@@ -60,3 +60,10 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# CTP SDK dynamic libraries (platform-specific, not committed)
+Sources/CTPBridge/CTPLib/*.dylib
+Sources/CTPBridge/CTPLib/*.so
+
+# macOS
+.DS_Store

@@ -14,11 +14,11 @@ let package = Package(
         .executableTarget(
             name: "FuturesTraderApp",
             dependencies: [
-                .product(name: "Shared", package: "FuturesTrader"),
-                .product(name: "FormulaEngine", package: "FuturesTrader"),
-                .product(name: "MarketData", package: "FuturesTrader"),
-                .product(name: "ContractManager", package: "FuturesTrader"),
-                .product(name: "TradingEngine", package: "FuturesTrader"),
+                .product(name: "Shared", package: "macos_futures_trading"),
+                .product(name: "FormulaEngine", package: "macos_futures_trading"),
+                .product(name: "MarketData", package: "macos_futures_trading"),
+                .product(name: "ContractManager", package: "macos_futures_trading"),
+                .product(name: "TradingEngine", package: "macos_futures_trading"),
             ]
         ),
     ]

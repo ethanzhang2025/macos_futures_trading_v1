@@ -83,6 +83,9 @@ struct KLineChartView: View {
                                         hoverIndex = nil
                                     }
                                 }
+                                .onTapGesture(count: 2) { location in
+                                    handleChartDoubleTap(location: location, geoWidth: geo.size.width - 16, chartHeight: klineH)
+                                }
                                 .onTapGesture { location in
                                     handleChartTap(location: location, geoWidth: geo.size.width - 16, chartHeight: klineH)
                                 }
@@ -660,6 +663,32 @@ struct KLineChartView: View {
         }
     }
 
+    // MARK: - 双击编辑
+
+    private func handleChartDoubleTap(location: CGPoint, geoWidth: CGFloat, chartHeight: CGFloat) {
+        let bars = displayBars
+        guard let g = chartGeometry(size: CGSize(width: geoWidth, height: chartHeight), bars: bars) else { return }
+        let (_, _, adjMin, adjRange, chartH, topPad, barW) = g
+
+        let clickIndex = Int((location.x - padding) / barW)
+        let clickPrice = (adjMin + adjRange) - adjRange * Double(location.y - topPad) / Double(chartH)
+        let tolerance = adjRange * 0.02
+        let ds = vm.drawingState
+
+        // 找到被双击的文字标注
+        for i in ds.objects.indices {
+            let obj = ds.objects[i]
+            guard obj.type == .text else { continue }
+            if abs(Double(obj.startIndex - clickIndex)) < 2 && abs(obj.startPrice - clickPrice) < tolerance {
+                let newText = showTextInput(current: obj.label)
+                if !newText.isEmpty {
+                    ds.objects[i].label = newText
+                }
+                return
+            }
+        }
+    }
+
     private func fmtP(_ p: Decimal) -> String {
         let d = NSDecimalNumber(decimal: p).doubleValue
         if d >= 1000 { return String(format: "%.0f", d) }; if d >= 10 { return String(format: "%.1f", d) }; return String(format: "%.2f", d)
@@ -669,14 +698,14 @@ struct KLineChartView: View {
 
     // MARK: - 文字输入弹窗
 
-    private func showTextInput() -> String {
+    private func showTextInput(current: String = "") -> String {
         let alert = NSAlert()
-        alert.messageText = "添加文字标注"
+        alert.messageText = current.isEmpty ? "添加文字标注" : "编辑文字标注"
         alert.informativeText = "请输入标注内容："
         alert.addButton(withTitle: "确定")
         alert.addButton(withTitle: "取消")
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
-        textField.stringValue = ""
+        textField.stringValue = current
         textField.placeholderString = "输入标注文字"
         alert.accessoryView = textField
         alert.window.initialFirstResponder = textField

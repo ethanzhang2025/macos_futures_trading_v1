@@ -113,8 +113,9 @@ public final class SinaMarketData: @unchecked Sendable {
         let (data, _) = try await self.urlSessionData(for: request)
 
         // 新浪返回的是JSON数组的数组: [["date","open","high","low","close","volume"], ...]
+        // 非交易时段可能返回空或非JSON，此时返回空数组
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [[String]] else {
-            throw SinaAPIError.decodingFailed
+            return []
         }
 
         return json.compactMap { fields in

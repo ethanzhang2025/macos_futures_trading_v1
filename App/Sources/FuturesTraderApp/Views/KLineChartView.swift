@@ -173,11 +173,8 @@ struct KLineChartView: View {
             let bodyBottom = scaleY(min(o, c))
             let bodyHeight = max(1, bodyBottom - bodyTop)
             let bodyRect = CGRect(x: x - candleWidth / 2, y: bodyTop, width: candleWidth, height: bodyHeight)
-            if isUp {
-                context.stroke(Path(bodyRect), with: .color(color), lineWidth: 1)
-            } else {
-                context.fill(Path(bodyRect), with: .color(color))
-            }
+            // 深色背景下全部实心填充，阳线红色阴线绿色
+            context.fill(Path(bodyRect), with: .color(color))
         }
 
         // MA线

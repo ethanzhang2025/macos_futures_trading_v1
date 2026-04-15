@@ -72,8 +72,8 @@ public final class SinaMarketData: @unchecked Sendable {
 
     /// 获取当日分时数据（从5分钟K线合成）
     public func fetchTimeline(symbol: String) async throws -> [SinaTimelinePoint] {
-        // 用5分钟K线数据模拟分时图（新浪没有直接的分时接口给期货）
-        let bars = try await fetchMinute5KLines(symbol: symbol)
+        // 用5分钟K线数据模拟分时图
+        let bars = (try? await fetchMinute5KLines(symbol: symbol)) ?? []
         guard !bars.isEmpty else { return [] }
 
         // 计算均价线（累计成交额/累计成交量的近似）

@@ -10,24 +10,22 @@ final class AppViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var selectedPeriod: String = "日线"
+    @Published var subChartType: SubChartType = .macd
 
     private let api = SinaMarketData()
     private var pollingTask: Task<Void, Never>?
 
-    /// 所有监控的合约
     let watchList = SinaFuturesSymbol.all
+    private let periods = ["日线", "60分", "15分", "5分"]
 
-    /// 当前选中的合约名称
     var selectedName: String {
         watchList.first { $0.symbol == selectedSymbol }?.name ?? selectedSymbol
     }
 
-    /// 当前选中的报价
     var selectedQuote: SinaQuote? {
         quotes.first { $0.symbol == selectedSymbol }
     }
 
-    /// 启动行情轮询
     func startPolling() {
         pollingTask?.cancel()
         pollingTask = Task {
@@ -39,24 +37,47 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    /// 停止轮询
-    func stopPolling() {
-        pollingTask?.cancel()
-    }
+    func stopPolling() { pollingTask?.cancel() }
 
-    /// 切换合约
     func selectSymbol(_ symbol: String) {
         selectedSymbol = symbol
         Task { await loadKLines() }
     }
 
-    /// 切换周期
     func selectPeriod(_ period: String) {
         selectedPeriod = period
         Task { await loadKLines() }
     }
 
-    /// 获取实时报价
+    // MARK: - 键盘操作
+
+    /// 上一个合约
+    func selectPrevSymbol() {
+        guard let idx = watchList.firstIndex(where: { $0.symbol == selectedSymbol }), idx > 0 else { return }
+        selectSymbol(watchList[idx - 1].symbol)
+    }
+
+    /// 下一个合约
+    func selectNextSymbol() {
+        guard let idx = watchList.firstIndex(where: { $0.symbol == selectedSymbol }), idx < watchList.count - 1 else { return }
+        selectSymbol(watchList[idx + 1].symbol)
+    }
+
+    /// 按数字键切换周期
+    func selectPeriodByKey(_ key: Int) {
+        guard key >= 1, key <= periods.count else { return }
+        selectPeriod(periods[key - 1])
+    }
+
+    /// 切换副图指标
+    func cycleSubChart() {
+        let all = SubChartType.allCases
+        guard let idx = all.firstIndex(of: subChartType) else { return }
+        subChartType = all[(idx + 1) % all.count]
+    }
+
+    // MARK: - 数据加载
+
     private func fetchQuotes() async {
         let symbols = watchList.map { $0.symbol }
         do {
@@ -68,20 +89,15 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    /// 加载K线数据
     func loadKLines() async {
         isLoading = true
         do {
             let bars: [SinaKLineBar]
             switch selectedPeriod {
-            case "5分":
-                bars = try await api.fetchMinute5KLines(symbol: selectedSymbol)
-            case "15分":
-                bars = try await api.fetchMinute15KLines(symbol: selectedSymbol)
-            case "60分":
-                bars = try await api.fetchMinute60KLines(symbol: selectedSymbol)
-            default:
-                bars = try await api.fetchDailyKLines(symbol: selectedSymbol)
+            case "5分":  bars = try await api.fetchMinute5KLines(symbol: selectedSymbol)
+            case "15分": bars = try await api.fetchMinute15KLines(symbol: selectedSymbol)
+            case "60分": bars = try await api.fetchMinute60KLines(symbol: selectedSymbol)
+            default:     bars = try await api.fetchDailyKLines(symbol: selectedSymbol)
             }
             self.klines = bars
             self.errorMessage = nil

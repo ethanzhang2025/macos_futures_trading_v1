@@ -32,8 +32,27 @@ public enum BuiltinFunctions {
             ABSFunction(),
             MAXFunction(),
             MINFunction(),
+            POWFunction(),
+            SQRTFunction(),
+            LOGFunction(),
+            EXPFunction(),
+            CEILINGFunction(),
+            FLOORFunction(),
+            INTPARTFunction(),
+            STDFunction(),
+            AVEDEVFunction(),
             // 引用
             BARSLASTFunction(),
+            HHVBARSFunction(),
+            LLVBARSFunction(),
+            // 逻辑扩展
+            LONGCROSSFunction(),
+            BETWEENFunction(),
+            VALUEWHENFunction(),
+            IFFFunction(),
+            // 均线扩展
+            DMAFunction(),
+            WMAFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

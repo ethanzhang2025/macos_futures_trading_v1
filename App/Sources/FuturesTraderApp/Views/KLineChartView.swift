@@ -517,15 +517,26 @@ struct KLineChartView: View {
 
             case .arrow:
                 let x = sX(obj.startIndex), y = sY(obj.startPrice)
-                // 向上箭头
+                // 向上箭头（大号）
                 var ap = Path()
-                ap.move(to: CGPoint(x: x, y: y - 10)); ap.addLine(to: CGPoint(x: x - 5, y: y)); ap.addLine(to: CGPoint(x: x + 5, y: y)); ap.closeSubpath()
+                ap.move(to: CGPoint(x: x, y: y - 20))
+                ap.addLine(to: CGPoint(x: x - 10, y: y))
+                ap.addLine(to: CGPoint(x: x - 3, y: y))
+                ap.addLine(to: CGPoint(x: x - 3, y: y + 12))
+                ap.addLine(to: CGPoint(x: x + 3, y: y + 12))
+                ap.addLine(to: CGPoint(x: x + 3, y: y))
+                ap.addLine(to: CGPoint(x: x + 10, y: y))
+                ap.closeSubpath()
                 context.fill(ap, with: .color(obj.color))
-                if obj.isSelected { dot(x, y, obj.color) }
+                if obj.isSelected { dot(x, y + 12, obj.color) }
 
             case .text:
                 let x = sX(obj.startIndex), y = sY(obj.startPrice)
                 let text = obj.label.isEmpty ? "标注" : obj.label
+                // 背景框
+                let bgRect = CGRect(x: x - 30, y: y - 10, width: 60, height: 20)
+                context.fill(Path(roundedRect: bgRect, cornerRadius: 3), with: .color(Theme.panelBackground.opacity(0.8)))
+                context.stroke(Path(roundedRect: bgRect, cornerRadius: 3), with: .color(obj.color.opacity(0.5)), lineWidth: 0.5)
                 context.draw(Text(text).font(.system(size: 11, weight: .medium)).foregroundColor(obj.color), at: CGPoint(x: x, y: y))
                 if obj.isSelected { dot(x, y + 8, obj.color) }
 
@@ -579,10 +590,16 @@ struct KLineChartView: View {
                     context.stroke(hp, with: .color(pvColor.opacity(0.3)), style: pvStyle)
                 }
             case .arrow:
+                let mx = mouseLocation.x
                 var ap = Path()
-                ap.move(to: CGPoint(x: mouseLocation.x, y: mouseY - 10))
-                ap.addLine(to: CGPoint(x: mouseLocation.x - 5, y: mouseY))
-                ap.addLine(to: CGPoint(x: mouseLocation.x + 5, y: mouseY)); ap.closeSubpath()
+                ap.move(to: CGPoint(x: mx, y: mouseY - 20))
+                ap.addLine(to: CGPoint(x: mx - 10, y: mouseY))
+                ap.addLine(to: CGPoint(x: mx - 3, y: mouseY))
+                ap.addLine(to: CGPoint(x: mx - 3, y: mouseY + 12))
+                ap.addLine(to: CGPoint(x: mx + 3, y: mouseY + 12))
+                ap.addLine(to: CGPoint(x: mx + 3, y: mouseY))
+                ap.addLine(to: CGPoint(x: mx + 10, y: mouseY))
+                ap.closeSubpath()
                 context.fill(ap, with: .color(pvColor))
             case .text:
                 context.draw(Text("点击放置文字").font(.system(size: 11)).foregroundColor(pvColor), at: CGPoint(x: mouseLocation.x, y: mouseY))
@@ -630,7 +647,10 @@ struct KLineChartView: View {
                 case .horizontalLine: ds.addObject(.horizontal(price: clickPrice, index: clickIndex))
                 case .verticalLine:   ds.addObject(.vertical(index: clickIndex, price: clickPrice))
                 case .arrow:          ds.addObject(.arrowMark(index: clickIndex, price: clickPrice))
-                case .text:           ds.addObject(.textMark(index: clickIndex, price: clickPrice, text: "标注"))
+                case .text:
+                    let input = showTextInput()
+                    if !input.isEmpty { ds.addObject(.textMark(index: clickIndex, price: clickPrice, text: input)) }
+                    else { ds.cancelDrawing() }
                 default: break
                 }
             }
@@ -646,6 +666,26 @@ struct KLineChartView: View {
     }
     private func fmtC(_ c: Decimal) -> String { String(format: "%+.0f", NSDecimalNumber(decimal: c).doubleValue) }
     private func fmtPct(_ p: Decimal) -> String { String(format: "%+.2f%%", NSDecimalNumber(decimal: p).doubleValue) }
+
+    // MARK: - 文字输入弹窗
+
+    private func showTextInput() -> String {
+        let alert = NSAlert()
+        alert.messageText = "添加文字标注"
+        alert.informativeText = "请输入标注内容："
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "取消")
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+        textField.stringValue = ""
+        textField.placeholderString = "输入标注文字"
+        alert.accessoryView = textField
+        alert.window.initialFirstResponder = textField
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            return textField.stringValue
+        }
+        return ""
+    }
 
     // MARK: - 键盘监听
 

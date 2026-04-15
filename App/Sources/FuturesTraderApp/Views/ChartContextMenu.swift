@@ -89,7 +89,6 @@ struct ChartContextMenu: View {
                 Button("删除选中 (Delete)") { vm.drawingState.deleteSelected() }
                     .disabled(!vm.drawingState.objects.contains { $0.isSelected })
                 Button("清除全部绘图") { vm.drawingState.clearAll() }
-                    .disabled(vm.drawingState.objects.isEmpty)
             }
 
             Divider()

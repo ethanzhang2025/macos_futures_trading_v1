@@ -409,10 +409,11 @@ struct KLineChartView: View {
             case 125: vm.selectNextSymbol(); return nil    // ↓
             case 123: scrollOffset = min(bars.count - visibleCount, scrollOffset + 3); return nil  // ←
             case 124: scrollOffset = max(0, scrollOffset - 3); return nil  // →
-            case 18: vm.selectPeriodByKey(1); return nil   // 1
-            case 19: vm.selectPeriodByKey(2); return nil   // 2
-            case 20: vm.selectPeriodByKey(3); return nil   // 3
-            case 21: vm.selectPeriodByKey(4); return nil   // 4
+            case 18: vm.selectPeriodByKey(1); return nil   // 1 分时
+            case 19: vm.selectPeriodByKey(2); return nil   // 2 日线
+            case 20: vm.selectPeriodByKey(3); return nil   // 3 60分
+            case 21: vm.selectPeriodByKey(4); return nil   // 4 15分
+            case 23: vm.selectPeriodByKey(5); return nil   // 5 5分
             case 24: visibleCount = max(20, visibleCount - 5); return nil   // =
             case 27: visibleCount = min(bars.count, visibleCount + 5); return nil  // -
             case 48: vm.cycleSubChart(); return nil        // Tab

@@ -11,12 +11,15 @@ final class AppViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var selectedPeriod: String = "日线"
     @Published var subChartType: SubChartType = .macd
+    @Published var timelinePoints: [SinaTimelinePoint] = []
+
+    var isTimeline: Bool { selectedPeriod == "分时" }
 
     private let api = SinaMarketData()
     private var pollingTask: Task<Void, Never>?
 
     let watchList = SinaFuturesSymbol.all
-    private let periods = ["日线", "60分", "15分", "5分"]
+    private let periods = ["分时", "日线", "60分", "15分", "5分"]
 
     var selectedName: String {
         watchList.first { $0.symbol == selectedSymbol }?.name ?? selectedSymbol
@@ -92,17 +95,22 @@ final class AppViewModel: ObservableObject {
     func loadKLines() async {
         isLoading = true
         do {
-            let bars: [SinaKLineBar]
-            switch selectedPeriod {
-            case "5分":  bars = try await api.fetchMinute5KLines(symbol: selectedSymbol)
-            case "15分": bars = try await api.fetchMinute15KLines(symbol: selectedSymbol)
-            case "60分": bars = try await api.fetchMinute60KLines(symbol: selectedSymbol)
-            default:     bars = try await api.fetchDailyKLines(symbol: selectedSymbol)
+            if selectedPeriod == "分时" {
+                let pts = try await api.fetchTimeline(symbol: selectedSymbol)
+                self.timelinePoints = pts
+            } else {
+                let bars: [SinaKLineBar]
+                switch selectedPeriod {
+                case "5分":  bars = try await api.fetchMinute5KLines(symbol: selectedSymbol)
+                case "15分": bars = try await api.fetchMinute15KLines(symbol: selectedSymbol)
+                case "60分": bars = try await api.fetchMinute60KLines(symbol: selectedSymbol)
+                default:     bars = try await api.fetchDailyKLines(symbol: selectedSymbol)
+                }
+                self.klines = bars
             }
-            self.klines = bars
             self.errorMessage = nil
         } catch {
-            self.errorMessage = "K线数据加载失败: \(error.localizedDescription)"
+            self.errorMessage = "数据加载失败: \(error.localizedDescription)"
         }
         isLoading = false
     }

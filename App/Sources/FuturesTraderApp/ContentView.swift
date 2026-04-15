@@ -6,33 +6,34 @@ struct ContentView: View {
 
     var body: some View {
         HSplitView {
-            // 左侧：合约列表
             ContractSidebar()
                 .frame(minWidth: 220, maxWidth: 280)
 
-            // 中央：K线图 + 成交量
             VStack(spacing: 0) {
                 ToolbarView()
-                if vm.isLoading && vm.klines.isEmpty {
-                    Spacer()
-                    ProgressView("加载中...")
-                        .foregroundColor(Theme.textSecondary)
-                    Spacer()
-                } else if vm.klines.isEmpty {
-                    Spacer()
-                    Text("暂无K线数据")
-                        .foregroundColor(Theme.textSecondary)
-                    if let err = vm.errorMessage {
-                        Text(err).font(.caption).foregroundColor(Theme.up)
+                if vm.isTimeline {
+                    // 分时图
+                    if vm.isLoading && vm.timelinePoints.isEmpty {
+                        loadingView
+                    } else if vm.timelinePoints.isEmpty {
+                        emptyView
+                    } else {
+                        let preClose = vm.selectedQuote?.preSettlement ?? vm.selectedQuote?.close ?? 0
+                        TimelineChartView(points: vm.timelinePoints, quote: vm.selectedQuote, preClose: preClose)
                     }
-                    Spacer()
                 } else {
-                    KLineChartView(bars: vm.klines, quote: vm.selectedQuote)
+                    // K线图
+                    if vm.isLoading && vm.klines.isEmpty {
+                        loadingView
+                    } else if vm.klines.isEmpty {
+                        emptyView
+                    } else {
+                        KLineChartView(bars: vm.klines, quote: vm.selectedQuote)
+                    }
                 }
             }
             .background(Theme.background)
 
-            // 右侧：盘口信息
             OrderBookPanel(quote: vm.selectedQuote, symbolName: vm.selectedName)
                 .frame(minWidth: 190, maxWidth: 230)
         }
@@ -40,5 +41,18 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .onAppear { vm.startPolling() }
         .onDisappear { vm.stopPolling() }
+    }
+
+    private var loadingView: some View {
+        VStack { Spacer(); ProgressView("加载中...").foregroundColor(Theme.textSecondary); Spacer() }
+    }
+
+    private var emptyView: some View {
+        VStack {
+            Spacer()
+            Text("暂无数据").foregroundColor(Theme.textSecondary)
+            if let err = vm.errorMessage { Text(err).font(.caption).foregroundColor(Theme.up) }
+            Spacer()
+        }
     }
 }

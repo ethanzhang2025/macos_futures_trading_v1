@@ -68,6 +68,37 @@ public final class SinaMarketData: @unchecked Sendable {
         return try await fetchKLines(urlString: urlString)
     }
 
+    // MARK: - 分时数据
+
+    /// 获取当日分时数据（从5分钟K线合成）
+    public func fetchTimeline(symbol: String) async throws -> [SinaTimelinePoint] {
+        // 用5分钟K线数据模拟分时图（新浪没有直接的分时接口给期货）
+        let bars = try await fetchMinute5KLines(symbol: symbol)
+        guard !bars.isEmpty else { return [] }
+
+        // 计算均价线（累计成交额/累计成交量的近似）
+        var cumVolume: Double = 0
+        var cumAmount: Double = 0
+        var points: [SinaTimelinePoint] = []
+
+        for bar in bars {
+            let price = bar.close
+            let vol = bar.volume
+            let priceD = NSDecimalNumber(decimal: price).doubleValue
+            cumVolume += Double(vol)
+            cumAmount += priceD * Double(vol)
+            let avg = cumVolume > 0 ? Decimal(cumAmount / cumVolume) : price
+
+            points.append(SinaTimelinePoint(
+                time: String(bar.date.suffix(5)), // 取HH:MM部分
+                price: price,
+                avgPrice: avg,
+                volume: vol
+            ))
+        }
+        return points
+    }
+
     // MARK: - Private
 
     private func fetchKLines(urlString: String) async throws -> [SinaKLineBar] {

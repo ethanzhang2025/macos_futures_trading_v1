@@ -3,7 +3,7 @@ import SwiftUI
 struct ToolbarView: View {
     @EnvironmentObject var vm: AppViewModel
 
-    private let periods = ["日线", "60分", "15分", "5分"]
+    private let periods = ["分时", "日线", "60分", "15分", "5分"]
 
     var body: some View {
         HStack(spacing: 12) {

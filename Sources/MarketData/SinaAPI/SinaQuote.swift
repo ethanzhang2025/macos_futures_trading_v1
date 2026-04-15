@@ -53,6 +53,21 @@ public struct SinaKLineBar: Sendable {
     }
 }
 
+/// 分时数据点
+public struct SinaTimelinePoint: Sendable {
+    public let time: String      // HH:MM
+    public let price: Decimal
+    public let avgPrice: Decimal
+    public let volume: Int
+
+    public init(time: String, price: Decimal, avgPrice: Decimal, volume: Int) {
+        self.time = time
+        self.price = price
+        self.avgPrice = avgPrice
+        self.volume = volume
+    }
+}
+
 /// 常用期货合约代码映射
 public enum SinaFuturesSymbol {
     public static let all: [(symbol: String, name: String, pinyin: String)] = [

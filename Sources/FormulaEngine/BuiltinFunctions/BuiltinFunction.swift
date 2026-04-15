@@ -66,6 +66,13 @@ public enum BuiltinFunctions {
             SIGNFunction(),
             SUMBARSFunction(),
             MULARFunction(),
+            // 时间/位置函数
+            DATEFunction(),
+            TIMEFunction(),
+            HOURFunction(),
+            MINUTEFunction(),
+            ISLASTBARFunction(),
+            BARPOSFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

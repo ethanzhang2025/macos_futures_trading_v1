@@ -30,11 +30,9 @@ struct ContentView: View {
                 }
             }
 
-            // 右侧：盘口信息
-            if let quote = vm.selectedQuote {
-                OrderBookPanel(quote: quote)
-                    .frame(minWidth: 200, maxWidth: 240)
-            }
+            // 右侧：盘口信息（始终显示）
+            OrderBookPanel(quote: vm.selectedQuote, symbolName: vm.selectedName)
+                .frame(minWidth: 200, maxWidth: 240)
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear { vm.startPolling() }

@@ -22,7 +22,7 @@ struct ContractSidebar: View {
                 Text("合约列表")
                     .font(.headline)
                 Spacer()
-                Text("\(vm.quotes.count)个")
+                Text("\(filteredContracts.count)个")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -30,12 +30,24 @@ struct ContractSidebar: View {
             .padding(.vertical, 8)
 
             // 搜索框
-            TextField("搜索合约/拼音", text: $searchText)
+            TextField("搜索代码/拼音/中文", text: $searchText)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
 
             Divider()
+
+            // 行情状态
+            if vm.quotes.isEmpty {
+                HStack(spacing: 4) {
+                    Circle().fill(Color.orange).frame(width: 6, height: 6)
+                    Text("非交易时段，无实时报价")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 12)
+            }
 
             // 合约列表
             List(selection: Binding(
@@ -77,7 +89,7 @@ struct ContractRow: View {
                 }
             } else {
                 Text("--")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(.secondary)
             }
         }

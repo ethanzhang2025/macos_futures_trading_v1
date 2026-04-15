@@ -2,14 +2,22 @@ import SwiftUI
 import MarketData
 
 struct OrderBookPanel: View {
-    let quote: SinaQuote
+    let quote: SinaQuote?
+    let symbolName: String
 
     var body: some View {
         VStack(spacing: 0) {
             // 标题
-            Text("盘口信息")
-                .font(.headline)
-                .padding(.vertical, 8)
+            HStack {
+                Text("盘口信息")
+                    .font(.headline)
+                Spacer()
+                Text(symbolName)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
             Divider()
 
@@ -38,16 +46,25 @@ struct OrderBookPanel: View {
 
     private var priceSection: some View {
         VStack(spacing: 4) {
-            Text(formatPrice(quote.lastPrice))
-                .font(.system(size: 28, weight: .bold, design: .monospaced))
-                .foregroundColor(quote.isUp ? .red : .green)
-            HStack(spacing: 8) {
-                Text(formatChange(quote.change))
-                    .font(.system(size: 14, design: .monospaced))
-                Text(formatPercent(quote.changePercent))
-                    .font(.system(size: 14, design: .monospaced))
+            if let q = quote, q.lastPrice > 0 {
+                Text(formatPrice(q.lastPrice))
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+                    .foregroundColor(q.isUp ? .red : .green)
+                HStack(spacing: 8) {
+                    Text(formatChange(q.change))
+                        .font(.system(size: 14, design: .monospaced))
+                    Text(formatPercent(q.changePercent))
+                        .font(.system(size: 14, design: .monospaced))
+                }
+                .foregroundColor(q.isUp ? .red : .green)
+            } else {
+                Text("--")
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+                    .foregroundColor(.secondary)
+                Text("非交易时段")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
             }
-            .foregroundColor(quote.isUp ? .red : .green)
         }
     }
 
@@ -55,14 +72,13 @@ struct OrderBookPanel: View {
 
     private var orderSection: some View {
         VStack(spacing: 6) {
-            // 卖
             HStack {
                 Text("卖一").font(.system(size: 12)).foregroundColor(.secondary)
                 Spacer()
-                Text(formatPrice(quote.askPrice))
+                Text(priceText(quote?.askPrice))
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .foregroundColor(.green)
-                Text("\(quote.askVolume)")
+                Text(volumeText(quote?.askVolume))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 50, alignment: .trailing)
@@ -70,14 +86,13 @@ struct OrderBookPanel: View {
 
             Divider()
 
-            // 买
             HStack {
                 Text("买一").font(.system(size: 12)).foregroundColor(.secondary)
                 Spacer()
-                Text(formatPrice(quote.bidPrice))
+                Text(priceText(quote?.bidPrice))
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .foregroundColor(.red)
-                Text("\(quote.bidVolume)")
+                Text(volumeText(quote?.bidVolume))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 50, alignment: .trailing)
@@ -89,17 +104,17 @@ struct OrderBookPanel: View {
 
     private var dataSection: some View {
         VStack(spacing: 6) {
-            dataRow("开盘", formatPrice(quote.open))
-            dataRow("最高", formatPrice(quote.high), color: .red)
-            dataRow("最低", formatPrice(quote.low), color: .green)
-            dataRow("昨收", formatPrice(quote.close))
-            dataRow("昨结算", formatPrice(quote.preSettlement))
-            dataRow("结算价", formatPrice(quote.settlementPrice))
+            dataRow("开盘", priceText(quote?.open))
+            dataRow("最高", priceText(quote?.high), color: .red)
+            dataRow("最低", priceText(quote?.low), color: .green)
+            dataRow("昨收", priceText(quote?.close))
+            dataRow("昨结算", priceText(quote?.preSettlement))
+            dataRow("结算价", priceText(quote?.settlementPrice))
 
             Divider()
 
-            dataRow("成交量", formatVolume(quote.volume))
-            dataRow("持仓量", formatVolume(quote.openInterest))
+            dataRow("成交量", volumeText(quote?.volume))
+            dataRow("持仓量", volumeText(quote?.openInterest))
         }
     }
 
@@ -112,6 +127,16 @@ struct OrderBookPanel: View {
     }
 
     // MARK: - Formatting
+
+    private func priceText(_ p: Decimal?) -> String {
+        guard let p, p > 0 else { return "--" }
+        return formatPrice(p)
+    }
+
+    private func volumeText(_ v: Int?) -> String {
+        guard let v, v > 0 else { return "--" }
+        return formatVolume(v)
+    }
 
     private func formatPrice(_ p: Decimal) -> String {
         let d = NSDecimalNumber(decimal: p).doubleValue

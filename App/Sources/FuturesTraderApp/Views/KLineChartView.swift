@@ -22,12 +22,34 @@ struct KLineChartView: View {
 
     private let padding: CGFloat = 50
 
-    private var displayBars: [SinaKLineBar] {
+    /// 用于指标计算的扩展数据（前面多取30根用于预热MA/BOLL等）
+    private let preheat = 30
+
+    private var displayRange: (start: Int, end: Int) {
         let count = min(bars.count, visibleCount)
         let end = bars.count - scrollOffset
         let start = max(0, end - count)
-        guard start < end, start >= 0 else { return [] }
-        return Array(bars[start..<min(end, bars.count)])
+        return (start, min(end, bars.count))
+    }
+
+    private var displayBars: [SinaKLineBar] {
+        let r = displayRange
+        guard r.start < r.end else { return [] }
+        return Array(bars[r.start..<r.end])
+    }
+
+    /// 包含预热数据的K线（用于指标计算，确保BOLL等有足够前置数据）
+    private var extendedBars: [SinaKLineBar] {
+        let r = displayRange
+        let extStart = max(0, r.start - preheat)
+        guard extStart < r.end else { return [] }
+        return Array(bars[extStart..<r.end])
+    }
+
+    /// 预热偏移量（extendedBars比displayBars多出的前置K线数）
+    private var preheatOffset: Int {
+        let r = displayRange
+        return r.start - max(0, r.start - preheat)
     }
 
     var body: some View {
@@ -139,9 +161,12 @@ struct KLineChartView: View {
                 lbl("量", "\(bar.volume)", color: Theme.textPrimary)
                 // BOLL值
                 if mainOverlay == .boll || mainOverlay == .maAndBoll {
-                    let closes = displayBars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-                    let bollData = calcBOLL(closes, period: 20)
-                    if idx < bollData.mid.count, let m = bollData.mid[idx], let u = bollData.upper[idx], let l = bollData.lower[idx] {
+                    let extC = extendedBars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+                    let fullBoll = calcBOLL(extC, period: 20)
+                    let slicedMid = Array(fullBoll.mid.dropFirst(preheatOffset))
+                    let slicedUp = Array(fullBoll.upper.dropFirst(preheatOffset))
+                    let slicedDn = Array(fullBoll.lower.dropFirst(preheatOffset))
+                    if idx < slicedMid.count, let m = slicedMid[idx], let u = slicedUp[idx], let l = slicedDn[idx] {
                         Text("|").foregroundColor(Theme.textMuted).font(.system(size: 11))
                         lbl("MID", String(format: "%.0f", m), color: Color.white)
                         lbl("UP", String(format: "%.0f", u), color: Color.yellow)
@@ -190,7 +215,13 @@ struct KLineChartView: View {
         let adjMin = minP - margin, adjRange = range + margin * 2
         let sY: (Double) -> CGFloat = { p in topPad + chartH * CGFloat(1 - (p - adjMin) / adjRange) }
 
-        let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+        // 用扩展数据计算指标，然后截取显示范围
+        let extCloses = extendedBars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+        let offset = preheatOffset
+        func sliceIndicator(_ full: [Double?]) -> [Double?] {
+            guard offset < full.count else { return [] }
+            return Array(full[offset..<min(offset + bars.count, full.count)])
+        }
 
         // 网格
         for i in 0...4 {
@@ -204,7 +235,8 @@ struct KLineChartView: View {
 
         // BOLL带（先画，在K线下层）
         if mainOverlay == .boll || mainOverlay == .maAndBoll {
-            let boll = calcBOLL(closes, period: 20)
+            let fullBoll = calcBOLL(extCloses, period: 20)
+            let boll = BOLLData(mid: sliceIndicator(fullBoll.mid), upper: sliceIndicator(fullBoll.upper), lower: sliceIndicator(fullBoll.lower))
             // 填充带
             drawBollFill(context: context, upper: boll.upper, lower: boll.lower, barW: barW, sY: sY)
             drawLine(context: context, values: boll.upper, color: Color.yellow.opacity(0.7), barW: barW, sY: sY, lineWidth: 1)
@@ -226,7 +258,7 @@ struct KLineChartView: View {
 
         // MA线
         if mainOverlay == .ma || mainOverlay == .maAndBoll {
-            let ma5 = ma(closes, 5), ma20 = ma(closes, 20)
+            let ma5 = sliceIndicator(ma(extCloses, 5)), ma20 = sliceIndicator(ma(extCloses, 20))
             drawLine(context: context, values: ma5, color: Theme.ma5, barW: barW, sY: sY)
             drawLine(context: context, values: ma20, color: Theme.ma20, barW: barW, sY: sY)
             context.draw(Text("MA5").font(.system(size: 9)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 18, y: 6))

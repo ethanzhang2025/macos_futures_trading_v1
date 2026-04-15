@@ -459,10 +459,51 @@ struct KLineChartView: View {
             }
         }
 
-        // 绘图模式提示
+        // 绘图模式实时预览线
         if vm.drawingState.isDrawing {
+            let previewStyle = StrokeStyle(lineWidth: 1, dash: [6, 4])
+            let previewColor = Color.yellow.opacity(0.8)
+            let mouseY = max(topPad, min(topPad + chartH, mouseLocation.y))
+            let mousePrice = (adjMin + adjRange) - adjRange * Double(mouseY - topPad) / Double(chartH)
+
+            switch vm.drawingState.activeTool {
+            case .horizontalLine:
+                // 水平虚线跟随鼠标Y轴
+                var hp = Path()
+                hp.move(to: CGPoint(x: padding, y: mouseY))
+                hp.addLine(to: CGPoint(x: size.width - padding, y: mouseY))
+                context.stroke(hp, with: .color(previewColor), style: previewStyle)
+                // 价格标签
+                context.draw(Text(String(format: "%.0f", mousePrice)).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(previewColor),
+                             at: CGPoint(x: padding - 5, y: mouseY), anchor: .trailing)
+
+            case .trendLine:
+                if let si = vm.drawingState.tempStartIndex, let sp = vm.drawingState.tempStartPrice {
+                    // 第一个点已确定，预览线从起点到鼠标位置
+                    let sx = sX(si), sy = sY(sp)
+                    var tp = Path()
+                    tp.move(to: CGPoint(x: sx, y: sy))
+                    tp.addLine(to: CGPoint(x: mouseLocation.x, y: mouseY))
+                    context.stroke(tp, with: .color(previewColor), style: previewStyle)
+                    // 起点圆点
+                    context.fill(Path(ellipseIn: CGRect(x: sx - 4, y: sy - 4, width: 8, height: 8)), with: .color(previewColor))
+                    // 终点圆点
+                    context.fill(Path(ellipseIn: CGRect(x: mouseLocation.x - 3, y: mouseY - 3, width: 6, height: 6)), with: .color(previewColor.opacity(0.5)))
+                } else {
+                    // 还没点第一个点，显示十字线引导
+                    var vp = Path(); vp.move(to: CGPoint(x: mouseLocation.x, y: topPad)); vp.addLine(to: CGPoint(x: mouseLocation.x, y: topPad + chartH))
+                    var hp = Path(); hp.move(to: CGPoint(x: padding, y: mouseY)); hp.addLine(to: CGPoint(x: size.width - padding, y: mouseY))
+                    context.stroke(vp, with: .color(previewColor.opacity(0.3)), style: previewStyle)
+                    context.stroke(hp, with: .color(previewColor.opacity(0.3)), style: previewStyle)
+                }
+
+            case .none:
+                break
+            }
+
+            // 提示文字
             let toolName = vm.drawingState.activeTool.rawValue
-            let hint = vm.drawingState.tempStartIndex != nil ? "点击第二个点完成\(toolName)" : "点击设置\(toolName)起点 · ESC取消"
+            let hint = vm.drawingState.tempStartIndex != nil ? "点击第二个点完成\(toolName)" : "点击设置\(toolName) · ESC取消"
             context.draw(Text(hint).font(.system(size: 11, weight: .medium)).foregroundColor(Theme.ma5),
                          at: CGPoint(x: size.width / 2, y: topPad + chartH + 16))
         }

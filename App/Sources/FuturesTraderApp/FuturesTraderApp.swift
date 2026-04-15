@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         window.contentView = NSHostingView(rootView: contentView)
         window.contentMinSize = NSSize(width: 1200, height: 700)
+        window.backgroundColor = NSColor(red: 0.09, green: 0.09, blue: 0.11, alpha: 1)
+        window.titlebarAppearsTransparent = true
+        window.appearance = NSAppearance(named: .darkAqua)
         window.makeKeyAndOrderFront(nil)
 
         // 创建菜单栏

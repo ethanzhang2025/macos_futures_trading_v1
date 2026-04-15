@@ -20,11 +20,12 @@ struct ContractSidebar: View {
             // 标题
             HStack {
                 Text("合约列表")
-                    .font(.headline)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Theme.textPrimary)
                 Spacer()
                 Text("\(filteredContracts.count)个")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.textMuted)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -32,68 +33,75 @@ struct ContractSidebar: View {
             // 搜索框
             TextField("搜索代码/拼音/中文", text: $searchText)
                 .textFieldStyle(.roundedBorder)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
 
-            Divider()
+            Divider().background(Theme.border)
 
             // 行情状态
             if vm.quotes.isEmpty {
                 HStack(spacing: 4) {
                     Circle().fill(Color.orange).frame(width: 6, height: 6)
-                    Text("非交易时段，无实时报价")
+                    Text("非交易时段")
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.textMuted)
                 }
                 .padding(.vertical, 4)
                 .padding(.horizontal, 12)
             }
 
             // 合约列表
-            List(selection: Binding(
-                get: { vm.selectedSymbol },
-                set: { if let s = $0 { vm.selectSymbol(s) } }
-            )) {
-                ForEach(filteredContracts, id: \.symbol) { item in
-                    ContractRow(item: item, quote: vm.quotes.first { $0.symbol == item.symbol })
-                        .tag(item.symbol)
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredContracts, id: \.symbol) { item in
+                        ContractRow(
+                            item: item,
+                            quote: vm.quotes.first { $0.symbol == item.symbol },
+                            isSelected: vm.selectedSymbol == item.symbol
+                        )
+                        .onTapGesture { vm.selectSymbol(item.symbol) }
+                    }
                 }
             }
-            .listStyle(.sidebar)
         }
+        .background(Theme.panelBackground)
     }
 }
 
 struct ContractRow: View {
     let item: (symbol: String, name: String, pinyin: String)
     let quote: SinaQuote?
+    let isSelected: Bool
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.textPrimary)
                 Text(item.symbol)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(Theme.textMuted)
             }
             Spacer()
             if let q = quote, q.lastPrice > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(formatPrice(q.lastPrice))
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundColor(q.isUp ? .red : .green)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(q.isUp ? Theme.up : Theme.down)
                     Text(formatPercent(q.changePercent))
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(q.isUp ? .red : .green)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(q.isUp ? Theme.up : Theme.down)
                 }
             } else {
                 Text("--")
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(Theme.textMuted)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(isSelected ? Theme.selected : Color.clear)
     }
 
     private func formatPrice(_ p: Decimal) -> String {

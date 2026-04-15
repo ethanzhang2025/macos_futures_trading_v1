@@ -7,49 +7,47 @@ struct ToolbarView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // 合约信息
             Text(vm.selectedName)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(Theme.textPrimary)
             Text(vm.selectedSymbol)
-                .font(.system(size: 13, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(Theme.textMuted)
 
-            Divider().frame(height: 16)
+            Rectangle().fill(Theme.border).frame(width: 1, height: 14)
 
-            // 周期选择
             ForEach(periods, id: \.self) { period in
                 Button(action: { vm.selectPeriod(period) }) {
                     Text(period)
-                        .font(.system(size: 12, weight: vm.selectedPeriod == period ? .bold : .regular))
-                        .foregroundColor(vm.selectedPeriod == period ? .accentColor : .secondary)
+                        .font(.system(size: 11, weight: vm.selectedPeriod == period ? .bold : .regular))
+                        .foregroundColor(vm.selectedPeriod == period ? Theme.ma5 : Theme.textMuted)
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 3)
                         .background(
                             vm.selectedPeriod == period
-                                ? Color.accentColor.opacity(0.1)
+                                ? Theme.ma5.opacity(0.15)
                                 : Color.clear
                         )
-                        .cornerRadius(4)
+                        .cornerRadius(3)
                 }
                 .buttonStyle(.plain)
             }
 
             Spacer()
 
-            // 连接状态
             HStack(spacing: 4) {
                 Circle()
-                    .fill(vm.errorMessage == nil ? Color.green : Color.red)
-                    .frame(width: 8, height: 8)
+                    .fill(vm.errorMessage == nil ? Color.green : Color.orange)
+                    .frame(width: 6, height: 6)
                 Text(vm.errorMessage == nil ? "已连接" : "断开")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.textMuted)
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .padding(.vertical, 5)
+        .background(Theme.panelBackground)
 
-        Divider()
+        Rectangle().fill(Theme.border).frame(height: 0.5)
     }
 }

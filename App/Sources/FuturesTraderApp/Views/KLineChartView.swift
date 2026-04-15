@@ -19,6 +19,10 @@ struct KLineChartView: View {
     @State private var visibleCount: Int = 80
     @State private var scrollOffset: Int = 0
     @State private var mainOverlay: MainOverlay = .maAndBoll
+    // 内联文字编辑
+    @State private var editingTextId: UUID?
+    @State private var editingText: String = ""
+    @State private var editingPosition: CGPoint = .zero
 
     private let padding: CGFloat = 50
 
@@ -83,12 +87,18 @@ struct KLineChartView: View {
                                         hoverIndex = nil
                                     }
                                 }
-                                .onTapGesture(count: 2) { location in
-                                    handleChartDoubleTap(location: location, geoWidth: geo.size.width - 16, chartHeight: klineH)
-                                }
                                 .onTapGesture { location in
                                     handleChartTap(location: location, geoWidth: geo.size.width - 16, chartHeight: klineH)
                                 }
+                            // 内联文字编辑器
+                            if editingTextId != nil {
+                                InlineTextEditor(
+                                    text: $editingText,
+                                    position: editingPosition,
+                                    onCommit: { commitTextEdit() },
+                                    onCancel: { cancelTextEdit() }
+                                )
+                            }
                         }
                         // 主图指标切换按钮
                         HStack(spacing: 2) {
@@ -660,43 +670,62 @@ struct KLineChartView: View {
                 case .verticalLine:   ds.addObject(.vertical(index: clickIndex, price: clickPrice))
                 case .arrow:          ds.addObject(.arrowMark(index: clickIndex, price: clickPrice))
                 case .text:
-                    let input = showTextInput()
-                    if !input.isEmpty { ds.addObject(.textMark(index: clickIndex, price: clickPrice, text: input)) }
-                    else { ds.cancelDrawing() }
+                    // 创建空文字标注并直接进入内联编辑
+                    let obj = DrawingObject.textMark(index: clickIndex, price: clickPrice, text: "")
+                    ds.addObject(obj)
+                    startInlineEdit(id: obj.id, currentText: "", location: location)
                 default: break
                 }
             }
         } else {
+            // 非绘图模式：先检查是否点击了文字标注（直接进入编辑）
+            let bigTolerance = (adjRange) * 0.05
+            for i in ds.objects.indices {
+                let obj = ds.objects[i]
+                guard obj.type == .text else { continue }
+                if abs(Double(obj.startIndex - clickIndex)) < 5 && abs(obj.startPrice - clickPrice) < bigTolerance {
+                    ds.deselectAll()
+                    ds.objects[i].isSelected = true
+                    startInlineEdit(id: obj.id, currentText: obj.label, location: location)
+                    return
+                }
+            }
+            // 否则正常选中/取消
+            if editingTextId != nil { commitTextEdit() }
             let tolerance = (adjRange) * 0.02
             _ = ds.selectNearby(index: clickIndex, price: clickPrice, tolerance: tolerance)
         }
     }
 
-    // MARK: - 双击编辑
+    // MARK: - 内联编辑
 
-    private func handleChartDoubleTap(location: CGPoint, geoWidth: CGFloat, chartHeight: CGFloat) {
-        let bars = displayBars
-        guard let g = chartGeometry(size: CGSize(width: geoWidth, height: chartHeight), bars: bars) else { return }
-        let (_, _, adjMin, adjRange, chartH, topPad, barW) = g
+    private func startInlineEdit(id: UUID, currentText: String, location: CGPoint) {
+        editingTextId = id
+        editingText = currentText
+        editingPosition = location
+    }
 
-        let clickIndex = Int((location.x - padding) / barW)
-        let clickPrice = (adjMin + adjRange) - adjRange * Double(location.y - topPad) / Double(chartH)
-        let tolerance = adjRange * 0.02
-        let ds = vm.drawingState
-
-        // 找到被双击的文字标注（用更大的检测范围）
-        let bigTolerance = adjRange * 0.05
-        for i in ds.objects.indices {
-            let obj = ds.objects[i]
-            guard obj.type == .text else { continue }
-            if abs(Double(obj.startIndex - clickIndex)) < 5 && abs(obj.startPrice - clickPrice) < bigTolerance {
-                let newText = showTextInput(current: obj.label)
-                if !newText.isEmpty {
-                    ds.objects[i].label = newText
-                }
-                return
+    private func commitTextEdit() {
+        guard let id = editingTextId else { return }
+        if let idx = vm.drawingState.objects.firstIndex(where: { $0.id == id }) {
+            if editingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                vm.drawingState.objects.remove(at: idx)
+            } else {
+                vm.drawingState.objects[idx].label = editingText
             }
         }
+        editingTextId = nil
+        editingText = ""
+    }
+
+    private func cancelTextEdit() {
+        if let id = editingTextId, let idx = vm.drawingState.objects.firstIndex(where: { $0.id == id }) {
+            if vm.drawingState.objects[idx].label.isEmpty {
+                vm.drawingState.objects.remove(at: idx)
+            }
+        }
+        editingTextId = nil
+        editingText = ""
     }
 
     private func fmtP(_ p: Decimal) -> String {
@@ -705,37 +734,6 @@ struct KLineChartView: View {
     }
     private func fmtC(_ c: Decimal) -> String { String(format: "%+.0f", NSDecimalNumber(decimal: c).doubleValue) }
     private func fmtPct(_ p: Decimal) -> String { String(format: "%+.2f%%", NSDecimalNumber(decimal: p).doubleValue) }
-
-    // MARK: - 文字输入弹窗
-
-    private func showTextInput(current: String = "") -> String {
-        let alert = NSAlert()
-        alert.messageText = current.isEmpty ? "添加标注" : "编辑标注"
-        alert.informativeText = ""
-        alert.alertStyle = .informational
-        alert.icon = NSImage(size: NSSize(width: 1, height: 1)) // 去掉大图标
-        alert.addButton(withTitle: "确定")
-        alert.addButton(withTitle: "取消")
-        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 120))
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 120))
-        textView.isEditable = true
-        textView.isRichText = false
-        textView.font = .systemFont(ofSize: 13)
-        textView.string = current
-        textView.textColor = .labelColor
-        textView.backgroundColor = .textBackgroundColor
-        textView.isAutomaticQuoteSubstitutionEnabled = false
-        scrollView.documentView = textView
-        alert.accessoryView = scrollView
-        alert.window.initialFirstResponder = textView
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            return textView.string
-        }
-        return ""
-    }
 
     // MARK: - 键盘监听
 
@@ -754,7 +752,10 @@ struct KLineChartView: View {
             case 24: visibleCount = max(20, visibleCount - 5); return nil   // =
             case 27: visibleCount = min(bars.count, visibleCount + 5); return nil  // -
             case 48: vm.cycleSubChart(); return nil        // Tab
-            case 53: vm.drawingState.cancelDrawing(); return nil  // ESC
+            case 53:  // ESC
+                if editingTextId != nil { cancelTextEdit() }
+                else { vm.drawingState.cancelDrawing() }
+                return nil
             case 51: vm.drawingState.deleteSelected(); return nil // Delete
             default: return event
             }

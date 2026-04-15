@@ -591,10 +591,10 @@ struct KLineChartView: View {
                 let bgRect = CGRect(x: bx, y: by, width: bw, height: bh)
                 context.fill(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(Theme.panelBackground.opacity(0.9)))
                 context.stroke(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(obj.color.opacity(obj.isSelected ? 0.8 : 0.4)), lineWidth: obj.isSelected ? 1.5 : 0.5)
-                // 逐行绘制文字（左对齐）
+                // 逐行绘制文字（左对齐，按像素宽度换行）
                 let lineH: CGFloat = 15
-                let maxCharsPerLine = max(1, Int((bw - 16) / 7))
-                let wrappedLines = wrapText(text, maxCharsPerLine: maxCharsPerLine)
+                let maxPixelWidth = bw - 16
+                let wrappedLines = wrapTextByPixelWidth(text, maxWidth: maxPixelWidth)
                 let maxLines = max(1, Int((bh - 8) / lineH))
                 for (li, line) in wrappedLines.prefix(maxLines).enumerated() {
                     context.draw(
@@ -822,17 +822,25 @@ struct KLineChartView: View {
         editingText = ""
     }
 
-    /// 文字换行
-    private func wrapText(_ text: String, maxCharsPerLine: Int) -> [String] {
+    /// 按像素宽度换行（中文约11px，英文/数字约7px）
+    private func wrapTextByPixelWidth(_ text: String, maxWidth: CGFloat) -> [String] {
         var lines: [String] = []
         for paragraph in text.components(separatedBy: "\n") {
             if paragraph.isEmpty { lines.append(""); continue }
-            var remaining = paragraph
-            while !remaining.isEmpty {
-                let end = remaining.index(remaining.startIndex, offsetBy: min(maxCharsPerLine, remaining.count))
-                lines.append(String(remaining[remaining.startIndex..<end]))
-                remaining = String(remaining[end...])
+            var currentLine = ""
+            var currentWidth: CGFloat = 0
+            for char in paragraph {
+                let charWidth: CGFloat = char.isASCII ? 7 : 12
+                if currentWidth + charWidth > maxWidth && !currentLine.isEmpty {
+                    lines.append(currentLine)
+                    currentLine = String(char)
+                    currentWidth = charWidth
+                } else {
+                    currentLine.append(char)
+                    currentWidth += charWidth
+                }
             }
+            if !currentLine.isEmpty { lines.append(currentLine) }
         }
         return lines
     }

@@ -23,6 +23,8 @@ struct KLineChartView: View {
     @State private var editingTextId: UUID?
     @State private var editingText: String = ""
     @State private var editingPosition: CGPoint = .zero
+    // 拖拽移动标注
+    @State private var isDraggingObject: Bool = false
 
     private let padding: CGFloat = 50
 
@@ -86,6 +88,9 @@ struct KLineChartView: View {
                                     case .ended:
                                         hoverIndex = nil
                                     }
+                                }
+                                .onTapGesture(count: 2) { location in
+                                    handleChartDoubleTap(location: location, geoWidth: geo.size.width - 16, chartHeight: klineH)
                                 }
                                 .onTapGesture { location in
                                     handleChartTap(location: location, geoWidth: geo.size.width - 16, chartHeight: klineH)
@@ -152,10 +157,31 @@ struct KLineChartView: View {
                 }
                 .padding(.horizontal, 8)
                 .contextMenu { ChartContextMenu(mainOverlay: $mainOverlay) }
-                .gesture(DragGesture(minimumDistance: 5).onChanged { value in
-                    let dx = Int(-value.translation.width / 8)
-                    scrollOffset = max(0, min(bars.count - visibleCount, scrollOffset + dx))
-                })
+                .gesture(DragGesture(minimumDistance: 5)
+                    .onChanged { value in
+                        // 检查是否有选中的标注，如果有则移动它
+                        if let selIdx = vm.drawingState.objects.firstIndex(where: { $0.isSelected }) {
+                            isDraggingObject = true
+                            let chartW = max(1, geo.size.width - 16 - padding * 2)
+                            let barW = chartW / CGFloat(displayBars.count)
+                            let dxIdx = Int(value.translation.width / barW / 3)
+                            let prices = displayBars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
+                            if let minP = prices.min(), let maxP = prices.max(), maxP > minP {
+                                let range = maxP - minP
+                                let dyPrice = -Double(value.translation.height) / Double(klineH) * range / 3
+                                vm.drawingState.objects[selIdx].startIndex += dxIdx
+                                vm.drawingState.objects[selIdx].endIndex += dxIdx
+                                vm.drawingState.objects[selIdx].startPrice += dyPrice
+                                vm.drawingState.objects[selIdx].endPrice += dyPrice
+                            }
+                        } else {
+                            isDraggingObject = false
+                            let dx = Int(-value.translation.width / 8)
+                            scrollOffset = max(0, min(bars.count - visibleCount, scrollOffset + dx))
+                        }
+                    }
+                    .onEnded { _ in isDraggingObject = false }
+                )
                 .gesture(MagnificationGesture().onChanged { scale in
                     if scale > 1 { visibleCount = max(20, visibleCount - 2) }
                     else { visibleCount = min(bars.count, visibleCount + 2) }
@@ -678,15 +704,15 @@ struct KLineChartView: View {
                 }
             }
         } else {
-            // 非绘图模式：先检查是否点击了文字标注（直接进入编辑）
+            // 非绘图模式：先提交正在编辑的文字
+            if editingTextId != nil { commitTextEdit() }
+            // 单击选中/取消选中（不进入编辑）
             let bigTolerance = (adjRange) * 0.05
             for i in ds.objects.indices {
                 let obj = ds.objects[i]
-                guard obj.type == .text else { continue }
                 if abs(Double(obj.startIndex - clickIndex)) < 5 && abs(obj.startPrice - clickPrice) < bigTolerance {
                     ds.deselectAll()
                     ds.objects[i].isSelected = true
-                    startInlineEdit(id: obj.id, currentText: obj.label, location: location)
                     return
                 }
             }
@@ -694,6 +720,29 @@ struct KLineChartView: View {
             if editingTextId != nil { commitTextEdit() }
             let tolerance = (adjRange) * 0.02
             _ = ds.selectNearby(index: clickIndex, price: clickPrice, tolerance: tolerance)
+        }
+    }
+
+    // MARK: - 双击编辑
+
+    private func handleChartDoubleTap(location: CGPoint, geoWidth: CGFloat, chartHeight: CGFloat) {
+        let bars = displayBars
+        guard let g = chartGeometry(size: CGSize(width: geoWidth, height: chartHeight), bars: bars) else { return }
+        let (_, _, adjMin, adjRange, chartH, topPad, barW) = g
+        let clickIndex = Int((location.x - padding) / barW)
+        let clickPrice = (adjMin + adjRange) - adjRange * Double(location.y - topPad) / Double(chartH)
+        let ds = vm.drawingState
+        let bigTolerance = adjRange * 0.05
+
+        for i in ds.objects.indices {
+            let obj = ds.objects[i]
+            guard obj.type == .text else { continue }
+            if abs(Double(obj.startIndex - clickIndex)) < 5 && abs(obj.startPrice - clickPrice) < bigTolerance {
+                ds.deselectAll()
+                ds.objects[i].isSelected = true
+                startInlineEdit(id: obj.id, currentText: obj.label, location: location)
+                return
+            }
         }
     }
 

@@ -53,6 +53,19 @@ public enum BuiltinFunctions {
             // 均线扩展
             DMAFunction(),
             WMAFunction(),
+            // 高级函数
+            SLOPEFunction(),
+            FORCASTFunction(),
+            FILTERFunction(),
+            BARSSINCEFunction(),
+            BARSCOUNTFunction(),
+            CONSTFunction(),
+            LASTFunction(),
+            DEVSQFunction(),
+            ROUNDFunction(),
+            SIGNFunction(),
+            SUMBARSFunction(),
+            MULARFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

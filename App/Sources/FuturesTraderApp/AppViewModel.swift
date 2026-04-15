@@ -86,13 +86,11 @@ final class AppViewModel: ObservableObject {
 
     private func fetchQuotes() async {
         let symbols = watchList.map { $0.symbol }
-        do {
-            let result = try await api.fetchQuotes(symbols: symbols)
+        if let result = try? await api.fetchQuotes(symbols: symbols), !result.isEmpty {
             self.quotes = result
             self.errorMessage = nil
-        } catch {
-            self.errorMessage = "行情获取失败: \(error.localizedDescription)"
         }
+        // 非交易时段获取失败时静默忽略，保留上一次的报价数据
     }
 
     func loadKLines() async {

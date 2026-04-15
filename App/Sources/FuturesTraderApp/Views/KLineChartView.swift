@@ -75,22 +75,21 @@ struct KLineChartView: View {
     // MARK: - 缩放平移手势
 
     private var scrollGesture: some Gesture {
-        ScrollGesture()
+        DragGesture(minimumDistance: 5)
             .onChanged { value in
-                let dx = Int(value.translation.width / 5)
+                let dx = Int(-value.translation.width / 8)
                 scrollOffset = max(0, min(bars.count - visibleCount, scrollOffset + dx))
             }
     }
 
     private var magnifyGesture: some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                let scale = value.magnification
+        MagnificationGesture()
+            .onChanged { scale in
                 let newCount: Int
                 if scale > 1 {
-                    newCount = max(20, visibleCount - 2) // 放大：显示更少K线
+                    newCount = max(20, visibleCount - 2)
                 } else {
-                    newCount = min(bars.count, visibleCount + 2) // 缩小：显示更多K线
+                    newCount = min(bars.count, visibleCount + 2)
                 }
                 visibleCount = newCount
             }
@@ -406,9 +405,3 @@ struct KLineChartView: View {
     private func fmtPct(_ p: Decimal) -> String { String(format: "%+.2f%%", NSDecimalNumber(decimal: p).doubleValue) }
 }
 
-/// 滚动手势（触控板双指平移）
-struct ScrollGesture: Gesture {
-    var body: some Gesture {
-        DragGesture(minimumDistance: 5)
-    }
-}

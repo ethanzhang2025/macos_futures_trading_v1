@@ -583,26 +583,29 @@ struct KLineChartView: View {
                 if obj.isSelected { dot(x, y + 12, obj.color) }
 
             case .text:
-                let x = sX(obj.startIndex), y = sY(obj.startPrice)
+                let anchorX = sX(obj.startIndex), anchorY = sY(obj.startPrice)
                 let text = obj.label.isEmpty ? "..." : obj.label
                 let bw = obj.boxWidth, bh = obj.boxHeight
-                let bgRect = CGRect(x: x, y: y, width: bw, height: bh)
+                // 框以锚点为中心
+                let bx = anchorX - bw / 2, by = anchorY - bh / 2
+                let bgRect = CGRect(x: bx, y: by, width: bw, height: bh)
                 context.fill(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(Theme.panelBackground.opacity(0.9)))
                 context.stroke(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(obj.color.opacity(obj.isSelected ? 0.8 : 0.4)), lineWidth: obj.isSelected ? 1.5 : 0.5)
-                // 逐行绘制文字
-                let lineH: CGFloat = 14
-                let maxCharsPerLine = max(1, Int((bw - 12) / 7))
+                // 逐行绘制文字（左对齐）
+                let lineH: CGFloat = 15
+                let maxCharsPerLine = max(1, Int((bw - 16) / 7))
                 let wrappedLines = wrapText(text, maxCharsPerLine: maxCharsPerLine)
                 let maxLines = max(1, Int((bh - 8) / lineH))
                 for (li, line) in wrappedLines.prefix(maxLines).enumerated() {
                     context.draw(
                         Text(line).font(.system(size: 11, weight: .medium)).foregroundColor(obj.color),
-                        at: CGPoint(x: x + bw / 2, y: y + 6 + CGFloat(li) * lineH + lineH / 2)
+                        at: CGPoint(x: bx + 8, y: by + 6 + CGFloat(li) * lineH + lineH / 2),
+                        anchor: .leading
                     )
                 }
                 if obj.isSelected {
-                    dot(x, y, obj.color); dot(x + bw, y, obj.color)
-                    dot(x, y + bh, obj.color); dot(x + bw, y + bh, obj.color)
+                    dot(bx, by, obj.color); dot(bx + bw, by, obj.color)
+                    dot(bx, by + bh, obj.color); dot(bx + bw, by + bh, obj.color)
                 }
 
             case .none: break
@@ -723,10 +726,27 @@ struct KLineChartView: View {
         } else {
             // 非绘图模式：先提交正在编辑的文字
             if editingTextId != nil { commitTextEdit() }
-            // 单击选中/取消选中（不进入编辑）
-            let bigTolerance = (adjRange) * 0.05
+
+            // 先检查文字标注（用像素区域检测）
+            let (sXf, sYf, _, _, _, _, _) = g
             for i in ds.objects.indices {
                 let obj = ds.objects[i]
+                if obj.type == .text {
+                    let ax = sXf(obj.startIndex), ay = sYf(obj.startPrice)
+                    let hitRect = CGRect(x: ax - obj.boxWidth / 2, y: ay - obj.boxHeight / 2, width: obj.boxWidth, height: obj.boxHeight)
+                    if hitRect.contains(location) {
+                        ds.deselectAll()
+                        ds.objects[i].isSelected = true
+                        return
+                    }
+                }
+            }
+
+            // 再检查其他绘图对象
+            for i in ds.objects.indices {
+                let obj = ds.objects[i]
+                guard obj.type != .text else { continue }
+                let bigTolerance = (adjRange) * 0.03
                 if abs(Double(obj.startIndex - clickIndex)) < 5 && abs(obj.startPrice - clickPrice) < bigTolerance {
                     ds.deselectAll()
                     ds.objects[i].isSelected = true
@@ -745,19 +765,20 @@ struct KLineChartView: View {
     private func handleChartDoubleTap(location: CGPoint, geoWidth: CGFloat, chartHeight: CGFloat) {
         let bars = displayBars
         guard let g = chartGeometry(size: CGSize(width: geoWidth, height: chartHeight), bars: bars) else { return }
-        let (_, _, adjMin, adjRange, chartH, topPad, barW) = g
-        let clickIndex = Int((location.x - padding) / barW)
-        let clickPrice = (adjMin + adjRange) - adjRange * Double(location.y - topPad) / Double(chartH)
+        let (sX, sY, _, _, _, _, _) = g
         let ds = vm.drawingState
-        let bigTolerance = adjRange * 0.05
 
+        // 用像素坐标检测文字框区域
         for i in ds.objects.indices {
             let obj = ds.objects[i]
             guard obj.type == .text else { continue }
-            if abs(Double(obj.startIndex - clickIndex)) < 5 && abs(obj.startPrice - clickPrice) < bigTolerance {
+            let anchorX = sX(obj.startIndex), anchorY = sY(obj.startPrice)
+            let bx = anchorX - obj.boxWidth / 2, by = anchorY - obj.boxHeight / 2
+            let hitRect = CGRect(x: bx, y: by, width: obj.boxWidth, height: obj.boxHeight)
+            if hitRect.contains(location) {
                 ds.deselectAll()
                 ds.objects[i].isSelected = true
-                startInlineEdit(id: obj.id, currentText: obj.label, location: location)
+                startInlineEdit(id: obj.id, currentText: obj.label, location: CGPoint(x: anchorX, y: anchorY))
                 return
             }
         }

@@ -101,18 +101,9 @@ struct KLineChartView: View {
                 })
             }
         }
-        .onKeyPress(.upArrow) { vm.selectPrevSymbol(); return .handled }
-        .onKeyPress(.downArrow) { vm.selectNextSymbol(); return .handled }
-        .onKeyPress(.leftArrow) { scrollOffset = min(bars.count - visibleCount, scrollOffset + 3); return .handled }
-        .onKeyPress(.rightArrow) { scrollOffset = max(0, scrollOffset - 3); return .handled }
-        .onKeyPress("1") { vm.selectPeriodByKey(1); return .handled }
-        .onKeyPress("2") { vm.selectPeriodByKey(2); return .handled }
-        .onKeyPress("3") { vm.selectPeriodByKey(3); return .handled }
-        .onKeyPress("4") { vm.selectPeriodByKey(4); return .handled }
-        .onKeyPress("=") { visibleCount = max(20, visibleCount - 5); return .handled }
-        .onKeyPress("-") { visibleCount = min(bars.count, visibleCount + 5); return .handled }
-        .onKeyPress(.tab) { vm.cycleSubChart(); return .handled }
         .focusable()
+        .focusEffectDisabled()
+        .onAppear { setupKeyboardMonitor() }
     }
 
     // MARK: - 信息栏
@@ -281,4 +272,37 @@ struct KLineChartView: View {
     }
     private func fmtC(_ c: Decimal) -> String { String(format: "%+.0f", NSDecimalNumber(decimal: c).doubleValue) }
     private func fmtPct(_ p: Decimal) -> String { String(format: "%+.2f%%", NSDecimalNumber(decimal: p).doubleValue) }
+
+    // MARK: - 键盘监听（NSEvent全局监听，兼容所有macOS版本）
+
+    private func setupKeyboardMonitor() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            switch event.keyCode {
+            case 126: // ↑
+                vm.selectPrevSymbol(); return nil
+            case 125: // ↓
+                vm.selectNextSymbol(); return nil
+            case 123: // ←
+                scrollOffset = min(bars.count - visibleCount, scrollOffset + 3); return nil
+            case 124: // →
+                scrollOffset = max(0, scrollOffset - 3); return nil
+            case 18: // 1
+                vm.selectPeriodByKey(1); return nil
+            case 19: // 2
+                vm.selectPeriodByKey(2); return nil
+            case 20: // 3
+                vm.selectPeriodByKey(3); return nil
+            case 21: // 4
+                vm.selectPeriodByKey(4); return nil
+            case 24: // = (+)
+                visibleCount = max(20, visibleCount - 5); return nil
+            case 27: // -
+                visibleCount = min(bars.count, visibleCount + 5); return nil
+            case 48: // Tab
+                vm.cycleSubChart(); return nil
+            default:
+                return event
+            }
+        }
+    }
 }

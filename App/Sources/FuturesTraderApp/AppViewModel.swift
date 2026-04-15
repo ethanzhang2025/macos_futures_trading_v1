@@ -99,7 +99,7 @@ final class AppViewModel: ObservableObject {
         isLoading = true
         do {
             if selectedPeriod == "分时" {
-                let pts = try await api.fetchTimeline(symbol: selectedSymbol)
+                let pts = (try? await api.fetchTimeline(symbol: selectedSymbol)) ?? []
                 self.timelinePoints = pts
             } else {
                 let bars: [SinaKLineBar]

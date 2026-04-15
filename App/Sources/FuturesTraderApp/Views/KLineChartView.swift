@@ -9,6 +9,14 @@ enum MainOverlay: String, CaseIterable {
     case maAndBoll = "MA+BOLL"
 }
 
+/// 图表类型
+enum ChartStyle: String, CaseIterable {
+    case candlestick = "蜡烛"
+    case line = "线图"
+    case area = "面积"
+    case heikinAshi = "HA"
+}
+
 struct KLineChartView: View {
     let bars: [SinaKLineBar]
     let quote: SinaQuote?
@@ -19,6 +27,7 @@ struct KLineChartView: View {
     @State private var visibleCount: Int = 80
     @State private var scrollOffset: Int = 0
     @State private var mainOverlay: MainOverlay = .maAndBoll
+    @State private var chartStyle: ChartStyle = .candlestick
     // 内联文字编辑
     @State private var editingTextId: UUID?
     @State private var editingText: String = ""
@@ -113,18 +122,35 @@ struct KLineChartView: View {
                                 )
                             }
                         }
-                        // 主图指标切换按钮
-                        HStack(spacing: 2) {
-                            ForEach(MainOverlay.allCases, id: \.self) { overlay in
-                                Button(action: { mainOverlay = overlay }) {
-                                    Text(overlay.rawValue)
-                                        .font(.system(size: 9, weight: mainOverlay == overlay ? .bold : .regular))
-                                        .foregroundColor(mainOverlay == overlay ? Theme.ma5 : Theme.textMuted)
-                                        .padding(.horizontal, 5).padding(.vertical, 2)
-                                        .background(mainOverlay == overlay ? Theme.ma5.opacity(0.15) : Color.clear)
-                                        .cornerRadius(3)
+                        // 主图按钮区
+                        VStack(alignment: .trailing, spacing: 2) {
+                            // 图表类型
+                            HStack(spacing: 2) {
+                                ForEach(ChartStyle.allCases, id: \.self) { style in
+                                    Button(action: { chartStyle = style }) {
+                                        Text(style.rawValue)
+                                            .font(.system(size: 9, weight: chartStyle == style ? .bold : .regular))
+                                            .foregroundColor(chartStyle == style ? Theme.ma5 : Theme.textMuted)
+                                            .padding(.horizontal, 4).padding(.vertical, 2)
+                                            .background(chartStyle == style ? Theme.ma5.opacity(0.15) : Color.clear)
+                                            .cornerRadius(3)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
+                            }
+                            // 指标叠加
+                            HStack(spacing: 2) {
+                                ForEach(MainOverlay.allCases, id: \.self) { overlay in
+                                    Button(action: { mainOverlay = overlay }) {
+                                        Text(overlay.rawValue)
+                                            .font(.system(size: 9, weight: mainOverlay == overlay ? .bold : .regular))
+                                            .foregroundColor(mainOverlay == overlay ? Theme.ma5 : Theme.textMuted)
+                                            .padding(.horizontal, 4).padding(.vertical, 2)
+                                            .background(mainOverlay == overlay ? Theme.ma5.opacity(0.15) : Color.clear)
+                                            .cornerRadius(3)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
                         }
                         .padding(.trailing, 55).padding(.top, 1)
@@ -164,7 +190,7 @@ struct KLineChartView: View {
                     .frame(height: subH).background(Theme.chartBackground).cornerRadius(4)
                 }
                 .padding(.horizontal, 8)
-                .contextMenu { ChartContextMenu(mainOverlay: $mainOverlay) }
+                .contextMenu { ChartContextMenu(mainOverlay: $mainOverlay, chartStyle: $chartStyle) }
                 .gesture(DragGesture(minimumDistance: 5)
                     .onChanged { value in
                         if let selIdx = vm.drawingState.objects.firstIndex(where: { $0.isSelected }) {
@@ -304,16 +330,72 @@ struct KLineChartView: View {
             drawLine(context: context, values: boll.lower, color: Color.cyan.opacity(0.7), barW: barW, sY: sY, lineWidth: 1)
         }
 
-        // K线
-        for (i, bar) in bars.enumerated() {
-            let x = padding + CGFloat(i) * barW + barW / 2
-            let o = NSDecimalNumber(decimal: bar.open).doubleValue, c = NSDecimalNumber(decimal: bar.close).doubleValue
-            let h = NSDecimalNumber(decimal: bar.high).doubleValue, l = NSDecimalNumber(decimal: bar.low).doubleValue
-            let isUp = c >= o, color = isUp ? Theme.up : Theme.down
-            var shadow = Path(); shadow.move(to: CGPoint(x: x, y: sY(h))); shadow.addLine(to: CGPoint(x: x, y: sY(l)))
-            context.stroke(shadow, with: .color(color), lineWidth: 1)
-            let bTop = sY(max(o, c)), bBot = sY(min(o, c)), bH = max(1, bBot - bTop)
-            context.fill(Path(CGRect(x: x - candleW / 2, y: bTop, width: candleW, height: bH)), with: .color(color))
+        // 图表主体（根据chartStyle切换）
+        switch chartStyle {
+        case .candlestick:
+            for (i, bar) in bars.enumerated() {
+                let x = padding + CGFloat(i) * barW + barW / 2
+                let o = NSDecimalNumber(decimal: bar.open).doubleValue, c = NSDecimalNumber(decimal: bar.close).doubleValue
+                let h = NSDecimalNumber(decimal: bar.high).doubleValue, l = NSDecimalNumber(decimal: bar.low).doubleValue
+                let isUp = c >= o, color = isUp ? Theme.up : Theme.down
+                var shadow = Path(); shadow.move(to: CGPoint(x: x, y: sY(h))); shadow.addLine(to: CGPoint(x: x, y: sY(l)))
+                context.stroke(shadow, with: .color(color), lineWidth: 1)
+                let bTop = sY(max(o, c)), bBot = sY(min(o, c)), bH = max(1, bBot - bTop)
+                context.fill(Path(CGRect(x: x - candleW / 2, y: bTop, width: candleW, height: bH)), with: .color(color))
+            }
+
+        case .heikinAshi:
+            var prevHAClose = 0.0, prevHAOpen = 0.0
+            for (i, bar) in bars.enumerated() {
+                let o = NSDecimalNumber(decimal: bar.open).doubleValue, c = NSDecimalNumber(decimal: bar.close).doubleValue
+                let h = NSDecimalNumber(decimal: bar.high).doubleValue, l = NSDecimalNumber(decimal: bar.low).doubleValue
+                let haClose = (o + h + l + c) / 4
+                let haOpen = i == 0 ? (o + c) / 2 : (prevHAOpen + prevHAClose) / 2
+                let haHigh = max(h, max(haOpen, haClose))
+                let haLow = min(l, min(haOpen, haClose))
+                prevHAClose = haClose; prevHAOpen = haOpen
+                let x = padding + CGFloat(i) * barW + barW / 2
+                let isUp = haClose >= haOpen, color = isUp ? Theme.up : Theme.down
+                var shadow = Path(); shadow.move(to: CGPoint(x: x, y: sY(haHigh))); shadow.addLine(to: CGPoint(x: x, y: sY(haLow)))
+                context.stroke(shadow, with: .color(color), lineWidth: 1)
+                let bTop = sY(max(haOpen, haClose)), bBot = sY(min(haOpen, haClose)), bH = max(1, bBot - bTop)
+                context.fill(Path(CGRect(x: x - candleW / 2, y: bTop, width: candleW, height: bH)), with: .color(color))
+            }
+
+        case .line:
+            var path = Path()
+            for (i, bar) in bars.enumerated() {
+                let x = padding + CGFloat(i) * barW + barW / 2
+                let c = NSDecimalNumber(decimal: bar.close).doubleValue
+                let pt = CGPoint(x: x, y: sY(c))
+                if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+            }
+            context.stroke(path, with: .color(Color(red: 0.3, green: 0.6, blue: 1.0)), lineWidth: 1.5)
+
+        case .area:
+            let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+            // 填充区域
+            var fillPath = Path()
+            let baseY = sY(adjMin)
+            for (i, c) in closes.enumerated() {
+                let x = padding + CGFloat(i) * barW + barW / 2
+                let pt = CGPoint(x: x, y: sY(c))
+                if i == 0 { fillPath.move(to: CGPoint(x: x, y: baseY)); fillPath.addLine(to: pt) }
+                else { fillPath.addLine(to: pt) }
+            }
+            let lastX = padding + CGFloat(closes.count - 1) * barW + barW / 2
+            fillPath.addLine(to: CGPoint(x: lastX, y: baseY))
+            fillPath.closeSubpath()
+            // 渐变填充
+            context.fill(fillPath, with: .color(Color(red: 0.2, green: 0.5, blue: 0.9).opacity(0.15)))
+            // 顶部线条
+            var linePath = Path()
+            for (i, c) in closes.enumerated() {
+                let x = padding + CGFloat(i) * barW + barW / 2
+                let pt = CGPoint(x: x, y: sY(c))
+                if i == 0 { linePath.move(to: pt) } else { linePath.addLine(to: pt) }
+            }
+            context.stroke(linePath, with: .color(Color(red: 0.3, green: 0.6, blue: 1.0)), lineWidth: 1.5)
         }
 
         // MA线（可配置）

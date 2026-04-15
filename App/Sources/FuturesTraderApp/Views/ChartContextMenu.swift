@@ -4,9 +4,23 @@ import SwiftUI
 struct ChartContextMenu: View {
     @EnvironmentObject var vm: AppViewModel
     @Binding var mainOverlay: MainOverlay
+    @Binding var chartStyle: ChartStyle
 
     var body: some View {
         Group {
+            // 图表类型
+            Menu("图表类型") {
+                ForEach(ChartStyle.allCases, id: \.self) { style in
+                    Button(action: { chartStyle = style }) {
+                        HStack {
+                            Text(style.rawValue)
+                            if chartStyle == style { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+            }
+
+            Divider()
             // 周期切换
             Menu("切换周期") {
                 ForEach(["分时", "日线", "60分", "15分", "5分"], id: \.self) { period in

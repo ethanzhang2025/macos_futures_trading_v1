@@ -13,7 +13,7 @@ struct InlineTextEditor: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .trailing, spacing: 0) {
             // 编辑区域
             TextEditor(text: $text)
                 .font(.system(size: 12))
@@ -22,69 +22,52 @@ struct InlineTextEditor: View {
                 .background(Theme.panelBackground)
                 .focused($isFocused)
                 .frame(width: editorWidth, height: editorHeight)
-                .cornerRadius(4)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Theme.ma5, lineWidth: 1.5)
-                )
 
-            // 操作栏
-            HStack(spacing: 8) {
-                // 拖拽调整大小的提示
-                Text("\(Int(editorWidth))×\(Int(editorHeight))")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(Theme.textMuted)
-
+            // 底部操作栏
+            HStack(spacing: 6) {
                 Spacer()
-
                 Button("取消") { onCancel() }
                     .font(.system(size: 11))
                     .foregroundColor(Theme.textMuted)
                     .buttonStyle(.plain)
-
                 Button("确定") { onCommit() }
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundColor(Theme.ma5)
                     .buttonStyle(.plain)
+
+                // 拖拽调整大小手柄
+                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.textMuted)
+                    .frame(width: 20, height: 16)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                editorWidth = max(120, editorWidth + value.translation.width / 10)
+                                editorHeight = max(30, editorHeight + value.translation.height / 10)
+                            }
+                    )
+                    .onHover { inside in
+                        if inside { NSCursor.resizeUpDown.push() }
+                        else { NSCursor.pop() }
+                    }
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .frame(width: editorWidth)
-            .background(Theme.panelBackground.opacity(0.9))
-            .cornerRadius(0)
-
-            // 右下角拖拽调整大小的手柄
+            .background(Theme.panelBackground.opacity(0.95))
         }
-        .position(x: max(editorWidth / 2 + 60, position.x), y: max(editorHeight / 2 + 20, position.y))
-        .gesture(
-            DragGesture()
-                .onChanged { _ in } // 阻止拖拽穿透到K线图
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(Theme.ma5, lineWidth: 1.5)
         )
-        .onAppear { isFocused = true }
-        // 右下角拖拽调整大小
-        .overlay(alignment: .bottomTrailing) {
-            Rectangle()
-                .fill(Color.clear)
-                .frame(width: 16, height: 16)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            editorWidth = max(120, editorWidth + value.translation.width)
-                            editorHeight = max(30, editorHeight + value.translation.height)
-                        }
-                )
-                .position(x: max(editorWidth / 2 + 60, position.x) + editorWidth / 2 - 8,
-                           y: max(editorHeight / 2 + 20, position.y) + editorHeight / 2 + 10)
-                .cursor(.resizeUpDown)
-        }
-    }
-}
-
-extension View {
-    func cursor(_ cursor: NSCursor) -> some View {
-        self.onHover { inside in
-            if inside { cursor.push() } else { NSCursor.pop() }
+        .cornerRadius(4)
+        .shadow(color: .black.opacity(0.5), radius: 8)
+        .position(x: max(editorWidth / 2 + 60, position.x),
+                  y: max(editorHeight / 2 + 20, position.y))
+        .onAppear {
+            isFocused = true
         }
     }
 }

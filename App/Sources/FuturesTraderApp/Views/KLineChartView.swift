@@ -536,12 +536,19 @@ struct KLineChartView: View {
             case .text:
                 let x = sX(obj.startIndex), y = sY(obj.startPrice)
                 let text = obj.label.isEmpty ? "标注" : obj.label
-                // 背景框
-                let bgRect = CGRect(x: x - 30, y: y - 10, width: 60, height: 20)
-                context.fill(Path(roundedRect: bgRect, cornerRadius: 3), with: .color(Theme.panelBackground.opacity(0.8)))
-                context.stroke(Path(roundedRect: bgRect, cornerRadius: 3), with: .color(obj.color.opacity(0.5)), lineWidth: 0.5)
-                context.draw(Text(text).font(.system(size: 11, weight: .medium)).foregroundColor(obj.color), at: CGPoint(x: x, y: y))
-                if obj.isSelected { dot(x, y + 8, obj.color) }
+                let lines = text.components(separatedBy: "\n")
+                let lineH: CGFloat = 15
+                let maxW: CGFloat = max(60, CGFloat(lines.map(\.count).max() ?? 4) * 8 + 16)
+                let totalH = CGFloat(lines.count) * lineH + 8
+                let bgRect = CGRect(x: x - maxW / 2, y: y - totalH / 2, width: maxW, height: totalH)
+                context.fill(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(Theme.panelBackground.opacity(0.85)))
+                context.stroke(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(obj.color.opacity(0.5)), lineWidth: obj.isSelected ? 1.5 : 0.5)
+                for (li, line) in lines.enumerated() {
+                    let ly = y - totalH / 2 + 4 + CGFloat(li) * lineH + lineH / 2
+                    context.draw(Text(line).font(.system(size: 11, weight: .medium)).foregroundColor(obj.color),
+                                 at: CGPoint(x: x, y: ly))
+                }
+                if obj.isSelected { dot(x + maxW / 2, y + totalH / 2, obj.color) }
 
             case .none: break
             }
@@ -700,18 +707,28 @@ struct KLineChartView: View {
 
     private func showTextInput(current: String = "") -> String {
         let alert = NSAlert()
-        alert.messageText = current.isEmpty ? "添加文字标注" : "编辑文字标注"
-        alert.informativeText = "请输入标注内容："
+        alert.messageText = current.isEmpty ? "添加标注" : "编辑标注"
+        alert.informativeText = ""
         alert.addButton(withTitle: "确定")
         alert.addButton(withTitle: "取消")
-        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
-        textField.stringValue = current
-        textField.placeholderString = "输入标注文字"
-        alert.accessoryView = textField
-        alert.window.initialFirstResponder = textField
+        // 多行文本输入框
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 120))
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 120))
+        textView.isEditable = true
+        textView.isRichText = false
+        textView.font = .systemFont(ofSize: 13)
+        textView.string = current
+        textView.textColor = .labelColor
+        textView.backgroundColor = .textBackgroundColor
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        scrollView.documentView = textView
+        alert.accessoryView = scrollView
+        alert.window.initialFirstResponder = textView
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
-            return textField.stringValue
+            return textView.string
         }
         return ""
     }

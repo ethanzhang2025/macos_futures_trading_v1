@@ -403,107 +403,194 @@ struct KLineChartView: View {
 
     // MARK: - 绘图对象渲染
 
-    private func drawDrawingObjects(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
-        guard !bars.isEmpty else { return }
+    private func chartGeometry(size: CGSize, bars: [SinaKLineBar]) -> (sX: (Int) -> CGFloat, sY: (Double) -> CGFloat, adjMin: Double, adjRange: Double, chartH: CGFloat, topPad: CGFloat, barW: CGFloat)? {
+        guard bars.count >= 2 else { return nil }
         let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
-        guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return }
-        let chartW = size.width - padding * 2, chartH = size.height - 30, topPad: CGFloat = 16
-        let barW = chartW / CGFloat(bars.count)
+        guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return nil }
+        let chartH = size.height - 30, topPad: CGFloat = 16
+        let barW = (size.width - padding * 2) / CGFloat(bars.count)
         let range = maxP - minP, margin = range * 0.08, adjMin = minP - margin, adjRange = range + margin * 2
         let sY: (Double) -> CGFloat = { p in topPad + chartH * CGFloat(1 - (p - adjMin) / adjRange) }
-        let sX: (Int) -> CGFloat = { i in padding + CGFloat(i) * barW + barW / 2 }
+        let sX: (Int) -> CGFloat = { i in self.padding + CGFloat(i) * barW + barW / 2 }
+        return (sX, sY, adjMin, adjRange, chartH, topPad, barW)
+    }
+
+    private func drawDrawingObjects(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
+        guard let g = chartGeometry(size: size, bars: bars) else { return }
+        let (sX, sY, adjMin, adjRange, chartH, topPad, _) = g
 
         for obj in vm.drawingState.objects {
-            let lineWidth: CGFloat = obj.isSelected ? 2 : 1
-            let style = obj.isSelected ? StrokeStyle(lineWidth: lineWidth) : StrokeStyle(lineWidth: lineWidth, dash: [])
+            let lw: CGFloat = obj.isSelected ? 2 : 1
+            let st = StrokeStyle(lineWidth: lw)
+            let dot = { (x: CGFloat, y: CGFloat, c: Color) in
+                context.fill(Path(ellipseIn: CGRect(x: x - 4, y: y - 4, width: 8, height: 8)), with: .color(c))
+            }
 
             switch obj.type {
             case .horizontalLine:
                 let y = sY(obj.startPrice)
-                if y >= topPad && y <= topPad + chartH {
-                    var path = Path()
-                    path.move(to: CGPoint(x: padding, y: y))
-                    path.addLine(to: CGPoint(x: size.width - padding, y: y))
-                    context.stroke(path, with: .color(obj.color), style: style)
-                    // 价格标签
-                    context.draw(Text(String(format: "%.0f", obj.startPrice)).font(.system(size: 8, design: .monospaced)).foregroundColor(obj.color),
-                                 at: CGPoint(x: padding - 5, y: y), anchor: .trailing)
-                    if obj.isSelected {
-                        context.fill(Path(ellipseIn: CGRect(x: padding - 4, y: y - 4, width: 8, height: 8)), with: .color(obj.color))
-                        context.fill(Path(ellipseIn: CGRect(x: size.width - padding - 4, y: y - 4, width: 8, height: 8)), with: .color(obj.color))
-                    }
-                }
+                var p = Path(); p.move(to: CGPoint(x: padding, y: y)); p.addLine(to: CGPoint(x: size.width - padding, y: y))
+                context.stroke(p, with: .color(obj.color), style: st)
+                context.draw(Text(String(format: "%.0f", obj.startPrice)).font(.system(size: 8, design: .monospaced)).foregroundColor(obj.color),
+                             at: CGPoint(x: padding - 5, y: y), anchor: .trailing)
+                if obj.isSelected { dot(padding, y, obj.color); dot(size.width - padding, y, obj.color) }
+
+            case .verticalLine:
+                let x = sX(obj.startIndex)
+                var p = Path(); p.move(to: CGPoint(x: x, y: topPad)); p.addLine(to: CGPoint(x: x, y: topPad + chartH))
+                context.stroke(p, with: .color(obj.color), style: st)
+                if obj.isSelected { dot(x, topPad, obj.color); dot(x, topPad + chartH, obj.color) }
 
             case .trendLine:
-                let x1 = sX(obj.startIndex), y1 = sY(obj.startPrice)
-                let x2 = sX(obj.endIndex), y2 = sY(obj.endPrice)
-                // 延伸到图表边缘
-                let dx = x2 - x1, dy = y2 - y1
-                var extX1 = x1, extY1 = y1, extX2 = x2, extY2 = y2
-                if abs(dx) > 0.001 {
-                    let slope = dy / dx
-                    extX1 = padding; extY1 = y1 + slope * (extX1 - x1)
-                    extX2 = size.width - padding; extY2 = y1 + slope * (extX2 - x1)
-                }
-                var path = Path()
-                path.move(to: CGPoint(x: extX1, y: extY1))
-                path.addLine(to: CGPoint(x: extX2, y: extY2))
-                context.stroke(path, with: .color(obj.color), style: style)
-                if obj.isSelected {
-                    context.fill(Path(ellipseIn: CGRect(x: x1 - 4, y: y1 - 4, width: 8, height: 8)), with: .color(obj.color))
-                    context.fill(Path(ellipseIn: CGRect(x: x2 - 4, y: y2 - 4, width: 8, height: 8)), with: .color(obj.color))
-                }
+                let x1 = sX(obj.startIndex), y1 = sY(obj.startPrice), x2 = sX(obj.endIndex), y2 = sY(obj.endPrice)
+                let dx = x2 - x1
+                var eX1 = x1, eY1 = y1, eX2 = x2, eY2 = y2
+                if abs(dx) > 0.001 { let s = (y2 - y1) / dx; eX1 = padding; eY1 = y1 + s * (eX1 - x1); eX2 = size.width - padding; eY2 = y1 + s * (eX2 - x1) }
+                var p = Path(); p.move(to: CGPoint(x: eX1, y: eY1)); p.addLine(to: CGPoint(x: eX2, y: eY2))
+                context.stroke(p, with: .color(obj.color), style: st)
+                if obj.isSelected { dot(x1, y1, obj.color); dot(x2, y2, obj.color) }
 
-            case .none:
-                break
+            case .ray:
+                let x1 = sX(obj.startIndex), y1 = sY(obj.startPrice), x2 = sX(obj.endIndex), y2 = sY(obj.endPrice)
+                let dx = x2 - x1
+                var eX2 = x2, eY2 = y2
+                if abs(dx) > 0.001 { let s = (y2 - y1) / dx; eX2 = size.width - padding; eY2 = y1 + s * (eX2 - x1) }
+                var p = Path(); p.move(to: CGPoint(x: x1, y: y1)); p.addLine(to: CGPoint(x: eX2, y: eY2))
+                context.stroke(p, with: .color(obj.color), style: st)
+                if obj.isSelected { dot(x1, y1, obj.color); dot(x2, y2, obj.color) }
+
+            case .fibonacci:
+                let x1 = sX(obj.startIndex), x2 = sX(obj.endIndex)
+                let highP = max(obj.startPrice, obj.endPrice), lowP = min(obj.startPrice, obj.endPrice)
+                let fibRange = highP - lowP
+                let left = min(x1, x2), right = max(x1, x2)
+                for (li, level) in FibonacciLevels.levels.enumerated() {
+                    let price = highP - fibRange * level.ratio
+                    let y = sY(price)
+                    let color = li < FibonacciLevels.colors.count ? FibonacciLevels.colors[li] : obj.color
+                    var lp = Path(); lp.move(to: CGPoint(x: left, y: y)); lp.addLine(to: CGPoint(x: right, y: y))
+                    context.stroke(lp, with: .color(color), lineWidth: lw)
+                    context.draw(Text("\(level.label) \(String(format: "%.0f", price))").font(.system(size: 8, design: .monospaced)).foregroundColor(color),
+                                 at: CGPoint(x: right + 5, y: y), anchor: .leading)
+                }
+                // 竖线边框
+                var vl = Path(); vl.move(to: CGPoint(x: left, y: sY(highP))); vl.addLine(to: CGPoint(x: left, y: sY(lowP)))
+                var vr = Path(); vr.move(to: CGPoint(x: right, y: sY(highP))); vr.addLine(to: CGPoint(x: right, y: sY(lowP)))
+                context.stroke(vl, with: .color(obj.color.opacity(0.3)), lineWidth: 0.5)
+                context.stroke(vr, with: .color(obj.color.opacity(0.3)), lineWidth: 0.5)
+                // 半透明填充各层
+                for li in 0..<FibonacciLevels.levels.count - 1 {
+                    let p1 = highP - fibRange * FibonacciLevels.levels[li].ratio
+                    let p2 = highP - fibRange * FibonacciLevels.levels[li + 1].ratio
+                    let color = li < FibonacciLevels.colors.count ? FibonacciLevels.colors[li] : obj.color
+                    var fp = Path()
+                    fp.addRect(CGRect(x: left, y: sY(p1), width: right - left, height: sY(p2) - sY(p1)))
+                    context.fill(fp, with: .color(color.opacity(0.05)))
+                }
+                if obj.isSelected { dot(x1, sY(obj.startPrice), obj.color); dot(x2, sY(obj.endPrice), obj.color) }
+
+            case .parallelChannel:
+                let x1 = sX(obj.startIndex), y1 = sY(obj.startPrice), x2 = sX(obj.endIndex), y2 = sY(obj.endPrice)
+                let offsetY = sY(obj.startPrice - obj.channelWidth) - y1
+                // 上沿
+                var p1 = Path(); p1.move(to: CGPoint(x: x1, y: y1)); p1.addLine(to: CGPoint(x: x2, y: y2))
+                context.stroke(p1, with: .color(obj.color), style: st)
+                // 下沿
+                var p2 = Path(); p2.move(to: CGPoint(x: x1, y: y1 + offsetY)); p2.addLine(to: CGPoint(x: x2, y: y2 + offsetY))
+                context.stroke(p2, with: .color(obj.color), style: st)
+                // 中线虚线
+                var pm = Path(); pm.move(to: CGPoint(x: x1, y: y1 + offsetY / 2)); pm.addLine(to: CGPoint(x: x2, y: y2 + offsetY / 2))
+                context.stroke(pm, with: .color(obj.color.opacity(0.4)), style: StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
+                // 填充
+                var fp = Path()
+                fp.move(to: CGPoint(x: x1, y: y1)); fp.addLine(to: CGPoint(x: x2, y: y2))
+                fp.addLine(to: CGPoint(x: x2, y: y2 + offsetY)); fp.addLine(to: CGPoint(x: x1, y: y1 + offsetY)); fp.closeSubpath()
+                context.fill(fp, with: .color(obj.color.opacity(0.06)))
+                if obj.isSelected { dot(x1, y1, obj.color); dot(x2, y2, obj.color) }
+
+            case .rectangle:
+                let x1 = sX(obj.startIndex), y1 = sY(obj.startPrice), x2 = sX(obj.endIndex), y2 = sY(obj.endPrice)
+                let rect = CGRect(x: min(x1, x2), y: min(y1, y2), width: abs(x2 - x1), height: abs(y2 - y1))
+                context.stroke(Path(rect), with: .color(obj.color), style: st)
+                context.fill(Path(rect), with: .color(obj.color.opacity(0.06)))
+                if obj.isSelected { dot(x1, y1, obj.color); dot(x2, y2, obj.color) }
+
+            case .arrow:
+                let x = sX(obj.startIndex), y = sY(obj.startPrice)
+                // 向上箭头
+                var ap = Path()
+                ap.move(to: CGPoint(x: x, y: y - 10)); ap.addLine(to: CGPoint(x: x - 5, y: y)); ap.addLine(to: CGPoint(x: x + 5, y: y)); ap.closeSubpath()
+                context.fill(ap, with: .color(obj.color))
+                if obj.isSelected { dot(x, y, obj.color) }
+
+            case .text:
+                let x = sX(obj.startIndex), y = sY(obj.startPrice)
+                let text = obj.label.isEmpty ? "标注" : obj.label
+                context.draw(Text(text).font(.system(size: 11, weight: .medium)).foregroundColor(obj.color), at: CGPoint(x: x, y: y))
+                if obj.isSelected { dot(x, y + 8, obj.color) }
+
+            case .none: break
             }
         }
 
-        // 绘图模式实时预览线
+        // 实时预览线
         if vm.drawingState.isDrawing {
-            let previewStyle = StrokeStyle(lineWidth: 1, dash: [6, 4])
-            let previewColor = Color.yellow.opacity(0.8)
+            let pvStyle = StrokeStyle(lineWidth: 1, dash: [6, 4])
+            let pvColor = Color.yellow.opacity(0.8)
             let mouseY = max(topPad, min(topPad + chartH, mouseLocation.y))
             let mousePrice = (adjMin + adjRange) - adjRange * Double(mouseY - topPad) / Double(chartH)
+            let mouseIdx = Int((mouseLocation.x - padding) / g.barW)
+            let ds = vm.drawingState
 
-            switch vm.drawingState.activeTool {
+            switch ds.activeTool {
             case .horizontalLine:
-                // 水平虚线跟随鼠标Y轴
-                var hp = Path()
-                hp.move(to: CGPoint(x: padding, y: mouseY))
-                hp.addLine(to: CGPoint(x: size.width - padding, y: mouseY))
-                context.stroke(hp, with: .color(previewColor), style: previewStyle)
-                // 价格标签
-                context.draw(Text(String(format: "%.0f", mousePrice)).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(previewColor),
+                var hp = Path(); hp.move(to: CGPoint(x: padding, y: mouseY)); hp.addLine(to: CGPoint(x: size.width - padding, y: mouseY))
+                context.stroke(hp, with: .color(pvColor), style: pvStyle)
+                context.draw(Text(String(format: "%.0f", mousePrice)).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(pvColor),
                              at: CGPoint(x: padding - 5, y: mouseY), anchor: .trailing)
-
-            case .trendLine:
-                if let si = vm.drawingState.tempStartIndex, let sp = vm.drawingState.tempStartPrice {
-                    // 第一个点已确定，预览线从起点到鼠标位置
+            case .verticalLine:
+                var vp = Path(); vp.move(to: CGPoint(x: mouseLocation.x, y: topPad)); vp.addLine(to: CGPoint(x: mouseLocation.x, y: topPad + chartH))
+                context.stroke(vp, with: .color(pvColor), style: pvStyle)
+            case .trendLine, .ray, .parallelChannel, .rectangle, .fibonacci:
+                if let si = ds.tempStartIndex, let sp = ds.tempStartPrice {
                     let sx = sX(si), sy = sY(sp)
-                    var tp = Path()
-                    tp.move(to: CGPoint(x: sx, y: sy))
-                    tp.addLine(to: CGPoint(x: mouseLocation.x, y: mouseY))
-                    context.stroke(tp, with: .color(previewColor), style: previewStyle)
-                    // 起点圆点
-                    context.fill(Path(ellipseIn: CGRect(x: sx - 4, y: sy - 4, width: 8, height: 8)), with: .color(previewColor))
-                    // 终点圆点
-                    context.fill(Path(ellipseIn: CGRect(x: mouseLocation.x - 3, y: mouseY - 3, width: 6, height: 6)), with: .color(previewColor.opacity(0.5)))
+                    switch ds.activeTool {
+                    case .rectangle, .fibonacci:
+                        let rect = CGRect(x: min(sx, mouseLocation.x), y: min(sy, mouseY), width: abs(mouseLocation.x - sx), height: abs(mouseY - sy))
+                        context.stroke(Path(rect), with: .color(pvColor), style: pvStyle)
+                    case .parallelChannel:
+                        var tp = Path(); tp.move(to: CGPoint(x: sx, y: sy)); tp.addLine(to: CGPoint(x: mouseLocation.x, y: mouseY))
+                        context.stroke(tp, with: .color(pvColor), style: pvStyle)
+                        // 平行线预览（通道宽度默认为价格范围的5%）
+                        let chW = (adjRange) * 0.05
+                        let offY = sY(sp - chW) - sy
+                        var tp2 = Path(); tp2.move(to: CGPoint(x: sx, y: sy + offY)); tp2.addLine(to: CGPoint(x: mouseLocation.x, y: mouseY + offY))
+                        context.stroke(tp2, with: .color(pvColor.opacity(0.5)), style: pvStyle)
+                    default:
+                        var tp = Path(); tp.move(to: CGPoint(x: sx, y: sy)); tp.addLine(to: CGPoint(x: mouseLocation.x, y: mouseY))
+                        context.stroke(tp, with: .color(pvColor), style: pvStyle)
+                    }
+                    context.fill(Path(ellipseIn: CGRect(x: sx - 4, y: sy - 4, width: 8, height: 8)), with: .color(pvColor))
+                    context.fill(Path(ellipseIn: CGRect(x: mouseLocation.x - 3, y: mouseY - 3, width: 6, height: 6)), with: .color(pvColor.opacity(0.5)))
                 } else {
-                    // 还没点第一个点，显示十字线引导
                     var vp = Path(); vp.move(to: CGPoint(x: mouseLocation.x, y: topPad)); vp.addLine(to: CGPoint(x: mouseLocation.x, y: topPad + chartH))
                     var hp = Path(); hp.move(to: CGPoint(x: padding, y: mouseY)); hp.addLine(to: CGPoint(x: size.width - padding, y: mouseY))
-                    context.stroke(vp, with: .color(previewColor.opacity(0.3)), style: previewStyle)
-                    context.stroke(hp, with: .color(previewColor.opacity(0.3)), style: previewStyle)
+                    context.stroke(vp, with: .color(pvColor.opacity(0.3)), style: pvStyle)
+                    context.stroke(hp, with: .color(pvColor.opacity(0.3)), style: pvStyle)
                 }
-
-            case .none:
-                break
+            case .arrow:
+                var ap = Path()
+                ap.move(to: CGPoint(x: mouseLocation.x, y: mouseY - 10))
+                ap.addLine(to: CGPoint(x: mouseLocation.x - 5, y: mouseY))
+                ap.addLine(to: CGPoint(x: mouseLocation.x + 5, y: mouseY)); ap.closeSubpath()
+                context.fill(ap, with: .color(pvColor))
+            case .text:
+                context.draw(Text("点击放置文字").font(.system(size: 11)).foregroundColor(pvColor), at: CGPoint(x: mouseLocation.x, y: mouseY))
+            case .none: break
             }
 
-            // 提示文字
-            let toolName = vm.drawingState.activeTool.rawValue
-            let hint = vm.drawingState.tempStartIndex != nil ? "点击第二个点完成\(toolName)" : "点击设置\(toolName) · ESC取消"
+            let toolName = ds.activeTool.rawValue
+            let hint = ds.tempStartIndex != nil ? "点击第二个点完成\(toolName)" : "点击设置\(toolName) · ESC取消"
             context.draw(Text(hint).font(.system(size: 11, weight: .medium)).foregroundColor(Theme.ma5),
                          at: CGPoint(x: size.width / 2, y: topPad + chartH + 16))
         }
@@ -513,36 +600,42 @@ struct KLineChartView: View {
 
     private func handleChartTap(location: CGPoint, geoWidth: CGFloat, chartHeight: CGFloat) {
         let bars = displayBars
-        guard !bars.isEmpty else { return }
-
-        let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
-        guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return }
-        let chartW = geoWidth - padding * 2, chartH = chartHeight - 30, topPad: CGFloat = 16
-        let barW = chartW / CGFloat(bars.count)
-        let range = maxP - minP, margin = range * 0.08, adjMin = minP - margin, adjRange = range + margin * 2
+        guard let g = chartGeometry(size: CGSize(width: geoWidth, height: chartHeight), bars: bars) else { return }
+        let (_, _, adjMin, adjRange, chartH, topPad, barW) = g
 
         let clickIndex = Int((location.x - padding) / barW)
         let clickPrice = (adjMin + adjRange) - adjRange * Double(location.y - topPad) / Double(chartH)
-
         let ds = vm.drawingState
 
         if ds.isDrawing {
-            switch ds.activeTool {
-            case .horizontalLine:
-                ds.addObject(.horizontal(price: clickPrice, index: clickIndex))
-            case .trendLine:
+            let tool = ds.activeTool
+            if tool.needsTwoClicks {
                 if let si = ds.tempStartIndex, let sp = ds.tempStartPrice {
-                    ds.addObject(.trend(startIndex: si, startPrice: sp, endIndex: clickIndex, endPrice: clickPrice))
+                    // 第二次点击
+                    switch tool {
+                    case .trendLine:   ds.addObject(.trend(si: si, sp: sp, ei: clickIndex, ep: clickPrice))
+                    case .ray:         ds.addObject(.ray(si: si, sp: sp, ei: clickIndex, ep: clickPrice))
+                    case .fibonacci:   ds.addObject(.fib(si: si, sp: sp, ei: clickIndex, ep: clickPrice))
+                    case .rectangle:   ds.addObject(.rect(si: si, sp: sp, ei: clickIndex, ep: clickPrice))
+                    case .parallelChannel:
+                        let chWidth = adjRange * 0.05
+                        ds.addObject(.channel(si: si, sp: sp, ei: clickIndex, ep: clickPrice, width: chWidth))
+                    default: break
+                    }
                 } else {
-                    ds.tempStartIndex = clickIndex
-                    ds.tempStartPrice = clickPrice
+                    ds.tempStartIndex = clickIndex; ds.tempStartPrice = clickPrice
                 }
-            case .none:
-                break
+            } else {
+                switch tool {
+                case .horizontalLine: ds.addObject(.horizontal(price: clickPrice, index: clickIndex))
+                case .verticalLine:   ds.addObject(.vertical(index: clickIndex, price: clickPrice))
+                case .arrow:          ds.addObject(.arrowMark(index: clickIndex, price: clickPrice))
+                case .text:           ds.addObject(.textMark(index: clickIndex, price: clickPrice, text: "标注"))
+                default: break
+                }
             }
         } else {
-            // 非绘图模式：点击选中/取消选中
-            let tolerance = range * 0.02
+            let tolerance = (adjRange) * 0.02
             _ = ds.selectNearby(index: clickIndex, price: clickPrice, tolerance: tolerance)
         }
     }

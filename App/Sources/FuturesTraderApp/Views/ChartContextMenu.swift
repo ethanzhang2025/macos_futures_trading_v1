@@ -70,12 +70,25 @@ struct ChartContextMenu: View {
 
             // 绘图工具
             Menu("绘图工具") {
-                Button("趋势线") { vm.drawingState.startTool(.trendLine) }
-                Button("水平线") { vm.drawingState.startTool(.horizontalLine) }
+                Menu("线条") {
+                    ForEach(DrawingToolType.lineTools, id: \.self) { tool in
+                        Button(tool.rawValue) { vm.drawingState.startTool(tool) }
+                    }
+                }
+                Menu("区域/分析") {
+                    ForEach(DrawingToolType.areaTools, id: \.self) { tool in
+                        Button(tool.rawValue) { vm.drawingState.startTool(tool) }
+                    }
+                }
+                Menu("标注") {
+                    ForEach(DrawingToolType.annotationTools, id: \.self) { tool in
+                        Button(tool.rawValue) { vm.drawingState.startTool(tool) }
+                    }
+                }
                 Divider()
-                Button("删除选中") { vm.drawingState.deleteSelected() }
+                Button("删除选中 (Delete)") { vm.drawingState.deleteSelected() }
                     .disabled(!vm.drawingState.objects.contains { $0.isSelected })
-                Button("清除全部") { vm.drawingState.clearAll() }
+                Button("清除全部绘图") { vm.drawingState.clearAll() }
                     .disabled(vm.drawingState.objects.isEmpty)
             }
 

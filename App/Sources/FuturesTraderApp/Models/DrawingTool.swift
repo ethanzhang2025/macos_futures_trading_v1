@@ -45,6 +45,10 @@ struct DrawingObject: Identifiable, Equatable {
     var channelWidth: Double = 0
     /// 文字内容
     var label: String = ""
+    /// 文字框宽度（像素）
+    var boxWidth: CGFloat = 200
+    /// 文字框高度（像素）
+    var boxHeight: CGFloat = 60
 
     static func == (lhs: DrawingObject, rhs: DrawingObject) -> Bool { lhs.id == rhs.id }
 

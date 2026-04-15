@@ -23,8 +23,14 @@ struct KLineChartView: View {
     @State private var editingTextId: UUID?
     @State private var editingText: String = ""
     @State private var editingPosition: CGPoint = .zero
+    @State private var editingWidth: CGFloat = 200
+    @State private var editingHeight: CGFloat = 60
     // 拖拽移动标注
     @State private var isDraggingObject: Bool = false
+    @State private var dragStartIndex: Int = 0
+    @State private var dragStartPrice: Double = 0
+    @State private var dragEndIndex: Int = 0
+    @State private var dragEndPrice: Double = 0
 
     private let padding: CGFloat = 50
 
@@ -99,6 +105,8 @@ struct KLineChartView: View {
                             if editingTextId != nil {
                                 InlineTextEditor(
                                     text: $editingText,
+                                    editorWidth: $editingWidth,
+                                    editorHeight: $editingHeight,
                                     position: editingPosition,
                                     onCommit: { commitTextEdit() },
                                     onCancel: { cancelTextEdit() }
@@ -159,23 +167,28 @@ struct KLineChartView: View {
                 .contextMenu { ChartContextMenu(mainOverlay: $mainOverlay) }
                 .gesture(DragGesture(minimumDistance: 5)
                     .onChanged { value in
-                        // 检查是否有选中的标注，如果有则移动它
                         if let selIdx = vm.drawingState.objects.firstIndex(where: { $0.isSelected }) {
-                            isDraggingObject = true
+                            if !isDraggingObject {
+                                // 拖拽开始：记录初始位置
+                                isDraggingObject = true
+                                dragStartIndex = vm.drawingState.objects[selIdx].startIndex
+                                dragStartPrice = vm.drawingState.objects[selIdx].startPrice
+                                dragEndIndex = vm.drawingState.objects[selIdx].endIndex
+                                dragEndPrice = vm.drawingState.objects[selIdx].endPrice
+                            }
                             let chartW = max(1, geo.size.width - 16 - padding * 2)
                             let barW = chartW / CGFloat(displayBars.count)
-                            let dxIdx = Int(value.translation.width / barW / 3)
+                            let dxIdx = Int(value.translation.width / barW)
                             let prices = displayBars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
                             if let minP = prices.min(), let maxP = prices.max(), maxP > minP {
                                 let range = maxP - minP
-                                let dyPrice = -Double(value.translation.height) / Double(klineH) * range / 3
-                                vm.drawingState.objects[selIdx].startIndex += dxIdx
-                                vm.drawingState.objects[selIdx].endIndex += dxIdx
-                                vm.drawingState.objects[selIdx].startPrice += dyPrice
-                                vm.drawingState.objects[selIdx].endPrice += dyPrice
+                                let dyPrice = -Double(value.translation.height) / Double(klineH) * range
+                                vm.drawingState.objects[selIdx].startIndex = dragStartIndex + dxIdx
+                                vm.drawingState.objects[selIdx].endIndex = dragEndIndex + dxIdx
+                                vm.drawingState.objects[selIdx].startPrice = dragStartPrice + dyPrice
+                                vm.drawingState.objects[selIdx].endPrice = dragEndPrice + dyPrice
                             }
                         } else {
-                            isDraggingObject = false
                             let dx = Int(-value.translation.width / 8)
                             scrollOffset = max(0, min(bars.count - visibleCount, scrollOffset + dx))
                         }
@@ -571,22 +584,26 @@ struct KLineChartView: View {
 
             case .text:
                 let x = sX(obj.startIndex), y = sY(obj.startPrice)
-                let text = obj.label.isEmpty ? "标注" : obj.label
-                // 用SwiftUI Text的自动换行能力，限定最大宽度
-                let maxTextW: CGFloat = 180
-                let resolvedText = Text(text)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(obj.color)
-                // 估算高度：按字符数和最大宽度粗算行数
-                let charPerLine = Int(maxTextW / 7)
-                let estimatedLines = max(1, (text.count + charPerLine - 1) / charPerLine + text.components(separatedBy: "\n").count - 1)
-                let boxW = min(maxTextW + 16, CGFloat(min(text.count, charPerLine)) * 7 + 16)
-                let boxH = CGFloat(estimatedLines) * 15 + 10
-                let bgRect = CGRect(x: x - boxW / 2, y: y - 4, width: boxW, height: boxH)
+                let text = obj.label.isEmpty ? "..." : obj.label
+                let bw = obj.boxWidth, bh = obj.boxHeight
+                let bgRect = CGRect(x: x, y: y, width: bw, height: bh)
                 context.fill(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(Theme.panelBackground.opacity(0.9)))
                 context.stroke(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(obj.color.opacity(obj.isSelected ? 0.8 : 0.4)), lineWidth: obj.isSelected ? 1.5 : 0.5)
-                context.draw(resolvedText, in: CGRect(x: x - boxW / 2 + 6, y: y, width: boxW - 12, height: boxH - 8))
-                if obj.isSelected { dot(x + boxW / 2, y + boxH - 4, obj.color) }
+                // 逐行绘制文字
+                let lineH: CGFloat = 14
+                let maxCharsPerLine = max(1, Int((bw - 12) / 7))
+                let wrappedLines = wrapText(text, maxCharsPerLine: maxCharsPerLine)
+                let maxLines = max(1, Int((bh - 8) / lineH))
+                for (li, line) in wrappedLines.prefix(maxLines).enumerated() {
+                    context.draw(
+                        Text(line).font(.system(size: 11, weight: .medium)).foregroundColor(obj.color),
+                        at: CGPoint(x: x + bw / 2, y: y + 6 + CGFloat(li) * lineH + lineH / 2)
+                    )
+                }
+                if obj.isSelected {
+                    dot(x, y, obj.color); dot(x + bw, y, obj.color)
+                    dot(x, y + bh, obj.color); dot(x + bw, y + bh, obj.color)
+                }
 
             case .none: break
             }
@@ -752,6 +769,11 @@ struct KLineChartView: View {
         editingTextId = id
         editingText = currentText
         editingPosition = location
+        // 从DrawingObject读取框大小
+        if let obj = vm.drawingState.objects.first(where: { $0.id == id }) {
+            editingWidth = obj.boxWidth
+            editingHeight = obj.boxHeight
+        }
     }
 
     private func commitTextEdit() {
@@ -761,6 +783,8 @@ struct KLineChartView: View {
                 vm.drawingState.objects.remove(at: idx)
             } else {
                 vm.drawingState.objects[idx].label = editingText
+                vm.drawingState.objects[idx].boxWidth = editingWidth
+                vm.drawingState.objects[idx].boxHeight = editingHeight
             }
         }
         editingTextId = nil
@@ -775,6 +799,21 @@ struct KLineChartView: View {
         }
         editingTextId = nil
         editingText = ""
+    }
+
+    /// 文字换行
+    private func wrapText(_ text: String, maxCharsPerLine: Int) -> [String] {
+        var lines: [String] = []
+        for paragraph in text.components(separatedBy: "\n") {
+            if paragraph.isEmpty { lines.append(""); continue }
+            var remaining = paragraph
+            while !remaining.isEmpty {
+                let end = remaining.index(remaining.startIndex, offsetBy: min(maxCharsPerLine, remaining.count))
+                lines.append(String(remaining[remaining.startIndex..<end]))
+                remaining = String(remaining[end...])
+            }
+        }
+        return lines
     }
 
     private func fmtP(_ p: Decimal) -> String {

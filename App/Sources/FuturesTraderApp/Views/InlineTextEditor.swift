@@ -4,17 +4,16 @@ import AppKit
 /// K线图上的内联文字编辑器
 struct InlineTextEditor: View {
     @Binding var text: String
+    @Binding var editorWidth: CGFloat
+    @Binding var editorHeight: CGFloat
     let position: CGPoint
     let onCommit: () -> Void
     let onCancel: () -> Void
 
-    @State private var editorWidth: CGFloat = 200
-    @State private var editorHeight: CGFloat = 60
     @FocusState private var isFocused: Bool
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 0) {
-            // 编辑区域
             TextEditor(text: $text)
                 .font(.system(size: 12))
                 .foregroundColor(.white)
@@ -23,7 +22,6 @@ struct InlineTextEditor: View {
                 .focused($isFocused)
                 .frame(width: editorWidth, height: editorHeight)
 
-            // 底部操作栏
             HStack(spacing: 6) {
                 Spacer()
                 Button("取消") { onCancel() }
@@ -34,9 +32,8 @@ struct InlineTextEditor: View {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(Theme.ma5)
                     .buttonStyle(.plain)
-
-                // 拖拽调整大小手柄
-                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                // 拖拽调整大小
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 10))
                     .foregroundColor(Theme.textMuted)
                     .frame(width: 20, height: 16)
@@ -44,13 +41,12 @@ struct InlineTextEditor: View {
                     .gesture(
                         DragGesture()
                             .onChanged { value in
-                                editorWidth = max(120, editorWidth + value.translation.width / 10)
-                                editorHeight = max(30, editorHeight + value.translation.height / 10)
+                                editorWidth = max(100, editorWidth + value.translation.width / 8)
+                                editorHeight = max(30, editorHeight + value.translation.height / 8)
                             }
                     )
                     .onHover { inside in
-                        if inside { NSCursor.resizeUpDown.push() }
-                        else { NSCursor.pop() }
+                        if inside { NSCursor.crosshair.push() } else { NSCursor.pop() }
                     }
             }
             .padding(.horizontal, 6)
@@ -58,16 +54,11 @@ struct InlineTextEditor: View {
             .frame(width: editorWidth)
             .background(Theme.panelBackground.opacity(0.95))
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(Theme.ma5, lineWidth: 1.5)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.ma5, lineWidth: 1.5))
         .cornerRadius(4)
         .shadow(color: .black.opacity(0.5), radius: 8)
         .position(x: max(editorWidth / 2 + 60, position.x),
                   y: max(editorHeight / 2 + 20, position.y))
-        .onAppear {
-            isFocused = true
-        }
+        .onAppear { isFocused = true }
     }
 }

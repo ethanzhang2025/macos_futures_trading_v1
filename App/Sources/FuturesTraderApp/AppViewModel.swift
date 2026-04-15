@@ -12,6 +12,8 @@ final class AppViewModel: ObservableObject {
     @Published var selectedPeriod: String = "日线"
     @Published var subChartType: SubChartType = .macd
     @Published var timelinePoints: [SinaTimelinePoint] = []
+    @Published var maConfig: MAConfig = .default
+    @Published var showBoll: Bool = true
 
     var isTimeline: Bool { selectedPeriod == "分时" }
 

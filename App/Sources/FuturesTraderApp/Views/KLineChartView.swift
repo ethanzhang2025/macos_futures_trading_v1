@@ -132,6 +132,7 @@ struct KLineChartView: View {
                     .frame(height: subH).background(Theme.chartBackground).cornerRadius(4)
                 }
                 .padding(.horizontal, 8)
+                .contextMenu { ChartContextMenu(mainOverlay: $mainOverlay) }
                 .gesture(DragGesture(minimumDistance: 5).onChanged { value in
                     let dx = Int(-value.translation.width / 8)
                     scrollOffset = max(0, min(bars.count - visibleCount, scrollOffset + dx))
@@ -231,7 +232,7 @@ struct KLineChartView: View {
         }
 
         // BOLL带（先画，在K线下层）
-        if mainOverlay == .boll || mainOverlay == .maAndBoll {
+        if vm.showBoll && (mainOverlay == .boll || mainOverlay == .maAndBoll) {
             let fullBoll = calcBOLL(extCloses, period: 20)
             let boll = BOLLData(
                 mid: Array(fullBoll.mid.dropFirst(phOffset).prefix(dispCount)),
@@ -257,18 +258,19 @@ struct KLineChartView: View {
             context.fill(Path(CGRect(x: x - candleW / 2, y: bTop, width: candleW, height: bH)), with: .color(color))
         }
 
-        // MA线
+        // MA线（可配置）
         if mainOverlay == .ma || mainOverlay == .maAndBoll {
-            let ma5 = Array(ma(extCloses, 5).dropFirst(phOffset).prefix(dispCount))
-            let ma20 = Array(ma(extCloses, 20).dropFirst(phOffset).prefix(dispCount))
-            drawLine(context: context, values: ma5, color: Theme.ma5, barW: barW, sY: sY)
-            drawLine(context: context, values: ma20, color: Theme.ma20, barW: barW, sY: sY)
-            context.draw(Text("MA5").font(.system(size: 9)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 18, y: 6))
-            context.draw(Text("MA20").font(.system(size: 9)).foregroundColor(Theme.ma20), at: CGPoint(x: padding + 55, y: 6))
+            var legendX: CGFloat = padding + 18
+            for maLine in vm.maConfig.enabledLines {
+                let maValues = Array(ma(extCloses, maLine.period).dropFirst(phOffset).prefix(dispCount))
+                drawLine(context: context, values: maValues, color: maLine.color, barW: barW, sY: sY)
+                context.draw(Text("MA\(maLine.period)").font(.system(size: 9)).foregroundColor(maLine.color), at: CGPoint(x: legendX, y: 6))
+                legendX += 45
+            }
         }
-        if mainOverlay == .boll || mainOverlay == .maAndBoll {
-            let xOff: CGFloat = (mainOverlay == .maAndBoll) ? 100 : 18
-            context.draw(Text("BOLL(20,2)").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + xOff, y: 6))
+        if vm.showBoll && (mainOverlay == .boll || mainOverlay == .maAndBoll) {
+            let legendX: CGFloat = (mainOverlay == .maAndBoll) ? padding + 18 + CGFloat(vm.maConfig.enabledLines.count) * 45 : padding + 18
+            context.draw(Text("BOLL(20,2)").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: legendX, y: 6))
         }
     }
 

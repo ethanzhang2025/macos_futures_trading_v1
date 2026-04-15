@@ -66,6 +66,9 @@ struct KLineChartView: View {
                     ZStack(alignment: .topTrailing) {
                         ZStack {
                             Canvas { ctx, size in drawKLines(context: ctx, size: size, bars: displayBars) }
+                            // 绘图对象层
+                            Canvas { ctx, size in drawDrawingObjects(context: ctx, size: size, bars: displayBars) }
+                            // 十字光标 + 交互层
                             Canvas { ctx, size in drawCrosshair(context: ctx, size: size, bars: displayBars) }
                                 .allowsHitTesting(true)
                                 .onContinuousHover { phase in
@@ -79,6 +82,9 @@ struct KLineChartView: View {
                                     case .ended:
                                         hoverIndex = nil
                                     }
+                                }
+                                .onTapGesture { location in
+                                    handleChartTap(location: location, geoWidth: geo.size.width - 16, chartHeight: klineH)
                                 }
                         }
                         // 主图指标切换按钮
@@ -395,6 +401,111 @@ struct KLineChartView: View {
         return r
     }
 
+    // MARK: - 绘图对象渲染
+
+    private func drawDrawingObjects(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
+        guard !bars.isEmpty else { return }
+        let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
+        guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return }
+        let chartW = size.width - padding * 2, chartH = size.height - 30, topPad: CGFloat = 16
+        let barW = chartW / CGFloat(bars.count)
+        let range = maxP - minP, margin = range * 0.08, adjMin = minP - margin, adjRange = range + margin * 2
+        let sY: (Double) -> CGFloat = { p in topPad + chartH * CGFloat(1 - (p - adjMin) / adjRange) }
+        let sX: (Int) -> CGFloat = { i in padding + CGFloat(i) * barW + barW / 2 }
+
+        for obj in vm.drawingState.objects {
+            let lineWidth: CGFloat = obj.isSelected ? 2 : 1
+            let style = obj.isSelected ? StrokeStyle(lineWidth: lineWidth) : StrokeStyle(lineWidth: lineWidth, dash: [])
+
+            switch obj.type {
+            case .horizontalLine:
+                let y = sY(obj.startPrice)
+                if y >= topPad && y <= topPad + chartH {
+                    var path = Path()
+                    path.move(to: CGPoint(x: padding, y: y))
+                    path.addLine(to: CGPoint(x: size.width - padding, y: y))
+                    context.stroke(path, with: .color(obj.color), style: style)
+                    // 价格标签
+                    context.draw(Text(String(format: "%.0f", obj.startPrice)).font(.system(size: 8, design: .monospaced)).foregroundColor(obj.color),
+                                 at: CGPoint(x: padding - 5, y: y), anchor: .trailing)
+                    if obj.isSelected {
+                        context.fill(Path(ellipseIn: CGRect(x: padding - 4, y: y - 4, width: 8, height: 8)), with: .color(obj.color))
+                        context.fill(Path(ellipseIn: CGRect(x: size.width - padding - 4, y: y - 4, width: 8, height: 8)), with: .color(obj.color))
+                    }
+                }
+
+            case .trendLine:
+                let x1 = sX(obj.startIndex), y1 = sY(obj.startPrice)
+                let x2 = sX(obj.endIndex), y2 = sY(obj.endPrice)
+                // 延伸到图表边缘
+                let dx = x2 - x1, dy = y2 - y1
+                var extX1 = x1, extY1 = y1, extX2 = x2, extY2 = y2
+                if abs(dx) > 0.001 {
+                    let slope = dy / dx
+                    extX1 = padding; extY1 = y1 + slope * (extX1 - x1)
+                    extX2 = size.width - padding; extY2 = y1 + slope * (extX2 - x1)
+                }
+                var path = Path()
+                path.move(to: CGPoint(x: extX1, y: extY1))
+                path.addLine(to: CGPoint(x: extX2, y: extY2))
+                context.stroke(path, with: .color(obj.color), style: style)
+                if obj.isSelected {
+                    context.fill(Path(ellipseIn: CGRect(x: x1 - 4, y: y1 - 4, width: 8, height: 8)), with: .color(obj.color))
+                    context.fill(Path(ellipseIn: CGRect(x: x2 - 4, y: y2 - 4, width: 8, height: 8)), with: .color(obj.color))
+                }
+
+            case .none:
+                break
+            }
+        }
+
+        // 绘图模式提示
+        if vm.drawingState.isDrawing {
+            let toolName = vm.drawingState.activeTool.rawValue
+            let hint = vm.drawingState.tempStartIndex != nil ? "点击第二个点完成\(toolName)" : "点击设置\(toolName)起点 · ESC取消"
+            context.draw(Text(hint).font(.system(size: 11, weight: .medium)).foregroundColor(Theme.ma5),
+                         at: CGPoint(x: size.width / 2, y: topPad + chartH + 16))
+        }
+    }
+
+    // MARK: - 图表点击处理
+
+    private func handleChartTap(location: CGPoint, geoWidth: CGFloat, chartHeight: CGFloat) {
+        let bars = displayBars
+        guard !bars.isEmpty else { return }
+
+        let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
+        guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return }
+        let chartW = geoWidth - padding * 2, chartH = chartHeight - 30, topPad: CGFloat = 16
+        let barW = chartW / CGFloat(bars.count)
+        let range = maxP - minP, margin = range * 0.08, adjMin = minP - margin, adjRange = range + margin * 2
+
+        let clickIndex = Int((location.x - padding) / barW)
+        let clickPrice = (adjMin + adjRange) - adjRange * Double(location.y - topPad) / Double(chartH)
+
+        let ds = vm.drawingState
+
+        if ds.isDrawing {
+            switch ds.activeTool {
+            case .horizontalLine:
+                ds.addObject(.horizontal(price: clickPrice, index: clickIndex))
+            case .trendLine:
+                if let si = ds.tempStartIndex, let sp = ds.tempStartPrice {
+                    ds.addObject(.trend(startIndex: si, startPrice: sp, endIndex: clickIndex, endPrice: clickPrice))
+                } else {
+                    ds.tempStartIndex = clickIndex
+                    ds.tempStartPrice = clickPrice
+                }
+            case .none:
+                break
+            }
+        } else {
+            // 非绘图模式：点击选中/取消选中
+            let tolerance = range * 0.02
+            _ = ds.selectNearby(index: clickIndex, price: clickPrice, tolerance: tolerance)
+        }
+    }
+
     private func fmtP(_ p: Decimal) -> String {
         let d = NSDecimalNumber(decimal: p).doubleValue
         if d >= 1000 { return String(format: "%.0f", d) }; if d >= 10 { return String(format: "%.1f", d) }; return String(format: "%.2f", d)
@@ -419,6 +530,8 @@ struct KLineChartView: View {
             case 24: visibleCount = max(20, visibleCount - 5); return nil   // =
             case 27: visibleCount = min(bars.count, visibleCount + 5); return nil  // -
             case 48: vm.cycleSubChart(); return nil        // Tab
+            case 53: vm.drawingState.cancelDrawing(); return nil  // ESC
+            case 51: vm.drawingState.deleteSelected(); return nil // Delete
             default: return event
             }
         }

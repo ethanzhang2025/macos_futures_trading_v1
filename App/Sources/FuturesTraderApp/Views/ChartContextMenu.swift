@@ -68,6 +68,19 @@ struct ChartContextMenu: View {
 
             Divider()
 
+            // 绘图工具
+            Menu("绘图工具") {
+                Button("趋势线") { vm.drawingState.startTool(.trendLine) }
+                Button("水平线") { vm.drawingState.startTool(.horizontalLine) }
+                Divider()
+                Button("删除选中") { vm.drawingState.deleteSelected() }
+                    .disabled(!vm.drawingState.objects.contains { $0.isSelected })
+                Button("清除全部") { vm.drawingState.clearAll() }
+                    .disabled(vm.drawingState.objects.isEmpty)
+            }
+
+            Divider()
+
             // 截图
             Button("保存截图") {
                 saveScreenshot()

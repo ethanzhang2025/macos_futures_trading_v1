@@ -217,11 +217,8 @@ struct KLineChartView: View {
 
         // 用扩展数据计算指标，然后截取显示范围
         let extCloses = extendedBars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-        let offset = preheatOffset
-        func sliceIndicator(_ full: [Double?]) -> [Double?] {
-            guard offset < full.count else { return [] }
-            return Array(full[offset..<min(offset + bars.count, full.count)])
-        }
+        let phOffset = preheatOffset
+        let dispCount = bars.count
 
         // 网格
         for i in 0...4 {
@@ -236,7 +233,11 @@ struct KLineChartView: View {
         // BOLL带（先画，在K线下层）
         if mainOverlay == .boll || mainOverlay == .maAndBoll {
             let fullBoll = calcBOLL(extCloses, period: 20)
-            let boll = BOLLData(mid: sliceIndicator(fullBoll.mid), upper: sliceIndicator(fullBoll.upper), lower: sliceIndicator(fullBoll.lower))
+            let boll = BOLLData(
+                mid: Array(fullBoll.mid.dropFirst(phOffset).prefix(dispCount)),
+                upper: Array(fullBoll.upper.dropFirst(phOffset).prefix(dispCount)),
+                lower: Array(fullBoll.lower.dropFirst(phOffset).prefix(dispCount))
+            )
             // 填充带
             drawBollFill(context: context, upper: boll.upper, lower: boll.lower, barW: barW, sY: sY)
             drawLine(context: context, values: boll.upper, color: Color.yellow.opacity(0.7), barW: barW, sY: sY, lineWidth: 1)
@@ -258,7 +259,8 @@ struct KLineChartView: View {
 
         // MA线
         if mainOverlay == .ma || mainOverlay == .maAndBoll {
-            let ma5 = sliceIndicator(ma(extCloses, 5)), ma20 = sliceIndicator(ma(extCloses, 20))
+            let ma5 = Array(ma(extCloses, 5).dropFirst(phOffset).prefix(dispCount))
+            let ma20 = Array(ma(extCloses, 20).dropFirst(phOffset).prefix(dispCount))
             drawLine(context: context, values: ma5, color: Theme.ma5, barW: barW, sY: sY)
             drawLine(context: context, values: ma20, color: Theme.ma20, barW: barW, sY: sY)
             context.draw(Text("MA5").font(.system(size: 9)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 18, y: 6))

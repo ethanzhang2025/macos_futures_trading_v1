@@ -7,107 +7,139 @@ struct KLineChartView: View {
 
     @State private var hoverIndex: Int?
     @State private var mouseLocation: CGPoint = .zero
+    // 缩放平移状态
+    @State private var visibleCount: Int = 80      // 可见K线数量
+    @State private var scrollOffset: Int = 0       // 向左滚动偏移量（0=最右端）
+
+    private let padding: CGFloat = 50
 
     private var displayBars: [SinaKLineBar] {
-        let count = min(bars.count, 80)
-        let start = bars.count - count
-        return Array(bars[start...])
+        let count = min(bars.count, visibleCount)
+        let end = bars.count - scrollOffset
+        let start = max(0, end - count)
+        guard start < end, start >= 0 else { return [] }
+        return Array(bars[start..<min(end, bars.count)])
     }
 
     var body: some View {
         VStack(spacing: 0) {
             infoBar
             GeometryReader { geo in
-                let chartHeight = geo.size.height * 0.72
-                let volumeHeight = geo.size.height * 0.23
-                let spacing: CGFloat = geo.size.height * 0.05
+                let klineH = geo.size.height * 0.52
+                let volH = geo.size.height * 0.16
+                let macdH = geo.size.height * 0.22
+                let gap: CGFloat = 4
 
-                VStack(spacing: spacing) {
+                VStack(spacing: gap) {
+                    // K线主图
                     ZStack {
-                        Canvas { context, size in
-                            drawKLines(context: context, size: size, bars: displayBars)
-                        }
-                        // 十字光标叠加层
-                        Canvas { context, size in
-                            drawCrosshair(context: context, size: size, bars: displayBars)
-                        }
-                        .allowsHitTesting(true)
-                        .onContinuousHover { phase in
-                            switch phase {
-                            case .active(let location):
-                                mouseLocation = location
-                                let padding: CGFloat = 50
-                                let chartWidth = max(1, geo.size.width - 16 - padding * 2)
-                                let barWidth = chartWidth / CGFloat(displayBars.count)
-                                let idx = Int((location.x - padding) / barWidth)
-                                hoverIndex = (idx >= 0 && idx < displayBars.count) ? idx : nil
-                            case .ended:
-                                hoverIndex = nil
+                        Canvas { ctx, size in drawKLines(context: ctx, size: size, bars: displayBars) }
+                        Canvas { ctx, size in drawCrosshair(context: ctx, size: size, bars: displayBars) }
+                            .allowsHitTesting(true)
+                            .onContinuousHover { phase in
+                                switch phase {
+                                case .active(let loc):
+                                    mouseLocation = loc
+                                    let chartW = max(1, geo.size.width - 16 - padding * 2)
+                                    let barW = chartW / CGFloat(displayBars.count)
+                                    let idx = Int((loc.x - padding) / barW)
+                                    hoverIndex = (idx >= 0 && idx < displayBars.count) ? idx : nil
+                                case .ended:
+                                    hoverIndex = nil
+                                }
                             }
-                        }
                     }
-                    .frame(height: chartHeight)
+                    .frame(height: klineH)
                     .background(Theme.chartBackground)
                     .cornerRadius(4)
 
-                    Canvas { context, size in
-                        drawVolume(context: context, size: size, bars: displayBars)
-                    }
-                    .frame(height: volumeHeight)
-                    .background(Theme.chartBackground)
-                    .cornerRadius(4)
+                    // 成交量
+                    Canvas { ctx, size in drawVolume(context: ctx, size: size, bars: displayBars) }
+                        .frame(height: volH)
+                        .background(Theme.chartBackground)
+                        .cornerRadius(4)
+
+                    // MACD
+                    Canvas { ctx, size in drawMACD(context: ctx, size: size, bars: displayBars) }
+                        .frame(height: macdH)
+                        .background(Theme.chartBackground)
+                        .cornerRadius(4)
                 }
                 .padding(.horizontal, 8)
+                .gesture(scrollGesture)
+                .gesture(magnifyGesture)
             }
         }
+    }
+
+    // MARK: - 缩放平移手势
+
+    private var scrollGesture: some Gesture {
+        ScrollGesture()
+            .onChanged { value in
+                let dx = Int(value.translation.width / 5)
+                scrollOffset = max(0, min(bars.count - visibleCount, scrollOffset + dx))
+            }
+    }
+
+    private var magnifyGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                let scale = value.magnification
+                let newCount: Int
+                if scale > 1 {
+                    newCount = max(20, visibleCount - 2) // 放大：显示更少K线
+                } else {
+                    newCount = min(bars.count, visibleCount + 2) // 缩小：显示更多K线
+                }
+                visibleCount = newCount
+            }
     }
 
     // MARK: - 信息栏
 
     private var infoBar: some View {
-        HStack(spacing: 16) {
-            // 如果有十字光标悬浮，显示悬浮K线信息
+        HStack(spacing: 12) {
             if let idx = hoverIndex, idx < displayBars.count {
                 let bar = displayBars[idx]
                 let isUp = bar.close >= bar.open
-                Text(bar.date).font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.textSecondary)
-                label("开", formatPrice(bar.open), color: isUp ? Theme.up : Theme.down)
-                label("高", formatPrice(bar.high), color: Theme.up)
-                label("低", formatPrice(bar.low), color: Theme.down)
-                label("收", formatPrice(bar.close), color: isUp ? Theme.up : Theme.down)
-                label("量", "\(bar.volume)", color: Theme.textPrimary)
+                Text(bar.date).font(.system(size: 11, design: .monospaced)).foregroundColor(Theme.textSecondary)
+                lbl("开", fmtP(bar.open), color: isUp ? Theme.up : Theme.down)
+                lbl("高", fmtP(bar.high), color: Theme.up)
+                lbl("低", fmtP(bar.low), color: Theme.down)
+                lbl("收", fmtP(bar.close), color: isUp ? Theme.up : Theme.down)
+                lbl("量", "\(bar.volume)", color: Theme.textPrimary)
+                // MACD值
+                let macdData = calcMACD(displayBars.map { NSDecimalNumber(decimal: $0.close).doubleValue })
+                if idx < macdData.dif.count, let d = macdData.dif[idx], let e = macdData.dea[idx], let m = macdData.macd[idx] {
+                    Text("|").foregroundColor(Theme.textMuted).font(.system(size: 11))
+                    lbl("DIF", String(format: "%.1f", d), color: Theme.ma5)
+                    lbl("DEA", String(format: "%.1f", e), color: Theme.ma20)
+                    lbl("MACD", String(format: "%.1f", m), color: m >= 0 ? Theme.up : Theme.down)
+                }
                 Spacer()
             } else if let q = quote, q.lastPrice > 0 {
-                Text(q.name).font(.system(size: 14, weight: .bold)).foregroundColor(Theme.textPrimary)
-                Text(formatPrice(q.lastPrice))
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                Text(q.name).font(.system(size: 13, weight: .bold)).foregroundColor(Theme.textPrimary)
+                Text(fmtP(q.lastPrice))
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
                     .foregroundColor(q.isUp ? Theme.up : Theme.down)
-                Text(formatChange(q.change))
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(q.isUp ? Theme.up : Theme.down)
-                Text(formatPercent(q.changePercent))
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(q.isUp ? Theme.up : Theme.down)
+                Text(fmtC(q.change)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
+                Text(fmtPct(q.changePercent)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
                 Spacer()
-                label("开", formatPrice(q.open))
-                label("高", formatPrice(q.high), color: Theme.up)
-                label("低", formatPrice(q.low), color: Theme.down)
-                label("量", "\(q.volume)")
-                label("仓", "\(q.openInterest)")
+                lbl("开", fmtP(q.open)); lbl("高", fmtP(q.high), color: Theme.up)
+                lbl("低", fmtP(q.low), color: Theme.down); lbl("量", "\(q.volume)"); lbl("仓", "\(q.openInterest)")
             } else {
-                Text("等待行情数据...").foregroundColor(Theme.textSecondary)
-                Spacer()
+                Text("等待行情数据...").foregroundColor(Theme.textSecondary); Spacer()
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12).padding(.vertical, 5)
         .background(Theme.panelBackground)
     }
 
-    private func label(_ title: String, _ value: String, color: Color = Theme.textSecondary) -> some View {
+    private func lbl(_ t: String, _ v: String, color: Color = Theme.textSecondary) -> some View {
         HStack(spacing: 2) {
-            Text(title).font(.system(size: 11)).foregroundColor(Theme.textMuted)
-            Text(value).font(.system(size: 12, design: .monospaced)).foregroundColor(color)
+            Text(t).font(.system(size: 10)).foregroundColor(Theme.textMuted)
+            Text(v).font(.system(size: 11, design: .monospaced)).foregroundColor(color)
         }
     }
 
@@ -115,208 +147,268 @@ struct KLineChartView: View {
 
     private func drawKLines(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
         guard bars.count >= 2 else { return }
-
         let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
-        guard let minPrice = prices.min(), let maxPrice = prices.max(), maxPrice > minPrice else { return }
+        guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return }
 
-        let padding: CGFloat = 50
-        let chartWidth = size.width - padding * 2
-        let chartHeight = size.height - 30
-        let topPad: CGFloat = 20
-        let barWidth = chartWidth / CGFloat(bars.count)
-        let candleWidth = max(1, barWidth * 0.65)
-        let priceRange = maxPrice - minPrice
-        let margin = priceRange * 0.05
-        let adjMin = minPrice - margin
-        let adjRange = priceRange + margin * 2
-        let scaleY: (Double) -> CGFloat = { price in
-            topPad + chartHeight * CGFloat(1 - (price - adjMin) / adjRange)
-        }
+        let chartW = size.width - padding * 2
+        let chartH = size.height - 30
+        let topPad: CGFloat = 16
+        let barW = chartW / CGFloat(bars.count)
+        let candleW = max(1, barW * 0.65)
+        let range = maxP - minP
+        let margin = range * 0.05
+        let adjMin = minP - margin
+        let adjRange = range + margin * 2
+        let sY: (Double) -> CGFloat = { p in topPad + chartH * CGFloat(1 - (p - adjMin) / adjRange) }
 
         let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-        let ma5 = movingAverage(closes, period: 5)
-        let ma20 = movingAverage(closes, period: 20)
+        let ma5 = ma(closes, 5), ma20 = ma(closes, 20)
 
         // 网格
         for i in 0...4 {
-            let y = topPad + chartHeight * CGFloat(i) / 4
-            let priceLabel = (adjMin + adjRange) - adjRange * Double(i) / 4
-            var path = Path()
-            path.move(to: CGPoint(x: padding, y: y))
-            path.addLine(to: CGPoint(x: size.width - padding, y: y))
-            context.stroke(path, with: .color(Theme.gridLine), lineWidth: 0.5)
-            context.draw(
-                Text(String(format: "%.0f", priceLabel)).font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.textMuted),
-                at: CGPoint(x: size.width - padding + 5, y: y),
-                anchor: .leading
-            )
+            let y = topPad + chartH * CGFloat(i) / 4
+            let pl = (adjMin + adjRange) - adjRange * Double(i) / 4
+            var p = Path(); p.move(to: CGPoint(x: padding, y: y)); p.addLine(to: CGPoint(x: size.width - padding, y: y))
+            context.stroke(p, with: .color(Theme.gridLine), lineWidth: 0.5)
+            context.draw(Text(String(format: "%.0f", pl)).font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.textMuted),
+                         at: CGPoint(x: size.width - padding + 5, y: y), anchor: .leading)
         }
 
         // K线
         for (i, bar) in bars.enumerated() {
-            let x = padding + CGFloat(i) * barWidth + barWidth / 2
+            let x = padding + CGFloat(i) * barW + barW / 2
             let o = NSDecimalNumber(decimal: bar.open).doubleValue
             let c = NSDecimalNumber(decimal: bar.close).doubleValue
             let h = NSDecimalNumber(decimal: bar.high).doubleValue
             let l = NSDecimalNumber(decimal: bar.low).doubleValue
             let isUp = c >= o
             let color = isUp ? Theme.up : Theme.down
-
-            // 影线
-            var shadow = Path()
-            shadow.move(to: CGPoint(x: x, y: scaleY(h)))
-            shadow.addLine(to: CGPoint(x: x, y: scaleY(l)))
+            var shadow = Path(); shadow.move(to: CGPoint(x: x, y: sY(h))); shadow.addLine(to: CGPoint(x: x, y: sY(l)))
             context.stroke(shadow, with: .color(color), lineWidth: 1)
-
-            // 实体
-            let bodyTop = scaleY(max(o, c))
-            let bodyBottom = scaleY(min(o, c))
-            let bodyHeight = max(1, bodyBottom - bodyTop)
-            let bodyRect = CGRect(x: x - candleWidth / 2, y: bodyTop, width: candleWidth, height: bodyHeight)
-            // 深色背景下全部实心填充，阳线红色阴线绿色
-            context.fill(Path(bodyRect), with: .color(color))
+            let bTop = sY(max(o, c)), bBot = sY(min(o, c)), bH = max(1, bBot - bTop)
+            context.fill(Path(CGRect(x: x - candleW / 2, y: bTop, width: candleW, height: bH)), with: .color(color))
         }
 
-        // MA线
-        drawMALine(context: context, values: ma5, color: Theme.ma5, barWidth: barWidth, padding: padding, scaleY: scaleY)
-        drawMALine(context: context, values: ma20, color: Theme.ma20, barWidth: barWidth, padding: padding, scaleY: scaleY)
-
-        // 图例
-        context.draw(Text("MA5").font(.system(size: 10)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 20, y: 8))
-        context.draw(Text("MA20").font(.system(size: 10)).foregroundColor(Theme.ma20), at: CGPoint(x: padding + 60, y: 8))
-    }
-
-    // MARK: - 十字光标
-
-    private func drawCrosshair(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
-        guard let idx = hoverIndex, idx >= 0, idx < bars.count else { return }
-
-        let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
-        guard let minPrice = prices.min(), let maxPrice = prices.max(), maxPrice > minPrice else { return }
-
-        let padding: CGFloat = 50
-        let chartWidth = size.width - padding * 2
-        let chartHeight = size.height - 30
-        let topPad: CGFloat = 20
-        let barWidth = chartWidth / CGFloat(bars.count)
-        let priceRange = maxPrice - minPrice
-        let margin = priceRange * 0.05
-        let adjMin = minPrice - margin
-        let adjRange = priceRange + margin * 2
-
-        let bar = bars[idx]
-        let x = padding + CGFloat(idx) * barWidth + barWidth / 2
-        let closePrice = NSDecimalNumber(decimal: bar.close).doubleValue
-        let y = topPad + chartHeight * CGFloat(1 - (closePrice - adjMin) / adjRange)
-
-        // 竖线
-        var vLine = Path()
-        vLine.move(to: CGPoint(x: x, y: topPad))
-        vLine.addLine(to: CGPoint(x: x, y: topPad + chartHeight))
-        context.stroke(vLine, with: .color(Theme.crosshair), style: StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
-
-        // 横线
-        let clampedY = max(topPad, min(topPad + chartHeight, mouseLocation.y))
-        var hLine = Path()
-        hLine.move(to: CGPoint(x: padding, y: clampedY))
-        hLine.addLine(to: CGPoint(x: size.width - padding, y: clampedY))
-        context.stroke(hLine, with: .color(Theme.crosshair), style: StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
-
-        // 右侧价格标签
-        let hoverPrice = (adjMin + adjRange) - adjRange * Double(clampedY - topPad) / Double(chartHeight)
-        let labelRect = CGRect(x: size.width - padding, y: clampedY - 9, width: 48, height: 18)
-        context.fill(Path(roundedRect: labelRect, cornerRadius: 3), with: .color(Theme.crosshair))
-        context.draw(
-            Text(String(format: "%.0f", hoverPrice))
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(Theme.background),
-            at: CGPoint(x: size.width - padding + 24, y: clampedY)
-        )
-
-        // 底部日期标签
-        let dateLabelRect = CGRect(x: x - 35, y: topPad + chartHeight + 2, width: 70, height: 16)
-        context.fill(Path(roundedRect: dateLabelRect, cornerRadius: 3), with: .color(Theme.crosshair))
-        context.draw(
-            Text(bar.date.suffix(10))
-                .font(.system(size: 8, weight: .medium, design: .monospaced))
-                .foregroundColor(Theme.background),
-            at: CGPoint(x: x, y: topPad + chartHeight + 10)
-        )
-    }
-
-    private func drawMALine(context: GraphicsContext, values: [Double?], color: Color, barWidth: CGFloat, padding: CGFloat, scaleY: (Double) -> CGFloat) {
-        var path = Path()
-        var started = false
-        for (i, v) in values.enumerated() {
-            guard let v else { continue }
-            let x = padding + CGFloat(i) * barWidth + barWidth / 2
-            let y = scaleY(v)
-            if !started { path.move(to: CGPoint(x: x, y: y)); started = true }
-            else { path.addLine(to: CGPoint(x: x, y: y)) }
-        }
-        context.stroke(path, with: .color(color), lineWidth: 1.5)
+        drawLine(context: context, values: ma5, color: Theme.ma5, barW: barW, sY: sY)
+        drawLine(context: context, values: ma20, color: Theme.ma20, barW: barW, sY: sY)
+        context.draw(Text("MA5").font(.system(size: 9)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 18, y: 6))
+        context.draw(Text("MA20").font(.system(size: 9)).foregroundColor(Theme.ma20), at: CGPoint(x: padding + 55, y: 6))
     }
 
     // MARK: - 成交量
 
     private func drawVolume(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
         guard !bars.isEmpty else { return }
-
         let maxVol = Double(bars.map(\.volume).max() ?? 1)
-        let padding: CGFloat = 50
-        let chartWidth = size.width - padding * 2
-        let chartHeight = size.height - 10
-        let barWidth = chartWidth / CGFloat(bars.count)
-        let volWidth = max(1, barWidth * 0.65)
+        let chartW = size.width - padding * 2
+        let chartH = size.height - 6
+        let barW = chartW / CGFloat(bars.count)
+        let vW = max(1, barW * 0.65)
 
-        // 标签
-        context.draw(Text("VOL").font(.system(size: 10)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 15, y: 6))
+        context.draw(Text("VOL").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 15, y: 5))
 
         for (i, bar) in bars.enumerated() {
-            let x = padding + CGFloat(i) * barWidth + barWidth / 2
-            let vol = Double(bar.volume)
-            let h = chartHeight * CGFloat(vol / maxVol)
-            let isUp = bar.close >= bar.open
-            let color = isUp ? Theme.volumeUp : Theme.volumeDown
-            let rect = CGRect(x: x - volWidth / 2, y: chartHeight - h + 5, width: volWidth, height: h)
-            context.fill(Path(rect), with: .color(color))
+            let x = padding + CGFloat(i) * barW + barW / 2
+            let h = chartH * CGFloat(Double(bar.volume) / maxVol)
+            let color = bar.close >= bar.open ? Theme.volumeUp : Theme.volumeDown
+            context.fill(Path(CGRect(x: x - vW / 2, y: chartH - h + 3, width: vW, height: h)), with: .color(color))
         }
-
-        // 十字光标竖线延伸到成交量区域
-        if let idx = hoverIndex, idx >= 0, idx < bars.count {
-            let x = padding + CGFloat(idx) * barWidth + barWidth / 2
-            var vLine = Path()
-            vLine.move(to: CGPoint(x: x, y: 0))
-            vLine.addLine(to: CGPoint(x: x, y: size.height))
-            context.stroke(vLine, with: .color(Theme.crosshair), style: StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
-        }
+        drawCrosshairVLine(context: context, size: size, bars: bars)
     }
 
-    // MARK: - Helpers
+    // MARK: - MACD
 
-    private func movingAverage(_ values: [Double], period: Int) -> [Double?] {
-        var result = [Double?](repeating: nil, count: values.count)
-        for i in (period - 1)..<values.count {
-            let sum = values[(i - period + 1)...i].reduce(0, +)
-            result[i] = sum / Double(period)
+    private func drawMACD(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
+        guard bars.count >= 2 else { return }
+        let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+        let data = calcMACD(closes)
+
+        let chartW = size.width - padding * 2
+        let chartH = size.height - 10
+        let topPad: CGFloat = 14
+        let barW = chartW / CGFloat(bars.count)
+        let stickW = max(1, barW * 0.55)
+
+        // 计算范围
+        var allVals: [Double] = []
+        for i in 0..<bars.count {
+            if let d = data.dif[i] { allVals.append(d) }
+            if let e = data.dea[i] { allVals.append(e) }
+            if let m = data.macd[i] { allVals.append(m) }
         }
-        return result
+        guard let maxV = allVals.max(), let minV = allVals.min() else { return }
+        let absMax = max(abs(maxV), abs(minV), 0.01)
+        let midY = topPad + (chartH - topPad) / 2
+        let scale = (chartH - topPad) / 2 / CGFloat(absMax)
+
+        // 零轴
+        var zeroLine = Path()
+        zeroLine.move(to: CGPoint(x: padding, y: midY))
+        zeroLine.addLine(to: CGPoint(x: size.width - padding, y: midY))
+        context.stroke(zeroLine, with: .color(Theme.gridLine), lineWidth: 0.5)
+
+        // MACD柱状图
+        for i in 0..<bars.count {
+            guard let m = data.macd[i] else { continue }
+            let x = padding + CGFloat(i) * barW + barW / 2
+            let h = CGFloat(abs(m)) * scale
+            let y = m >= 0 ? midY - h : midY
+            let color = m >= 0 ? Theme.up : Theme.down
+            context.fill(Path(CGRect(x: x - stickW / 2, y: y, width: stickW, height: max(1, h))), with: .color(color))
+        }
+
+        // DIF线
+        drawLine(context: context, values: data.dif, color: Theme.ma5, barW: barW, midY: midY, scale: scale)
+        // DEA线
+        drawLine(context: context, values: data.dea, color: Theme.ma20, barW: barW, midY: midY, scale: scale)
+
+        // 图例
+        context.draw(Text("MACD(12,26,9)").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 40, y: 5))
+        context.draw(Text("DIF").font(.system(size: 9)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 100, y: 5))
+        context.draw(Text("DEA").font(.system(size: 9)).foregroundColor(Theme.ma20), at: CGPoint(x: padding + 125, y: 5))
+
+        drawCrosshairVLine(context: context, size: size, bars: bars)
     }
 
-    private func formatPrice(_ p: Decimal) -> String {
+    // MARK: - MACD 计算
+
+    private struct MACDData {
+        let dif: [Double?]
+        let dea: [Double?]
+        let macd: [Double?]
+    }
+
+    private func calcMACD(_ closes: [Double]) -> MACDData {
+        let ema12 = ema(closes, 12)
+        let ema26 = ema(closes, 26)
+        var dif = [Double?](repeating: nil, count: closes.count)
+        for i in 0..<closes.count {
+            if let e12 = ema12[i], let e26 = ema26[i] { dif[i] = e12 - e26 }
+        }
+        let difValues = dif.compactMap { $0 }
+        let deaAll = ema(difValues, 9)
+        var dea = [Double?](repeating: nil, count: closes.count)
+        var deaIdx = 0
+        for i in 0..<closes.count {
+            if dif[i] != nil {
+                dea[i] = deaIdx < deaAll.count ? deaAll[deaIdx] : nil
+                deaIdx += 1
+            }
+        }
+        var macd = [Double?](repeating: nil, count: closes.count)
+        for i in 0..<closes.count {
+            if let d = dif[i], let e = dea[i] { macd[i] = 2 * (d - e) }
+        }
+        return MACDData(dif: dif, dea: dea, macd: macd)
+    }
+
+    // MARK: - 十字光标
+
+    private func drawCrosshair(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
+        guard let idx = hoverIndex, idx >= 0, idx < bars.count else { return }
+        let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
+        guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return }
+
+        let chartW = size.width - padding * 2
+        let chartH = size.height - 30
+        let topPad: CGFloat = 16
+        let barW = chartW / CGFloat(bars.count)
+        let range = maxP - minP
+        let margin = range * 0.05
+        let adjMin = minP - margin
+        let adjRange = range + margin * 2
+
+        let x = padding + CGFloat(idx) * barW + barW / 2
+
+        var vLine = Path(); vLine.move(to: CGPoint(x: x, y: topPad)); vLine.addLine(to: CGPoint(x: x, y: topPad + chartH))
+        context.stroke(vLine, with: .color(Theme.crosshair), style: StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
+
+        let clampedY = max(topPad, min(topPad + chartH, mouseLocation.y))
+        var hLine = Path(); hLine.move(to: CGPoint(x: padding, y: clampedY)); hLine.addLine(to: CGPoint(x: size.width - padding, y: clampedY))
+        context.stroke(hLine, with: .color(Theme.crosshair), style: StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
+
+        let hoverPrice = (adjMin + adjRange) - adjRange * Double(clampedY - topPad) / Double(chartH)
+        let lr = CGRect(x: size.width - padding, y: clampedY - 9, width: 48, height: 18)
+        context.fill(Path(roundedRect: lr, cornerRadius: 3), with: .color(Theme.crosshair))
+        context.draw(Text(String(format: "%.0f", hoverPrice)).font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundColor(Theme.background),
+                     at: CGPoint(x: size.width - padding + 24, y: clampedY))
+
+        let bar = bars[idx]
+        let dr = CGRect(x: x - 35, y: topPad + chartH + 2, width: 70, height: 14)
+        context.fill(Path(roundedRect: dr, cornerRadius: 3), with: .color(Theme.crosshair))
+        context.draw(Text(String(bar.date.suffix(10))).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(Theme.background),
+                     at: CGPoint(x: x, y: topPad + chartH + 9))
+    }
+
+    private func drawCrosshairVLine(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
+        guard let idx = hoverIndex, idx >= 0, idx < bars.count else { return }
+        let chartW = size.width - padding * 2
+        let barW = chartW / CGFloat(bars.count)
+        let x = padding + CGFloat(idx) * barW + barW / 2
+        var vl = Path(); vl.move(to: CGPoint(x: x, y: 0)); vl.addLine(to: CGPoint(x: x, y: size.height))
+        context.stroke(vl, with: .color(Theme.crosshair), style: StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
+    }
+
+    // MARK: - 通用绘线
+
+    private func drawLine(context: GraphicsContext, values: [Double?], color: Color, barW: CGFloat, sY: (Double) -> CGFloat) {
+        var path = Path(); var started = false
+        for (i, v) in values.enumerated() {
+            guard let v else { continue }
+            let x = padding + CGFloat(i) * barW + barW / 2
+            if !started { path.move(to: CGPoint(x: x, y: sY(v))); started = true }
+            else { path.addLine(to: CGPoint(x: x, y: sY(v))) }
+        }
+        context.stroke(path, with: .color(color), lineWidth: 1.2)
+    }
+
+    // MACD用的drawLine（以midY为零轴）
+    private func drawLine(context: GraphicsContext, values: [Double?], color: Color, barW: CGFloat, midY: CGFloat, scale: CGFloat) {
+        var path = Path(); var started = false
+        for (i, v) in values.enumerated() {
+            guard let v else { continue }
+            let x = padding + CGFloat(i) * barW + barW / 2
+            let y = midY - CGFloat(v) * scale
+            if !started { path.move(to: CGPoint(x: x, y: y)); started = true }
+            else { path.addLine(to: CGPoint(x: x, y: y)) }
+        }
+        context.stroke(path, with: .color(color), lineWidth: 1.2)
+    }
+
+    // MARK: - 数学
+
+    private func ma(_ values: [Double], _ period: Int) -> [Double?] {
+        var r = [Double?](repeating: nil, count: values.count)
+        for i in (period - 1)..<values.count { r[i] = values[(i - period + 1)...i].reduce(0, +) / Double(period) }
+        return r
+    }
+
+    private func ema(_ values: [Double], _ period: Int) -> [Double?] {
+        var r = [Double?](repeating: nil, count: values.count)
+        let k = 2.0 / Double(period + 1)
+        var prev: Double?
+        for i in 0..<values.count {
+            if prev == nil { prev = values[i] } else { prev = k * values[i] + (1 - k) * prev! }
+            r[i] = prev
+        }
+        return r
+    }
+
+    // MARK: - 格式化
+
+    private func fmtP(_ p: Decimal) -> String {
         let d = NSDecimalNumber(decimal: p).doubleValue
         if d >= 1000 { return String(format: "%.0f", d) }
         if d >= 10 { return String(format: "%.1f", d) }
         return String(format: "%.2f", d)
     }
+    private func fmtC(_ c: Decimal) -> String { String(format: "%+.0f", NSDecimalNumber(decimal: c).doubleValue) }
+    private func fmtPct(_ p: Decimal) -> String { String(format: "%+.2f%%", NSDecimalNumber(decimal: p).doubleValue) }
+}
 
-    private func formatChange(_ c: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: c).doubleValue
-        return String(format: "%+.0f", d)
-    }
-
-    private func formatPercent(_ p: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: p).doubleValue
-        return String(format: "%+.2f%%", d)
+/// 滚动手势（触控板双指平移）
+struct ScrollGesture: Gesture {
+    var body: some Gesture {
+        DragGesture(minimumDistance: 5)
     }
 }

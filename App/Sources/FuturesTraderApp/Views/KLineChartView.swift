@@ -536,19 +536,21 @@ struct KLineChartView: View {
             case .text:
                 let x = sX(obj.startIndex), y = sY(obj.startPrice)
                 let text = obj.label.isEmpty ? "标注" : obj.label
-                let lines = text.components(separatedBy: "\n")
-                let lineH: CGFloat = 15
-                let maxW: CGFloat = max(60, CGFloat(lines.map(\.count).max() ?? 4) * 8 + 16)
-                let totalH = CGFloat(lines.count) * lineH + 8
-                let bgRect = CGRect(x: x - maxW / 2, y: y - totalH / 2, width: maxW, height: totalH)
-                context.fill(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(Theme.panelBackground.opacity(0.85)))
-                context.stroke(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(obj.color.opacity(0.5)), lineWidth: obj.isSelected ? 1.5 : 0.5)
-                for (li, line) in lines.enumerated() {
-                    let ly = y - totalH / 2 + 4 + CGFloat(li) * lineH + lineH / 2
-                    context.draw(Text(line).font(.system(size: 11, weight: .medium)).foregroundColor(obj.color),
-                                 at: CGPoint(x: x, y: ly))
-                }
-                if obj.isSelected { dot(x + maxW / 2, y + totalH / 2, obj.color) }
+                // 用SwiftUI Text的自动换行能力，限定最大宽度
+                let maxTextW: CGFloat = 180
+                let resolvedText = Text(text)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(obj.color)
+                // 估算高度：按字符数和最大宽度粗算行数
+                let charPerLine = Int(maxTextW / 7)
+                let estimatedLines = max(1, (text.count + charPerLine - 1) / charPerLine + text.components(separatedBy: "\n").count - 1)
+                let boxW = min(maxTextW + 16, CGFloat(min(text.count, charPerLine)) * 7 + 16)
+                let boxH = CGFloat(estimatedLines) * 15 + 10
+                let bgRect = CGRect(x: x - boxW / 2, y: y - 4, width: boxW, height: boxH)
+                context.fill(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(Theme.panelBackground.opacity(0.9)))
+                context.stroke(Path(roundedRect: bgRect, cornerRadius: 4), with: .color(obj.color.opacity(obj.isSelected ? 0.8 : 0.4)), lineWidth: obj.isSelected ? 1.5 : 0.5)
+                context.draw(resolvedText, in: CGRect(x: x - boxW / 2 + 6, y: y, width: boxW - 12, height: boxH - 8))
+                if obj.isSelected { dot(x + boxW / 2, y + boxH - 4, obj.color) }
 
             case .none: break
             }
@@ -682,11 +684,12 @@ struct KLineChartView: View {
         let tolerance = adjRange * 0.02
         let ds = vm.drawingState
 
-        // 找到被双击的文字标注
+        // 找到被双击的文字标注（用更大的检测范围）
+        let bigTolerance = adjRange * 0.05
         for i in ds.objects.indices {
             let obj = ds.objects[i]
             guard obj.type == .text else { continue }
-            if abs(Double(obj.startIndex - clickIndex)) < 2 && abs(obj.startPrice - clickPrice) < tolerance {
+            if abs(Double(obj.startIndex - clickIndex)) < 5 && abs(obj.startPrice - clickPrice) < bigTolerance {
                 let newText = showTextInput(current: obj.label)
                 if !newText.isEmpty {
                     ds.objects[i].label = newText
@@ -709,9 +712,10 @@ struct KLineChartView: View {
         let alert = NSAlert()
         alert.messageText = current.isEmpty ? "添加标注" : "编辑标注"
         alert.informativeText = ""
+        alert.alertStyle = .informational
+        alert.icon = NSImage(size: NSSize(width: 1, height: 1)) // 去掉大图标
         alert.addButton(withTitle: "确定")
         alert.addButton(withTitle: "取消")
-        // 多行文本输入框
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 120))
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true

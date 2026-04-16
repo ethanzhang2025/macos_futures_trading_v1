@@ -33,6 +33,8 @@ final class AppViewModel: ObservableObject {
     }
 
     func startPolling() {
+        // 初始化绘图上下文（加载当前合约的已保存绘图）
+        drawingState.switchContext(symbol: selectedSymbol, period: selectedPeriod)
         pollingTask?.cancel()
         pollingTask = Task {
             await loadKLines()
@@ -47,11 +49,13 @@ final class AppViewModel: ObservableObject {
 
     func selectSymbol(_ symbol: String) {
         selectedSymbol = symbol
+        drawingState.switchContext(symbol: symbol, period: selectedPeriod)
         Task { await loadKLines() }
     }
 
     func selectPeriod(_ period: String) {
         selectedPeriod = period
+        drawingState.switchContext(symbol: selectedSymbol, period: period)
         Task { await loadKLines() }
     }
 

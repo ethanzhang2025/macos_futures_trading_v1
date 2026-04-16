@@ -1,7 +1,30 @@
 import SwiftUI
+import AppKit
+
+/// Color ↔ Hex 字符串转换
+extension Color {
+    func toHex() -> String {
+        let ns = NSColor(self).usingColorSpace(.sRGB) ?? .white
+        let r = Int(ns.redComponent * 255), g = Int(ns.greenComponent * 255), b = Int(ns.blueComponent * 255), a = Int(ns.alphaComponent * 255)
+        return String(format: "#%02X%02X%02X%02X", r, g, b, a)
+    }
+
+    init(hex: String) {
+        var hex = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        if hex.count == 6 { hex += "FF" }
+        guard hex.count == 8, let v = UInt64(hex, radix: 16) else {
+            self = .yellow; return
+        }
+        let r = Double((v >> 24) & 0xFF) / 255
+        let g = Double((v >> 16) & 0xFF) / 255
+        let b = Double((v >> 8) & 0xFF) / 255
+        let a = Double(v & 0xFF) / 255
+        self = Color(red: r, green: g, blue: b, opacity: a)
+    }
+}
 
 /// 绘图工具类型
-enum DrawingToolType: String, CaseIterable {
+enum DrawingToolType: String, CaseIterable, Codable {
     case none = "无"
     // 线条类
     case trendLine = "趋势线"
@@ -32,23 +55,45 @@ enum DrawingToolType: String, CaseIterable {
 }
 
 /// 绘图对象
-struct DrawingObject: Identifiable, Equatable {
-    let id = UUID()
+struct DrawingObject: Identifiable, Equatable, Codable {
+    var id = UUID()
     let type: DrawingToolType
     var startIndex: Int
     var startPrice: Double
     var endIndex: Int
     var endPrice: Double
-    var color: Color
+    var colorHex: String  // 存储为hex字符串，便于序列化
     var isSelected: Bool = false
-    /// 平行通道宽度（价格单位）
     var channelWidth: Double = 0
-    /// 文字内容
     var label: String = ""
-    /// 文字框宽度（像素）
     var boxWidth: CGFloat = 200
-    /// 文字框高度（像素）
     var boxHeight: CGFloat = 60
+
+    var color: Color {
+        get { Color(hex: colorHex) }
+        set { colorHex = newValue.toHex() }
+    }
+
+    // isSelected 不参与序列化
+    enum CodingKeys: String, CodingKey {
+        case id, type, startIndex, startPrice, endIndex, endPrice, colorHex
+        case channelWidth, label, boxWidth, boxHeight
+    }
+
+    init(id: UUID = UUID(), type: DrawingToolType, startIndex: Int, startPrice: Double, endIndex: Int, endPrice: Double, color: Color, isSelected: Bool = false, channelWidth: Double = 0, label: String = "", boxWidth: CGFloat = 200, boxHeight: CGFloat = 60) {
+        self.id = id
+        self.type = type
+        self.startIndex = startIndex
+        self.startPrice = startPrice
+        self.endIndex = endIndex
+        self.endPrice = endPrice
+        self.colorHex = color.toHex()
+        self.isSelected = isSelected
+        self.channelWidth = channelWidth
+        self.label = label
+        self.boxWidth = boxWidth
+        self.boxHeight = boxHeight
+    }
 
     static func == (lhs: DrawingObject, rhs: DrawingObject) -> Bool { lhs.id == rhs.id }
 
@@ -101,12 +146,17 @@ enum FibonacciLevels {
     ]
 }
 
-/// 绘图状态管理
+/// 绘图状态管理（按合约+周期自动持久化）
 class DrawingState: ObservableObject {
     @Published var activeTool: DrawingToolType = .none
-    @Published var objects: [DrawingObject] = []
+    @Published var objects: [DrawingObject] = [] {
+        didSet { saveToStorage() }
+    }
     @Published var tempStartIndex: Int?
     @Published var tempStartPrice: Double?
+
+    /// 当前上下文的key（symbol_period），切换时自动加载
+    private var currentKey: String = ""
 
     var isDrawing: Bool { activeTool != .none }
 
@@ -125,6 +175,33 @@ class DrawingState: ObservableObject {
     func deleteSelected() { objects.removeAll { $0.isSelected } }
     func deselectAll() { for i in objects.indices { objects[i].isSelected = false } }
     func clearAll() { objects.removeAll() }
+
+    // MARK: - 持久化
+
+    /// 切换合约/周期时调用
+    func switchContext(symbol: String, period: String) {
+        if !currentKey.isEmpty { saveToStorage() }
+        currentKey = "\(symbol)_\(period)"
+        loadFromStorage()
+    }
+
+    private func storageKey() -> String { "drawings_\(currentKey)" }
+
+    private func saveToStorage() {
+        guard !currentKey.isEmpty else { return }
+        if let data = try? JSONEncoder().encode(objects) {
+            UserDefaults.standard.set(data, forKey: storageKey())
+        }
+    }
+
+    private func loadFromStorage() {
+        guard let data = UserDefaults.standard.data(forKey: storageKey()),
+              let loaded = try? JSONDecoder().decode([DrawingObject].self, from: data) else {
+            objects = []
+            return
+        }
+        objects = loaded
+    }
 
     func selectNearby(index: Int, price: Double, tolerance: Double) -> Bool {
         deselectAll()

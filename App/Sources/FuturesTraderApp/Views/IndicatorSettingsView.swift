@@ -168,38 +168,37 @@ struct IndicatorSettingsView: View {
     }
 
     private func intField(value: Binding<Int>, min: Int, max: Int, width: CGFloat) -> some View {
-        TextField("", value: value, formatter: IntFormatter(min: min, max: max))
+        HStack(spacing: 2) {
+            TextField("", text: Binding(
+                get: { String(value.wrappedValue) },
+                set: { v in
+                    if let n = Int(v), n >= min, n <= max { value.wrappedValue = n }
+                    else if v.isEmpty { value.wrappedValue = min }
+                }
+            ))
             .textFieldStyle(.roundedBorder)
             .font(.system(size: 12, design: .monospaced))
             .frame(width: width)
+            Stepper("", value: value, in: min...max)
+                .labelsHidden()
+                .controlSize(.mini)
+        }
     }
 
     private func doubleField(value: Binding<Double>, min: Double, max: Double, width: CGFloat) -> some View {
-        TextField("", value: value, formatter: DoubleFormatter(min: min, max: max))
+        HStack(spacing: 2) {
+            TextField("", text: Binding(
+                get: { String(format: "%.1f", value.wrappedValue) },
+                set: { v in
+                    if let n = Double(v), n >= min, n <= max { value.wrappedValue = n }
+                }
+            ))
             .textFieldStyle(.roundedBorder)
             .font(.system(size: 12, design: .monospaced))
             .frame(width: width)
+            Stepper("", value: value, in: min...max, step: 0.1)
+                .labelsHidden()
+                .controlSize(.mini)
+        }
     }
-}
-
-class IntFormatter: NumberFormatter, @unchecked Sendable {
-    init(min: Int, max: Int) {
-        super.init()
-        allowsFloats = false
-        minimum = NSNumber(value: min)
-        maximum = NSNumber(value: max)
-    }
-    required init?(coder: NSCoder) { fatalError() }
-}
-
-class DoubleFormatter: NumberFormatter, @unchecked Sendable {
-    init(min: Double, max: Double) {
-        super.init()
-        allowsFloats = true
-        minimumFractionDigits = 1
-        maximumFractionDigits = 2
-        minimum = NSNumber(value: min)
-        maximum = NSNumber(value: max)
-    }
-    required init?(coder: NSCoder) { fatalError() }
 }

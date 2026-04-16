@@ -5,42 +5,44 @@ struct ContentView: View {
     @EnvironmentObject var vm: AppViewModel
 
     var body: some View {
-        HSplitView {
-            ContractSidebar()
-                .frame(minWidth: 220, maxWidth: 280)
+        ZStack {
+            HSplitView {
+                ContractSidebar()
+                    .frame(minWidth: 220, maxWidth: 280)
 
-            VStack(spacing: 0) {
-                ToolbarView()
-                if vm.isTimeline {
-                    // 分时图
-                    if vm.isLoading && vm.timelinePoints.isEmpty {
-                        loadingView
-                    } else if vm.timelinePoints.isEmpty {
-                        emptyView
+                VStack(spacing: 0) {
+                    ToolbarView()
+                    if vm.isTimeline {
+                        if vm.isLoading && vm.timelinePoints.isEmpty { loadingView }
+                        else if vm.timelinePoints.isEmpty { emptyView }
+                        else {
+                            let preClose = vm.selectedQuote?.preSettlement ?? vm.selectedQuote?.close ?? 0
+                            TimelineChartView(points: vm.timelinePoints, quote: vm.selectedQuote, preClose: preClose)
+                        }
                     } else {
-                        let preClose = vm.selectedQuote?.preSettlement ?? vm.selectedQuote?.close ?? 0
-                        TimelineChartView(points: vm.timelinePoints, quote: vm.selectedQuote, preClose: preClose)
-                    }
-                } else {
-                    // K线图
-                    if vm.isLoading && vm.klines.isEmpty {
-                        loadingView
-                    } else if vm.klines.isEmpty {
-                        emptyView
-                    } else {
-                        KLineChartView(bars: vm.klines, quote: vm.selectedQuote)
+                        if vm.isLoading && vm.klines.isEmpty { loadingView }
+                        else if vm.klines.isEmpty { emptyView }
+                        else { KLineChartView(bars: vm.klines, quote: vm.selectedQuote) }
                     }
                 }
+                .background(Theme.background)
+
+                OrderBookPanel(quote: vm.selectedQuote, symbolName: vm.selectedName)
+                    .frame(minWidth: 190, maxWidth: 230)
             }
             .background(Theme.background)
+            .preferredColorScheme(.dark)
+            .onAppear { vm.startPolling() }
+            .onDisappear { vm.stopPolling() }
 
-            OrderBookPanel(quote: vm.selectedQuote, symbolName: vm.selectedName)
-                .frame(minWidth: 190, maxWidth: 230)
+            // 指标设置浮层
+            if vm.showingIndicatorSettings {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                    .onTapGesture { vm.showingIndicatorSettings = false }
+                IndicatorSettingsView(params: $vm.indicatorParams, isPresented: $vm.showingIndicatorSettings)
+            }
         }
-        .background(Theme.background)
-        .preferredColorScheme(.dark)
-        .onAppear { vm.startPolling() }
-        .onDisappear { vm.stopPolling() }
     }
 
     private var loadingView: some View {

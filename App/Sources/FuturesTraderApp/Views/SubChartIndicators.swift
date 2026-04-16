@@ -17,14 +17,14 @@ enum SubChartRenderer {
         let dif: [Double?], dea: [Double?], macd: [Double?]
     }
 
-    static func calcMACD(_ closes: [Double]) -> MACDData {
-        let ema12 = ema(closes, 12), ema26 = ema(closes, 26)
+    static func calcMACD(_ closes: [Double], fast: Int = 12, slow: Int = 26, signal: Int = 9) -> MACDData {
+        let emaFast = ema(closes, fast), emaSlow = ema(closes, slow)
         var dif = [Double?](repeating: nil, count: closes.count)
         for i in 0..<closes.count {
-            if let e12 = ema12[i], let e26 = ema26[i] { dif[i] = e12 - e26 }
+            if let ef = emaFast[i], let es = emaSlow[i] { dif[i] = ef - es }
         }
         let difVals = dif.compactMap { $0 }
-        let deaAll = ema(difVals, 9)
+        let deaAll = ema(difVals, signal)
         var dea = [Double?](repeating: nil, count: closes.count)
         var idx = 0
         for i in 0..<closes.count {
@@ -37,10 +37,10 @@ enum SubChartRenderer {
         return MACDData(dif: dif, dea: dea, macd: macd)
     }
 
-    static func drawMACD(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar], padding: CGFloat, hoverIndex: Int?) {
+    static func drawMACD(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar], padding: CGFloat, hoverIndex: Int?, fast: Int = 12, slow: Int = 26, signal: Int = 9) {
         guard bars.count >= 2 else { return }
         let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-        let data = calcMACD(closes)
+        let data = calcMACD(closes, fast: fast, slow: slow, signal: signal)
 
         let chartW = size.width - padding * 2, chartH = size.height - 10, topPad: CGFloat = 14
         let barW = chartW / CGFloat(bars.count), stickW = max(1, barW * 0.55)
@@ -72,7 +72,7 @@ enum SubChartRenderer {
         drawLine(context: context, values: data.dif, color: Theme.ma5, barW: barW, padding: padding, midY: midY, scale: scale)
         drawLine(context: context, values: data.dea, color: Theme.ma20, barW: barW, padding: padding, midY: midY, scale: scale)
 
-        context.draw(Text("MACD(12,26,9)").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 40, y: 5))
+        context.draw(Text("MACD(\(fast),\(slow),\(signal))").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 40, y: 5))
         context.draw(Text("DIF").font(.system(size: 9)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 100, y: 5))
         context.draw(Text("DEA").font(.system(size: 9)).foregroundColor(Theme.ma20), at: CGPoint(x: padding + 125, y: 5))
 
@@ -113,9 +113,9 @@ enum SubChartRenderer {
         return KDJData(k: k, d: d, j: j)
     }
 
-    static func drawKDJ(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar], padding: CGFloat, hoverIndex: Int?) {
+    static func drawKDJ(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar], padding: CGFloat, hoverIndex: Int?, n: Int = 9, m1: Int = 3, m2: Int = 3) {
         guard bars.count >= 2 else { return }
-        let data = calcKDJ(bars)
+        let data = calcKDJ(bars, n: n, m1: m1, m2: m2)
 
         let chartW = size.width - padding * 2, chartH = size.height - 10, topPad: CGFloat = 14
         let barW = chartW / CGFloat(bars.count)
@@ -140,7 +140,7 @@ enum SubChartRenderer {
         drawLineScaled(context: context, values: data.d, color: dColor, barW: barW, padding: padding, sY: sY)
         drawLineScaled(context: context, values: data.j, color: jColor, barW: barW, padding: padding, sY: sY)
 
-        context.draw(Text("KDJ(9,3,3)").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 35, y: 5))
+        context.draw(Text("KDJ(\(n),\(m1),\(m2))").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 35, y: 5))
         context.draw(Text("K").font(.system(size: 9)).foregroundColor(kColor), at: CGPoint(x: padding + 85, y: 5))
         context.draw(Text("D").font(.system(size: 9)).foregroundColor(dColor), at: CGPoint(x: padding + 100, y: 5))
         context.draw(Text("J").font(.system(size: 9)).foregroundColor(jColor), at: CGPoint(x: padding + 115, y: 5))
@@ -173,12 +173,13 @@ enum SubChartRenderer {
         return rsi
     }
 
-    static func drawRSI(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar], padding: CGFloat, hoverIndex: Int?) {
+    static func drawRSI(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar], padding: CGFloat, hoverIndex: Int?, periods: [Int] = [6, 14, 24]) {
         guard bars.count >= 2 else { return }
         let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-        let rsi6 = calcRSI(closes, period: 6)
-        let rsi14 = calcRSI(closes, period: 14)
-        let rsi24 = calcRSI(closes, period: 24)
+        let p = periods.count >= 3 ? periods : [6, 14, 24]
+        let rsi6 = calcRSI(closes, period: p[0])
+        let rsi14 = calcRSI(closes, period: p[1])
+        let rsi24 = calcRSI(closes, period: p[2])
 
         let chartW = size.width - padding * 2, chartH = size.height - 10, topPad: CGFloat = 14
         let barW = chartW / CGFloat(bars.count)
@@ -202,9 +203,9 @@ enum SubChartRenderer {
         drawLineScaled(context: context, values: rsi24, color: c24, barW: barW, padding: padding, sY: sY)
 
         context.draw(Text("RSI").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 15, y: 5))
-        context.draw(Text("6").font(.system(size: 9)).foregroundColor(c6), at: CGPoint(x: padding + 40, y: 5))
-        context.draw(Text("14").font(.system(size: 9)).foregroundColor(c14), at: CGPoint(x: padding + 55, y: 5))
-        context.draw(Text("24").font(.system(size: 9)).foregroundColor(c24), at: CGPoint(x: padding + 75, y: 5))
+        context.draw(Text("\(p[0])").font(.system(size: 9)).foregroundColor(c6), at: CGPoint(x: padding + 40, y: 5))
+        context.draw(Text("\(p[1])").font(.system(size: 9)).foregroundColor(c14), at: CGPoint(x: padding + 55, y: 5))
+        context.draw(Text("\(p[2])").font(.system(size: 9)).foregroundColor(c24), at: CGPoint(x: padding + 75, y: 5))
 
         drawVCrosshair(context: context, size: size, bars: bars, padding: padding, hoverIndex: hoverIndex)
     }
@@ -255,11 +256,11 @@ enum SubChartRenderer {
     }
 
     /// 获取悬浮时的副图指标文本
-    static func hoverText(type: SubChartType, bars: [SinaKLineBar], index: Int) -> [(String, String, Color)] {
+    static func hoverText(type: SubChartType, bars: [SinaKLineBar], index: Int, params: IndicatorParams = .default) -> [(String, String, Color)] {
         switch type {
         case .macd:
             let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-            let data = calcMACD(closes)
+            let data = calcMACD(closes, fast: params.macdFast, slow: params.macdSlow, signal: params.macdSignal)
             guard index < data.dif.count else { return [] }
             var items: [(String, String, Color)] = []
             if let d = data.dif[index] { items.append(("DIF", String(format: "%.1f", d), Theme.ma5)) }
@@ -267,7 +268,7 @@ enum SubChartRenderer {
             if let m = data.macd[index] { items.append(("MACD", String(format: "%.1f", m), m >= 0 ? Theme.up : Theme.down)) }
             return items
         case .kdj:
-            let data = calcKDJ(bars)
+            let data = calcKDJ(bars, n: params.kdjN, m1: params.kdjM1, m2: params.kdjM2)
             guard index < data.k.count else { return [] }
             var items: [(String, String, Color)] = []
             if let k = data.k[index] { items.append(("K", String(format: "%.1f", k), Theme.ma5)) }
@@ -276,12 +277,13 @@ enum SubChartRenderer {
             return items
         case .rsi:
             let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-            let r6 = calcRSI(closes, period: 6)
-            let r14 = calcRSI(closes, period: 14)
-            guard index < r6.count else { return [] }
+            let p = params.rsiPeriods.count >= 3 ? params.rsiPeriods : [6, 14, 24]
+            let r1 = calcRSI(closes, period: p[0])
+            let r2 = calcRSI(closes, period: p[1])
+            guard index < r1.count else { return [] }
             var items: [(String, String, Color)] = []
-            if let v = r6[index] { items.append(("RSI6", String(format: "%.1f", v), Theme.ma5)) }
-            if let v = r14[index] { items.append(("RSI14", String(format: "%.1f", v), Theme.ma20)) }
+            if let v = r1[index] { items.append(("RSI\(p[0])", String(format: "%.1f", v), Theme.ma5)) }
+            if let v = r2[index] { items.append(("RSI\(p[1])", String(format: "%.1f", v), Theme.ma20)) }
             return items
         }
     }

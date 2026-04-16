@@ -167,9 +167,9 @@ struct KLineChartView: View {
                     ZStack(alignment: .topTrailing) {
                         Canvas { ctx, size in
                             switch vm.subChartType {
-                            case .macd: SubChartRenderer.drawMACD(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex)
-                            case .kdj:  SubChartRenderer.drawKDJ(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex)
-                            case .rsi:  SubChartRenderer.drawRSI(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex)
+                            case .macd: SubChartRenderer.drawMACD(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex, fast: vm.indicatorParams.macdFast, slow: vm.indicatorParams.macdSlow, signal: vm.indicatorParams.macdSignal)
+                            case .kdj:  SubChartRenderer.drawKDJ(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex, n: vm.indicatorParams.kdjN, m1: vm.indicatorParams.kdjM1, m2: vm.indicatorParams.kdjM2)
+                            case .rsi:  SubChartRenderer.drawRSI(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex, periods: vm.indicatorParams.rsiPeriods)
                             }
                         }
                         HStack(spacing: 2) {
@@ -259,7 +259,7 @@ struct KLineChartView: View {
                     }
                 }
                 // 副图值
-                let items = SubChartRenderer.hoverText(type: vm.subChartType, bars: displayBars, index: idx)
+                let items = SubChartRenderer.hoverText(type: vm.subChartType, bars: displayBars, index: idx, params: vm.indicatorParams)
                 if !items.isEmpty {
                     Text("|").foregroundColor(Theme.textMuted).font(.system(size: 11))
                     ForEach(items, id: \.0) { item in lbl(item.0, item.1, color: item.2) }
@@ -317,7 +317,7 @@ struct KLineChartView: View {
 
         // BOLL带（先画，在K线下层）
         if vm.showBoll && (mainOverlay == .boll || mainOverlay == .maAndBoll) {
-            let fullBoll = calcBOLL(extCloses, period: 20)
+            let fullBoll = calcBOLL(extCloses, period: vm.indicatorParams.bollPeriod, mult: vm.indicatorParams.bollMultiplier)
             let boll = BOLLData(
                 mid: Array(fullBoll.mid.dropFirst(phOffset).prefix(dispCount)),
                 upper: Array(fullBoll.upper.dropFirst(phOffset).prefix(dispCount)),
@@ -399,18 +399,23 @@ struct KLineChartView: View {
         }
 
         // MA线（可配置）
+        let maColors: [Color] = [Theme.ma5, Color(red: 0.3, green: 0.7, blue: 1.0), Theme.ma20, Color(red: 0.2, green: 0.9, blue: 0.6)]
         if mainOverlay == .ma || mainOverlay == .maAndBoll {
             var legendX: CGFloat = padding + 18
-            for maLine in vm.maConfig.enabledLines {
-                let maValues = Array(ma(extCloses, maLine.period).dropFirst(phOffset).prefix(dispCount))
-                drawLine(context: context, values: maValues, color: maLine.color, barW: barW, sY: sY)
-                context.draw(Text("MA\(maLine.period)").font(.system(size: 9)).foregroundColor(maLine.color), at: CGPoint(x: legendX, y: 6))
-                legendX += 45
+            var enabledCount = 0
+            for (idx, period) in vm.indicatorParams.maPeriods.enumerated() {
+                guard idx < vm.indicatorParams.maEnabled.count, vm.indicatorParams.maEnabled[idx] else { continue }
+                let c = maColors[idx % maColors.count]
+                let maValues = Array(ma(extCloses, period).dropFirst(phOffset).prefix(dispCount))
+                drawLine(context: context, values: maValues, color: c, barW: barW, sY: sY)
+                context.draw(Text("MA\(period)").font(.system(size: 9)).foregroundColor(c), at: CGPoint(x: legendX, y: 6))
+                legendX += 45; enabledCount += 1
             }
         }
         if vm.showBoll && (mainOverlay == .boll || mainOverlay == .maAndBoll) {
-            let legendX: CGFloat = (mainOverlay == .maAndBoll) ? padding + 18 + CGFloat(vm.maConfig.enabledLines.count) * 45 : padding + 18
-            context.draw(Text("BOLL(20,2)").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: legendX, y: 6))
+            let enabledCount = vm.indicatorParams.maEnabled.filter { $0 }.count
+            let legendX: CGFloat = (mainOverlay == .maAndBoll) ? padding + 18 + CGFloat(enabledCount) * 45 : padding + 18
+            context.draw(Text("BOLL(\(vm.indicatorParams.bollPeriod),\(String(format: "%.0f", vm.indicatorParams.bollMultiplier)))").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: legendX, y: 6))
         }
     }
 

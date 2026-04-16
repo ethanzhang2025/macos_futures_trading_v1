@@ -107,6 +107,13 @@ struct ChartContextMenu: View {
 
             Divider()
 
+            // 指标参数
+            Button("指标参数设置...") {
+                vm.showingIndicatorSettings = true
+            }
+
+            Divider()
+
             // 截图
             Button("保存截图") {
                 saveScreenshot()

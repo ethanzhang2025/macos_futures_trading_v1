@@ -14,6 +14,10 @@ final class AppViewModel: ObservableObject {
     @Published var timelinePoints: [SinaTimelinePoint] = []
     @Published var maConfig: MAConfig = .default
     @Published var showBoll: Bool = true
+    @Published var indicatorParams: IndicatorParams = IndicatorParams.load() {
+        didSet { indicatorParams.save() }
+    }
+    @Published var showingIndicatorSettings: Bool = false
     let drawingState = DrawingState()
 
     var isTimeline: Bool { selectedPeriod == "分时" }

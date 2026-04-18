@@ -40,11 +40,16 @@ struct KLineChartView: View {
     @State private var dragStartPrice: Double = 0
     @State private var dragEndIndex: Int = 0
     @State private var dragEndPrice: Double = 0
+    // NSEvent 监听器句柄（onDisappear 时回收，避免 View 重建造成累积泄漏）
+    @State private var keyMonitor: Any?
+    @State private var wheelMonitor: Any?
+
+    /// 指标结果记忆化。基于全局 bars 计算一次，滚动/缩放时按 displayRange 切片即可。
+    @StateObject private var indicatorCache = IndicatorCache()
 
     private let padding: CGFloat = 50
 
-    /// 用于指标计算的扩展数据（前面多取30根用于预热MA/BOLL等）
-    private let preheat = 30
+    private var contextID: String { "\(vm.selectedSymbol)_\(vm.selectedPeriod)" }
 
     private var displayRange: (start: Int, end: Int) {
         let count = min(bars.count, visibleCount)
@@ -57,20 +62,6 @@ struct KLineChartView: View {
         let r = displayRange
         guard r.start < r.end else { return [] }
         return Array(bars[r.start..<r.end])
-    }
-
-    /// 包含预热数据的K线（用于指标计算，确保BOLL等有足够前置数据）
-    private var extendedBars: [SinaKLineBar] {
-        let r = displayRange
-        let extStart = max(0, r.start - preheat)
-        guard extStart < r.end else { return [] }
-        return Array(bars[extStart..<r.end])
-    }
-
-    /// 预热偏移量（extendedBars比displayBars多出的前置K线数）
-    private var preheatOffset: Int {
-        let r = displayRange
-        return r.start - max(0, r.start - preheat)
     }
 
     var body: some View {
@@ -205,7 +196,7 @@ struct KLineChartView: View {
                             let chartW = max(1, geo.size.width - 16 - padding * 2)
                             let barW = chartW / CGFloat(displayBars.count)
                             let dxIdx = Int(value.translation.width / barW)
-                            let prices = displayBars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
+                            let prices = displayBars.flatMap { [$0.highD, $0.lowD] }
                             if let minP = prices.min(), let maxP = prices.max(), maxP > minP {
                                 let range = maxP - minP
                                 let dyPrice = -Double(value.translation.height) / Double(klineH) * range
@@ -219,7 +210,10 @@ struct KLineChartView: View {
                             scrollOffset = max(0, min(bars.count - visibleCount, scrollOffset + dx))
                         }
                     }
-                    .onEnded { _ in isDraggingObject = false }
+                    .onEnded { _ in
+                        if isDraggingObject { vm.drawingState.commitSave() }
+                        isDraggingObject = false
+                    }
                 )
                 .gesture(MagnificationGesture().onChanged { scale in
                     if scale > 1 { visibleCount = max(20, visibleCount - 2) }
@@ -229,6 +223,10 @@ struct KLineChartView: View {
         }
         .focusable().focusEffectDisabled()
         .onAppear { setupKeyboardMonitor(); setupScrollWheelMonitor() }
+        .onDisappear {
+            if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+            if let m = wheelMonitor { NSEvent.removeMonitor(m); wheelMonitor = nil }
+        }
     }
 
     // MARK: - 信息栏
@@ -239,19 +237,19 @@ struct KLineChartView: View {
                 let bar = displayBars[idx]
                 let isUp = bar.close >= bar.open
                 Text(bar.date).font(.system(size: 11, design: .monospaced)).foregroundColor(Theme.textSecondary)
-                lbl("开", fmtP(bar.open), color: isUp ? Theme.up : Theme.down)
-                lbl("高", fmtP(bar.high), color: Theme.up)
-                lbl("低", fmtP(bar.low), color: Theme.down)
-                lbl("收", fmtP(bar.close), color: isUp ? Theme.up : Theme.down)
+                lbl("开", Formatters.price(bar.open), color: isUp ? Theme.up : Theme.down)
+                lbl("高", Formatters.price(bar.high), color: Theme.up)
+                lbl("低", Formatters.price(bar.low), color: Theme.down)
+                lbl("收", Formatters.price(bar.close), color: isUp ? Theme.up : Theme.down)
                 lbl("量", "\(bar.volume)", color: Theme.textPrimary)
-                // BOLL值
+                // BOLL值（顺便修复原先 period 写死 20 不读用户配置的 bug）
                 if mainOverlay == .boll || mainOverlay == .maAndBoll {
-                    let extC = extendedBars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-                    let fullBoll = calcBOLL(extC, period: 20)
-                    let slicedMid = Array(fullBoll.mid.dropFirst(preheatOffset))
-                    let slicedUp = Array(fullBoll.upper.dropFirst(preheatOffset))
-                    let slicedDn = Array(fullBoll.lower.dropFirst(preheatOffset))
-                    if idx < slicedMid.count, let m = slicedMid[idx], let u = slicedUp[idx], let l = slicedDn[idx] {
+                    let fullBoll = indicatorCache.boll(contextID: contextID, bars: bars,
+                                                        period: vm.indicatorParams.bollPeriod,
+                                                        mult: vm.indicatorParams.bollMultiplier)
+                    let gIdx = displayRange.start + idx
+                    if gIdx < fullBoll.mid.count,
+                       let m = fullBoll.mid[gIdx], let u = fullBoll.upper[gIdx], let l = fullBoll.lower[gIdx] {
                         Text("|").foregroundColor(Theme.textMuted).font(.system(size: 11))
                         lbl("MID", String(format: "%.0f", m), color: Color.white)
                         lbl("UP", String(format: "%.0f", u), color: Color.yellow)
@@ -267,12 +265,12 @@ struct KLineChartView: View {
                 Spacer()
             } else if let q = quote, q.lastPrice > 0 {
                 Text(q.name).font(.system(size: 13, weight: .bold)).foregroundColor(Theme.textPrimary)
-                Text(fmtP(q.lastPrice)).font(.system(size: 16, weight: .bold, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
-                Text(fmtC(q.change)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
-                Text(fmtPct(q.changePercent)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
+                Text(Formatters.price(q.lastPrice)).font(.system(size: 16, weight: .bold, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
+                Text(Formatters.change(q.change)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
+                Text(Formatters.percent(q.changePercent)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
                 Spacer()
-                lbl("开", fmtP(q.open)); lbl("高", fmtP(q.high), color: Theme.up)
-                lbl("低", fmtP(q.low), color: Theme.down); lbl("量", "\(q.volume)"); lbl("仓", "\(q.openInterest)")
+                lbl("开", Formatters.price(q.open)); lbl("高", Formatters.price(q.high), color: Theme.up)
+                lbl("低", Formatters.price(q.low), color: Theme.down); lbl("量", "\(q.volume)"); lbl("仓", "\(q.openInterest)")
             } else {
                 Text("等待行情数据...").foregroundColor(Theme.textSecondary); Spacer()
             }
@@ -291,7 +289,7 @@ struct KLineChartView: View {
 
     private func drawKLines(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
         guard bars.count >= 2 else { return }
-        let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
+        let prices = bars.flatMap { [$0.highD, $0.lowD] }
         guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return }
 
         let chartW = size.width - padding * 2, chartH = size.height - 30, topPad: CGFloat = 16
@@ -299,11 +297,6 @@ struct KLineChartView: View {
         let range = maxP - minP, margin = range * 0.08
         let adjMin = minP - margin, adjRange = range + margin * 2
         let sY: (Double) -> CGFloat = { p in topPad + chartH * CGFloat(1 - (p - adjMin) / adjRange) }
-
-        // 用扩展数据计算指标，然后截取显示范围
-        let extCloses = extendedBars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-        let phOffset = preheatOffset
-        let dispCount = bars.count
 
         // 网格
         for i in 0...4 {
@@ -317,96 +310,38 @@ struct KLineChartView: View {
 
         // BOLL带（先画，在K线下层）
         if vm.showBoll && (mainOverlay == .boll || mainOverlay == .maAndBoll) {
-            let fullBoll = calcBOLL(extCloses, period: vm.indicatorParams.bollPeriod, mult: vm.indicatorParams.bollMultiplier)
-            let boll = BOLLData(
-                mid: Array(fullBoll.mid.dropFirst(phOffset).prefix(dispCount)),
-                upper: Array(fullBoll.upper.dropFirst(phOffset).prefix(dispCount)),
-                lower: Array(fullBoll.lower.dropFirst(phOffset).prefix(dispCount))
-            )
-            // 填充带
-            drawBollFill(context: context, upper: boll.upper, lower: boll.lower, barW: barW, sY: sY)
-            drawLine(context: context, values: boll.upper, color: Color.yellow.opacity(0.7), barW: barW, sY: sY, lineWidth: 1)
-            drawLine(context: context, values: boll.mid, color: Color.white.opacity(0.5), barW: barW, sY: sY, lineWidth: 1)
-            drawLine(context: context, values: boll.lower, color: Color.cyan.opacity(0.7), barW: barW, sY: sY, lineWidth: 1)
+            let r = displayRange
+            let fullBoll = indicatorCache.boll(contextID: contextID, bars: self.bars,
+                                                period: vm.indicatorParams.bollPeriod,
+                                                mult: vm.indicatorParams.bollMultiplier)
+            let upper = Array(fullBoll.upper[r.start..<r.end])
+            let mid = Array(fullBoll.mid[r.start..<r.end])
+            let lower = Array(fullBoll.lower[r.start..<r.end])
+            drawBollFill(context: context, upper: upper, lower: lower, barW: barW, sY: sY)
+            drawLine(context: context, values: upper, color: Color.yellow.opacity(0.7), barW: barW, sY: sY, lineWidth: 1)
+            drawLine(context: context, values: mid, color: Color.white.opacity(0.5), barW: barW, sY: sY, lineWidth: 1)
+            drawLine(context: context, values: lower, color: Color.cyan.opacity(0.7), barW: barW, sY: sY, lineWidth: 1)
         }
 
-        // 图表主体（根据chartStyle切换）
+        // 图表主体
         switch chartStyle {
-        case .candlestick:
-            for (i, bar) in bars.enumerated() {
-                let x = padding + CGFloat(i) * barW + barW / 2
-                let o = NSDecimalNumber(decimal: bar.open).doubleValue, c = NSDecimalNumber(decimal: bar.close).doubleValue
-                let h = NSDecimalNumber(decimal: bar.high).doubleValue, l = NSDecimalNumber(decimal: bar.low).doubleValue
-                let isUp = c >= o, color = isUp ? Theme.up : Theme.down
-                var shadow = Path(); shadow.move(to: CGPoint(x: x, y: sY(h))); shadow.addLine(to: CGPoint(x: x, y: sY(l)))
-                context.stroke(shadow, with: .color(color), lineWidth: 1)
-                let bTop = sY(max(o, c)), bBot = sY(min(o, c)), bH = max(1, bBot - bTop)
-                context.fill(Path(CGRect(x: x - candleW / 2, y: bTop, width: candleW, height: bH)), with: .color(color))
-            }
-
-        case .heikinAshi:
-            var prevHAClose = 0.0, prevHAOpen = 0.0
-            for (i, bar) in bars.enumerated() {
-                let o = NSDecimalNumber(decimal: bar.open).doubleValue, c = NSDecimalNumber(decimal: bar.close).doubleValue
-                let h = NSDecimalNumber(decimal: bar.high).doubleValue, l = NSDecimalNumber(decimal: bar.low).doubleValue
-                let haClose = (o + h + l + c) / 4
-                let haOpen = i == 0 ? (o + c) / 2 : (prevHAOpen + prevHAClose) / 2
-                let haHigh = max(h, max(haOpen, haClose))
-                let haLow = min(l, min(haOpen, haClose))
-                prevHAClose = haClose; prevHAOpen = haOpen
-                let x = padding + CGFloat(i) * barW + barW / 2
-                let isUp = haClose >= haOpen, color = isUp ? Theme.up : Theme.down
-                var shadow = Path(); shadow.move(to: CGPoint(x: x, y: sY(haHigh))); shadow.addLine(to: CGPoint(x: x, y: sY(haLow)))
-                context.stroke(shadow, with: .color(color), lineWidth: 1)
-                let bTop = sY(max(haOpen, haClose)), bBot = sY(min(haOpen, haClose)), bH = max(1, bBot - bTop)
-                context.fill(Path(CGRect(x: x - candleW / 2, y: bTop, width: candleW, height: bH)), with: .color(color))
-            }
-
-        case .line:
-            var path = Path()
-            for (i, bar) in bars.enumerated() {
-                let x = padding + CGFloat(i) * barW + barW / 2
-                let c = NSDecimalNumber(decimal: bar.close).doubleValue
-                let pt = CGPoint(x: x, y: sY(c))
-                if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
-            }
-            context.stroke(path, with: .color(Color(red: 0.3, green: 0.6, blue: 1.0)), lineWidth: 1.5)
-
-        case .area:
-            let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
-            // 填充区域
-            var fillPath = Path()
-            let baseY = sY(adjMin)
-            for (i, c) in closes.enumerated() {
-                let x = padding + CGFloat(i) * barW + barW / 2
-                let pt = CGPoint(x: x, y: sY(c))
-                if i == 0 { fillPath.move(to: CGPoint(x: x, y: baseY)); fillPath.addLine(to: pt) }
-                else { fillPath.addLine(to: pt) }
-            }
-            let lastX = padding + CGFloat(closes.count - 1) * barW + barW / 2
-            fillPath.addLine(to: CGPoint(x: lastX, y: baseY))
-            fillPath.closeSubpath()
-            // 渐变填充
-            context.fill(fillPath, with: .color(Color(red: 0.2, green: 0.5, blue: 0.9).opacity(0.15)))
-            // 顶部线条
-            var linePath = Path()
-            for (i, c) in closes.enumerated() {
-                let x = padding + CGFloat(i) * barW + barW / 2
-                let pt = CGPoint(x: x, y: sY(c))
-                if i == 0 { linePath.move(to: pt) } else { linePath.addLine(to: pt) }
-            }
-            context.stroke(linePath, with: .color(Color(red: 0.3, green: 0.6, blue: 1.0)), lineWidth: 1.5)
+        case .candlestick: drawCandles(context: context, bars: bars, barW: barW, candleW: candleW, sY: sY)
+        case .heikinAshi:  drawHeikinAshi(context: context, bars: bars, barW: barW, candleW: candleW, sY: sY)
+        case .line:        drawLineChart(context: context, bars: bars, barW: barW, sY: sY)
+        case .area:        drawAreaChart(context: context, bars: bars, barW: barW, sY: sY, baseY: sY(adjMin))
         }
 
         // MA线（可配置）
         let maColors: [Color] = [Theme.ma5, Color(red: 0.3, green: 0.7, blue: 1.0), Theme.ma20, Color(red: 0.2, green: 0.9, blue: 0.6)]
         if mainOverlay == .ma || mainOverlay == .maAndBoll {
+            let r = displayRange
             var legendX: CGFloat = padding + 18
             var enabledCount = 0
             for (idx, period) in vm.indicatorParams.maPeriods.enumerated() {
                 guard idx < vm.indicatorParams.maEnabled.count, vm.indicatorParams.maEnabled[idx] else { continue }
                 let c = maColors[idx % maColors.count]
-                let maValues = Array(ma(extCloses, period).dropFirst(phOffset).prefix(dispCount))
+                let fullMA = indicatorCache.ma(contextID: contextID, bars: self.bars, period: period)
+                let maValues = Array(fullMA[r.start..<r.end])
                 drawLine(context: context, values: maValues, color: c, barW: barW, sY: sY)
                 context.draw(Text("MA\(period)").font(.system(size: 9)).foregroundColor(c), at: CGPoint(x: legendX, y: 6))
                 legendX += 45; enabledCount += 1
@@ -419,27 +354,79 @@ struct KLineChartView: View {
         }
     }
 
-    // MARK: - BOLL计算
+    // MARK: - 图表样式
 
-    private struct BOLLData {
-        let mid: [Double?], upper: [Double?], lower: [Double?]
+    private func drawCandles(context: GraphicsContext, bars: [SinaKLineBar],
+                             barW: CGFloat, candleW: CGFloat, sY: (Double) -> CGFloat) {
+        for (i, bar) in bars.enumerated() {
+            let x = padding + CGFloat(i) * barW + barW / 2
+            let o = bar.openD, c = bar.closeD, h = bar.highD, l = bar.lowD
+            let color = c >= o ? Theme.up : Theme.down
+            var shadow = Path()
+            shadow.move(to: CGPoint(x: x, y: sY(h)))
+            shadow.addLine(to: CGPoint(x: x, y: sY(l)))
+            context.stroke(shadow, with: .color(color), lineWidth: 1)
+            let bTop = sY(max(o, c)), bBot = sY(min(o, c)), bH = max(1, bBot - bTop)
+            context.fill(Path(CGRect(x: x - candleW / 2, y: bTop, width: candleW, height: bH)),
+                         with: .color(color))
+        }
     }
 
-    private func calcBOLL(_ closes: [Double], period: Int, mult: Double = 2) -> BOLLData {
-        let count = closes.count
-        var mid = [Double?](repeating: nil, count: count)
-        var upper = [Double?](repeating: nil, count: count)
-        var lower = [Double?](repeating: nil, count: count)
-        for i in (period - 1)..<count {
-            let slice = Array(closes[(i - period + 1)...i])
-            let avg = slice.reduce(0, +) / Double(period)
-            let variance = slice.map { ($0 - avg) * ($0 - avg) }.reduce(0, +) / Double(period)
-            let std = sqrt(variance)
-            mid[i] = avg
-            upper[i] = avg + mult * std
-            lower[i] = avg - mult * std
+    private func drawHeikinAshi(context: GraphicsContext, bars: [SinaKLineBar],
+                                barW: CGFloat, candleW: CGFloat, sY: (Double) -> CGFloat) {
+        // Heikin Ashi 依赖前一根的 haOpen/haClose，递推计算
+        var prevHAClose = 0.0, prevHAOpen = 0.0
+        for (i, bar) in bars.enumerated() {
+            let o = bar.openD, c = bar.closeD, h = bar.highD, l = bar.lowD
+            let haClose = (o + h + l + c) / 4
+            let haOpen = i == 0 ? (o + c) / 2 : (prevHAOpen + prevHAClose) / 2
+            let haHigh = max(h, max(haOpen, haClose))
+            let haLow = min(l, min(haOpen, haClose))
+            prevHAClose = haClose; prevHAOpen = haOpen
+            let x = padding + CGFloat(i) * barW + barW / 2
+            let color = haClose >= haOpen ? Theme.up : Theme.down
+            var shadow = Path()
+            shadow.move(to: CGPoint(x: x, y: sY(haHigh)))
+            shadow.addLine(to: CGPoint(x: x, y: sY(haLow)))
+            context.stroke(shadow, with: .color(color), lineWidth: 1)
+            let bTop = sY(max(haOpen, haClose)), bBot = sY(min(haOpen, haClose)), bH = max(1, bBot - bTop)
+            context.fill(Path(CGRect(x: x - candleW / 2, y: bTop, width: candleW, height: bH)),
+                         with: .color(color))
         }
-        return BOLLData(mid: mid, upper: upper, lower: lower)
+    }
+
+    private func drawLineChart(context: GraphicsContext, bars: [SinaKLineBar],
+                               barW: CGFloat, sY: (Double) -> CGFloat) {
+        var path = Path()
+        for (i, bar) in bars.enumerated() {
+            let x = padding + CGFloat(i) * barW + barW / 2
+            let pt = CGPoint(x: x, y: sY(bar.closeD))
+            if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+        }
+        context.stroke(path, with: .color(Color(red: 0.3, green: 0.6, blue: 1.0)), lineWidth: 1.5)
+    }
+
+    private func drawAreaChart(context: GraphicsContext, bars: [SinaKLineBar],
+                               barW: CGFloat, sY: (Double) -> CGFloat, baseY: CGFloat) {
+        var fillPath = Path()
+        for (i, bar) in bars.enumerated() {
+            let x = padding + CGFloat(i) * barW + barW / 2
+            let pt = CGPoint(x: x, y: sY(bar.closeD))
+            if i == 0 { fillPath.move(to: CGPoint(x: x, y: baseY)); fillPath.addLine(to: pt) }
+            else { fillPath.addLine(to: pt) }
+        }
+        let lastX = padding + CGFloat(bars.count - 1) * barW + barW / 2
+        fillPath.addLine(to: CGPoint(x: lastX, y: baseY))
+        fillPath.closeSubpath()
+        context.fill(fillPath, with: .color(Color(red: 0.2, green: 0.5, blue: 0.9).opacity(0.15)))
+
+        var linePath = Path()
+        for (i, bar) in bars.enumerated() {
+            let x = padding + CGFloat(i) * barW + barW / 2
+            let pt = CGPoint(x: x, y: sY(bar.closeD))
+            if i == 0 { linePath.move(to: pt) } else { linePath.addLine(to: pt) }
+        }
+        context.stroke(linePath, with: .color(Color(red: 0.3, green: 0.6, blue: 1.0)), lineWidth: 1.5)
     }
 
     private func drawBollFill(context: GraphicsContext, upper: [Double?], lower: [Double?], barW: CGFloat, sY: (Double) -> CGFloat) {
@@ -486,7 +473,7 @@ struct KLineChartView: View {
 
     private func drawCrosshair(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar]) {
         guard let idx = hoverIndex, idx >= 0, idx < bars.count else { return }
-        let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
+        let prices = bars.flatMap { [$0.highD, $0.lowD] }
         guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return }
         let chartH = size.height - 30, topPad: CGFloat = 16
         let barW = (size.width - padding * 2) / CGFloat(bars.count)
@@ -534,17 +521,11 @@ struct KLineChartView: View {
         context.stroke(path, with: .color(color), lineWidth: lineWidth)
     }
 
-    private func ma(_ values: [Double], _ period: Int) -> [Double?] {
-        var r = [Double?](repeating: nil, count: values.count)
-        for i in (period - 1)..<values.count { r[i] = values[(i - period + 1)...i].reduce(0, +) / Double(period) }
-        return r
-    }
-
     // MARK: - 绘图对象渲染
 
     private func chartGeometry(size: CGSize, bars: [SinaKLineBar]) -> (sX: (Int) -> CGFloat, sY: (Double) -> CGFloat, adjMin: Double, adjRange: Double, chartH: CGFloat, topPad: CGFloat, barW: CGFloat)? {
         guard bars.count >= 2 else { return nil }
-        let prices = bars.flatMap { [NSDecimalNumber(decimal: $0.high).doubleValue, NSDecimalNumber(decimal: $0.low).doubleValue] }
+        let prices = bars.flatMap { [$0.highD, $0.lowD] }
         guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return nil }
         let chartH = size.height - 30, topPad: CGFloat = 16
         let barW = (size.width - padding * 2) / CGFloat(bars.count)
@@ -894,6 +875,7 @@ struct KLineChartView: View {
                 vm.drawingState.objects[idx].boxWidth = editingWidth
                 vm.drawingState.objects[idx].boxHeight = editingHeight
             }
+            vm.drawingState.commitSave()
         }
         editingTextId = nil
         editingText = ""
@@ -903,6 +885,7 @@ struct KLineChartView: View {
         if let id = editingTextId, let idx = vm.drawingState.objects.firstIndex(where: { $0.id == id }) {
             if vm.drawingState.objects[idx].label.isEmpty {
                 vm.drawingState.objects.remove(at: idx)
+                vm.drawingState.commitSave()
             }
         }
         editingTextId = nil
@@ -932,17 +915,11 @@ struct KLineChartView: View {
         return lines
     }
 
-    private func fmtP(_ p: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: p).doubleValue
-        if d >= 1000 { return String(format: "%.0f", d) }; if d >= 10 { return String(format: "%.1f", d) }; return String(format: "%.2f", d)
-    }
-    private func fmtC(_ c: Decimal) -> String { String(format: "%+.0f", NSDecimalNumber(decimal: c).doubleValue) }
-    private func fmtPct(_ p: Decimal) -> String { String(format: "%+.2f%%", NSDecimalNumber(decimal: p).doubleValue) }
-
     // MARK: - 键盘监听
 
     private func setupKeyboardMonitor() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        if let m = keyMonitor { NSEvent.removeMonitor(m) }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             switch event.keyCode {
             case 126: vm.selectPrevSymbol(); return nil    // ↑
             case 125: vm.selectNextSymbol(); return nil    // ↓
@@ -969,7 +946,8 @@ struct KLineChartView: View {
     // MARK: - 滚轮缩放
 
     private func setupScrollWheelMonitor() {
-        NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+        if let m = wheelMonitor { NSEvent.removeMonitor(m) }
+        wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
             let dy = event.scrollingDeltaY
             if abs(dy) > abs(event.scrollingDeltaX) {
                 // 垂直滚动 = 缩放

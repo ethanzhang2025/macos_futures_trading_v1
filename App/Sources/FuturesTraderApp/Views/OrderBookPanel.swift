@@ -39,13 +39,13 @@ struct OrderBookPanel: View {
     private var priceSection: some View {
         VStack(spacing: 4) {
             if let q = quote, q.lastPrice > 0 {
-                Text(formatPrice(q.lastPrice))
+                Text(Formatters.price(q.lastPrice))
                     .font(.system(size: 26, weight: .bold, design: .monospaced))
                     .foregroundColor(q.isUp ? Theme.up : Theme.down)
                 HStack(spacing: 8) {
-                    Text(formatChange(q.change))
+                    Text(Formatters.change(q.change))
                         .font(.system(size: 13, design: .monospaced))
-                    Text(formatPercent(q.changePercent))
+                    Text(Formatters.percent(q.changePercent))
                         .font(.system(size: 13, design: .monospaced))
                 }
                 .foregroundColor(q.isUp ? Theme.up : Theme.down)
@@ -112,29 +112,12 @@ struct OrderBookPanel: View {
 
     private func priceText(_ p: Decimal?) -> String {
         guard let p, p > 0 else { return "--" }
-        return formatPrice(p)
+        return Formatters.price(p)
     }
 
     private func volumeText(_ v: Int?) -> String {
         guard let v, v > 0 else { return "--" }
         return formatVolume(v)
-    }
-
-    private func formatPrice(_ p: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: p).doubleValue
-        if d >= 1000 { return String(format: "%.0f", d) }
-        if d >= 10 { return String(format: "%.1f", d) }
-        return String(format: "%.2f", d)
-    }
-
-    private func formatChange(_ c: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: c).doubleValue
-        return String(format: "%+.0f", d)
-    }
-
-    private func formatPercent(_ p: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: p).doubleValue
-        return String(format: "%+.2f%%", d)
     }
 
     private func formatVolume(_ v: Int) -> String {

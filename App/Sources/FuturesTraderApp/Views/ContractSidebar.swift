@@ -86,10 +86,10 @@ struct ContractRow: View {
             Spacer()
             if let q = quote, q.lastPrice > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(formatPrice(q.lastPrice))
+                    Text(Formatters.price(q.lastPrice))
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundColor(q.isUp ? Theme.up : Theme.down)
-                    Text(formatPercent(q.changePercent))
+                    Text(Formatters.percent(q.changePercent))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(q.isUp ? Theme.up : Theme.down)
                 }
@@ -104,15 +104,4 @@ struct ContractRow: View {
         .background(isSelected ? Theme.selected : Color.clear)
     }
 
-    private func formatPrice(_ p: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: p).doubleValue
-        if d >= 1000 { return String(format: "%.0f", d) }
-        if d >= 10 { return String(format: "%.1f", d) }
-        return String(format: "%.2f", d)
-    }
-
-    private func formatPercent(_ p: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: p).doubleValue
-        return String(format: "%+.2f%%", d)
-    }
 }

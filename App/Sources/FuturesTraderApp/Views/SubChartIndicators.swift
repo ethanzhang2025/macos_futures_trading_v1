@@ -39,7 +39,7 @@ enum SubChartRenderer {
 
     static func drawMACD(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar], padding: CGFloat, hoverIndex: Int?, fast: Int = 12, slow: Int = 26, signal: Int = 9) {
         guard bars.count >= 2 else { return }
-        let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+        let closes = bars.map(\.closeD)
         let data = calcMACD(closes, fast: fast, slow: slow, signal: signal)
 
         let chartW = size.width - padding * 2, chartH = size.height - 10, topPad: CGFloat = 14
@@ -92,11 +92,11 @@ enum SubChartRenderer {
             let start = max(0, i - n + 1)
             var hn: Double = -.infinity, ln: Double = .infinity
             for j in start...i {
-                let h = NSDecimalNumber(decimal: bars[j].high).doubleValue
-                let l = NSDecimalNumber(decimal: bars[j].low).doubleValue
+                let h = bars[j].highD
+                let l = bars[j].lowD
                 hn = max(hn, h); ln = min(ln, l)
             }
-            let c = NSDecimalNumber(decimal: bars[i].close).doubleValue
+            let c = bars[i].closeD
             rsv[i] = (hn - ln) > 0 ? (c - ln) / (hn - ln) * 100 : 50
         }
         var k = [Double?](repeating: nil, count: count)
@@ -175,7 +175,7 @@ enum SubChartRenderer {
 
     static func drawRSI(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar], padding: CGFloat, hoverIndex: Int?, periods: [Int] = [6, 14, 24]) {
         guard bars.count >= 2 else { return }
-        let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+        let closes = bars.map(\.closeD)
         let p = periods.count >= 3 ? periods : [6, 14, 24]
         let rsi6 = calcRSI(closes, period: p[0])
         let rsi14 = calcRSI(closes, period: p[1])
@@ -259,7 +259,7 @@ enum SubChartRenderer {
     static func hoverText(type: SubChartType, bars: [SinaKLineBar], index: Int, params: IndicatorParams = .default) -> [(String, String, Color)] {
         switch type {
         case .macd:
-            let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+            let closes = bars.map(\.closeD)
             let data = calcMACD(closes, fast: params.macdFast, slow: params.macdSlow, signal: params.macdSignal)
             guard index < data.dif.count else { return [] }
             var items: [(String, String, Color)] = []
@@ -276,7 +276,7 @@ enum SubChartRenderer {
             if let j = data.j[index] { items.append(("J", String(format: "%.1f", j), Color(red: 0.95, green: 0.45, blue: 0.85))) }
             return items
         case .rsi:
-            let closes = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+            let closes = bars.map(\.closeD)
             let p = params.rsiPeriods.count >= 3 ? params.rsiPeriods : [6, 14, 24]
             let r1 = calcRSI(closes, period: p[0])
             let r2 = calcRSI(closes, period: p[1])

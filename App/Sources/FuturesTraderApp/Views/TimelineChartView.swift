@@ -66,18 +66,18 @@ struct TimelineChartView: View {
                 let pct = preClose != 0 ? change / preClose * 100 : Decimal(0)
                 let isUp = change >= 0
                 Text(pt.time).font(.system(size: 11, design: .monospaced)).foregroundColor(Theme.textSecondary)
-                lbl("价", fmtP(pt.price), color: isUp ? Theme.up : Theme.down)
-                lbl("均", fmtP(pt.avgPrice), color: Theme.ma5)
-                lbl("涨跌", fmtC(change), color: isUp ? Theme.up : Theme.down)
-                lbl("幅", fmtPct(pct), color: isUp ? Theme.up : Theme.down)
+                lbl("价", Formatters.price(pt.price), color: isUp ? Theme.up : Theme.down)
+                lbl("均", Formatters.price(pt.avgPrice), color: Theme.ma5)
+                lbl("涨跌", Formatters.change(change), color: isUp ? Theme.up : Theme.down)
+                lbl("幅", Formatters.percent(pct), color: isUp ? Theme.up : Theme.down)
                 lbl("量", "\(pt.volume)", color: Theme.textPrimary)
                 Spacer()
             } else if let q = quote, q.lastPrice > 0 {
                 Text(q.name).font(.system(size: 13, weight: .bold)).foregroundColor(Theme.textPrimary)
-                Text(fmtP(q.lastPrice)).font(.system(size: 16, weight: .bold, design: .monospaced))
+                Text(Formatters.price(q.lastPrice)).font(.system(size: 16, weight: .bold, design: .monospaced))
                     .foregroundColor(q.isUp ? Theme.up : Theme.down)
-                Text(fmtC(q.change)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
-                Text(fmtPct(q.changePercent)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
+                Text(Formatters.change(q.change)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
+                Text(Formatters.percent(q.changePercent)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
                 Spacer()
             } else {
                 Text("分时图 · \(vm.selectedName)").foregroundColor(Theme.textSecondary); Spacer()
@@ -252,10 +252,4 @@ struct TimelineChartView: View {
         }
     }
 
-    private func fmtP(_ p: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: p).doubleValue
-        if d >= 1000 { return String(format: "%.0f", d) }; if d >= 10 { return String(format: "%.1f", d) }; return String(format: "%.2f", d)
-    }
-    private func fmtC(_ c: Decimal) -> String { String(format: "%+.0f", NSDecimalNumber(decimal: c).doubleValue) }
-    private func fmtPct(_ p: Decimal) -> String { String(format: "%+.2f%%", NSDecimalNumber(decimal: p).doubleValue) }
 }

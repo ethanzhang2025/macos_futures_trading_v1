@@ -191,6 +191,7 @@ struct IndicatorSettingsView: View {
                 get: { String(format: "%.1f", value.wrappedValue) },
                 set: { v in
                     if let n = Double(v), n >= min, n <= max { value.wrappedValue = n }
+                    else if v.isEmpty { value.wrappedValue = min }
                 }
             ))
             .textFieldStyle(.roundedBorder)

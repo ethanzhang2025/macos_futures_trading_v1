@@ -149,9 +149,10 @@ enum FibonacciLevels {
 /// 绘图状态管理（按合约+周期自动持久化）
 class DrawingState: ObservableObject {
     @Published var activeTool: DrawingToolType = .none
-    @Published var objects: [DrawingObject] = [] {
-        didSet { saveToStorage() }
-    }
+    // 注意：故意不在 objects 上挂 didSet 自动 save——拖拽/编辑过程中一帧可能改动多次，
+    //   每次落盘都要 JSON 编码全量对象并写 UserDefaults，主线程会被拖慢。
+    //   改为离散动作（新增/删除/清空）时立即落盘，连续动作（拖拽、编辑）结束后由外部调 commitSave()
+    @Published var objects: [DrawingObject] = []
     @Published var tempStartIndex: Int?
     @Published var tempStartPrice: Double?
 
@@ -170,11 +171,15 @@ class DrawingState: ObservableObject {
 
     func addObject(_ obj: DrawingObject) {
         objects.append(obj); activeTool = .none; tempStartIndex = nil; tempStartPrice = nil
+        saveToStorage()
     }
 
-    func deleteSelected() { objects.removeAll { $0.isSelected } }
+    func deleteSelected() { objects.removeAll { $0.isSelected }; saveToStorage() }
     func deselectAll() { for i in objects.indices { objects[i].isSelected = false } }
-    func clearAll() { objects.removeAll() }
+    func clearAll() { objects.removeAll(); saveToStorage() }
+
+    /// 拖拽结束/内联编辑提交时由视图层调用，把内存变化一次性落盘
+    func commitSave() { saveToStorage() }
 
     // MARK: - 持久化
 

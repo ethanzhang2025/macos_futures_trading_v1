@@ -6,29 +6,14 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            HSplitView {
-                ContractSidebar()
-                    .frame(minWidth: 220, maxWidth: 280)
-
-                VStack(spacing: 0) {
-                    ToolbarView()
-                    if vm.isTimeline {
-                        if vm.isLoading && vm.timelinePoints.isEmpty { loadingView }
-                        else if vm.timelinePoints.isEmpty { emptyView }
-                        else {
-                            let preClose = vm.selectedQuote?.preSettlement ?? vm.selectedQuote?.close ?? 0
-                            TimelineChartView(points: vm.timelinePoints, quote: vm.selectedQuote, preClose: preClose)
-                        }
-                    } else {
-                        if vm.isLoading && vm.klines.isEmpty { loadingView }
-                        else if vm.klines.isEmpty { emptyView }
-                        else { KLineChartView(bars: vm.klines, quote: vm.selectedQuote) }
-                    }
+            VStack(spacing: 0) {
+                VSplitView {
+                    mainArea
+                        .frame(minHeight: 360)
+                    PositionTable()
+                        .frame(minHeight: 100, idealHeight: 160, maxHeight: 260)
                 }
-                .background(Theme.background)
-
-                OrderBookPanel(quote: vm.selectedQuote, symbolName: vm.selectedName)
-                    .frame(minWidth: 190, maxWidth: 230)
+                AccountBar()
             }
             .background(Theme.background)
             .preferredColorScheme(.dark)
@@ -42,6 +27,38 @@ struct ContentView: View {
                     .onTapGesture { vm.showingIndicatorSettings = false }
                 IndicatorSettingsView(params: $vm.indicatorParams, isPresented: $vm.showingIndicatorSettings)
             }
+        }
+    }
+
+    private var mainArea: some View {
+        HSplitView {
+            ContractSidebar()
+                .frame(minWidth: 220, maxWidth: 280)
+
+            VStack(spacing: 0) {
+                ToolbarView()
+                if vm.isTimeline {
+                    if vm.isLoading && vm.timelinePoints.isEmpty { loadingView }
+                    else if vm.timelinePoints.isEmpty { emptyView }
+                    else {
+                        let preClose = vm.selectedQuote?.preSettlement ?? vm.selectedQuote?.close ?? 0
+                        TimelineChartView(points: vm.timelinePoints, quote: vm.selectedQuote, preClose: preClose)
+                    }
+                } else {
+                    if vm.isLoading && vm.klines.isEmpty { loadingView }
+                    else if vm.klines.isEmpty { emptyView }
+                    else { KLineChartView(bars: vm.klines, quote: vm.selectedQuote) }
+                }
+            }
+            .background(Theme.background)
+
+            VSplitView {
+                OrderBookPanel(quote: vm.selectedQuote, symbolName: vm.selectedName)
+                    .frame(minHeight: 260)
+                OrderPanel()
+                    .frame(minHeight: 240)
+            }
+            .frame(minWidth: 210, maxWidth: 250)
         }
     }
 

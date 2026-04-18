@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MarketData
 import Shared
 
@@ -19,6 +20,8 @@ final class AppViewModel: ObservableObject {
     }
     @Published var showingIndicatorSettings: Bool = false
     let drawingState = DrawingState()
+    let trading = MockTradingService()
+    private var tradingCancellable: AnyCancellable?
 
     var isTimeline: Bool { selectedPeriod == "分时" }
 
@@ -28,12 +31,22 @@ final class AppViewModel: ObservableObject {
     let watchList = SinaFuturesSymbol.all
     private let periods = ["分时", "日线", "60分", "15分", "5分"]
 
+    init() {
+        tradingCancellable = trading.objectWillChange.sink { [weak self] in
+            self?.objectWillChange.send()
+        }
+    }
+
     var selectedName: String {
         watchList.first { $0.symbol == selectedSymbol }?.name ?? selectedSymbol
     }
 
     var selectedQuote: SinaQuote? {
         quotes.first { $0.symbol == selectedSymbol }
+    }
+
+    func selectedQuote(for symbol: String) -> SinaQuote? {
+        quotes.first { $0.symbol == symbol }
     }
 
     func startPolling() {
@@ -97,6 +110,11 @@ final class AppViewModel: ObservableObject {
         if let result = try? await api.fetchQuotes(symbols: symbols), !result.isEmpty {
             self.quotes = result
             self.errorMessage = nil
+            var priceMap: [String: Decimal] = [:]
+            for q in result where q.lastPrice > 0 {
+                priceMap[q.symbol] = q.lastPrice
+            }
+            self.trading.refreshPnL(quotes: priceMap)
         }
         // 非交易时段获取失败时静默忽略，保留上一次的报价数据
     }

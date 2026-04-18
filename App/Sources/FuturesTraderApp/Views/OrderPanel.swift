@@ -22,16 +22,13 @@ struct OrderPanel: View {
             .padding(12)
         }
         .background(Theme.panelBackground)
-        .onChange(of: vm.selectedQuote?.lastPrice) { _, newValue in
-            if priceText.isEmpty, let p = newValue, p > 0 {
-                priceText = Formatters.price(p)
-            }
+        .onAppear { autoFillIfEmpty() }
+        .onChange(of: vm.selectedSymbol) { _, _ in
+            priceText = ""
+            autoFillIfEmpty()
         }
-        .onAppear {
-            if let p = vm.selectedQuote?.lastPrice, p > 0 {
-                priceText = Formatters.price(p)
-            }
-        }
+        .onChange(of: vm.selectedQuote?.lastPrice) { _, _ in autoFillIfEmpty() }
+        .onChange(of: vm.klines.count) { _, _ in autoFillIfEmpty() }
     }
 
     // MARK: - UI sections
@@ -165,10 +162,25 @@ struct OrderPanel: View {
 
     // MARK: - 动作
 
+    /// 价格填充 fallback：实时价 → 最后一根 K 线收盘 → 昨结算 → 昨收
+    private var autoFillPrice: Decimal? {
+        if let p = vm.selectedQuote?.lastPrice, p > 0 { return p }
+        if let p = vm.klines.last?.close, p > 0 { return p }
+        if let p = vm.selectedQuote?.preSettlement, p > 0 { return p }
+        if let p = vm.selectedQuote?.close, p > 0 { return p }
+        return nil
+    }
+
+    private func autoFillIfEmpty() {
+        if priceText.isEmpty, let p = autoFillPrice {
+            priceText = Formatters.price(p)
+        }
+    }
+
     private func submit(_ direction: Direction, _ offset: OffsetFlag) {
         let price: Decimal
         if priceType == .marketPrice {
-            price = vm.selectedQuote?.lastPrice ?? 0
+            price = autoFillPrice ?? 0
         } else {
             price = Decimal(string: priceText) ?? 0
         }
@@ -190,7 +202,7 @@ struct OrderPanel: View {
     }
 
     private func fillLastPrice() {
-        if let p = vm.selectedQuote?.lastPrice, p > 0 {
+        if let p = autoFillPrice {
             priceText = Formatters.price(p)
         }
     }

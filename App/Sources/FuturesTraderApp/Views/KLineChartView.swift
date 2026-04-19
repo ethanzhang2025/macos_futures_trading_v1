@@ -940,6 +940,9 @@ struct KLineChartView: View {
     private func setupKeyboardMonitor() {
         if let m = keyMonitor { NSEvent.removeMonitor(m) }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // 文本输入中（TextField/TextEditor 内的 NSTextView fieldEditor）不拦截，
+            // 否则 backspace/方向键/数字键等都会被全局 monitor 吞掉
+            if event.window?.firstResponder is NSTextView { return event }
             switch event.keyCode {
             case 126: vm.selectPrevSymbol(); return nil    // ↑
             case 125: vm.selectNextSymbol(); return nil    // ↓

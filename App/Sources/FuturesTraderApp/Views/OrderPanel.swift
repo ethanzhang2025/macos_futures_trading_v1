@@ -162,13 +162,8 @@ struct OrderPanel: View {
 
     // MARK: - 动作
 
-    /// 价格填充 fallback：实时价 → 最后一根 K 线收盘 → 昨结算 → 昨收
     private var autoFillPrice: Decimal? {
-        if let p = vm.selectedQuote?.lastPrice, p > 0 { return p }
-        if let p = vm.klines.last?.close, p > 0 { return p }
-        if let p = vm.selectedQuote?.preSettlement, p > 0 { return p }
-        if let p = vm.selectedQuote?.close, p > 0 { return p }
-        return nil
+        vm.priceFallback(for: vm.selectedSymbol)
     }
 
     private func autoFillIfEmpty() {
@@ -196,7 +191,7 @@ struct OrderPanel: View {
 
     private func flattenAll() {
         for pos in vm.trading.positions {
-            let price = vm.selectedQuote(for: pos.instrumentID)?.lastPrice ?? pos.openAvgPrice
+            guard let price = vm.priceFallback(for: pos.instrumentID) else { continue }
             vm.trading.flatten(pos, currentPrice: price)
         }
     }

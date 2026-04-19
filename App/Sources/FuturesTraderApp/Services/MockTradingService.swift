@@ -24,6 +24,7 @@ final class MockTradingService: ObservableObject {
     // MARK: - 下单
 
     func placeOrder(symbol: String, direction: Direction, offsetFlag: OffsetFlag, price: Decimal, volume: Int) {
+        guard price > 0 else { return }
         orderSeq += 1
         let ref = String(format: "%06d", orderSeq)
         let time = Self.timeNow()

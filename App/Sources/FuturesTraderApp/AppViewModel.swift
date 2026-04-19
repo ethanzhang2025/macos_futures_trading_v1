@@ -49,6 +49,17 @@ final class AppViewModel: ObservableObject {
         quotes.first { $0.symbol == symbol }
     }
 
+    /// 价格 fallback：实时价 → 最后一根 K 线 close（仅当前合约）→ 昨结算 → 昨收
+    func priceFallback(for symbol: String) -> Decimal? {
+        if let p = selectedQuote(for: symbol)?.lastPrice, p > 0 { return p }
+        if symbol == selectedSymbol, let p = klines.last?.close, p > 0 { return p }
+        if let q = selectedQuote(for: symbol) {
+            if q.preSettlement > 0 { return q.preSettlement }
+            if q.close > 0 { return q.close }
+        }
+        return nil
+    }
+
     func startPolling() {
         // 初始化绘图上下文（加载当前合约的已保存绘图）
         drawingState.switchContext(symbol: selectedSymbol, period: selectedPeriod)

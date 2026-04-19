@@ -36,7 +36,7 @@ struct PositionTable: View {
     }
 
     private func row(_ p: Position) -> some View {
-        let currentPrice = vm.selectedQuote(for: p.instrumentID)?.lastPrice ?? p.openAvgPrice
+        let currentPrice = vm.priceFallback(for: p.instrumentID) ?? p.openAvgPrice
         let pnl = p.floatingPnL(currentPrice: currentPrice)
         let pnlColor: Color = pnl > 0 ? Theme.up : pnl < 0 ? Theme.down : Theme.flat
         let directionColor: Color = p.direction == .long ? Theme.up : Theme.down

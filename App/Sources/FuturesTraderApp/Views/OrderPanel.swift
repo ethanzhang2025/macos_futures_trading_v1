@@ -191,7 +191,7 @@ struct OrderPanel: View {
 
     private func flattenAll() {
         for pos in vm.trading.positions {
-            guard let price = vm.priceFallback(for: pos.instrumentID) else { continue }
+            let price = vm.priceFallback(for: pos.instrumentID) ?? pos.openAvgPrice
             vm.trading.flatten(pos, currentPrice: price)
         }
     }

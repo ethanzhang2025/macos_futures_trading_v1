@@ -115,7 +115,24 @@
 
 **限定**：仅视觉切换 —— `selectedSymbol` 和 API 请求**始终走连续代码**。未做"切到主力后 K 线加载主力月份真实数据"，因为新浪 K 线 API 对月份合约代码的支持未验证，避免空数据风险。真实主力数据延后到 CTP/文华数据源阶段。
 
-### Week 2（2026-04-25 ~ 05-01）：多窗口 + 主力切换 — 进行中
+### Day 2 续（2026-04-19）：多窗口 ⌘N — ✅ 已完成
+
+- `FuturesTraderApp.AppDelegate` 从 `private var window` 改 `private var windows: [NSWindow]`
+- 抽 `@objc newWindow()`：每个窗口独立 `AppViewModel`（合约/周期/指标参数各自独立），watchList 走 UserDefaults 共享
+- 窗口级联排列（新窗口在上一个基础上偏移 +30/-30），不完全覆盖
+- 监听 `NSWindow.willCloseNotification`，关闭时从 windows 数组清除
+- 菜单栏加「文件 > 新窗口 ⌘N」—— macOS 系统惯例快捷键（与 ⌘Q 退出/⌘M 最小化同类），非产品自定义，不在"延后统一梳理"范围
+
+**限定**：watchList 通过 UserDefaults 启动时加载 + 本窗口 didSet 保存，**窗口间不实时互相同步**（A 窗口加合约 B 窗口看不到，直到 B 重启）。Alpha 阶段可接受。
+
+### Week 2：✅ 3/3 可做项完成
+
+- [x] 自选合约增删 + 持久化（Day 2）
+- [x] 合约列表「连续/主力」显示切换（Day 2）
+- [x] 多窗口 ⌘N（Day 2）
+- [x] ~~OI 副图~~ 放弃（新浪 K 线 API 不返回 bar 级持仓量，数据源不支持）
+
+### Week 3（2026-05-02 ~ 05-08）：演示材料 + Scope 冻结 — 未开始
 
 计划清单（详见 `~/.claude/plans/review-1-1-30-alpha-iridescent-fern.md`）：
 - `FuturesTraderApp.swift` 改造 WindowController + `⌘N`

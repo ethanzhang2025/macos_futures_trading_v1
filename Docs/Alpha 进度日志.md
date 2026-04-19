@@ -141,6 +141,26 @@ Week 2 完成后的增量，补齐交易工作流视觉链路。
 - `PositionTable` 去掉自身 header（改由 TradingTabView 统管），保留行渲染
 - `ContentView` 把 `PositionTable()` 替换为 `TradingTabView()`
 
+### Day 2 续（2026-04-19）：数据源升级（修复 2 年老化）— ✅ 已完成
+
+**背景**：调研"真实主力切换"时用 curl 实测发现，旧新浪 API 数据卡在 `2024-07-17`——过去两年项目所有"实时"行情实际是老快照。换端点后数据升到 `2026-04-17`。
+
+**改动**：
+- `SinaMarketData.fetchQuotes` URL：`list=RB0` → `list=nf_RB0`（加 `nf_` 前缀）
+- `parseQuotes` 分商品/金融两套：
+  - 商品期货（RB/HC/I/J/...）沿用旧字段顺序，但 openInterest/volume 改 Int(Double(...))（新 API 返回小数格式如 `1443377.000`）
+  - 金融期货（IF/IC/IM/IH/T*）完全不同字段顺序：name 在末尾，价格 0-3，last 在 7，oi 在 6；独立 preSettlement 字段缺失，近似用 close
+- K 线 4 个 endpoint 全换到 `InnerFuturesNewService.getDailyKLine` / `getFewMinLine?type=5/15/60`（jsonp_v2 格式）
+- `fetchKLines` 私有方法：剥离 `var t=(...);` 包装后按 `[[String: String]]` JSON decode；字段 d/o/h/l/c/v/p
+- `SinaKLineBar` 加 `openInterest: Int` 字段（默认 0），从新 API 的 `p` 字段映射
+
+**验证**：`swift build --target MarketData` 编译通过。Mac 端 `git pull && swift run --package-path ...` 后应看到：
+- K 线最新日期是 `2026-04-17` 而非 `2024-07-17`
+- 商品期货 lastPrice 与新浪网页一致
+- 金融期货 IF0/IC0/IM0/IH0 能加载（交易时段字段精度可能有偏差，非交易时段 close=last 近似 OK）
+
+**连锁**：`SinaKLineBar.openInterest` 已 populated → **OI 副图**（原放弃项）前置条件成立。
+
 ### Week 3（2026-05-02 ~ 05-08）：演示材料 + Scope 冻结 — 暂不做
 
 计划清单（详见 `~/.claude/plans/review-1-1-30-alpha-iridescent-fern.md`）：

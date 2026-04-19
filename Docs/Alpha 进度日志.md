@@ -106,6 +106,15 @@
 
 **延后**：拖拽排序（SwiftUI `ScrollView + LazyVStack` 不支持原生拖拽，手写 `DropDelegate` 与 Alpha 价值不匹配）、OI 副图（新浪 K 线 API 不返回 bar 级持仓量，数据源不支持，移出 Week 2 范围）。
 
+### Day 2 续（2026-04-19）：合约列表「连续/主力」显示切换 — ✅ 已完成
+
+- 新建 `Services/MainContractService.swift`：36 品种硬编码主力月份映射（2026-04-19 估算值）
+- `AppViewModel` 加 `@Published showMainContract: Bool` + `displaySymbol(for:) -> String` helper
+- `ContractSidebar` 搜索框下加 `[连续 / 主力]` segmented Picker
+- `ContractRow` 代码列用 `vm.displaySymbol`，主力模式下显示 RB2510 等具体月份
+
+**限定**：仅视觉切换 —— `selectedSymbol` 和 API 请求**始终走连续代码**。未做"切到主力后 K 线加载主力月份真实数据"，因为新浪 K 线 API 对月份合约代码的支持未验证，避免空数据风险。真实主力数据延后到 CTP/文华数据源阶段。
+
 ### Week 2（2026-04-25 ~ 05-01）：多窗口 + 主力切换 — 进行中
 
 计划清单（详见 `~/.claude/plans/review-1-1-30-alpha-iridescent-fern.md`）：

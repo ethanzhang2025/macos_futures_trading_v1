@@ -4,8 +4,9 @@ import MarketData
 struct ContractSidebar: View {
     @EnvironmentObject var vm: AppViewModel
     @State private var searchText = ""
+    @State private var showingAdd = false
 
-    private var filteredContracts: [(symbol: String, name: String, pinyin: String)] {
+    private var filteredContracts: [WatchItem] {
         if searchText.isEmpty { return vm.watchList }
         let upper = searchText.uppercased()
         return vm.watchList.filter {
@@ -18,11 +19,20 @@ struct ContractSidebar: View {
     var body: some View {
         VStack(spacing: 0) {
             // 标题
-            HStack {
+            HStack(spacing: 8) {
                 Text("合约列表")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(Theme.textPrimary)
                 Spacer()
+                Button {
+                    showingAdd = true
+                } label: {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("添加自选合约")
                 Text("\(filteredContracts.count)个")
                     .font(.system(size: 11))
                     .foregroundColor(Theme.textMuted)
@@ -60,16 +70,25 @@ struct ContractSidebar: View {
                             isSelected: vm.selectedSymbol == item.symbol
                         )
                         .onTapGesture { vm.selectSymbol(item.symbol) }
+                        .contextMenu {
+                            Button("从自选移除", role: .destructive) {
+                                vm.removeFromWatch(item.symbol)
+                            }
+                        }
                     }
                 }
             }
         }
         .background(Theme.panelBackground)
+        .sheet(isPresented: $showingAdd) {
+            AddContractSheet()
+                .environmentObject(vm)
+        }
     }
 }
 
 struct ContractRow: View {
-    let item: (symbol: String, name: String, pinyin: String)
+    let item: WatchItem
     let quote: SinaQuote?
     let isSelected: Bool
 

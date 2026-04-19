@@ -28,10 +28,16 @@ final class AppViewModel: ObservableObject {
     private let api = SinaMarketData()
     private var pollingTask: Task<Void, Never>?
 
-    let watchList = SinaFuturesSymbol.all
+    @Published var watchList: [WatchItem] = WatchItem.allContracts {
+        didSet { saveWatchList() }
+    }
     private let periods = ["分时", "日线", "60分", "15分", "5分"]
 
     init() {
+        if let data = UserDefaults.standard.data(forKey: "watchList"),
+           let loaded = try? JSONDecoder().decode([WatchItem].self, from: data), !loaded.isEmpty {
+            self.watchList = loaded
+        }
         tradingCancellable = trading.objectWillChange.sink { [weak self] in
             self?.objectWillChange.send()
         }
@@ -99,6 +105,29 @@ final class AppViewModel: ObservableObject {
     func selectNextSymbol() {
         guard let idx = watchList.firstIndex(where: { $0.symbol == selectedSymbol }), idx < watchList.count - 1 else { return }
         selectSymbol(watchList[idx + 1].symbol)
+    }
+
+    // MARK: - 自选合约管理
+
+    private func saveWatchList() {
+        if let data = try? JSONEncoder().encode(watchList) {
+            UserDefaults.standard.set(data, forKey: "watchList")
+        }
+    }
+
+    /// 添加自选（从全部合约池）
+    func addToWatch(_ symbol: String) {
+        guard !watchList.contains(where: { $0.symbol == symbol }),
+              let item = WatchItem.allContracts.first(where: { $0.symbol == symbol }) else { return }
+        watchList.append(item)
+    }
+
+    /// 移除自选；若正被选中则切到首项
+    func removeFromWatch(_ symbol: String) {
+        watchList.removeAll { $0.symbol == symbol }
+        if selectedSymbol == symbol, let first = watchList.first {
+            selectSymbol(first.symbol)
+        }
     }
 
     /// 按数字键切换周期

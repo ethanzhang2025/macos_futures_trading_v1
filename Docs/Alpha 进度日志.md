@@ -86,7 +86,27 @@
 
 `+15 / −8`。Linux 无 SwiftUI 不能 build App 目录，Mac 端待验证。
 
-### Week 2：多窗口 + 合约增强 — 未开始
+### Day 2 续（2026-04-19）：K 线右键「此价位买开/卖开」— ✅ 已完成
+
+- `KLineChartView` 加 `hoverPrice @State`，`onContinuousHover` 时更新
+- 抽 `computeHoverPrice(y:chartH:)` helper（与 `drawCrosshair` 同算法，Y 坐标 → 价格）
+- `ChartContextMenu` 加 `hoverPrice: Decimal?` 参数，顶部条件渲染两个菜单项，点击固定 1 手下单
+
+**约束**：F1-F4 等快捷键延后到所有功能完成后统一梳理（见 memory `project_shortcut_postponed.md`）。Week 1 收尾只做到右键菜单为止。
+
+### Day 2 续（2026-04-19）：自选合约增删 + UserDefaults 持久化 — ✅ 已完成
+
+**Week 2 子项提前启动**。原计划 Week 2，Day 2 把 Week 1 收尾完就顺手开了。
+
+- `Models/WatchItem.swift` 新建：`Codable/Identifiable/Hashable` struct 包裹 `SinaFuturesSymbol` tuple，`allContracts` 是全部合约池（36 个）
+- `AppViewModel.watchList` 从 `let` 改 `@Published var [WatchItem]`，`didSet` 自动保存；`init` 启动时从 UserDefaults `"watchList"` key 加载
+- 加 `addToWatch(_:) / removeFromWatch(_:)`：移除正被选中的合约时切到首项
+- `ContractSidebar` 标题行加「+」按钮（`plus.circle`）打开 sheet；每行右键菜单「从自选移除」
+- 新建 `Views/AddContractSheet.swift`：展示未在自选里的合约，支持搜索 + 点击「添加」
+
+**延后**：拖拽排序（SwiftUI `ScrollView + LazyVStack` 不支持原生拖拽，手写 `DropDelegate` 与 Alpha 价值不匹配）、OI 副图（新浪 K 线 API 不返回 bar 级持仓量，数据源不支持，移出 Week 2 范围）。
+
+### Week 2（2026-04-25 ~ 05-01）：多窗口 + 主力切换 — 进行中
 
 计划清单（详见 `~/.claude/plans/review-1-1-30-alpha-iridescent-fern.md`）：
 - `FuturesTraderApp.swift` 改造 WindowController + `⌘N`

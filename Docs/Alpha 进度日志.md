@@ -132,7 +132,16 @@
 - [x] 多窗口 ⌘N（Day 2）
 - [x] ~~OI 副图~~ 放弃（新浪 K 线 API 不返回 bar 级持仓量，数据源不支持）
 
-### Week 3（2026-05-02 ~ 05-08）：演示材料 + Scope 冻结 — 未开始
+### Day 2 续（2026-04-19）：委托单历史表 — ✅ 已完成
+
+Week 2 完成后的增量，补齐交易工作流视觉链路。
+
+- 新建 `Views/OrdersTable.swift`：列 时间/合约/方向/开平/价格/委托/成交/状态，最新在顶（MockTradingService.orders 插入 at: 0）；状态颜色：已报橙、成交白、部分成交黄、已撤/废灰
+- 新建 `Views/TradingTabView.swift`：下方面板改 Tab 结构，`[持仓 N | 委托 M]` 切换，数字随 `vm.trading.{positions, orders}` 实时更新
+- `PositionTable` 去掉自身 header（改由 TradingTabView 统管），保留行渲染
+- `ContentView` 把 `PositionTable()` 替换为 `TradingTabView()`
+
+### Week 3（2026-05-02 ~ 05-08）：演示材料 + Scope 冻结 — 暂不做
 
 计划清单（详见 `~/.claude/plans/review-1-1-30-alpha-iridescent-fern.md`）：
 - `FuturesTraderApp.swift` 改造 WindowController + `⌘N`

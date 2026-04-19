@@ -19,6 +19,7 @@ final class AppViewModel: ObservableObject {
         didSet { indicatorParams.save() }
     }
     @Published var showingIndicatorSettings: Bool = false
+    @Published var showMainContract: Bool = false
     let drawingState = DrawingState()
     let trading = MockTradingService()
     private var tradingCancellable: AnyCancellable?
@@ -53,6 +54,11 @@ final class AppViewModel: ObservableObject {
 
     func selectedQuote(for symbol: String) -> SinaQuote? {
         quotes.first { $0.symbol == symbol }
+    }
+
+    /// 按显示模式返回合约代码（连续 RB0 / 主力 RB2510）。仅用于 UI 展示。
+    func displaySymbol(for symbol: String) -> String {
+        showMainContract ? MainContractService.mainCode(for: symbol) : symbol
     }
 
     /// 价格 fallback：实时价 → 最后一根 K 线 close（仅当前合约）→ 昨结算 → 昨收

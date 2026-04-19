@@ -46,6 +46,15 @@ struct ContractSidebar: View {
                 .padding(.horizontal, 10)
                 .padding(.bottom, 6)
 
+            // 显示模式：连续代码 vs 主力月份代码（仅视觉切换，数据仍走连续代码）
+            Picker("", selection: $vm.showMainContract) {
+                Text("连续").tag(false)
+                Text("主力").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
+
             Divider().background(Theme.border)
 
             // 行情状态
@@ -88,6 +97,7 @@ struct ContractSidebar: View {
 }
 
 struct ContractRow: View {
+    @EnvironmentObject var vm: AppViewModel
     let item: WatchItem
     let quote: SinaQuote?
     let isSelected: Bool
@@ -98,7 +108,7 @@ struct ContractRow: View {
                 Text(item.name)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(Theme.textPrimary)
-                Text(item.symbol)
+                Text(vm.displaySymbol(for: item.symbol))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(Theme.textMuted)
             }

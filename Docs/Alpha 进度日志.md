@@ -73,6 +73,19 @@
 - ⏳ macOS 端 UI 交互（布局、下单链路、风险闪烁）**待实机验证**
 - ⏳ F1-F4 快捷键绑定 NSEvent 未做（文案已占位）
 
+### Day 2（2026-04-19）：非交易时段 bug 修复 — ✅ 已完成
+
+**问题**：
+- `PositionTable.swift:39` 现价 fallback 失效 —— `lastPrice` 是 `Decimal(0)` 不是 nil，`??` 不触发，现价列显示 0
+- 平仓按钮 / `OrderPanel.flattenAll` 非交易时段传 `price = 0`；`MockTradingService.placeOrder` 无 guard，成交后 `closePosition` 按 `0 − openAvgPrice` 算出大负 pnl 入 `closePnL`，演示时一点平仓账户瞬间爆亏
+
+**修改**：
+- `AppViewModel.swift` 新增 `priceFallback(for:)` helper：实时价 → 最后 K 线 close（仅当前合约）→ 昨结算 → 昨收
+- `OrderPanel.swift` / `PositionTable.swift` 改用 helper
+- `MockTradingService.swift:27` `placeOrder` 加 `guard price > 0` 作为最后防线
+
+`+15 / −8`。Linux 无 SwiftUI 不能 build App 目录，Mac 端待验证。
+
 ### Week 2：多窗口 + 合约增强 — 未开始
 
 计划清单（详见 `~/.claude/plans/review-1-1-30-alpha-iridescent-fern.md`）：

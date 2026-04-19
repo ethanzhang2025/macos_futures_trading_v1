@@ -42,14 +42,16 @@ public struct SinaKLineBar: Sendable {
     public let low: Decimal
     public let close: Decimal
     public let volume: Int
+    public let openInterest: Int
 
-    public init(date: String, open: Decimal, high: Decimal, low: Decimal, close: Decimal, volume: Int) {
+    public init(date: String, open: Decimal, high: Decimal, low: Decimal, close: Decimal, volume: Int, openInterest: Int = 0) {
         self.date = date
         self.open = open
         self.high = high
         self.low = low
         self.close = close
         self.volume = volume
+        self.openInterest = openInterest
     }
 }
 

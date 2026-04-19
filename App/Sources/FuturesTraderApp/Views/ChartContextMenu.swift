@@ -1,13 +1,26 @@
 import SwiftUI
+import Shared
 
 /// 图表右键菜单
 struct ChartContextMenu: View {
     @EnvironmentObject var vm: AppViewModel
     @Binding var mainOverlay: MainOverlay
     @Binding var chartStyle: ChartStyle
+    let hoverPrice: Decimal?
 
     var body: some View {
         Group {
+            // 此价位下单（固定 1 手，需要自定义手数走右侧面板）
+            if let price = hoverPrice {
+                Button("此价位买开 @ \(Formatters.price(price))") {
+                    vm.trading.placeOrder(symbol: vm.selectedSymbol, direction: .buy, offsetFlag: .open, price: price, volume: 1)
+                }
+                Button("此价位卖开 @ \(Formatters.price(price))") {
+                    vm.trading.placeOrder(symbol: vm.selectedSymbol, direction: .sell, offsetFlag: .open, price: price, volume: 1)
+                }
+                Divider()
+            }
+
             // 图表类型
             Menu("图表类型") {
                 ForEach(ChartStyle.allCases, id: \.self) { style in

@@ -24,6 +24,7 @@ struct KLineChartView: View {
 
     @State private var hoverIndex: Int?
     @State private var mouseLocation: CGPoint = .zero
+    @State private var hoverPrice: Double? = nil
     @State private var visibleCount: Int = 80
     @State private var scrollOffset: Int = 0
     @State private var mainOverlay: MainOverlay = .maAndBoll
@@ -91,8 +92,10 @@ struct KLineChartView: View {
                                         let barW = chartW / CGFloat(displayBars.count)
                                         let idx = Int((loc.x - padding) / barW)
                                         hoverIndex = (idx >= 0 && idx < displayBars.count) ? idx : nil
+                                        hoverPrice = computeHoverPrice(y: loc.y, chartH: klineH - 30)
                                     case .ended:
                                         hoverIndex = nil
+                                        hoverPrice = nil
                                     }
                                 }
                                 .onTapGesture(count: 2) { location in
@@ -181,7 +184,13 @@ struct KLineChartView: View {
                     .frame(height: subH).background(Theme.chartBackground).cornerRadius(4)
                 }
                 .padding(.horizontal, 8)
-                .contextMenu { ChartContextMenu(mainOverlay: $mainOverlay, chartStyle: $chartStyle) }
+                .contextMenu {
+                    ChartContextMenu(
+                        mainOverlay: $mainOverlay,
+                        chartStyle: $chartStyle,
+                        hoverPrice: hoverPrice.flatMap { $0 > 0 ? Decimal($0) : nil }
+                    )
+                }
                 .gesture(DragGesture(minimumDistance: 5)
                     .onChanged { value in
                         if let selIdx = vm.drawingState.objects.firstIndex(where: { $0.isSelected }) {
@@ -467,6 +476,17 @@ struct KLineChartView: View {
                          with: .color(bar.close >= bar.open ? Theme.volumeUp : Theme.volumeDown))
         }
         drawCrosshairVLine(context: context, size: size, bars: bars)
+    }
+
+    /// Y 坐标 → 价格（和 drawCrosshair 同算法：加 8% margin）。给右键菜单复用。
+    private func computeHoverPrice(y: CGFloat, chartH: CGFloat) -> Double? {
+        let prices = displayBars.flatMap { [$0.highD, $0.lowD] }
+        guard let minP = prices.min(), let maxP = prices.max(), maxP > minP else { return nil }
+        let topPad: CGFloat = 16
+        let range = maxP - minP, margin = range * 0.08
+        let adjMin = minP - margin, adjRange = range + margin * 2
+        let clampedY = max(topPad, min(topPad + chartH, y))
+        return (adjMin + adjRange) - adjRange * Double(clampedY - topPad) / Double(chartH)
     }
 
     // MARK: - 十字光标

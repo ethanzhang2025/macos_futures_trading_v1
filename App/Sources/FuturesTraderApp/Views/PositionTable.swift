@@ -6,9 +6,7 @@ struct PositionTable: View {
     @EnvironmentObject var vm: AppViewModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().background(Theme.border)
+        Group {
             if vm.trading.positions.isEmpty {
                 emptyView
             } else {
@@ -23,16 +21,6 @@ struct PositionTable: View {
             }
         }
         .background(Theme.panelBackground)
-    }
-
-    private var header: some View {
-        HStack(spacing: 0) {
-            Text("持仓").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.textPrimary)
-            Spacer()
-            Text("\(vm.trading.positions.count) 个").font(.system(size: 10)).foregroundColor(Theme.textMuted)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
     }
 
     private func row(_ p: Position) -> some View {

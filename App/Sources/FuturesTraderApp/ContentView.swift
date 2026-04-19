@@ -10,7 +10,7 @@ struct ContentView: View {
                 VSplitView {
                     mainArea
                         .frame(minHeight: 360)
-                    PositionTable()
+                    TradingTabView()
                         .frame(minHeight: 100, idealHeight: 160, maxHeight: 260)
                 }
                 AccountBar()

@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// 新开窗口：每个窗口独立 AppViewModel（合约/周期/指标参数各自独立），watchList 通过 UserDefaults 共享
-    @objc func newWindow() {
+    @MainActor @objc func newWindow() {
         let viewModel = AppViewModel()
         let contentView = ContentView()
             .environmentObject(viewModel)
@@ -58,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)), name: NSWindow.willCloseNotification, object: window)
     }
 
-    @objc private func windowWillClose(_ notification: Notification) {
+    @MainActor @objc private func windowWillClose(_ notification: Notification) {
         guard let w = notification.object as? NSWindow else { return }
         windows.removeAll { $0 === w }
     }

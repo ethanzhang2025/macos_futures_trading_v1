@@ -67,3 +67,6 @@ Sources/CTPBridge/CTPLib/*.so
 
 # macOS
 .DS_Store
+
+# Claude Code 本地设置（各开发者个人权限/自动模式配置，不进仓库）
+.claude/

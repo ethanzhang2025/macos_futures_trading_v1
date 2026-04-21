@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 /// SPM可执行目标没有.app bundle，需要手动创建NSApplication和窗口
 @main
@@ -16,6 +17,7 @@ enum FuturesTraderApp {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [NSWindow] = []
+    private var cancellables: [AnyCancellable] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
@@ -39,7 +41,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "期货交易终端"
+        // 标题随 selectedSymbol / selectedPeriod 变化：「螺纹钢 · 日线」
+        viewModel.$selectedSymbol
+            .combineLatest(viewModel.$selectedPeriod)
+            .sink { [weak window] symbol, period in
+                guard let window else { return }
+                let name = WatchItem.allContracts.first(where: { $0.symbol == symbol })?.name ?? symbol
+                window.title = "\(name) · \(period)"
+            }
+            .store(in: &cancellables)
         // 级联排列：避免新窗口完全盖住旧窗口
         if let last = windows.last {
             let f = last.frame

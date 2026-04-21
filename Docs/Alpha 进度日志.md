@@ -161,6 +161,16 @@ Week 2 完成后的增量，补齐交易工作流视觉链路。
 
 **连锁**：`SinaKLineBar.openInterest` 已 populated → **OI 副图**（原放弃项）前置条件成立。
 
+### Day 2 续（2026-04-19）：OI 副图 — ✅ 已完成
+
+**前置**：数据源升级后 `SinaKLineBar.openInterest` 已从新 K 线 API 的 `p` 字段填充，原 Week 2 放弃的 OI 副图现可做。
+
+- `SubChartType` 加 `.oi = "OI"` 枚举值
+- `SubChartRenderer.drawOI`：金黄色折线 + 下方半透明面积，按 bars 的 OI min/max 自动缩放（10% margin）
+- `KLineChartView` 副图 switch 加 `.oi` 分支
+- `hoverText` 对 `.oi` 返回 `(OI, 数字, 金色)`
+- 副图按钮区和右键「副图指标」菜单用 `SubChartType.allCases` 自动枚举，新 case 无需额外改
+
 ### Week 3（2026-05-02 ~ 05-08）：演示材料 + Scope 冻结 — 暂不做
 
 计划清单（详见 `~/.claude/plans/review-1-1-30-alpha-iridescent-fern.md`）：

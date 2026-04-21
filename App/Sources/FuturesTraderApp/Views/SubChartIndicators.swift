@@ -74,8 +74,18 @@ enum SubChartRenderer {
         drawLine(context: context, values: data.dea, color: Theme.ma20, barW: barW, padding: padding, midY: midY, scale: scale)
 
         context.draw(Text("MACD(\(fast),\(slow),\(signal))").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 40, y: 5))
-        context.draw(Text("DIF").font(.system(size: 9)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 100, y: 5))
-        context.draw(Text("DEA").font(.system(size: 9)).foregroundColor(Theme.ma20), at: CGPoint(x: padding + 125, y: 5))
+        if let idx = hoverIndex, idx >= 0, idx < data.dif.count {
+            let difStr = data.dif[idx].map { String(format: "%.1f", $0) } ?? "-"
+            let deaStr = data.dea[idx].map { String(format: "%.1f", $0) } ?? "-"
+            let macdStr = data.macd[idx].map { String(format: "%.1f", $0) } ?? "-"
+            let macdColor: Color = (data.macd[idx] ?? 0) >= 0 ? Theme.up : Theme.down
+            context.draw(Text("DIF \(difStr)").font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 115, y: 5))
+            context.draw(Text("DEA \(deaStr)").font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.ma20), at: CGPoint(x: padding + 175, y: 5))
+            context.draw(Text("MACD \(macdStr)").font(.system(size: 9, design: .monospaced)).foregroundColor(macdColor), at: CGPoint(x: padding + 240, y: 5))
+        } else {
+            context.draw(Text("DIF").font(.system(size: 9)).foregroundColor(Theme.ma5), at: CGPoint(x: padding + 100, y: 5))
+            context.draw(Text("DEA").font(.system(size: 9)).foregroundColor(Theme.ma20), at: CGPoint(x: padding + 125, y: 5))
+        }
 
         drawVCrosshair(context: context, size: size, bars: bars, padding: padding, hoverIndex: hoverIndex)
     }
@@ -142,9 +152,18 @@ enum SubChartRenderer {
         drawLineScaled(context: context, values: data.j, color: jColor, barW: barW, padding: padding, sY: sY)
 
         context.draw(Text("KDJ(\(n),\(m1),\(m2))").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 35, y: 5))
-        context.draw(Text("K").font(.system(size: 9)).foregroundColor(kColor), at: CGPoint(x: padding + 85, y: 5))
-        context.draw(Text("D").font(.system(size: 9)).foregroundColor(dColor), at: CGPoint(x: padding + 100, y: 5))
-        context.draw(Text("J").font(.system(size: 9)).foregroundColor(jColor), at: CGPoint(x: padding + 115, y: 5))
+        if let idx = hoverIndex, idx >= 0, idx < data.k.count {
+            let kStr = data.k[idx].map { String(format: "%.1f", $0) } ?? "-"
+            let dStr = data.d[idx].map { String(format: "%.1f", $0) } ?? "-"
+            let jStr = data.j[idx].map { String(format: "%.1f", $0) } ?? "-"
+            context.draw(Text("K \(kStr)").font(.system(size: 9, design: .monospaced)).foregroundColor(kColor), at: CGPoint(x: padding + 100, y: 5))
+            context.draw(Text("D \(dStr)").font(.system(size: 9, design: .monospaced)).foregroundColor(dColor), at: CGPoint(x: padding + 155, y: 5))
+            context.draw(Text("J \(jStr)").font(.system(size: 9, design: .monospaced)).foregroundColor(jColor), at: CGPoint(x: padding + 210, y: 5))
+        } else {
+            context.draw(Text("K").font(.system(size: 9)).foregroundColor(kColor), at: CGPoint(x: padding + 85, y: 5))
+            context.draw(Text("D").font(.system(size: 9)).foregroundColor(dColor), at: CGPoint(x: padding + 100, y: 5))
+            context.draw(Text("J").font(.system(size: 9)).foregroundColor(jColor), at: CGPoint(x: padding + 115, y: 5))
+        }
 
         drawVCrosshair(context: context, size: size, bars: bars, padding: padding, hoverIndex: hoverIndex)
     }
@@ -204,9 +223,18 @@ enum SubChartRenderer {
         drawLineScaled(context: context, values: rsi24, color: c24, barW: barW, padding: padding, sY: sY)
 
         context.draw(Text("RSI").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 15, y: 5))
-        context.draw(Text("\(p[0])").font(.system(size: 9)).foregroundColor(c6), at: CGPoint(x: padding + 40, y: 5))
-        context.draw(Text("\(p[1])").font(.system(size: 9)).foregroundColor(c14), at: CGPoint(x: padding + 55, y: 5))
-        context.draw(Text("\(p[2])").font(.system(size: 9)).foregroundColor(c24), at: CGPoint(x: padding + 75, y: 5))
+        if let idx = hoverIndex, idx >= 0, idx < rsi6.count {
+            let r6Str = rsi6[idx].map { String(format: "%.1f", $0) } ?? "-"
+            let r14Str = rsi14[idx].map { String(format: "%.1f", $0) } ?? "-"
+            let r24Str = rsi24[idx].map { String(format: "%.1f", $0) } ?? "-"
+            context.draw(Text("\(p[0]) \(r6Str)").font(.system(size: 9, design: .monospaced)).foregroundColor(c6), at: CGPoint(x: padding + 50, y: 5))
+            context.draw(Text("\(p[1]) \(r14Str)").font(.system(size: 9, design: .monospaced)).foregroundColor(c14), at: CGPoint(x: padding + 110, y: 5))
+            context.draw(Text("\(p[2]) \(r24Str)").font(.system(size: 9, design: .monospaced)).foregroundColor(c24), at: CGPoint(x: padding + 170, y: 5))
+        } else {
+            context.draw(Text("\(p[0])").font(.system(size: 9)).foregroundColor(c6), at: CGPoint(x: padding + 40, y: 5))
+            context.draw(Text("\(p[1])").font(.system(size: 9)).foregroundColor(c14), at: CGPoint(x: padding + 55, y: 5))
+            context.draw(Text("\(p[2])").font(.system(size: 9)).foregroundColor(c24), at: CGPoint(x: padding + 75, y: 5))
+        }
 
         drawVCrosshair(context: context, size: size, bars: bars, padding: padding, hoverIndex: hoverIndex)
     }

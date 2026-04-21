@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [NSWindow] = []
     /// 按窗口分组的 Combine 订阅；窗口关闭时精确清理，避免 publisher 在 teardown 过程中继续触发
     private var windowCancellables: [ObjectIdentifier: AnyCancellable] = [:]
+    /// 按窗口分组的 vm 引用；关窗时先显式 stopPolling，再 release
+    private var windowViewModels: [ObjectIdentifier: AppViewModel] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
@@ -64,17 +66,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.titlebarAppearsTransparent = true
         window.appearance = NSAppearance(named: .darkAqua)
         window.makeKeyAndOrderFront(nil)
+        let key = ObjectIdentifier(window)
         windows.append(window)
-        windowCancellables[ObjectIdentifier(window)] = titleCancellable
+        windowCancellables[key] = titleCancellable
+        windowViewModels[key] = viewModel
 
         NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)), name: NSWindow.willCloseNotification, object: window)
     }
 
     @MainActor @objc private func windowWillClose(_ notification: Notification) {
         guard let w = notification.object as? NSWindow else { return }
-        // 先取消订阅：title sink 闭包不再运行，避免窗口 teardown 过程中访问已释放状态
-        windowCancellables.removeValue(forKey: ObjectIdentifier(w))
-        // 再移除 window strong 引用，让 NSHostingView → ContentView → AppViewModel 走默认释放链
+        let key = ObjectIdentifier(w)
+        // Teardown 顺序：
+        // 1. 显式 stopPolling 以 cancel 后台 Task，避免在 NSHostingView 释放时 @Published 再触发
+        windowViewModels[key]?.stopPolling()
+        // 2. 取消 title sink
+        windowCancellables.removeValue(forKey: key)
+        // 3. 移除 vm 与 window 的 strong 引用，NSHostingView → ContentView → vm 走默认释放链
+        windowViewModels.removeValue(forKey: key)
         windows.removeAll { $0 === w }
         NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: w)
     }

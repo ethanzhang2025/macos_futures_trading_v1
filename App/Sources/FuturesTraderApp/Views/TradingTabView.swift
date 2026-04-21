@@ -5,13 +5,14 @@ struct TradingTabView: View {
     @EnvironmentObject var vm: AppViewModel
     @State private var tab: Tab = .positions
 
-    enum Tab { case positions, orders }
+    enum Tab { case positions, orders, trades }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
                 tabButton("持仓 \(vm.trading.positions.count)", .positions)
                 tabButton("委托 \(vm.trading.orders.count)", .orders)
+                tabButton("成交 \(vm.trading.trades.count)", .trades)
                 Spacer()
             }
             .padding(.horizontal, 10)
@@ -23,6 +24,7 @@ struct TradingTabView: View {
             switch tab {
             case .positions: PositionTable()
             case .orders:    OrdersTable()
+            case .trades:    TradesTable()
             }
         }
         .background(Theme.panelBackground)

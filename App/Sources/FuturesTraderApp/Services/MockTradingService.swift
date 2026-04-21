@@ -5,6 +5,7 @@ import Shared
 @MainActor
 final class MockTradingService: ObservableObject {
     @Published var orders: [OrderRecord] = []
+    @Published var trades: [TradeRecord] = []
     @Published var positions: [Position] = []
     @Published var account: Account = Account(
         preBalance: 1_000_000,
@@ -55,6 +56,21 @@ final class MockTradingService: ObservableObject {
         order.status = .filled
         order.statusMessage = "全部成交"
         orders[idx] = order
+
+        // 生成成交记录（最新在上）
+        let fee = commissionPerLot * Decimal(order.totalVolume)
+        let trade = TradeRecord(
+            tradeID: "T\(order.orderRef)",
+            orderRef: order.orderRef,
+            instrumentID: order.instrumentID,
+            direction: order.direction,
+            offsetFlag: order.offsetFlag,
+            price: order.price,
+            volume: order.totalVolume,
+            tradeTime: Self.timeNow(),
+            commission: fee
+        )
+        trades.insert(trade, at: 0)
 
         applyTrade(
             symbol: order.instrumentID,

@@ -167,6 +167,18 @@ struct KLineChartView: View {
                             case .oi:   SubChartRenderer.drawOI(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex)
                             }
                         }
+                        .onContinuousHover { phase in
+                            // 鼠标在副图时同步 hoverIndex，让主图顶部 infoBar 显示该 bar 的副图指标值
+                            switch phase {
+                            case .active(let loc):
+                                let chartW = max(1, geo.size.width - 16 - padding * 2)
+                                let barW = chartW / CGFloat(displayBars.count)
+                                let idx = Int((loc.x - padding) / barW)
+                                hoverIndex = (idx >= 0 && idx < displayBars.count) ? idx : nil
+                            case .ended:
+                                hoverIndex = nil
+                            }
+                        }
                         HStack(spacing: 2) {
                             ForEach(SubChartType.allCases, id: \.self) { type in
                                 Button(action: { vm.subChartType = type }) {

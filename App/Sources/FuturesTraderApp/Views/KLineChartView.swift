@@ -164,6 +164,7 @@ struct KLineChartView: View {
                             case .macd: SubChartRenderer.drawMACD(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex, fast: vm.indicatorParams.macdFast, slow: vm.indicatorParams.macdSlow, signal: vm.indicatorParams.macdSignal)
                             case .kdj:  SubChartRenderer.drawKDJ(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex, n: vm.indicatorParams.kdjN, m1: vm.indicatorParams.kdjM1, m2: vm.indicatorParams.kdjM2)
                             case .rsi:  SubChartRenderer.drawRSI(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex, periods: vm.indicatorParams.rsiPeriods)
+                            case .oi:   SubChartRenderer.drawOI(context: ctx, size: size, bars: displayBars, padding: padding, hoverIndex: hoverIndex)
                             }
                         }
                         HStack(spacing: 2) {

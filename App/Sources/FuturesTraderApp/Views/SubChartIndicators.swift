@@ -6,6 +6,7 @@ enum SubChartType: String, CaseIterable {
     case macd = "MACD"
     case kdj = "KDJ"
     case rsi = "RSI"
+    case oi = "OI"
 }
 
 /// 副图指标计算与绘制
@@ -210,6 +211,48 @@ enum SubChartRenderer {
         drawVCrosshair(context: context, size: size, bars: bars, padding: padding, hoverIndex: hoverIndex)
     }
 
+    // MARK: - OI（持仓量）
+
+    /// 折线 + 下方半透明面积；没有固定区间，按 bars 里的 min/max 自动缩放（加 10% margin）
+    static func drawOI(context: GraphicsContext, size: CGSize, bars: [SinaKLineBar], padding: CGFloat, hoverIndex: Int?) {
+        guard bars.count >= 2 else { return }
+        let ois = bars.map { Double($0.openInterest) }
+        guard let maxV = ois.max(), let minV = ois.min(), maxV > minV else { return }
+
+        let chartW = size.width - padding * 2, chartH = size.height - 10, topPad: CGFloat = 14
+        let barW = chartW / CGFloat(bars.count)
+        let range = maxV - minV, margin = range * 0.1
+        let adjMin = minV - margin, adjRange = range + margin * 2
+        let sY: (Double) -> CGFloat = { v in
+            topPad + (chartH - topPad) * CGFloat(1 - (v - adjMin) / adjRange)
+        }
+
+        let oiColor = Color(red: 0.95, green: 0.75, blue: 0.3)
+        var line = Path(); var started = false
+        for (i, v) in ois.enumerated() {
+            let x = padding + CGFloat(i) * barW + barW / 2
+            let y = sY(v)
+            if !started { line.move(to: CGPoint(x: x, y: y)); started = true }
+            else { line.addLine(to: CGPoint(x: x, y: y)) }
+        }
+
+        // 下方填充
+        var fill = line
+        let lastX = padding + CGFloat(ois.count - 1) * barW + barW / 2
+        let firstX = padding + barW / 2
+        let bottomY = topPad + chartH
+        fill.addLine(to: CGPoint(x: lastX, y: bottomY))
+        fill.addLine(to: CGPoint(x: firstX, y: bottomY))
+        fill.closeSubpath()
+        context.fill(fill, with: .color(oiColor.opacity(0.15)))
+        context.stroke(line, with: .color(oiColor), lineWidth: 1.5)
+
+        context.draw(Text("OI 持仓量").font(.system(size: 9)).foregroundColor(Theme.textMuted),
+                     at: CGPoint(x: padding + 30, y: 5))
+
+        drawVCrosshair(context: context, size: size, bars: bars, padding: padding, hoverIndex: hoverIndex)
+    }
+
     // MARK: - 通用
 
     private static func ema(_ values: [Double], _ period: Int) -> [Double?] {
@@ -285,6 +328,9 @@ enum SubChartRenderer {
             if let v = r1[index] { items.append(("RSI\(p[0])", String(format: "%.1f", v), Theme.ma5)) }
             if let v = r2[index] { items.append(("RSI\(p[1])", String(format: "%.1f", v), Theme.ma20)) }
             return items
+        case .oi:
+            guard index < bars.count else { return [] }
+            return [("OI", "\(bars[index].openInterest)", Color(red: 0.95, green: 0.75, blue: 0.3))]
         }
     }
 }

@@ -76,10 +76,13 @@ final class AppViewModel: ObservableObject {
         // 初始化绘图上下文（加载当前合约的已保存绘图）
         drawingState.switchContext(symbol: selectedSymbol, period: selectedPeriod)
         pollingTask?.cancel()
-        pollingTask = Task {
-            await loadKLines()
+        // [weak self]：窗口关闭释放 vm 后 self 变 nil，while 循环自然退出，
+        // 避免 Task 强持有 vm 导致 vm 泄漏 + 继续触发 @Published 访问已 teardown 的 View
+        pollingTask = Task { [weak self] in
+            await self?.loadKLines()
             while !Task.isCancelled {
-                await fetchQuotes()
+                guard let self else { return }
+                await self.fetchQuotes()
                 try? await Task.sleep(for: .seconds(3))
             }
         }

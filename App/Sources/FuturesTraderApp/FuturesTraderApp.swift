@@ -17,7 +17,8 @@ enum FuturesTraderApp {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [NSWindow] = []
-    private var cancellables: [AnyCancellable] = []
+    /// 按窗口分组的 Combine 订阅；窗口关闭时精确清理，避免 publisher 在 teardown 过程中继续触发
+    private var windowCancellables: [ObjectIdentifier: AnyCancellable] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
@@ -42,14 +43,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         // 标题随 selectedSymbol / selectedPeriod 变化：「螺纹钢 · 日线」
-        viewModel.$selectedSymbol
+        // 订阅按窗口分组存；关窗时连带清理，避免闭包在窗口 teardown 过程中继续运行
+        let titleCancellable = viewModel.$selectedSymbol
             .combineLatest(viewModel.$selectedPeriod)
             .sink { [weak window] symbol, period in
                 guard let window else { return }
                 let name = WatchItem.allContracts.first(where: { $0.symbol == symbol })?.name ?? symbol
                 window.title = "\(name) · \(period)"
             }
-            .store(in: &cancellables)
         // 级联排列：避免新窗口完全盖住旧窗口
         if let last = windows.last {
             let f = last.frame
@@ -64,13 +65,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.appearance = NSAppearance(named: .darkAqua)
         window.makeKeyAndOrderFront(nil)
         windows.append(window)
+        windowCancellables[ObjectIdentifier(window)] = titleCancellable
 
         NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)), name: NSWindow.willCloseNotification, object: window)
     }
 
     @MainActor @objc private func windowWillClose(_ notification: Notification) {
         guard let w = notification.object as? NSWindow else { return }
+        // 先取消订阅：title sink 闭包不再运行，避免窗口 teardown 过程中访问已释放状态
+        windowCancellables.removeValue(forKey: ObjectIdentifier(w))
+        // 再移除 window strong 引用，让 NSHostingView → ContentView → AppViewModel 走默认释放链
         windows.removeAll { $0 === w }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: w)
     }
 
     private func setupMenuBar() {

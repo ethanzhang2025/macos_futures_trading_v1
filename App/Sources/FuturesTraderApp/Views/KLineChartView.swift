@@ -482,6 +482,10 @@ struct KLineChartView: View {
         let chartW = size.width - padding * 2, chartH = size.height - 6
         let barW = chartW / CGFloat(bars.count), vW = max(1, barW * 0.65)
         context.draw(Text("VOL").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 15, y: 5))
+        if let idx = hoverIndex, idx >= 0, idx < bars.count {
+            context.draw(Text("\(bars[idx].volume)").font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.textSecondary),
+                         at: CGPoint(x: padding + 55, y: 5))
+        }
         for (i, bar) in bars.enumerated() {
             let x = padding + CGFloat(i) * barW + barW / 2
             let h = chartH * CGFloat(Double(bar.volume) / maxVol)

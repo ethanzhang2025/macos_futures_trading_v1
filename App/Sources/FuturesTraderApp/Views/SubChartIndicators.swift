@@ -249,6 +249,10 @@ enum SubChartRenderer {
 
         context.draw(Text("OI 持仓量").font(.system(size: 9)).foregroundColor(Theme.textMuted),
                      at: CGPoint(x: padding + 30, y: 5))
+        if let idx = hoverIndex, idx >= 0, idx < bars.count {
+            context.draw(Text("\(bars[idx].openInterest)").font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.textSecondary),
+                         at: CGPoint(x: padding + 95, y: 5))
+        }
 
         drawVCrosshair(context: context, size: size, bars: bars, padding: padding, hoverIndex: hoverIndex)
     }

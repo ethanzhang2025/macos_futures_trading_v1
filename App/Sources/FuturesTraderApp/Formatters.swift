@@ -19,4 +19,31 @@ enum Formatters {
     static func percent(_ p: Decimal) -> String {
         String(format: "%+.2f%%", NSDecimalNumber(decimal: p).doubleValue)
     }
+
+    /// 金额千分位（账户权益/保证金等，取整）
+    static func money(_ v: Decimal) -> String {
+        grouped(NSDecimalNumber(decimal: v).doubleValue, fractionDigits: 0)
+    }
+
+    /// 金额带正负号（盈亏用，千分位，取整）
+    static func signedMoney(_ v: Decimal) -> String {
+        let d = NSDecimalNumber(decimal: v).doubleValue
+        let s = grouped(abs(d), fractionDigits: 0)
+        return d >= 0 ? "+\(s)" : "-\(s)"
+    }
+
+    /// 大整数千分位（成交量/持仓量等）
+    static func bigNumber(_ n: Int) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f.string(from: NSNumber(value: n)) ?? "\(n)"
+    }
+
+    private static func grouped(_ d: Double, fractionDigits: Int) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.minimumFractionDigits = fractionDigits
+        f.maximumFractionDigits = fractionDigits
+        return f.string(from: NSNumber(value: d)) ?? "\(d)"
+    }
 }

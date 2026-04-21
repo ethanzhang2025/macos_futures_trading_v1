@@ -278,7 +278,7 @@ enum SubChartRenderer {
         context.draw(Text("OI 持仓量").font(.system(size: 9)).foregroundColor(Theme.textMuted),
                      at: CGPoint(x: padding + 30, y: 5))
         if let idx = hoverIndex, idx >= 0, idx < bars.count {
-            context.draw(Text("\(bars[idx].openInterest)").font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.textSecondary),
+            context.draw(Text(Formatters.bigNumber(bars[idx].openInterest)).font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.textSecondary),
                          at: CGPoint(x: padding + 95, y: 5))
         }
 
@@ -362,7 +362,7 @@ enum SubChartRenderer {
             return items
         case .oi:
             guard index < bars.count else { return [] }
-            return [("OI", "\(bars[index].openInterest)", Color(red: 0.95, green: 0.75, blue: 0.3))]
+            return [("OI", Formatters.bigNumber(bars[index].openInterest), Color(red: 0.95, green: 0.75, blue: 0.3))]
         }
     }
 }

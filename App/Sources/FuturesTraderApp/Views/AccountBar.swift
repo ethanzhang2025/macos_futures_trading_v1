@@ -67,11 +67,11 @@ struct AccountBar: View {
     }
 
     private func decimal(_ v: Decimal) -> String {
-        String(format: "%.0f", NSDecimalNumber(decimal: v).doubleValue)
+        Formatters.money(v)
     }
 
     private func decimalSigned(_ v: Decimal) -> String {
-        String(format: "%+.0f", NSDecimalNumber(decimal: v).doubleValue)
+        Formatters.signedMoney(v)
     }
 
     private func startFlashing() {

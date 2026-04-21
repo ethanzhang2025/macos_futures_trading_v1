@@ -263,7 +263,7 @@ struct KLineChartView: View {
                 lbl("高", Formatters.price(bar.high), color: Theme.up)
                 lbl("低", Formatters.price(bar.low), color: Theme.down)
                 lbl("收", Formatters.price(bar.close), color: isUp ? Theme.up : Theme.down)
-                lbl("量", "\(bar.volume)", color: Theme.textPrimary)
+                lbl("量", Formatters.bigNumber(bar.volume), color: Theme.textPrimary)
                 // BOLL值（顺便修复原先 period 写死 20 不读用户配置的 bug）
                 if mainOverlay == .boll || mainOverlay == .maAndBoll {
                     let fullBoll = indicatorCache.boll(contextID: contextID, bars: bars,
@@ -292,7 +292,7 @@ struct KLineChartView: View {
                 Text(Formatters.percent(q.changePercent)).font(.system(size: 12, design: .monospaced)).foregroundColor(q.isUp ? Theme.up : Theme.down)
                 Spacer()
                 lbl("开", Formatters.price(q.open)); lbl("高", Formatters.price(q.high), color: Theme.up)
-                lbl("低", Formatters.price(q.low), color: Theme.down); lbl("量", "\(q.volume)"); lbl("仓", "\(q.openInterest)")
+                lbl("低", Formatters.price(q.low), color: Theme.down); lbl("量", Formatters.bigNumber(q.volume)); lbl("仓", Formatters.bigNumber(q.openInterest))
             } else {
                 Text("等待行情数据...").foregroundColor(Theme.textSecondary); Spacer()
             }
@@ -483,7 +483,7 @@ struct KLineChartView: View {
         let barW = chartW / CGFloat(bars.count), vW = max(1, barW * 0.65)
         context.draw(Text("VOL").font(.system(size: 9)).foregroundColor(Theme.textMuted), at: CGPoint(x: padding + 15, y: 5))
         if let idx = hoverIndex, idx >= 0, idx < bars.count {
-            context.draw(Text("\(bars[idx].volume)").font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.textSecondary),
+            context.draw(Text(Formatters.bigNumber(bars[idx].volume)).font(.system(size: 9, design: .monospaced)).foregroundColor(Theme.textSecondary),
                          at: CGPoint(x: padding + 55, y: 5))
         }
         for (i, bar) in bars.enumerated() {

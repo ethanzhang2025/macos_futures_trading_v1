@@ -1,0 +1,20 @@
+  {                                                                                                                                                                              
+    "permissions": {                                       
+      "allow": [                                                                                                                                                                 
+        "Bash(*)",                                         
+        "Bash(git push:*)",                                                                                                                                                      
+        "Bash(git push origin main)",                                                                                                                                            
+        "Edit(*)",                                                                                                                                                               
+        "Write(*)",                                                                                                                                                              
+        "Read(*)",                                         
+        "Glob(*)",                                                                                                                                                               
+        "Grep(*)"                                                                                                                                                                
+      ],                                                   
+      "defaultMode": "acceptEdits"                                                                                                                                               
+    },                                                 
+    "autoMode": {                                                                                                                                                              
+      "allow": [                                   
+        "Direct pushes to main branch are allowed in this personal project (no PR review workflow)"
+      ]                                                                                                                                                                          
+    }                                                  
+  } 

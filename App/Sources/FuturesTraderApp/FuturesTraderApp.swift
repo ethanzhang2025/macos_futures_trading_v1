@@ -28,8 +28,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    // 关最后一个窗口不退出 app —— 规避 SwiftUI + NSHostingView 在 terminate flow 中
+    // pool pop 时 over-release NSConcretePointerArray 的已知 crash。
+    // 用户走 ⌘Q 退出；Dock 重开触发 applicationShouldHandleReopen 新建窗口。
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    @MainActor func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { newWindow() }
+        return true
     }
 
     /// 新开窗口：每个窗口独立 AppViewModel（合约/周期/指标参数各自独立），watchList 通过 UserDefaults 共享

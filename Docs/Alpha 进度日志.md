@@ -125,12 +125,12 @@
 
 **限定**：watchList 通过 UserDefaults 启动时加载 + 本窗口 didSet 保存，**窗口间不实时互相同步**（A 窗口加合约 B 窗口看不到，直到 B 重启）。Alpha 阶段可接受。
 
-### Week 2：✅ 3/3 可做项完成
+### Week 2：✅ 2/3 可做项完成
 
 - [x] 自选合约增删 + 持久化（Day 2）
 - [x] 合约列表「连续/主力」显示切换（Day 2）
-- [x] 多窗口 ⌘N（Day 2）
-- [x] ~~OI 副图~~ 放弃（新浪 K 线 API 不返回 bar 级持仓量，数据源不支持）
+- [x] ~~多窗口 ⌘N（Day 2）~~ **Day 5 回退，推 Beta 用 WindowGroup 重做**（详见 Day 5 decision）
+- [x] ~~OI 副图~~ 放弃 → 数据源升级后复活（详见 Day 2 续「数据源升级」）
 
 ### Day 2 续（2026-04-19）：委托单历史表 — ✅ 已完成
 
@@ -171,7 +171,25 @@ Week 2 完成后的增量，补齐交易工作流视觉链路。
 - `hoverText` 对 `.oi` 返回 `(OI, 数字, 金色)`
 - 副图按钮区和右键「副图指标」菜单用 `SubChartType.allCases` 自动枚举，新 case 无需额外改
 
-### Week 3（2026-05-02 ~ 05-08）：演示材料 + Scope 冻结 — 暂不做
+### Day 5（2026-04-22）：多窗口 ⌘N 回退 — ❌ 撤销 Week 2 的多窗口实现
+
+**现象**：用户 Mac 端反复撞窗口关闭问题，演变过程：
+1. 单窗口关闭 crash：`CA::Transaction::commit → autoreleasepool pop → NSConcretePointerArray dealloc → _Block_release → objc_release` 野指针
+2. 多次修 teardown 顺序（`de6457c` / `9239b1d` / `b0d8866`）均无效
+3. 定位 `KLineChartView.NSEvent.addLocalMonitorForEvents` 全局闭包强持 SwiftUI State/EnvironmentObject、`onDisappear` 在 NSHostingView 随 window 关闭时不可靠 → 删 keyMonitor / wheelMonitor 改 NSViewRepresentable（`eaf2372`），单窗口不再崩
+4. 但关最后一个窗口仍崩 → `applicationShouldTerminateAfterLastWindowClosed = false` 规避 terminate flow（`78c68d2`），关第一个窗口后主线程 hang（beach ball），彻底卡死
+
+**根因**：macOS 26 SDK + Swift 6 SwiftUI runtime 在 **NSHostingView 多实例销毁路径**上有多处清理不彻底（NSConcretePointerArray / observer block 残留），属于 AppKit + SwiftUI 混合模式的已知痛点。手搓 `NSApplication + 字典追踪 + NSHostingView` 无法彻底规避。
+
+**决策**：**Alpha 阶段回退到单窗口**（commit 本次），多窗口推到 Beta 用 `SwiftUI App + WindowGroup` 原生多场景一起重做（原生生命周期，不踩手搓坑）。
+
+**回退范围**：
+- `AppDelegate` 瘦身回 `private var window: NSWindow?` + 单 `viewModel` + 单 `titleCancellable`
+- 删 `newWindow()` / `windowWillClose` / `windowViewModels` / `windowCancellables` / `windows: [NSWindow]`
+- 删菜单「文件 > 新窗口 ⌘N」 + 整个「文件」菜单
+- 保留：窗口标题 Combine 订阅（单窗口下仍然有用）、`eaf2372` 的 monitor 修复（单窗口下也受益）
+
+**非回退项**：Week 2 的自选增删、连续/主力切换、数据源升级、OI 副图、成交记录表、千分位等全部保留。
 
 计划清单（详见 `~/.claude/plans/review-1-1-30-alpha-iridescent-fern.md`）：
 - `FuturesTraderApp.swift` 改造 WindowController + `⌘N`
@@ -194,6 +212,7 @@ Week 2 完成后的增量，补齐交易工作流视觉链路。
 | Alpha 不接 CTP | 用 `MockTradingService` | 省时投入演示，真实接入放交易核心阶段 |
 | 交易所优先级 | 上期/大商/郑商 常用品种先，CFFEX 金融期货后 | 演示场景集中在商品期货 |
 | 不为"未来换 Metal"做抽象层 | 换时直接新起 `MetalKLineView` 平替 | 当前无技术债 |
+| Alpha 不做多窗口 | 手搓 NSApp + NSHostingView 多实例被 macOS 26 SDK + SwiftUI runtime 反复报销（pool pop over-release / teardown hang） | 投入产出不划算；Beta 迁 `SwiftUI App + WindowGroup` 原生多场景一起做，由 SwiftUI runtime 管生命周期。应用内"一窗多格"分屏视图（4 宫格看多合约）不受此决策影响，可以后续 Alpha 范围内做 |
 
 ---
 

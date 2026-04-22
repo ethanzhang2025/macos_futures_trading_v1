@@ -41,9 +41,9 @@ struct KLineChartView: View {
     @State private var dragStartPrice: Double = 0
     @State private var dragEndIndex: Int = 0
     @State private var dragEndPrice: Double = 0
-    // NSEvent 监听器句柄（onDisappear 时回收，避免 View 重建造成累积泄漏）
-    @State private var keyMonitor: Any?
-    @State private var wheelMonitor: Any?
+    // 注：键盘快捷键按硬约束延后统一梳理；滚轮改用 NSViewRepresentable（见 ScrollWheelCatcher），
+    // 不再使用 NSEvent.addLocalMonitorForEvents（全局闭包捕获 SwiftUI @State，onDisappear 不可靠
+    // 会在窗口关闭后 over-release，典型 stack：CA commit → NSConcretePointerArray dealloc → _Block_release）
 
     /// 指标结果记忆化。基于全局 bars 计算一次，滚动/缩放时按 displayRange 切片即可。
     @StateObject private var indicatorCache = IndicatorCache()
@@ -241,14 +241,19 @@ struct KLineChartView: View {
                     if scale > 1 { visibleCount = max(20, visibleCount - 2) }
                     else { visibleCount = min(bars.count, visibleCount + 2) }
                 })
+                // 滚轮缩放/平移（底层 NSView 接收 scrollWheel；随 View 生命周期释放，不悬挂）
+                .background(ScrollWheelCatcher { dx, dy in
+                    if abs(dy) > abs(dx) {
+                        if dy > 0 { visibleCount = max(20, visibleCount - 3) }
+                        else { visibleCount = min(bars.count, visibleCount + 3) }
+                    } else {
+                        let step = Int(-dx / 2)
+                        scrollOffset = max(0, min(max(0, bars.count - visibleCount), scrollOffset + step))
+                    }
+                })
             }
         }
         .focusable().focusEffectDisabled()
-        .onAppear { setupKeyboardMonitor(); setupScrollWheelMonitor() }
-        .onDisappear {
-            if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
-            if let m = wheelMonitor { NSEvent.removeMonitor(m); wheelMonitor = nil }
-        }
     }
 
     // MARK: - 信息栏
@@ -952,53 +957,29 @@ struct KLineChartView: View {
         return lines
     }
 
-    // MARK: - 键盘监听
+}
 
-    private func setupKeyboardMonitor() {
-        if let m = keyMonitor { NSEvent.removeMonitor(m) }
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // 文本输入中（TextField/TextEditor 内的 NSTextView fieldEditor）不拦截，
-            // 否则 backspace/方向键/数字键等都会被全局 monitor 吞掉
-            if event.window?.firstResponder is NSTextView { return event }
-            switch event.keyCode {
-            case 126: vm.selectPrevSymbol(); return nil    // ↑
-            case 125: vm.selectNextSymbol(); return nil    // ↓
-            case 123: scrollOffset = min(bars.count - visibleCount, scrollOffset + 3); return nil  // ←
-            case 124: scrollOffset = max(0, scrollOffset - 3); return nil  // →
-            case 18: vm.selectPeriodByKey(1); return nil   // 1 分时
-            case 19: vm.selectPeriodByKey(2); return nil   // 2 日线
-            case 20: vm.selectPeriodByKey(3); return nil   // 3 60分
-            case 21: vm.selectPeriodByKey(4); return nil   // 4 15分
-            case 23: vm.selectPeriodByKey(5); return nil   // 5 5分
-            case 24: visibleCount = max(20, visibleCount - 5); return nil   // =
-            case 27: visibleCount = min(bars.count, visibleCount + 5); return nil  // -
-            case 48: vm.cycleSubChart(); return nil        // Tab
-            case 53:  // ESC
-                if editingTextId != nil { cancelTextEdit() }
-                else { vm.drawingState.cancelDrawing() }
-                return nil
-            case 51: vm.drawingState.deleteSelected(); return nil // Delete
-            default: return event
-            }
-        }
+// MARK: - 滚轮捕捉（NSViewRepresentable）
+
+/// 用 AppKit NSView 接收 scrollWheel。NSView 随 SwiftUI View 被 AppKit 自然释放，
+/// 闭包不会像 NSEvent.addLocalMonitorForEvents 那样被全局结构长期持有、在窗口关闭后悬挂。
+private struct ScrollWheelCatcher: NSViewRepresentable {
+    let onScroll: (CGFloat, CGFloat) -> Void  // (dx, dy)
+
+    func makeNSView(context: Context) -> _ScrollCatcherNSView {
+        let v = _ScrollCatcherNSView()
+        v.onScroll = onScroll
+        return v
     }
 
-    // MARK: - 滚轮缩放
+    func updateNSView(_ nsView: _ScrollCatcherNSView, context: Context) {
+        nsView.onScroll = onScroll
+    }
 
-    private func setupScrollWheelMonitor() {
-        if let m = wheelMonitor { NSEvent.removeMonitor(m) }
-        wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-            let dy = event.scrollingDeltaY
-            if abs(dy) > abs(event.scrollingDeltaX) {
-                // 垂直滚动 = 缩放
-                if dy > 0 { visibleCount = max(20, visibleCount - 3) }  // 向上滚 = 放大
-                else { visibleCount = min(bars.count, visibleCount + 3) } // 向下滚 = 缩小
-            } else {
-                // 水平滚动 = 平移
-                let dx = Int(-event.scrollingDeltaX / 2)
-                scrollOffset = max(0, min(bars.count - visibleCount, scrollOffset + dx))
-            }
-            return nil
+    final class _ScrollCatcherNSView: NSView {
+        var onScroll: ((CGFloat, CGFloat) -> Void)?
+        override func scrollWheel(with event: NSEvent) {
+            onScroll?(event.scrollingDeltaX, event.scrollingDeltaY)
         }
     }
 }

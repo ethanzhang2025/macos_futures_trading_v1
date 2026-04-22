@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 按窗口分组的 vm 引用；关窗时先显式 stopPolling，再 release
     private var windowViewModels: [ObjectIdentifier: AppViewModel] = [:]
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
         newWindow()
         NSApp.activate(ignoringOtherApps: true)
@@ -95,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func setupMenuBar() {
+    @MainActor private func setupMenuBar() {
         let mainMenu = NSMenu()
 
         // App菜单

@@ -77,15 +77,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor @objc private func windowWillClose(_ notification: Notification) {
         guard let w = notification.object as? NSWindow else { return }
         let key = ObjectIdentifier(w)
-        // Teardown 顺序：
-        // 1. 显式 stopPolling 以 cancel 后台 Task，避免在 NSHostingView 释放时 @Published 再触发
+        // willClose 在当前 runloop tick 的 CA transaction commit 前触发，NSHostingView/SwiftUI
+        // 内部 pointer array 里仍挂着捕获 vm 的 block。若此刻同步释放 vm，pool pop 时
+        // 会 over-release 野指针（表现：objc_release → _Block_release → NSConcretePointerArray dealloc）。
+        // 只做两件可安全同步完成的事：
+        //   ① 停轮询（仅 cancel Task，不释放对象）
+        //   ② 移除自己作为 NC observer（避免重复触发）
         windowViewModels[key]?.stopPolling()
-        // 2. 取消 title sink
-        windowCancellables.removeValue(forKey: key)
-        // 3. 移除 vm 与 window 的 strong 引用，NSHostingView → ContentView → vm 走默认释放链
-        windowViewModels.removeValue(forKey: key)
-        windows.removeAll { $0 === w }
         NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: w)
+        // 其余强引用清理推到下一个 runloop tick：此时 CA transaction 已 commit 完当前帧，
+        // NSHostingView 已完整释放其内部 observer，vm 再走默认释放链就安全了。
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.windowCancellables.removeValue(forKey: key)
+            self.windowViewModels.removeValue(forKey: key)
+            self.windows.removeAll { $0 === w }
+        }
     }
 
     private func setupMenuBar() {

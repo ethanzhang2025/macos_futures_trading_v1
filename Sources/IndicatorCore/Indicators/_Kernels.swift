@@ -73,6 +73,68 @@ enum Kernels {
         return out
     }
 
+    /// N 周期内最高值 HHV
+    static func hhv(_ xs: [Decimal], period n: Int) -> [Decimal?] {
+        let count = xs.count
+        var out = [Decimal?](repeating: nil, count: count)
+        guard n > 0, count >= n else { return out }
+        for i in (n - 1)..<count {
+            out[i] = xs[(i - n + 1)...i].max()
+        }
+        return out
+    }
+
+    /// N 周期内最低值 LLV
+    static func llv(_ xs: [Decimal], period n: Int) -> [Decimal?] {
+        let count = xs.count
+        var out = [Decimal?](repeating: nil, count: count)
+        guard n > 0, count >= n else { return out }
+        for i in (n - 1)..<count {
+            out[i] = xs[(i - n + 1)...i].min()
+        }
+        return out
+    }
+
+    /// 加权移动平均 WMA：权重 1..N，近期权重大
+    /// WMA(i) = Σ(x(i-N+k) * k) / Σk (k=1..N)
+    static func wma(_ xs: [Decimal], period n: Int) -> [Decimal?] {
+        let count = xs.count
+        var out = [Decimal?](repeating: nil, count: count)
+        guard n > 0, count >= n else { return out }
+        let weightSum = Decimal(n * (n + 1) / 2)
+        for i in (n - 1)..<count {
+            var sum: Decimal = 0
+            for k in 1...n {
+                sum += xs[i - n + k] * Decimal(k)
+            }
+            out[i] = round8(sum / weightSum)
+        }
+        return out
+    }
+
+    /// 基于 Int 成交量的累积运算辅助（OBV / PVT 等通用）
+    static func cumulative(_ xs: [Decimal]) -> [Decimal] {
+        var acc: Decimal = 0
+        return xs.map { acc += $0; return acc }
+    }
+
+    /// 在上一层 EMA 的输出上继续做 EMA（nil → 0 过渡后再 EMA）
+    /// 复用目的：DEMA/TEMA/TRIX 的 "EMA → map { $0 ?? 0 } → EMA" 重复模式
+    static func nextEMA(_ prev: [Decimal?], period n: Int) -> [Decimal?] {
+        ema(prev.map { $0 ?? 0 }, period: n)
+    }
+
+    /// N 周期滑动窗口求和；i < N-1 返回 nil（PSY 等纯加和场景复用）
+    static func slidingSum(_ xs: [Decimal], period n: Int) -> [Decimal?] {
+        let count = xs.count
+        var out = [Decimal?](repeating: nil, count: count)
+        guard n > 0, count >= n else { return out }
+        for i in (n - 1)..<count {
+            out[i] = xs[(i - n + 1)...i].reduce(Decimal(0), +)
+        }
+        return out
+    }
+
     /// N 周期样本标准差（总体标准差，分母 N；BOLL 约定）
     /// Decimal 精度不支持 sqrt，用 Double 过渡后转回 Decimal
     static func stddev(_ xs: [Decimal], period n: Int) -> [Decimal?] {

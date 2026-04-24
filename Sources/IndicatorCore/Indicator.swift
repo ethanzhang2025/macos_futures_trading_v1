@@ -72,3 +72,15 @@ public protocol Indicator: Sendable {
 func intValue(_ d: Decimal) -> Int {
     Int(truncating: d as NSDecimalNumber)
 }
+
+/// 各指标共用的 Int 参数校验：index 位置取整、下限检查，失败抛带 label 的异常
+func requireIntParam(_ params: [Decimal], index: Int = 0, min: Int = 1, label: String) throws -> Int {
+    guard params.count > index else {
+        throw IndicatorError.invalidParameter("\(label) 参数缺失")
+    }
+    let n = intValue(params[index])
+    guard n >= min else {
+        throw IndicatorError.invalidParameter("\(label) 必须 >= \(min)，实际 \(n)")
+    }
+    return n
+}

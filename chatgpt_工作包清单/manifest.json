@@ -1,0 +1,248 @@
+{
+  "package_name": "claude_code_work_packages",
+  "generated_from": [
+    "D1-顶层设计.md",
+    "D2-阶段A执行.md",
+    "D3-风险与危机预案.md",
+    "产品设计书.md"
+  ],
+  "stage_a_count": 12,
+  "stage_b_count": 11,
+  "stage_a_ids": [
+    "A01",
+    "A02",
+    "A03",
+    "A04",
+    "A05",
+    "A06",
+    "A07",
+    "A08",
+    "A09",
+    "A10",
+    "A11",
+    "A12"
+  ],
+  "stage_b_ids": [
+    "B01",
+    "B02",
+    "B03",
+    "B04",
+    "B05",
+    "B06",
+    "B07",
+    "B08",
+    "B09",
+    "B10",
+    "B11"
+  ],
+  "stage_a_filemap": [
+    {
+      "id": "A01",
+      "title": "仓库骨架与架构基线",
+      "filename": "A01-仓库骨架与架构基线.md",
+      "dependencies": []
+    },
+    {
+      "id": "A02",
+      "title": "行情接入 PoC 与数据管线",
+      "filename": "A02-行情接入 PoC 与数据管线.md",
+      "dependencies": [
+        "A01"
+      ]
+    },
+    {
+      "id": "A03",
+      "title": "Metal 图表引擎 v1",
+      "filename": "A03-Metal 图表引擎 v1.md",
+      "dependencies": [
+        "A01",
+        "A02"
+      ]
+    },
+    {
+      "id": "A04",
+      "title": "指标引擎与 56 个指标库 v1",
+      "filename": "A04-指标引擎与 56 个指标库 v1.md",
+      "dependencies": [
+        "A02",
+        "A03"
+      ]
+    },
+    {
+      "id": "A05",
+      "title": "自选管理、工作区模板与多窗口布局",
+      "filename": "A05-自选管理、工作区模板与多窗口布局.md",
+      "dependencies": [
+        "A01",
+        "A03"
+      ]
+    },
+    {
+      "id": "A06",
+      "title": "画线工具 v1 与图表交互层",
+      "filename": "A06-画线工具 v1 与图表交互层.md",
+      "dependencies": [
+        "A03",
+        "A05"
+      ]
+    },
+    {
+      "id": "A07",
+      "title": "K 线回放系统",
+      "filename": "A07-K 线回放系统.md",
+      "dependencies": [
+        "A02",
+        "A03",
+        "A10"
+      ]
+    },
+    {
+      "id": "A08",
+      "title": "条件预警中心",
+      "filename": "A08-条件预警中心.md",
+      "dependencies": [
+        "A02",
+        "A03",
+        "A06"
+      ]
+    },
+    {
+      "id": "A09",
+      "title": "交割单导入、复盘分析 8 图、交易日志",
+      "filename": "A09-交割单导入、复盘分析 8 图、交易日志.md",
+      "dependencies": [
+        "A01",
+        "A02"
+      ]
+    },
+    {
+      "id": "A10",
+      "title": "模拟训练与 SimNow 场景",
+      "filename": "A10-模拟训练与 SimNow 场景.md",
+      "dependencies": [
+        "A02",
+        "A09"
+      ]
+    },
+    {
+      "id": "A11",
+      "title": "订阅计费、权限门控、上线与事故基础设施",
+      "filename": "A11-订阅计费、权限门控、上线与事故基础设施.md",
+      "dependencies": [
+        "A01",
+        "A08",
+        "A09"
+      ]
+    },
+    {
+      "id": "A12",
+      "title": "M7-M9 增量包：iPad 基础版、CloudKit 同步、麦语言基础版",
+      "filename": "A12-M7-M9 增量包：iPad 基础版、CloudKit 同步、麦语言基础版.md",
+      "dependencies": [
+        "A03",
+        "A04",
+        "A05",
+        "A06",
+        "A11"
+      ]
+    }
+  ],
+  "stage_b_filemap": [
+    {
+      "id": "B01",
+      "title": "CTP 交易桥接与交易内核",
+      "filename": "B01-CTP 交易桥接与交易内核.md",
+      "dependencies": []
+    },
+    {
+      "id": "B02",
+      "title": "下单票据、基础订单与快捷键交易",
+      "filename": "B02-下单票据、基础订单与快捷键交易.md",
+      "dependencies": [
+        "B01"
+      ]
+    },
+    {
+      "id": "B03",
+      "title": "交易安全模式、断线重连、审计日志",
+      "filename": "B03-交易安全模式、断线重连、审计日志.md",
+      "dependencies": [
+        "B01"
+      ]
+    },
+    {
+      "id": "B04",
+      "title": "账户、持仓、风险与结算视图",
+      "filename": "B04-账户、持仓、风险与结算视图.md",
+      "dependencies": [
+        "B01"
+      ]
+    },
+    {
+      "id": "B05",
+      "title": "麦语言完整兼容与指标/策略执行引擎",
+      "filename": "B05-麦语言完整兼容与指标·策略执行引擎.md",
+      "dependencies": [
+        "A12"
+      ]
+    },
+    {
+      "id": "B06",
+      "title": "iPad 专业工作流与 Apple 生态深度能力",
+      "filename": "B06-iPad 专业工作流与 Apple 生态深度能力.md",
+      "dependencies": [
+        "A12",
+        "A06"
+      ]
+    },
+    {
+      "id": "B07",
+      "title": "高级订单体系：OCO、Bracket、Trailing Stop、Iceberg",
+      "filename": "B07-高级订单体系：OCO、Bracket、Trailing Stop、Iceberg.md",
+      "dependencies": [
+        "B01",
+        "B02",
+        "B03"
+      ]
+    },
+    {
+      "id": "B08",
+      "title": "多端同步、设备绑定与订阅升级体系",
+      "filename": "B08-多端同步、设备绑定与订阅升级体系.md",
+      "dependencies": [
+        "A11",
+        "A12"
+      ]
+    },
+    {
+      "id": "B09",
+      "title": "B2B2C 券商代付与后台结算能力",
+      "filename": "B09-B2B2C 券商代付与后台结算能力.md",
+      "dependencies": [
+        "B08"
+      ]
+    },
+    {
+      "id": "B10",
+      "title": "合规、保险、状态页与事故体系升级",
+      "filename": "B10-合规、保险、状态页与事故体系升级.md",
+      "dependencies": [
+        "B03"
+      ]
+    },
+    {
+      "id": "B11",
+      "title": "性能、基准、回滚与发布治理",
+      "filename": "B11-性能、基准、回滚与发布治理.md",
+      "dependencies": [
+        "B01",
+        "B02",
+        "B03"
+      ]
+    }
+  ],
+  "notes": [
+    "Stage A 工作包以 M6 收费上线为第一硬节点。",
+    "Stage B 工作包基于现有 4 份文档推导，未引用 D4。"
+  ]
+}

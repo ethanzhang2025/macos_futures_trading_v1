@@ -203,7 +203,11 @@
 - **DoD**：原 Legacy 11 个测试全绿 + CI 跑通
 - **锚点**：Legacy迁移融合方案.md §4 Week 1-2
 
-### ⬜ WP-31 · 参考改动 Legacy 3 大模块
+### 🟨 WP-31 · 参考改动 Legacy 3 大模块 · 部分完成 2026-04-24 · commit 871d950
+
+**本次（2026-04-24）已做**：MarketData → MarketDataProvider 协议抽象 + Legacy SinaMarketData 适配 HistoricalKLineProvider + MockMarketDataProvider 测试载体 + 6 合约测试
+
+**留到对应 WP**：ContractManager CTP 适配（WP-21 CTP 数据到位后做）· KLineChartView 拆分（WP-40 Metal 图表主体工作）
 - **时点**：M2-M3（Legacy 方案 Week 3-5）
 - **负责**：你
 - **模块**：MarketData / ContractManager / KLineChartView（985 行拆分 + Metal 重写）

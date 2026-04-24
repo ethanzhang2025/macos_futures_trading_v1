@@ -1,10 +1,12 @@
 // swift-tools-version: 6.0
-// 本文件由 WP-24 · Swift Package 8 Core 骨架建立 · 2026-04-24
+// WP-24 · Swift Package 8 Core 骨架 · 2026-04-24 建立
+// WP-30 · Legacy 5 targets 迁入（Shared/MarketData/ContractManager/FormulaEngine/TradingEngine.ConditionalOrder）· 新增 TradingCore target
 // 详见 Docs/architecture/stage-a-baseline.md
 // 依赖 DAG：Shared → DataCore → IndicatorCore → ChartCore
 //                          ↓         ↓
-//                    JournalCore  AlertCore / ReplayCore
+//                    JournalCore  AlertCore / ReplayCore / TradingCore
 // WorkspaceCore 仅依赖 Shared
+// TradingCore Stage A 不激活到 App，Stage B WP-220 起使用
 
 import PackageDescription
 
@@ -22,7 +24,8 @@ let package = Package(
         .library(name: "JournalCore", targets: ["JournalCore"]),
         .library(name: "AlertCore", targets: ["AlertCore"]),
         .library(name: "ReplayCore", targets: ["ReplayCore"]),
-        .library(name: "WorkspaceCore", targets: ["WorkspaceCore"])
+        .library(name: "WorkspaceCore", targets: ["WorkspaceCore"]),
+        .library(name: "TradingCore", targets: ["TradingCore"])
     ],
     dependencies: [],
     targets: [
@@ -56,6 +59,11 @@ let package = Package(
 
         // MARK: - WorkspaceCore · 工作区模板 + 自选
         .target(name: "WorkspaceCore", dependencies: ["Shared"], path: "Sources/WorkspaceCore"),
-        .testTarget(name: "WorkspaceCoreTests", dependencies: ["WorkspaceCore"], path: "Tests/WorkspaceCoreTests")
+        .testTarget(name: "WorkspaceCoreTests", dependencies: ["WorkspaceCore"], path: "Tests/WorkspaceCoreTests"),
+
+        // MARK: - TradingCore · CTP 下单与条件单（Legacy TradingEngine/ConditionalOrder 迁入）
+        // Stage A 不激活到 App；Stage B WP-220 起使用
+        .target(name: "TradingCore", dependencies: ["Shared", "DataCore"], path: "Sources/TradingCore"),
+        .testTarget(name: "TradingCoreTests", dependencies: ["TradingCore"], path: "Tests/TradingCoreTests")
     ]
 )

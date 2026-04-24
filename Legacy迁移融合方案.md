@@ -273,7 +273,7 @@ WP-24（Swift Package 模块骨架）在融合 ChatGPT 工程纪律时定义了 
 | 8 | 时间对齐（KLineBuilder）与交易所规则耦合 | 🟡 中 | CTP 接入时适配每个交易所开盘规则 |
 | 9 | `SinaMarketData` 网络断线重连逻辑弱 | 🟢 低 | 新项目重写行情接入时解决 |
 | 10 | Legacy 测试覆盖 UI 层弱 | 🟢 低 | 新项目加端到端 UI 测试 |
-| 11 | **Linux Swift 6.3 下 `Tests/FormulaEngineTests/EdgeCaseTests.swift` 2 处 `Decimal(100 + i)` 在 `(0..<N).map` closure 里类型推导超时** | 🟢 低 | macOS Xcode 编译更宽松，实测应能通过（Legacy 作者确认过）· Linux build 需跑测试时，给 `testLargeBars` (L44) 和 `testNestedFunctions` (L74) 加显式类型 `let open: Decimal = Decimal(...)`。**不影响主代码编译和 macOS 使用**。已在 legacy-source/ 迁移后 Linux 实测确认 |
+| 11 | ~~Linux Swift 6.3 下 EdgeCaseTests.swift 类型推导超时~~ → **已修复 · 实际 Mac Swift 6 `swift test` 也会触发（Xcode 不触发因为走 index-while-building 不同路径）** | ✅ 解决 | WP-30 迁入后在 `Tests/IndicatorCoreTests/FormulaEngineTests/EdgeCaseTests.swift` L44 和 L74 两处 `(0..<N).map { ... }` 里拆开 `Decimal(100+i)` 为临时变量 + 加 `[BarData]` 显式类型标注。Linux 跑 102 测试 / 21 suites 全绿（commit `<修复 SHA>`）|
 | 12 | **App/Package.swift 的 `.package(path: "..")` 引用名字为 `macos_futures_trading`**（硬编码 Legacy 目录名）· 迁到 `legacy-source/` 后可能 Mac 编译 App 时找不到 package | 🟡 中 | Mac 上启动 App Package 时验证；如报错改为 `package: "FuturesTrader"`（父 Package 声明的 name）或 `package: "legacy-source"` |
 
 ---
@@ -419,7 +419,8 @@ Legacy 迁移后完成状态：
 - [x] Git subtree 保留 83 commit 历史（✅）
 - [x] Linux 主代码编译验证（✅ 10.57s 通过）
 - [x] 按 §3.1.1 映射归入 WP-24 8 Core 布局（✅ commit `262cd6d` · Legacy 5 targets 全部迁入 Sources/{Shared/Models, DataCore/{MarketData,ContractManager}, IndicatorCore/FormulaEngine, TradingCore/ConditionalOrder} + Tests 11 文件 import 批量适配）
-- [ ] Mac 上 `swift test` 11 个测试（待 Mac 阶段，含坑 11 EdgeCaseTests）
+- [x] Linux `swift test` 全量测试（✅ Mac 端反馈坑 11 也触发 → 修 EdgeCaseTests 2 处 → 102 测试 / 21 suites 全绿）
+- [ ] Mac 上 `swift test` 再跑一次确认（pull 最新 commit 后跑）
 - [ ] Mac 上 `swift build --package-path legacy-source/App` 验证 App 层（待 Mac 阶段，可能触发 §6 坑 12）
 
 ---

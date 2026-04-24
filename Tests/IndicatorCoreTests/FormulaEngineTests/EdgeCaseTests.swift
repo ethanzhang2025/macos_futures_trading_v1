@@ -41,9 +41,13 @@ struct EdgeCaseTests {
 
     @Test("大量K线性能")
     func testLargeBars() throws {
-        let bars = (0..<5000).map { i in
-            BarData(open: Decimal(100 + i), high: Decimal(110 + i),
-                    low: Decimal(90 + i), close: Decimal(105 + i), volume: 1000)
+        // 拆开 Decimal 构造帮 Swift 类型推导分步走（原写法 Mac/Linux Swift 6 都会触发 type-check too complex，见迁移方案坑 11）
+        let bars: [BarData] = (0..<5000).map { i in
+            let open = Decimal(100 + i)
+            let high = Decimal(110 + i)
+            let low = Decimal(90 + i)
+            let close = Decimal(105 + i)
+            return BarData(open: open, high: high, low: low, close: close, volume: 1000)
         }
         let results = try run("R:MA(CLOSE,20);", bars: bars)
         #expect(results[0].values.count == 5000)
@@ -71,9 +75,13 @@ struct EdgeCaseTests {
 
     @Test("嵌套函数调用")
     func testNestedFunctions() throws {
-        let bars = (0..<20).map { i in
-            BarData(open: Decimal(100 + i), high: Decimal(110 + i),
-                    low: Decimal(90 + i), close: Decimal(105 + i), volume: 1000)
+        // 同上，拆开 Decimal 构造规避 Swift 6 类型推导超时
+        let bars: [BarData] = (0..<20).map { i in
+            let open = Decimal(100 + i)
+            let high = Decimal(110 + i)
+            let low = Decimal(90 + i)
+            let close = Decimal(105 + i)
+            return BarData(open: open, high: high, low: low, close: close, volume: 1000)
         }
         let results = try run("R:MA(EMA(CLOSE,5),3);", bars: bars)
         #expect(results[0].values[19] != nil)

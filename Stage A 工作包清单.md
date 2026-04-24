@@ -28,7 +28,7 @@
 | E1 | 合规与法律 | 5 | M1 / M5 | 0/5 |
 | E2 | 团队与治理 | 4 | M1 | 0/4 |
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
-| E4 | Legacy 代码迁移 | 3 | M1-M3 | 0/3 |
+| E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
 | E5 | 产品 · 图表与指标 | 5 | M2-M3 | 0/5 |
 | E6 | 产品 · 工作流功能 | 6 | M3-M5 | 0/6 |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
@@ -195,7 +195,7 @@
 
 ## E4 · Legacy 代码迁移（引用独立方案）
 
-### ⬜ WP-30 · 直接拷贝 Legacy 5 大模块
+### ✅ WP-30 · 直接拷贝 Legacy 5 大模块 · 完成 2026-04-24 · commit 262cd6d（Linux build 全绿，Mac 测试待验）
 - **时点**：M1-M2（Legacy 方案 Week 1-2）
 - **负责**：你
 - **模块**：Shared / FormulaEngine / TradingEngine / KLineBuilder / DrawingTool

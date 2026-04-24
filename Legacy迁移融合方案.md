@@ -418,9 +418,9 @@ Legacy 迁移后完成状态：
 - [x] Legacy 代码物理入仓 `legacy-source/`（✅ commit `2d7fff1`）
 - [x] Git subtree 保留 83 commit 历史（✅）
 - [x] Linux 主代码编译验证（✅ 10.57s 通过）
-- [ ] Mac 上 `swift test` 11 个测试（待开工 Mac 阶段）
-- [ ] Mac 上 `swift build --package-path legacy-source/App` 验证 App 层（待开工 Mac 阶段，可能触发 §6 坑 12）
-- [ ] 按 §3.1.1 映射归入 WP-24 8 Core 布局（待 WP-24 开工）
+- [x] 按 §3.1.1 映射归入 WP-24 8 Core 布局（✅ commit `262cd6d` · Legacy 5 targets 全部迁入 Sources/{Shared/Models, DataCore/{MarketData,ContractManager}, IndicatorCore/FormulaEngine, TradingCore/ConditionalOrder} + Tests 11 文件 import 批量适配）
+- [ ] Mac 上 `swift test` 11 个测试（待 Mac 阶段，含坑 11 EdgeCaseTests）
+- [ ] Mac 上 `swift build --package-path legacy-source/App` 验证 App 层（待 Mac 阶段，可能触发 §6 坑 12）
 
 ---
 

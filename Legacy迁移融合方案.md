@@ -197,7 +197,7 @@ WP-24（Swift Package 模块骨架）在融合 ChatGPT 工程纪律时定义了 
 ### M5（第五月）· 交易日志 + 模拟训练 + 上线准备
 **对应 WP**：WP-53（交易日志）+ WP-54（模拟训练）+ WP-90/91/92/95（上线决策 / IAP / 退款 / pre-launch checklist）
 
-- [ ] WP-54 模拟训练可**基于 Legacy App/Services/MockTradingService.swift 扩展**到 SimNow 接入
+- [ ] WP-54 模拟训练可**基于 Legacy App/Sources/FuturesTraderApp/Services/MockTradingService.swift 扩展**到 SimNow 接入
 - [ ] WP-53 交易日志全新写（Legacy 无）· 配合 SQLCipher 加密（G11）
 - [ ] **里程碑 M5-end**：上线决策会拍板 · Pre-launch 26 项 checklist 走查
 
@@ -307,7 +307,7 @@ WP-24（Swift Package 模块骨架）在融合 ChatGPT 工程纪律时定义了 
 
 ## 8. 设计文档吸收状态
 
-Legacy `Docs/` 下 6 份设计文档的精华已分层吸收：
+Legacy `Docs/` 下 7 份设计文档的精华已分层吸收：
 
 | 设计点 | 吸收位置（新项目当前文档）| 状态 |
 |-------|------------------------|:---:|
@@ -326,12 +326,12 @@ Legacy `Docs/` 下 6 份设计文档的精华已分层吸收：
 
 | 问 | 答 |
 |----|----|
-| 迁移总耗时？ | 单人 6-8 周 / 3 人协作 4-6 周 |
-| 最大时间节省点？ | 麦语言（省 10-13 周）+ 数据模型（省 3 周）+ 条件单（省 3-5 周）|
-| 最大新写投入？ | Metal 图表引擎 6-8 周 + CTP Bridge 3-4 周 |
-| Legacy 代码可直接用比例？ | **约 40%** 直接拷贝，30% 参考改动，30% 全新写 |
-| Legacy 最值钱的单个模块？ | `FormulaEngine/`（麦语言解析器，2300 行 85% 完成度）|
-| Legacy 最坑的单个文件？ | `App/Views/KLineChartView.swift`（985 行需拆分）|
+| 迁移总耗时？ | **不单独占 sprint**，穿插在 Stage A M1-M8 各 WP 中落地（详 §4）· 主迁移期 M1-M3（对应 WP-30/31/40/41/42）|
+| 最大时间节省点？ | 麦语言（省 10-13 周）+ 数据模型（省 3 周）+ 条件单（省 3-5 周）+ 条件预警评估器（省 2-3 周）|
+| 最大新写投入？ | Metal 图表引擎（WP-40 · 6-8 周）+ CTP Bridge（WP-220 Stage B · 3-4 周）|
+| Legacy 代码可直接用比例？ | **约 40%** 直接拷贝（WP-30），30% 参考改动（WP-31），30% 全新写（各功能 WP）|
+| Legacy 最值钱的单个模块？ | `FormulaEngine/`（麦语言解析器，2300 行 85% 完成度 · 对应 WP-62）|
+| Legacy 最坑的单个文件？ | `App/Sources/FuturesTraderApp/Views/KLineChartView.swift`（985 行需拆分为 5 子视图 · 由 WP-31/40 处理）|
 
 ---
 

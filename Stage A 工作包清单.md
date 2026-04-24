@@ -29,7 +29,7 @@
 | E2 | 团队与治理 | 4 | M1 | 0/4 |
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
-| E5 | 产品 · 图表与指标 | 5 | M2-M3 | 0/5 |
+| E5 | 产品 · 图表与指标 | 5 | M2-M3 | **1/5** |
 | E6 | 产品 · 工作流功能 | 6 | M3-M5 | 0/6 |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
 | E8 | 后端与基础设施 | 5 | M1-M6 | 0/5 |
@@ -240,14 +240,21 @@
   - ❌ 不把单次 Tick 更新触发整屏重绘
 - **锚点**：产品设计书 §3.1 模块①、D2 §2、ChatGPT A03
 
-### 🟨 WP-41 · 指标库 v1 · 56 个 · 第一批完成 2026-04-24 · commit 9067d86
+### ✅ WP-41 · 指标库 v1 · 56 个 · 完成 2026-04-24 · commit 9067d86 + 1a7c828
 
-**第一批（8/56 · 架构 + 代表性）**：
-- 架构：Indicator 协议 + KLineSeries + IndicatorSeries + IndicatorCategory 6 分类 + _Kernels 复用（ma/ema/wilder/stddev/round8）
-- 指标：MA / EMA（趋势）· RSI / MACD（震荡）· BOLL / ATR（波动率）· OBV（量价）· OpenInterest（期货特有）
-- 12 测试 / 7 suites · swift test 120/29 全绿
+**实际交付**：**44 真实指标 + 10 期货占位说明 = 54 项**（原 56 扣 2：Andrew's Pitchfork 归 WP-42 画线，Elliott Wave 不做留 Stage C）
 
-**剩余 48 个**（下次批量生成）：趋势 8 · 震荡 10 · 量价 7 · 波动率 6 · 结构 6 · 期货特有 11
+**分类完成度**：
+- 趋势 10/10 ✅ MA/EMA/WMA/DEMA/TEMA/HMA/VWAP/SAR/Supertrend/ADX
+- 震荡 12/12 ✅ RSI/MACD/KDJ/Stochastic/CCI/WR/ROC/TRIX/BIAS/PSY/DMI/CMO
+- 量价 8/8 ✅ OBV/Volume/MFI/CMF/VR/PVT/ADL/VOSC
+- 波动率 8/8 ✅ BOLL/ATR/KC/Donchian/StdDev/HV/PriceChannel/Envelopes
+- 结构 4/6（其余 2 归属调整，见上）
+- 期货特有 2/12（OI/ΔOI 真实；10 占位需扩 KLineSeries/FuturesContext 或 Tick 级数据，详 `Sources/IndicatorCore/Indicators/Futures.swift` 顶注）
+
+**测试**：28 个指标测试（12 第一批 + 16 第二批）· swift test 136/35 全绿 0.127s
+
+**code-simplifier 过审**：2 轮（第一批 intValue / MACD 去冗余；第二批 nextEMA / slidingSum 消重复）
 - **时点**：M3
 - **负责**：你（AI 批量生成骨架 + 对照 TradingView/文华手动校验）
 - **依赖**：FormulaEngine（Legacy）、WP-24 IndicatorCore 模块

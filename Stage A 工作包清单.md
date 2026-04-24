@@ -240,7 +240,14 @@
   - ❌ 不把单次 Tick 更新触发整屏重绘
 - **锚点**：产品设计书 §3.1 模块①、D2 §2、ChatGPT A03
 
-### ⬜ WP-41 · 指标库 v1 · 56 个
+### 🟨 WP-41 · 指标库 v1 · 56 个 · 第一批完成 2026-04-24 · commit 9067d86
+
+**第一批（8/56 · 架构 + 代表性）**：
+- 架构：Indicator 协议 + KLineSeries + IndicatorSeries + IndicatorCategory 6 分类 + _Kernels 复用（ma/ema/wilder/stddev/round8）
+- 指标：MA / EMA（趋势）· RSI / MACD（震荡）· BOLL / ATR（波动率）· OBV（量价）· OpenInterest（期货特有）
+- 12 测试 / 7 suites · swift test 120/29 全绿
+
+**剩余 48 个**（下次批量生成）：趋势 8 · 震荡 10 · 量价 7 · 波动率 6 · 结构 6 · 期货特有 11
 - **时点**：M3
 - **负责**：你（AI 批量生成骨架 + 对照 TradingView/文华手动校验）
 - **依赖**：FormulaEngine（Legacy）、WP-24 IndicatorCore 模块

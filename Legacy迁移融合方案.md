@@ -420,7 +420,7 @@ Legacy 迁移后完成状态：
 - [x] Linux 主代码编译验证（✅ 10.57s 通过）
 - [x] 按 §3.1.1 映射归入 WP-24 8 Core 布局（✅ commit `262cd6d` · Legacy 5 targets 全部迁入 Sources/{Shared/Models, DataCore/{MarketData,ContractManager}, IndicatorCore/FormulaEngine, TradingCore/ConditionalOrder} + Tests 11 文件 import 批量适配）
 - [x] Linux `swift test` 全量测试（✅ Mac 端反馈坑 11 也触发 → 修 EdgeCaseTests 2 处 → 102 测试 / 21 suites 全绿）
-- [ ] Mac 上 `swift test` 再跑一次确认（pull 最新 commit 后跑）
+- [x] Mac 上 `swift test` 再跑一次确认（✅ Mac Swift 6.x · 102 测试 / 21 suites 全绿 / 0.058s · Legacy 迁移验证完全闭环）
 - [ ] Mac 上 `swift build --package-path legacy-source/App` 验证 App 层（待 Mac 阶段，可能触发 §6 坑 12）
 
 ---

@@ -60,3 +60,22 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# macOS
+.DS_Store
+._*
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 临时与备份
+*.tmp
+*.bak
+*~
+
+# 本地配置
+.env
+.env.local

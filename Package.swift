@@ -84,6 +84,12 @@ let package = Package(
             name: "ReviewSmokeDemo",
             dependencies: ["Shared", "DataCore", "JournalCore"],
             path: "Tools/ReviewSmokeDemo"
+        ),
+        // AlertSmokeDemo · WP-52 条件预警真数据冒烟（Sina 真行情 → 4 类预警 → 触发记录）
+        .executableTarget(
+            name: "AlertSmokeDemo",
+            dependencies: ["Shared", "DataCore", "AlertCore"],
+            path: "Tools/AlertSmokeDemo"
         )
     ]
 )

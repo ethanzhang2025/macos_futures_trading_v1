@@ -579,6 +579,35 @@
 - **DoD**：数据分层实现 + 两端同步验证 + 隐私政策对应更新
 - **锚点**：D2 §4、StageA补遗 G1、产品设计书 9.2
 
+### 🟨 WP-19 · 数据持久化 SQLCipher（19a 客户端 SQLite ✅ / 19b 加密待）
+- **时点**：M3-M5（M5 上线前必备 · 容量 + 加密双需求）
+- **负责**：你
+- **交付**：4 个 Store 升级到 SQLite + SQLCipher 加密层
+  - KLineCacheStore（DataCore）· JournalStore（JournalCore）
+  - AlertHistoryStore（AlertCore）· AnalyticsEventStore（Shared/Analytics）
+- **DoD**：4 store 全部 SQLite 持久化 + SQLCipher 加密 + Linux/Mac 双端验证
+- **锚点**：多 WP 引用"留 WP-19"（WP-43 §持久化 / WP-52 §AlertHistory / WP-53 §JournalStore / WP-55 §持久化 / WP-133 §schema）
+- **已交付**（2026-04-25 · WP-19a 客户端 SQLite 全集 ✅ Linux 全验）：
+  - **基础设施**（commit a1d792f）：
+    - `Sources/CSQLite/` · systemLibrary 包装 sqlite3 C API（Linux libsqlite3-dev / macOS 系统自带）
+    - `Sources/Shared/SQLite/` · SQLiteConnection actor（exec/query/executeReturningRowID/Changes）+ SQLiteValue + SQLiteStatement + SQLiteError
+  - **4 个 SQLite Store 实现**：
+    - `Sources/Shared/Analytics/Stores/SQLiteAnalyticsEventStore.swift`（events 表 + 协议合约 11 测试）
+    - `Sources/DataCore/Cache/SQLiteKLineCacheStore.swift`（klines 表 + 复合主键去重 + maxBars 截尾 + 9 测试）
+    - `Sources/JournalCore/SQLiteJournalStore.swift`（trades + journals 双表 + JSON 数组字段 + 12 测试）
+    - `Sources/AlertCore/SQLiteAlertHistoryStore.swift`（alert_history 表 + AlertCondition JSON + 8 测试）
+  - **设计沉淀**：
+    - 协议先行 + 多实现（InMemory / JSONFile / SQLite 等价；未来 SQLCipher 接同协议）
+    - actor 隔离 · 显式 close（Swift 6 严格并发禁止 nonisolated deinit 访问 actor 状态）
+    - Decimal 用 TEXT 存（精度保留）· 时间用 INTEGER ms · UUID 用 TEXT
+    - withTransaction { } helper（KLine + Journal）· 列名常量（避免 SELECT 重复）· encodeJSON/decodeJSON 泛型 helper
+    - INSERT OR REPLACE 保证 PRIMARY KEY 重复时覆盖（与 InMemory 去重语义一致）
+  - **测试**：40 新测试 / 6 新 suite · Linux swift test 482/128 → **524/134 全绿**
+- **留待 WP-19b**（M3-M5）：
+  - SQLCipher 加密层（替换 SQLite library link · 接口零改动）
+  - 测试：加密往返 + 错误密钥拒绝
+  - 可选：DBPool（多连接读 + 单连接写）/ schema 版本号 + 迁移脚本
+
 ---
 
 ## E9 · 商业化与支付

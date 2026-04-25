@@ -114,6 +114,12 @@ let package = Package(
             name: "MultiPeriodKLineDemo",
             dependencies: ["Shared", "DataCore"],
             path: "Tools/MultiPeriodKLineDemo"
+        ),
+        // EndToEndDemo · 端到端业务流真数据冒烟（自选 + Sina 实时 + UDS + IndicatorCore + AlertCore）
+        .executableTarget(
+            name: "EndToEndDemo",
+            dependencies: ["Shared", "DataCore", "IndicatorCore", "AlertCore"],
+            path: "Tools/EndToEndDemo"
         )
     ]
 )

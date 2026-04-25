@@ -387,6 +387,17 @@
 
 ---
 
+### ✅ 端到端业务流真数据冒烟（v5.0+ 跨 5 Core 集成 demo · 第 7 个真数据 demo）
+
+- **位置**：`Tools/EndToEndDemo/main.swift` · `swift run EndToEndDemo`（60s 真网络）
+- **拓扑**：段 1 自选簿 + sina.fetchMinute60KLines × 3 合约 + IndicatorCore 末值 / 段 2 UnifiedDataSource(cache + RB0 .second30) 实时合成 / 段 3 SinaProvider 直订 AU0+IF0 → AlertEvaluator 真触发 + history 落库
+- **共享**：1 个 SinaMarketDataProvider + 1 个 SinaPollingDriver；合约分流（RB0→UDS / AU0+IF0→AlertEvaluator）
+- **6 Core 联通**：Shared(Watchlist) ✅ + DataCore-Sina ✅ + DataCore-UDS ✅ + IndicatorCore ✅ + AlertCore ✅ · code-simplifier 1 轮过审
+- **暴露的真问题**：同合约不能同时被 UDS + AlertEvaluator 订阅（SinaProvider.subscribe 是 `handlers[id]=handler` 字典覆盖语义）→ 留 WP-44c 修（多 handler 字典）
+- **回归**：527/134 swift test 全绿（demo 不带测试，executableTarget 不入测试套）
+
+---
+
 ## E6 · 产品 · 工作流功能
 
 ### ✅ WP-50 · 复盘分析 v1 · 8 张图（数据计算层）

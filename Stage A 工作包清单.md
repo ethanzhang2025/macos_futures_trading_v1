@@ -29,7 +29,7 @@
 | E2 | 团队与治理 | 4 | M1 | 0/4 |
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
-| E5 | 产品 · 图表与指标 | 5 | M2-M3 | **1/5** |
+| E5 | 产品 · 图表与指标 | 5 | M2-M3 | **2/5** |
 | E6 | 产品 · 工作流功能 | 6 | M3-M5 | 0/6 |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
 | E8 | 后端与基础设施 | 5 | M1-M6 | 0/5 |
@@ -266,13 +266,12 @@
   - ❌ 期货特有 12 指标数据口径不得和国内主流终端偏差 > 1%
 - **锚点**：D2 §2、产品设计书 §3.1 模块②、ChatGPT A04
 
-### ⬜ WP-42 · 画线工具 v1 · 6 种
-- **时点**：M3
-- **负责**：你
-- **依赖**：Legacy DrawingTool
-- **交付**：趋势线 / 水平线 / 矩形 / 平行通道 / 斐波那契回调 / 文字标注
-- **DoD**：6 种画线可创建、编辑、删除、保存、云同步预埋
-- **锚点**：D2 §2
+### ✅ WP-42 · 画线工具 v1 · 数据模型层完成 2026-04-24 · commit b41acc9
+
+**已交付**（Sources/Shared/Drawings/）：6 类型枚举（trendLine/horizontalLine/rectangle/parallelChannel/fibonacci/text）+ DrawingPoint（barIndex+Decimal 价格）+ Drawing 平铺 struct（Codable/Sendable/Identifiable）+ 6 类型安全 factory + DrawingGeometry（线段插值 / 矩形归一化 / 斐波那契 7 档 / 平行通道副线 / priceDistance）+ 12 测试
+
+**留给 WP-40**：屏幕像素级 hit-test · Metal 渲染 · 颜色/线型样式
+**禁做**：✅ 数据模型层不 import SwiftUI（Sources/Shared 跨端层）
 
 ### ⬜ WP-43 · 自选管理
 - **时点**：M2

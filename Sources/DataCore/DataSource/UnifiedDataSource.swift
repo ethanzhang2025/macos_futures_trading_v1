@@ -30,7 +30,7 @@ public actor UnifiedDataSource {
     // MARK: - 依赖（注入便于测试）
 
     private let cache: KLineCacheStore
-    private let realtime: SimulatedMarketDataProvider
+    private let realtime: any MarketDataProvider
     private let cacheMaxBars: Int
 
     // MARK: - 内部订阅状态
@@ -55,12 +55,14 @@ public actor UnifiedDataSource {
 
     /// - Parameters:
     ///   - cache: K 线本地缓存
-    ///   - realtime: 实时行情 provider（v1 用 SimulatedMarketDataProvider；
-    ///     WP-21b Mac 真 CTP 实现后注入 CTPMarketDataProvider）
+    ///   - realtime: 实时行情 provider
+    ///     - Production：`SinaMarketDataProvider`（WP-31a 起生效）+ `SinaPollingDriver` 驱动
+    ///     - Mock / 测试：`SimulatedMarketDataProvider`（WP-21a 已交付）/ `MockMarketDataProvider`
+    ///     - Stage B：`CTPMarketDataProvider`（WP-220 真 CTP 接入）
     ///   - cacheMaxBars: 缓存上限（每 instrumentID + period）；0 = 不限
     public init(
         cache: KLineCacheStore,
-        realtime: SimulatedMarketDataProvider,
+        realtime: any MarketDataProvider,
         cacheMaxBars: Int = 1000
     ) {
         self.cache = cache

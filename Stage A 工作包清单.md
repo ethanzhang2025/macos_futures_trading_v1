@@ -159,11 +159,12 @@
 - **断线重连**（`MarketData/Connection/`）：BackoffPolicy 协议 + ExponentialBackoff（指数退避 + cap + ±jitter + RNG 注入便于测试）+ NoBackoff · ConnectionStateMachine actor（纯状态机：状态转移 + attempt 计数 + AsyncStream 多订阅者推送，不持有 Task / 不主动 sleep / 时间外置 → 测试 100% 确定性）+ reset/reportConnecting/reportConnected/reportDisconnected/reportConnectionLost/reportError 6 事件
 - **行情模拟 provider**（`MarketData/Simulated/SimulatedMarketDataProvider.swift`）：actor 实现 MarketDataProvider 协议 + 集成 ConnectionStateMachine + connect/disconnect/simulateConnectionLost/simulateError/push/pushBatch/subscriberCount/isSubscribed · 多合约严格隔离（push 按 instrumentID 精确分发，未订阅静默丢弃）· production-ready 用作 SwiftUI demo 数据源 + 集成测试 fixture + WP-21b 真 CTP 实现的契约参考
 - **K 线本地缓存层**（`Cache/`）：KLineCacheStore 协议（load/save/append/clear/clearAll · 顺序保证按 openTime 升序）· InMemoryKLineCacheStore actor（测试 / 临时场景）· JSONFileKLineCacheStore actor（production · 文件路径 `{root}/{sanitized-instrumentID}_{period.rawValue}.json` · iso8601 日期 + sortedKeys 输出 · sanitize 防路径穿越）· merged 静态合并（去重 + 排序 + maxBars 截尾保留最近 N） · KLine 加 Codable conformance（在 Sources/Shared/Models/KLine.swift 原文件加，让自动合成可用）
-- **测试**：47 测试 11 suites（退避/状态机/Provider 集成 + Cache 内存/JSON 文件持久化/合并语义/sanitize/多合约多周期隔离）
-- **代码质量**：code-simplifier 2 轮过审（子模块 1+2 阶段 0 改动 / 子模块 3 阶段净 -9 行）
-- **commits**：`f28b096` 状态机 + 模拟 provider · `0c63466` 状态更新 · 子模块 3 待 commit
+- **TradingCalendar 完善**（`ContractManager/TradingCalendar.swift`）：expectedTradingDay(actionDay:hour:) 算夜盘归属（hour<3 凌晨夜盘归当日 / hour≥20 夜盘开始归下一工作日 / 其他归 actionDay） · isWeekend(actionDay:) 周末判断 · nextWeekday(after:) 跳周末（周五 → 周一 / 跨月正确）· 不依赖 DateFormatter（无 Sendable 顾虑 + 性能）· 不含节假日表（v2 接 JSON）· chinaCalendar 私有 static let DRY · while 防御死循环
+- **测试**：83 测试 16 suites（退避/状态机/Provider 集成 + Cache 内存/JSON 文件持久化/合并语义/sanitize/多合约多周期隔离 + TradingCalendar 跨午夜夜盘 7 case / 午休小休休市 11 case / 中金所 5 case / expectedTradingDay 5 case / 周末工具 7 case）
+- **代码质量**：code-simplifier 3 轮过审（子模块 1+2 0 改动 / 子模块 3 净 -9 行 / 子模块 5 净 0 行 3 处 DRY）
+- **commits**：`f28b096` 状态机 + 模拟 provider · `0c63466` 状态更新 · `5ba6069` 缓存层 · `c9ac216` 状态更新 · 子模块 5 待 commit
 
-**WP-21a 留给后续 WP-21a 推进**：UnifiedDataSource Facade（组装 historical + realtime + cache + reconnect）/ TradingCalendar 完善（夜盘日盘分界 case 验证）/ 数据管线时序图 docs
+**WP-21a 留给后续 WP-21a 推进**：UnifiedDataSource Facade（组装 historical + realtime + cache + reconnect）/ 数据管线时序图 docs
 
 **WP-21b 留给 Mac 切机器**：CTP Obj-C++ 桥接层 / CTPMarketDataProvider Swift 实现（替换 SimulatedMarketDataProvider 成为生产数据源）/ SimNow 账号实测 / SwiftUI demo 显示
 

@@ -74,6 +74,8 @@ public actor UnifiedDataSource {
 
     /// 启动订阅 · 立即 emit cache snapshot，然后是实时 K 线增量
     /// - Note: 同一 (instrumentID, period) 重复 start 会替换之前的订阅（旧 stream 终止）
+    /// - WP-44b: 同 instrumentID 不同 period 可同时订阅（各自一条 stream + 独立 KLineBuilder）；
+    ///   底层 realtime provider 按 instrumentID 仅订阅一次，handleTick 内部 dispatch 给所有匹配 period
     public func start(instrumentID: String, period: KLinePeriod) async -> AsyncStream<DataSourceUpdate> {
         let key = Key(instrumentID: instrumentID, period: period)
 
@@ -87,18 +89,24 @@ public actor UnifiedDataSource {
         let cached = (try? await cache.load(instrumentID: instrumentID, period: period)) ?? []
         continuation.yield(.snapshot(cached))
 
-        // 3. 注册订阅状态
+        // 3. 检查此 instrumentID 是否已经在 realtime 订阅中（决定是否注册 handler）
+        let isFirstSubscriptionForInstrument = !subscriptions.keys.contains { $0.instrumentID == instrumentID }
+
+        // 4. 注册订阅状态
         let builder = KLineBuilder(instrumentID: instrumentID, period: period)
         subscriptions[key] = SubscriptionState(builder: builder, continuation: continuation)
 
-        // 4. stream 终止时自动 cleanup（caller 不必显式 stop）
+        // 5. stream 终止时自动 cleanup（caller 不必显式 stop）
         continuation.onTermination = { [weak self] _ in
             Task { await self?.cleanup(key: key) }
         }
 
-        // 5. 订阅实时 Tick
-        await realtime.subscribe(instrumentID) { [weak self] tick in
-            Task { await self?.handleTick(tick, key: key) }
+        // 6. 仅当此 instrumentID 是首次订阅时注册 realtime handler
+        //    后续同 instrumentID 的其他 period 共享此 handler（避免 MarketDataProvider 字典覆盖）
+        if isFirstSubscriptionForInstrument {
+            await realtime.subscribe(instrumentID) { [weak self] tick in
+                Task { await self?.handleTick(tick) }
+            }
         }
 
         return stream
@@ -125,19 +133,24 @@ public actor UnifiedDataSource {
 
     // MARK: - 私有
 
-    private func handleTick(_ tick: Tick, key: Key) async {
-        guard let sub = subscriptions[key] else { return }
-        guard let completed = sub.builder.onTick(tick) else { return }
+    /// WP-44b: 按 tick.instrumentID 找出所有匹配 keys（多 period 各处理一次）
+    private func handleTick(_ tick: Tick) async {
+        // 拷贝快照：handleTick 内可能 cleanup（例如某 period 的 builder 触发 stream 关闭）
+        let matchingKeys = subscriptions.keys.filter { $0.instrumentID == tick.instrumentID }
+        for key in matchingKeys {
+            guard let sub = subscriptions[key] else { continue }
+            guard let completed = sub.builder.onTick(tick) else { continue }
 
-        sub.continuation.yield(.completedBar(completed))
+            sub.continuation.yield(.completedBar(completed))
 
-        // 增量持久化（失败静默：缓存层非关键路径，不影响实时流）
-        try? await cache.append(
-            [completed],
-            instrumentID: key.instrumentID,
-            period: key.period,
-            maxBars: cacheMaxBars
-        )
+            // 增量持久化（失败静默：缓存层非关键路径，不影响实时流）
+            try? await cache.append(
+                [completed],
+                instrumentID: key.instrumentID,
+                period: key.period,
+                maxBars: cacheMaxBars
+            )
+        }
     }
 
     private func cleanup(key: Key) async {

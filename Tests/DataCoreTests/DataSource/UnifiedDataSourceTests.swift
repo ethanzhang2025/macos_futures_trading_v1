@@ -256,6 +256,88 @@ struct UDSMultiInstrumentTests {
         await source.stopAll()
     }
 
+    @Test("WP-44b: 同合约多 period 同时订阅 · realtime subscribe 仅 1 次")
+    func multiPeriodSubscribesOnce() async {
+        let cache = InMemoryKLineCacheStore()
+        let realtime = SimulatedMarketDataProvider()
+        let source = UnifiedDataSource(cache: cache, realtime: realtime)
+
+        _ = await source.start(instrumentID: "rb2510", period: .minute1)
+        _ = await source.start(instrumentID: "rb2510", period: .minute3)
+        _ = await source.start(instrumentID: "rb2510", period: .minute5)
+
+        // 关键：subscriberCount = 1（虽然 source 内部 3 subscriptions）
+        #expect(await realtime.subscriberCount() == 1)
+        #expect(await source.activeSubscriptions().count == 3)
+
+        await source.stopAll()
+    }
+
+    @Test("WP-44b: 同合约多 period · 单次 push 多 builder 同时收到 tick")
+    func multiPeriodAllReceiveTicks() async {
+        let cache = InMemoryKLineCacheStore()
+        let realtime = SimulatedMarketDataProvider()
+        let source = UnifiedDataSource(cache: cache, realtime: realtime)
+
+        let coll1 = UpdateCollector()
+        let coll5 = UpdateCollector()
+        let s1 = await source.start(instrumentID: "rb2510", period: .minute1)
+        let s5 = await source.start(instrumentID: "rb2510", period: .minute5)
+        let t1 = consume(s1, into: coll1)
+        let t5 = consume(s5, into: coll5)
+
+        await waitForUpdates(coll1, count: 1)
+        await waitForUpdates(coll5, count: 1)
+
+        // 推跨 6 分钟的 tick 序列：minute1 应触发 ≥5 根 completedBar；minute5 触发 ≥1 根
+        await realtime.connect()
+        let baseDate = Date()
+        let ticks = makeMinuteTicks(
+            "rb2510",
+            baseDate: baseDate,
+            minuteOffsets: [9 * 60, 9 * 60 + 1, 9 * 60 + 2, 9 * 60 + 3, 9 * 60 + 4, 9 * 60 + 5, 9 * 60 + 6]
+        )
+        for t in ticks { await realtime.push(t) }
+
+        // 等异步 yield 完成
+        try? await Task.sleep(nanoseconds: 80_000_000)
+
+        // minute1：跨 6 个边界 → ≥5 个 completedBar
+        let m1Completed = await coll1.snapshot().filter {
+            if case .completedBar = $0 { return true } else { return false }
+        }.count
+        // minute5：跨 1 个边界（第 5 分钟切换）→ ≥1 个 completedBar
+        let m5Completed = await coll5.snapshot().filter {
+            if case .completedBar = $0 { return true } else { return false }
+        }.count
+
+        #expect(m1Completed >= 5)
+        #expect(m5Completed >= 1)
+
+        await source.stopAll()
+        t1.cancel(); t5.cancel()
+    }
+
+    @Test("WP-44b: 同合约多 period · 关 1 个 period · 其他 period 仍收到 tick")
+    func stopOnePeriodKeepsOthers() async {
+        let cache = InMemoryKLineCacheStore()
+        let realtime = SimulatedMarketDataProvider()
+        let source = UnifiedDataSource(cache: cache, realtime: realtime)
+
+        _ = await source.start(instrumentID: "rb2510", period: .minute1)
+        _ = await source.start(instrumentID: "rb2510", period: .minute5)
+
+        await source.stop(instrumentID: "rb2510", period: .minute1)
+
+        // realtime 仍订阅（minute5 还在）
+        #expect(await realtime.subscriberCount() == 1)
+        #expect(await source.activeSubscriptions().count == 1)
+
+        await source.stop(instrumentID: "rb2510", period: .minute5)
+        // 全关后 realtime 才取消
+        #expect(await realtime.subscriberCount() == 0)
+    }
+
     @Test("不同合约：realtime 订阅 N 个 + stop 一个不影响其他")
     func differentInstruments() async {
         let cache = InMemoryKLineCacheStore()

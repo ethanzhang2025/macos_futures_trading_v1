@@ -155,14 +155,15 @@
 - **WP-21a** Linux 全验子集（无真 CTP 库依赖；本会话推进中）
 - **WP-21b** Mac 真 CTP 接入（D2 §4 Obj-C++ 桥接路线，留待 Mac 切机）
 
-**WP-21a 已交付**（Sources/DataCore/MarketData/）：
-- **断线重连**（`Connection/`）：BackoffPolicy 协议 + ExponentialBackoff（指数退避 + cap + ±jitter + RNG 注入便于测试）+ NoBackoff · ConnectionStateMachine actor（纯状态机：状态转移 + attempt 计数 + AsyncStream 多订阅者推送，不持有 Task / 不主动 sleep / 时间外置 → 测试 100% 确定性）+ reset/reportConnecting/reportConnected/reportDisconnected/reportConnectionLost/reportError 6 事件
-- **行情模拟 provider**（`Simulated/SimulatedMarketDataProvider.swift`）：actor 实现 MarketDataProvider 协议 + 集成 ConnectionStateMachine + connect/disconnect/simulateConnectionLost/simulateError/push/pushBatch/subscriberCount/isSubscribed · 多合约严格隔离（push 按 instrumentID 精确分发，未订阅静默丢弃）· production-ready 用作 SwiftUI demo 数据源 + 集成测试 fixture + WP-21b 真 CTP 实现的契约参考
-- **测试**：28 测试 8 suites（退避序列/cap/jitter 范围 / 状态转移完备性 / AsyncStream 多订阅者 / 多合约隔离 / 故障注入 + 状态机集成）
-- **代码质量**：code-simplifier 1 轮过审 0 改动（教科书式 fail-fast precondition + actor weak self + 职责单一）
-- **commit**: 待 commit
+**WP-21a 已交付**（Sources/DataCore/）：
+- **断线重连**（`MarketData/Connection/`）：BackoffPolicy 协议 + ExponentialBackoff（指数退避 + cap + ±jitter + RNG 注入便于测试）+ NoBackoff · ConnectionStateMachine actor（纯状态机：状态转移 + attempt 计数 + AsyncStream 多订阅者推送，不持有 Task / 不主动 sleep / 时间外置 → 测试 100% 确定性）+ reset/reportConnecting/reportConnected/reportDisconnected/reportConnectionLost/reportError 6 事件
+- **行情模拟 provider**（`MarketData/Simulated/SimulatedMarketDataProvider.swift`）：actor 实现 MarketDataProvider 协议 + 集成 ConnectionStateMachine + connect/disconnect/simulateConnectionLost/simulateError/push/pushBatch/subscriberCount/isSubscribed · 多合约严格隔离（push 按 instrumentID 精确分发，未订阅静默丢弃）· production-ready 用作 SwiftUI demo 数据源 + 集成测试 fixture + WP-21b 真 CTP 实现的契约参考
+- **K 线本地缓存层**（`Cache/`）：KLineCacheStore 协议（load/save/append/clear/clearAll · 顺序保证按 openTime 升序）· InMemoryKLineCacheStore actor（测试 / 临时场景）· JSONFileKLineCacheStore actor（production · 文件路径 `{root}/{sanitized-instrumentID}_{period.rawValue}.json` · iso8601 日期 + sortedKeys 输出 · sanitize 防路径穿越）· merged 静态合并（去重 + 排序 + maxBars 截尾保留最近 N） · KLine 加 Codable conformance（在 Sources/Shared/Models/KLine.swift 原文件加，让自动合成可用）
+- **测试**：47 测试 11 suites（退避/状态机/Provider 集成 + Cache 内存/JSON 文件持久化/合并语义/sanitize/多合约多周期隔离）
+- **代码质量**：code-simplifier 2 轮过审（子模块 1+2 阶段 0 改动 / 子模块 3 阶段净 -9 行）
+- **commits**：`f28b096` 状态机 + 模拟 provider · `0c63466` 状态更新 · 子模块 3 待 commit
 
-**WP-21a 留给后续 WP-21a 推进**：KLineCacheStore（启动时优先恢复）/ UnifiedDataSource Facade（组装 historical + realtime + cache + reconnect）/ TradingCalendar 完善（夜盘日盘分界 case 验证）/ 数据管线时序图 docs
+**WP-21a 留给后续 WP-21a 推进**：UnifiedDataSource Facade（组装 historical + realtime + cache + reconnect）/ TradingCalendar 完善（夜盘日盘分界 case 验证）/ 数据管线时序图 docs
 
 **WP-21b 留给 Mac 切机器**：CTP Obj-C++ 桥接层 / CTPMarketDataProvider Swift 实现（替换 SimulatedMarketDataProvider 成为生产数据源）/ SimNow 账号实测 / SwiftUI demo 显示
 

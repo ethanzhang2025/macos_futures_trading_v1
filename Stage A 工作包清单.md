@@ -30,7 +30,7 @@
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
 | E5 | 产品 · 图表与指标 | 5 | M2-M3 | **5/5**（除 WP-40 Metal 引擎留 Mac）|
-| E6 | 产品 · 工作流功能 | 6 | M3-M5 | **2/6** |
+| E6 | 产品 · 工作流功能 | 6 | M3-M5 | **3/6** |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
 | E8 | 后端与基础设施 | 5 | M1-M6 | 0/5 |
 | E9 | 商业化与支付 | **7** | M3-M6 | 0/7 |
@@ -366,7 +366,7 @@
 **留给后续 UI WP**：实际通知通道（InAppOverlayChannel SwiftUI / SystemNoticeChannel UserNotifications / SoundChannel NSSound 留 Mac 切机）· 预警面板 UI（列表 + 编辑 + 启停按钮）· 画线预警 v2（趋势线/矩形/斐波那契接 DrawingGeometry，本 v1 仅 horizontalLine）· 后续 SQLite AlertHistoryStore（WP-19 数据持久化）
 **禁做**：✅ 通知发送逻辑统一在 NotificationChannel 层，不散落（A08 验收）· ✅ 数据模型层不 import SwiftUI/AppKit/UserNotifications · ✅ 不引入 print 散落生产路径（默认 logger 仅供测试）· ✅ 频控不依赖 wall-clock 真实时间（now 参数注入 → 100% 确定测试）
 
-### ⬜ WP-53 · 交易日志（最强粘性）
+### ✅ WP-53 · 交易日志（数据模型层 v1 · 最强粘性）
 - **时点**：M5
 - **负责**：你
 - **交付**：交割单 CSV 导入（含文华格式适配）、半自动日志生成、手动补原因/情绪、标签+搜索、月度/季度总结
@@ -376,6 +376,20 @@
   - ❌ 不让日志编辑反向污染成交记录（一对多映射单向）
   - ❌ 日志内容不出 SQLCipher 加密边界
 - **锚点**：D2 §2、产品设计书 §3.1 模块⑦、ChatGPT A09
+
+**已交付**（Sources/JournalCore/）：
+- **Trade 标准模型**（`Trade.swift`）：Trade struct（id/tradeReference/instrumentID/direction/offsetFlag/price/volume/commission/timestamp/source）+ TradeSource enum（wenhua/generic/manual）+ notional(volumeMultiple:) 计算 · 复用 Shared.Direction/OffsetFlag（已加 Codable）
+- **CSV 解析器**（`DealCSVParser.swift`，A09 转换层落实）：RawDeal struct（CSV 行 1:1 映射，全 String 字段）+ DealCSVFormat enum（wenhua/generic）+ DealCSVError 4 类（invalidEncoding/missingColumn/invalidValue/unsupportedFormat）+ DealCSVParser.parse(_:format:) → [RawDeal]（兼容 LF/CRLF/CR + 跳空行 + 表头校验）+ RawDeal.toTrade() 显式转换边界 + 中文/英文 direction/offset 双格式支持 + 3 种时间格式解析（ISO8601/yyyy-MM-dd HH:mm:ss/yyyyMMdd HHmmss）
+- **TradeJournal 模型**（`TradeJournal.swift`）：JournalEmotion 5 类（confident/hesitant/fearful/greedy/calm）+ JournalDeviation 8 类（asPlanned/breakStopLoss/chaseRebound/chaseHigh/catchFalling/earlyExit/overTrade/other）+ TradeJournal struct（id/tradeIDs 单向引用/title/reason/emotion/deviation/lesson/tags Set/timestamps）
+- **JournalStore 持久化协议**（`JournalStore.swift`）：JournalStore 协议 11 方法（trades 5：saveTrades/loadAll/forInstrumentID/from-to/delete · journals 6：save/loadAll/byID/from-to/withAnyTag/delete）+ InMemoryJournalStore actor + 加密策略契约文档化（trades 明文 / journals 走 SQLCipher 留 WP-19）
+- **JournalGenerator 半自动初稿**（`JournalGenerator.swift`）：generateDrafts(from:configuration:now:) → [TradeJournal] · 按 (instrumentID, 时间窗口默认 8h) 聚合 · 自动 title/tradeIDs/reason 模板（含开/平/总手数/手续费统计）· 单向：不修改 trades · Configuration 注入便于测试
+- **测试**：26 测试 7 suites（Trade Codable + notional + Source 枚举 / 文华 CSV 解析 + toTrade + 缺列/非法值/空行 / 通用 CSV / TradeJournal Codable + 默认值 + 5+8 枚举 / Store Trade CRUD + 合约/时间范围筛选 / Store Journal CRUD + tag 搜索 + 删 journal 不级联删 trade / Generator 空/同合约连续/跨窗口拆分/多合约/统计模板/不修改 trades）
+- **代码质量**：code-simplifier 1 轮过审 · 净 0 行（splitCSVLine `\.isNewline` 兼容 LF/CRLF/CR 三种行尾，原 `"\r\n"` Character 比较永远为假是隐藏 bug）
+
+**留给后续 UI WP**：交割单导入面板（文件选择 + 格式识别 + 错误展示）· 日志编辑器 UI（情绪/偏差选择器 + 标签输入）· 月度/季度总结聚合器 · CSV 引号转义解析 v2 · 标签搜索引擎（v1 用 contains，v2 上倒排索引）
+**留给 WP-19 数据持久化**：SQLCipherJournalStore（journals 字段加密列存储）· trades 可走 SQLite 明文表
+**留给 WP-50 复盘 8 图**：基于 JournalStore 提供的 trades 数据生成 8 张分析图
+**禁做**：✅ A09 三大禁做项全落实（RawDeal→Trade 显式转换边界 / tradeIDs 单向引用日志改不污染 trades / SQLCipher 加密边界协议层文档化）· ✅ 数据模型层不 import SwiftUI/AppKit/SQLCipher · ✅ 不引入第三方库
 
 ### ⬜ WP-54 · 模拟训练（SimNow）
 - **时点**：M5

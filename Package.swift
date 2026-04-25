@@ -72,6 +72,12 @@ let package = Package(
             name: "SinaTickDemo",
             dependencies: ["Shared", "DataCore"],
             path: "Tools/SinaTickDemo"
+        ),
+        // IndicatorSmokeDemo · WP-41 真数据冒烟（Sina 60min K 线 → MA/EMA/MACD/RSI/BOLL/KDJ）
+        .executableTarget(
+            name: "IndicatorSmokeDemo",
+            dependencies: ["Shared", "DataCore", "IndicatorCore"],
+            path: "Tools/IndicatorSmokeDemo"
         )
     ]
 )

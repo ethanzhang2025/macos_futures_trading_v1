@@ -791,12 +791,24 @@
 - **DoD**：每月 standup 纪要包含风险表 review 结果
 - **锚点**：D3 §7、§8、StageA补遗 G10
 
-### ⬜ WP-133 · 埋点 schema 与上报链路（源自 StageA补遗 G2）
+### 🟨 WP-133 · 埋点 schema 与上报链路（133a 客户端 ✅ / 133b 后端上报待 WP-80）
 - **时点**：M1 末前启用
 - **负责**：你
 - **交付**：10 个核心事件定义（app_launch / session_start / session_end / chart_open / indicator_add / drawing_create / replay_start / alert_trigger / journal_entry_save / subscription_event）+ SQLite `events` 表 + 批量上报链路（每 5min 或 100 条）+ 后端接收接口 + WAPU SQL 查询模板
 - **DoD**：埋点写入 + 上报链路跑通，后端能查出 WAPU
 - **锚点**：D1 §4、D3 §1、StageA补遗 G2
+- **已交付**（2026-04-25 · WP-133a 客户端层 · 不依赖后端）：
+  - `Sources/Shared/Analytics/AnalyticsEvent.swift` · 10 事件 enum + Codable + props JSON 序列化 + nowMs 工具
+  - `Sources/Shared/Analytics/AnalyticsEventStore.swift` · 持久化协议（append / appendBatch / queryPending / markUploaded / cleanupUploaded / count）
+  - `Sources/Shared/Analytics/Stores/InMemoryAnalyticsEventStore.swift` · actor 内存实现（id 自增）
+  - `Sources/Shared/Analytics/Stores/JSONFileAnalyticsEventStore.swift` · actor 文件持久化（atomic 替换 + 自动建目录 + 重启加载）
+  - `Sources/Shared/Analytics/AnalyticsService.swift` · 高层 actor · 隐私开关单一入口（StageA补遗 G2 §隐私）+ session 管理 + 时间注入
+  - 27 测试 / 6 suite · Linux swift test 455/122 → **482/128 全绿**
+- **留待 WP-133b**（依赖 WP-80 后端就绪）：
+  - 后端 REST 批量接收接口（PostgreSQL events 表）
+  - 客户端 BatchUploadDriver（HTTPClient + 重试 + 防丢失 + uploaded 翻位）
+  - WAPU SQL 查询模板（与 D1 §4 严谨定义对齐：过去 7 天 ≥ 3 个不同日期 session_start）
+- **留待 WP-19 SQLCipher**：JSONFile → SQLCipher 真实加密存储（接同协议）
 
 ---
 

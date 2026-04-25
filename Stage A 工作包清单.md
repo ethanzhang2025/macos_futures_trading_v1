@@ -161,11 +161,12 @@
 - **K 线本地缓存层**（`Cache/`）：KLineCacheStore 协议（load/save/append/clear/clearAll · 顺序保证按 openTime 升序）· InMemoryKLineCacheStore actor（测试 / 临时场景）· JSONFileKLineCacheStore actor（production · 文件路径 `{root}/{sanitized-instrumentID}_{period.rawValue}.json` · iso8601 日期 + sortedKeys 输出 · sanitize 防路径穿越）· merged 静态合并（去重 + 排序 + maxBars 截尾保留最近 N） · KLine 加 Codable conformance（在 Sources/Shared/Models/KLine.swift 原文件加，让自动合成可用）
 - **TradingCalendar 完善**（`ContractManager/TradingCalendar.swift`）：expectedTradingDay(actionDay:hour:) 算夜盘归属（hour<3 凌晨夜盘归当日 / hour≥20 夜盘开始归下一工作日 / 其他归 actionDay） · isWeekend(actionDay:) 周末判断 · nextWeekday(after:) 跳周末（周五 → 周一 / 跨月正确）· 不依赖 DateFormatter（无 Sendable 顾虑 + 性能）· 不含节假日表（v2 接 JSON）· chinaCalendar 私有 static let DRY · while 防御死循环
 - **统一数据源 Facade**（`DataSource/UnifiedDataSource.swift`）：actor 组装 cache + realtime + KLineBuilder · start(instrumentID:period:) → AsyncStream<DataSourceUpdate> · 工作流：立即 emit .snapshot(cached) → 实时 Tick → KLineBuilder → .completedBar + 增量持久化 · stop/stopAll · 同 (instrumentID, period) 重复 start 自动替换 · 同 instrumentID 多 period 共享 realtime 订阅（最后一个 period stop 才 unsubscribe）· KLine 加 Equatable conformance · v1 不做 historical 合并（HistoricalKLine vs KLine 适配留 v2）
+- **数据管线时序图 docs**（`Docs/architecture/data-pipeline.md`）：架构总览 + 4 个 Mermaid 时序图（启动恢复 / 实时流 / 断线重连 / stop 清理）+ 各组件职责对照表 + WP-21b Mac 切机指引（必做 CTPMarketDataProvider Obj-C++ 桥接 / 接口契约位置 / 替换流程 / 真接入后 DoD 验收 5 项）+ 8 项关键设计取舍记录 + 测试覆盖摘要
 - **测试**：92 测试 20 suites（退避/状态机/Provider 集成 + Cache 内存/JSON 持久化/合并/sanitize/多合约多周期隔离 + TradingCalendar 边界 36 case + UnifiedDataSource 启动快照 2 / 实时流 2 / 生命周期 3 / 多合约多周期 2）
 - **代码质量**：code-simplifier 4 轮过审（子模块 1+2 0 改动 / 3 净 -9 行 / 5 净 0 行 3 处 DRY / 4 净 +1 行 防御 mutation 遍历）
-- **commits**：`f28b096` 状态机 + 模拟 provider · `0c63466` · `5ba6069` 缓存层 · `c9ac216` · `9bad509` TradingCalendar · `73c5746` · 子模块 4 待 commit
+- **commits**：`f28b096` 状态机 + 模拟 provider · `0c63466` · `5ba6069` 缓存层 · `c9ac216` · `9bad509` TradingCalendar · `73c5746` · `4cc72d4` Facade · `86d6631` · 子模块 6 docs 待 commit
 
-**WP-21a 留给后续 WP-21a 推进**：数据管线时序图 docs（最后子模块 6）
+**WP-21a 全部 6 子模块完成 ✅**（端到端闭环：cache + realtime + KLineBuilder + ConnectionStateMachine 通过 UnifiedDataSource Facade 完整组装）
 
 **WP-21b 留给 Mac 切机器**：CTP Obj-C++ 桥接层 / CTPMarketDataProvider Swift 实现（替换 SimulatedMarketDataProvider 成为生产数据源）/ SimNow 账号实测 / SwiftUI demo 显示
 

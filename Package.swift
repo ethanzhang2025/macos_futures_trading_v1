@@ -78,6 +78,12 @@ let package = Package(
             name: "IndicatorSmokeDemo",
             dependencies: ["Shared", "DataCore", "IndicatorCore"],
             path: "Tools/IndicatorSmokeDemo"
+        ),
+        // ReviewSmokeDemo · WP-50 复盘 8 图真数据冒烟（基于 RB0 真实价位 12 笔成交 → FIFO 配对 → 8 个聚合算法）
+        .executableTarget(
+            name: "ReviewSmokeDemo",
+            dependencies: ["Shared", "DataCore", "JournalCore"],
+            path: "Tools/ReviewSmokeDemo"
         )
     ]
 )

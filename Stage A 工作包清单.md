@@ -29,7 +29,7 @@
 | E2 | 团队与治理 | 4 | M1 | 0/4 |
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
-| E5 | 产品 · 图表与指标 | 5 | M2-M3 | **2/5** |
+| E5 | 产品 · 图表与指标 | 5 | M2-M3 | **3/5** |
 | E6 | 产品 · 工作流功能 | 6 | M3-M5 | 0/6 |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
 | E8 | 后端与基础设施 | 5 | M1-M6 | 0/5 |
@@ -273,12 +273,17 @@
 **留给 WP-40**：屏幕像素级 hit-test · Metal 渲染 · 颜色/线型样式
 **禁做**：✅ 数据模型层不 import SwiftUI（Sources/Shared 跨端层）
 
-### ⬜ WP-43 · 自选管理
+### ✅ WP-43 · 自选管理（数据模型层 v1）
 - **时点**：M2
 - **负责**：你
 - **交付**：多分组（无上限）+ 每组合约无上限 + 拖拽排序
 - **DoD**：CloudKit 数据结构预埋、本地完整可用
 - **锚点**：D2 §2
+
+**已交付**（Sources/Shared/Watchlists/）：Watchlist struct（id/name/sortIndex/instrumentIDs/timestamps · Codable/Sendable/Identifiable/Hashable）+ WatchlistBook 聚合根（按 sortIndex 维护有序性 · 自动 normalize 连续整数）+ 分组级 CRUD（add/rename/remove/moveGroup）+ 合约级 CRUD（add/remove + 同组去重）+ 拖拽排序（同组 moveInstrument(in:from:to:) + 跨组 moveInstrument(_:from:to:targetIndex:) 含目标去重）+ 查询（contains/group(id:)/groups(containing:)）+ 通用 moveElement<T> 私有泛型函数（语义同 SwiftUI onMove）· CloudKit 字段映射预埋（cloudKitRecordType/CloudKitField 常量/cloudKitFields()/init?(cloudKitRecordName:fields:) · 不 import CloudKit · Linux 跨端兼容）· 25 测试 7 suites（CRUD/拖拽/去重/边界/Codable 往返/CloudKit 字段往返）· code-simplifier 1 轮过审
+
+**留给后续 WP**：拖拽 UI（SwiftUI/AppKit DnD）· 实际 CloudKit 同步（A12 M7-M9：CKContainer/CKSubscription/冲突合并）· 本地持久化层（SQLite/JSON 文件，归 WP-19 数据持久化）
+**禁做**：✅ 数据模型层不 import SwiftUI/AppKit/CloudKit（Sources/Shared 跨端层）· ✅ 不只存 UI 截图式快照，存结构化数据
 
 ### ⬜ WP-44 · 多周期切换 + 多窗口布局
 - **时点**：M2-M3

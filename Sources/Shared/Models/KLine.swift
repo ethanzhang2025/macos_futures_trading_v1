@@ -68,7 +68,7 @@ public enum KLinePeriod: String, Sendable, CaseIterable {
 }
 
 /// K线数据
-public struct KLine: Sendable, Codable {
+public struct KLine: Sendable, Codable, Equatable {
     /// 合约代码
     public let instrumentID: String
     /// 周期

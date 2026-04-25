@@ -1,7 +1,7 @@
 import Foundation
 
 /// 买卖方向
-public enum Direction: String, Sendable {
+public enum Direction: String, Sendable, Codable {
     case buy  = "0"
     case sell = "1"
 
@@ -14,7 +14,7 @@ public enum Direction: String, Sendable {
 }
 
 /// 开平标志
-public enum OffsetFlag: String, Sendable {
+public enum OffsetFlag: String, Sendable, Codable {
     case open       = "0"  // 开仓
     case close      = "1"  // 平仓
     case forceClose = "2"  // 强平

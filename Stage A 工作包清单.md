@@ -30,7 +30,7 @@
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
 | E5 | 产品 · 图表与指标 | 5 | M2-M3 | **5/5**（除 WP-40 Metal 引擎留 Mac）|
-| E6 | 产品 · 工作流功能 | 6 | M3-M5 | **3/6** |
+| E6 | 产品 · 工作流功能 | 6 | M3-M5 | **4/6** |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
 | E8 | 后端与基础设施 | 5 | M1-M6 | 0/5 |
 | E9 | 商业化与支付 | **7** | M3-M6 | 0/7 |
@@ -324,13 +324,24 @@
 
 ## E6 · 产品 · 工作流功能
 
-### ⬜ WP-50 · 复盘分析 v1 · 8 张图
+### ✅ WP-50 · 复盘分析 v1 · 8 张图（数据计算层）
 - **时点**：M4
 - **负责**：你
 - **依赖**：WP-53 交易日志（数据源）或 CSV 导入
 - **交付**：月度盈亏 / 分布直方 / 胜率曲线 / 品种矩阵 / 持仓时间 / 最大回撤 / 盈亏比 / 时段分析
 - **DoD**：8 图均可从交割单 CSV 生成
-- **锚点**：D2 §2、产品设计书 §3.1 模块④
+- **锚点**：D2 §2、产品设计书 §3.1 模块④、ChatGPT A09
+
+**已交付**（Sources/JournalCore/）：
+- **ClosedPosition + PositionMatcher**（`ClosedPosition.swift` + `PositionMatcher.swift`）：PositionSide enum（long/short）+ ClosedPosition struct（开+平 trades + 持仓时长 + 已实现 PnL + 总手续费）+ PositionMatcher.match(trades:multipliers:) FIFO 配对算法（按 (instrumentID, side) 队列；多空方向自动推导 buy-open→long / sell-open→short；4 种平仓 flag 全识别 close/closeToday/closeYesterday/forceClose；部分平仓拆 ClosedPosition；跨多笔开仓拆配对；手续费按手数比例分摊）+ OpenRemaining 未平仓快照
+- **8 张图数据契约**（`ReviewChartData.swift`）：MonthlyPnLBucket+MonthlyPnL / PnLDistributionBin+PnLDistribution / WinRatePoint+WinRateCurve / InstrumentMatrixCell+InstrumentMatrix / HoldingDurationBucket+HoldingDurationStats / EquityPoint+MaxDrawdownCurve / ProfitLossRatio / TradingSlot+SessionPnLBucket+SessionPnL · 全 Codable Sendable Equatable
+- **8 张图聚合算法**（`ReviewAnalytics.swift`）：8 个静态方法（monthlyPnL 跨月聚合 + pnlDistribution 单遍分桶+正负计数 + winRateCurve 累计胜率 + instrumentMatrix 按合约聚合排序 + holdingDurationStats 6 桶分布 + 中位/均值/min/max + maxDrawdownCurve 三变量状态机 + profitLossRatio 含 0 兜底 + sessionPnL 4 时段+other）+ Asia/Shanghai 时区注入
+- **测试**：23 测试 9 suites（FIFO 配对 10 case：空/多空 PnL/FIFO 顺序/部分平仓/跨多笔开仓/多合约隔离/手续费分摊/平今平昨强平识别/multiplier fallback + 8 图各自典型场景：跨月聚合/分布桶/胜率曲线 0.75/品种矩阵排序/持仓时间 median/最大回撤区间识别/盈亏比 ratio=2/4 时段聚合）
+- **代码质量**：code-simplifier 1 轮过审 · 净 -1 行（closeSide switch 编译器穷尽校验 / pnlBeforeFees 直接 switch 删 IIFE / pnlDistribution 单遍统计省 2×O(N) 扫描 / 显性注释）
+
+**留给后续 UI WP（Mac 切机）**：8 图 SwiftUI/Metal 渲染（折线 / 柱状 / 直方 / 矩阵热图）· 时段分析配 TradingCalendar 完整集合竞价支持 · 年度/季度切换聚合
+**留给 v2**：分布直方支持自适应 binSize（基于 IQR）· 持仓时间支持自定义桶 · 复合指标（夏普 / Sortino / Calmar）· 标签维度交叉分析（按 JournalEmotion / JournalDeviation 切片）
+**禁做**：✅ 数据计算层不 import SwiftUI/AppKit/Charts · ✅ 金额必须 Decimal 不用 Double（精度）· ✅ FIFO 配对手续费按手数比例分摊（不直接累加全额）· ✅ 单 trade 拆多 ClosedPosition（不强行合并）
 
 ### ✅ WP-51 · K 线回放（数据模型层 v1）
 - **时点**：M4

@@ -29,7 +29,11 @@ public final class SinaMarketData: @unchecked Sendable {
         request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
 
         let (data, _) = try await self.urlSessionData(for: request)
-        guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) else {
+        // Sina 报价端点返回 GBK 编码（中文字段如 "螺纹钢"）
+        // Linux corelibs-foundation 不直接支持 GBK；用 isoLatin1 兜底
+        // —— 中文字段会是乱码，但数字字段（价格 / 量 / 持仓）保持正确，业务不受影响
+        guard let text = String(data: data, encoding: .utf8)
+                ?? String(data: data, encoding: .isoLatin1) else {
             throw SinaAPIError.decodingFailed
         }
 

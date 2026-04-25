@@ -64,6 +64,14 @@ let package = Package(
         // MARK: - TradingCore · CTP 下单与条件单（Legacy TradingEngine/ConditionalOrder 迁入）
         // Stage A 不激活到 App；Stage B WP-220 起使用
         .target(name: "TradingCore", dependencies: ["Shared", "DataCore"], path: "Sources/TradingCore"),
-        .testTarget(name: "TradingCoreTests", dependencies: ["TradingCore"], path: "Tests/TradingCoreTests")
+        .testTarget(name: "TradingCoreTests", dependencies: ["TradingCore"], path: "Tests/TradingCoreTests"),
+
+        // MARK: - Tools · 命令行验证工具（非生产代码，CI 可跳过）
+        // SinaTickDemo · WP-31a 真网络回归（拉 RB0/IF0/AU0/CU0 实时报价 30s）
+        .executableTarget(
+            name: "SinaTickDemo",
+            dependencies: ["Shared", "DataCore"],
+            path: "Tools/SinaTickDemo"
+        )
     ]
 )

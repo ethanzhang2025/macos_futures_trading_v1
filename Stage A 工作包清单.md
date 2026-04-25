@@ -29,7 +29,7 @@
 | E2 | 团队与治理 | 4 | M1 | 0/4 |
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
-| E5 | 产品 · 图表与指标 | 5 | M2-M3 | **4/5** |
+| E5 | 产品 · 图表与指标 | 5 | M2-M3 | **5/5**（除 WP-40 Metal 引擎留 Mac）|
 | E6 | 产品 · 工作流功能 | 6 | M3-M5 | 0/6 |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
 | E8 | 后端与基础设施 | 5 | M1-M6 | 0/5 |
@@ -304,12 +304,21 @@
 **留给后续 WP**：拖拽 UI（SwiftUI/AppKit DnD）· 实际 CloudKit 同步（A12 M7-M9：CKContainer/CKSubscription/冲突合并）· 本地持久化层（SQLite/JSON 文件，归 WP-19 数据持久化）
 **禁做**：✅ 数据模型层不 import SwiftUI/AppKit/CloudKit（Sources/Shared 跨端层）· ✅ 不只存 UI 截图式快照，存结构化数据
 
-### ⬜ WP-44 · 多周期切换 + 多窗口布局
+### ✅ WP-44 · 多周期切换 + 多窗口布局（数据模型层 v1）
 - **时点**：M2-M3
 - **负责**：你
 - **交付**：9 个周期快捷切换、最多 6 窗口同屏、键盘快捷键全覆盖
 - **DoD**：窗口布局保存到工作区模板（WP-55）
 - **锚点**：D2 §2、D1 §3 原则 5 键盘一等
+
+**已交付**（Sources/Shared/Workspaces/）：
+- **PeriodSwitcher**（`PeriodSwitcher.swift`）：default9Periods（1m/5m/15m/30m/1h/4h/日/周/月）+ defaultShortcut(for:) → Cmd+1~9 + period(forShortcut:) 反查 + defaultShortcutMap 一次性注册集 · digitKeyCodes 数组硬编码 Apple HID Usage 顺序（1-9 keyCode 不连续）· 数据层只承担"映射数据"，UI 层负责实际键盘事件绑定
+- **WindowGridPreset**（`WindowGrid.swift`）：6 网格预设（single / horizontal2 / vertical2 / grid2x2 / grid2x3 / grid3x2）· dimensions 单一信息源（rows × cols 派生 maxWindows）· layout(forWindowCount:) 返回 0..1 归一化 LayoutFrame（先列后行）· applyTo([WindowLayout]) 替换 frame 保留其他字段 · 多余窗口自动截断
+- **测试**：22 测试 4 suites（PeriodSwitcher 8 case：9 周期顺序/Cmd 边界/非默认 nil/反查/modifier 校验/正反查闭环 + WindowGridPreset 14 case：6 case 全枚举/maxWindows/dimensions/各预设布局/边界 0/负数/超出 max/applyTo 三 case）
+- **代码质量**：code-simplifier 1 轮过审 · 净 -7 行（maxWindows 由 dimensions 派生，单一信息源）
+
+**留给后续 UI WP**：实际键盘事件绑定（NSEvent 监听 + 触发周期切换）· 多窗口同屏渲染（SwiftUI/AppKit 多 NSWindow + frame 桥接 CGRect）· 窗口拖拽 + 调整大小（与 WP-40 Metal 图表协作）· 网格预设切换动画
+**禁做**：✅ 数据模型层不 import SwiftUI/AppKit/CoreGraphics · ✅ 不实际绑定键盘事件 · ✅ 不算具体像素尺寸（只算 0..1 归一化）
 
 ---
 

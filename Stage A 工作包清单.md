@@ -278,11 +278,20 @@
 - **DoD**：原 Legacy 11 个测试全绿 + CI 跑通
 - **锚点**：Legacy迁移融合方案.md §4 Week 1-2
 
-### 🟨 WP-31 · 参考改动 Legacy 3 大模块 · 部分完成 2026-04-24 · commit 871d950
+### 🟨 WP-31 · 参考改动 Legacy 3 大模块 · 部分完成 · commits 871d950 / 80dc6e2 / WP-31a
 
-**本次（2026-04-24）已做**：MarketData → MarketDataProvider 协议抽象 + Legacy SinaMarketData 适配 HistoricalKLineProvider + MockMarketDataProvider 测试载体 + 6 合约测试
+**已做**：
+- **2026-04-24（WP-31 v1）**：MarketData → MarketDataProvider 协议抽象 + Legacy SinaMarketData 适配 HistoricalKLineProvider + MockMarketDataProvider 测试载体 + 6 合约测试
+- **2026-04-25（WP-31a · Sina 实时推送适配 ✅）**：
+  - `SinaQuoteFetching` 协议（fetchQuotes 抽象，便于测试注入 stub）
+  - `SinaQuoteToTick` 转换（5 档盘口补 0 / 缺失字段兜底 / tradingDay 时间注入）
+  - `SinaMarketDataProvider` actor 实现 `MarketDataProvider`（actor 不持 Task / pollOnce 外置驱动 / 失败上报状态机）
+  - `SinaPollingDriver` 持续轮询驱动器（production 用，默认 3s 间隔）
+  - `UnifiedDataSource.realtime` 解耦：`SimulatedMarketDataProvider` → `any MarketDataProvider`（向后兼容）
+  - 22 新测试 / 5 新 suite · Linux swift test 433/117 → **455/122 全绿**
+  - **战略意义**：Stage A M1-M3 PoC 阶段不再需要 SimNow / Mac 切机器，11/12 WP 可在 Linux 跑真实合约数据（如 RB0/IF0/AU0）；SimNow 推迟到 M3-M4 配套 WP-54 模拟训练；实盘 CTP 推迟到 M5+
 
-**留到对应 WP**：ContractManager CTP 适配（WP-21 CTP 数据到位后做）· KLineChartView 拆分（WP-40 Metal 图表主体工作）
+**留到对应 WP**：ContractManager CTP 适配（WP-21b SimNow 真接入推迟 M3-M4）· KLineChartView 拆分（WP-40 Metal 图表主体工作）
 - **时点**：M2-M3（Legacy 方案 Week 3-5）
 - **负责**：你
 - **模块**：MarketData / ContractManager / KLineChartView（985 行拆分 + Metal 重写）

@@ -127,15 +127,82 @@ public struct TradingCalendar: Sendable {
 
     /// 判断Tick的交易日归属
     /// 夜盘的Tick属于下一个交易日
+    /// - Note: 实际生产中应直接使用 CTP 提供的 tradingDay 字段（CTP 已含节假日数据）；
+    ///         本函数仅供 PoC 验证 / 离线数据回放归属计算
     public static func tradingDay(actionDay: String, updateTime: String) -> String {
-        // 如果时间在20:00之后，说明是夜盘，交易日是actionDay的下一个交易日
-        // CTP会直接在tradingDay字段给出正确值，这里作为验证逻辑
         guard let hour = Int(updateTime.prefix(2)) else { return actionDay }
-        if hour >= 20 {
-            // 夜盘，tradingDay应该是下一个交易日
-            // 实际使用CTP给出的tradingDay字段即可
-            return actionDay
-        }
+        return expectedTradingDay(actionDay: actionDay, hour: hour)
+    }
+
+    // MARK: - WP-21a 子模块 5 · 夜盘归属 + 周末跳过
+
+    /// 计算 Tick 的预期交易日归属（夜盘归属下一工作日）
+    /// 边界规则：
+    /// - actionDay 20:00 之后（夜盘开始） → tradingDay = nextWeekday(actionDay)
+    /// - actionDay 03:00 之前（凌晨夜盘） → tradingDay = actionDay（CTP 在跨日时已把 actionDay 设为次日自然日，本日凌晨的 tradingDay 等于 actionDay 本身）
+    /// - 其他时段（日盘） → tradingDay = actionDay
+    /// - Parameters:
+    ///   - actionDay: 自然日 YYYYMMDD（CTP Tick 的 actionDay 字段）
+    ///   - hour: 0-23
+    /// - Note: 不含节假日表（v2 接 JSON），仅跳周末
+    public static func expectedTradingDay(actionDay: String, hour: Int) -> String {
+        if hour < 3 { return actionDay }
+        if hour >= 20 { return nextWeekday(after: actionDay) }
         return actionDay
+    }
+
+    /// 判断给定日期是否是周末
+    /// - Parameter actionDay: YYYYMMDD 格式
+    /// - Returns: 解析失败返回 false
+    public static func isWeekend(actionDay: String) -> Bool {
+        guard let date = parseDate(actionDay) else { return false }
+        return isWeekendDate(date, calendar: chinaCalendar)
+    }
+
+    /// 返回 actionDay 之后下一个非周末日（不含节假日表）
+    /// - Parameter actionDay: YYYYMMDD 格式
+    /// - Returns: 下一个非周末的 YYYYMMDD；解析失败返回原值
+    public static func nextWeekday(after actionDay: String) -> String {
+        guard let date = parseDate(actionDay) else { return actionDay }
+        let calendar = chinaCalendar
+        guard var next = calendar.date(byAdding: .day, value: 1, to: date) else { return actionDay }
+        while isWeekendDate(next, calendar: calendar) {
+            guard let advanced = calendar.date(byAdding: .day, value: 1, to: next) else { break }
+            next = advanced
+        }
+        return formatDate(next)
+    }
+
+    // MARK: - 私有：日期解析（不依赖 DateFormatter，避免 Sendable 顾虑 + 性能开销）
+
+    private static let chinaTimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+
+    private static let chinaCalendar: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = chinaTimeZone
+        return c
+    }()
+
+    private static func parseDate(_ yyyymmdd: String) -> Date? {
+        guard yyyymmdd.count == 8,
+              let year = Int(yyyymmdd.prefix(4)),
+              let month = Int(yyyymmdd.dropFirst(4).prefix(2)),
+              let day = Int(yyyymmdd.suffix(2))
+        else { return nil }
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return chinaCalendar.date(from: components)
+    }
+
+    private static func formatDate(_ date: Date) -> String {
+        let c = chinaCalendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d%02d%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    private static func isWeekendDate(_ date: Date, calendar: Calendar) -> Bool {
+        let weekday = calendar.component(.weekday, from: date)
+        return weekday == 1 || weekday == 7  // 1 = Sunday, 7 = Saturday
     }
 }

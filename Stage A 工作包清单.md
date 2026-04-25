@@ -27,7 +27,7 @@
 |------|------|------|-------|------|
 | E1 | 合规与法律 | 5 | M1 / M5 | 0/5 |
 | E2 | 团队与治理 | 4 | M1 | 0/4 |
-| E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
+| E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **2/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
 | E5 | 产品 · 图表与指标 | 5 | M2-M3 | **5/5**（除 WP-40 Metal 引擎留 Mac）|
 | E6 | 产品 · 工作流功能 | 6 | M3-M5 | **4/6** |
@@ -178,14 +178,37 @@
 - **DoD**：产品清单一次定稿，M2 起不再随意扩
 - **锚点**：D2 §7 Week 4
 
-### ⬜ WP-23 · Feature Flag 基础设施
+### ✅ WP-23 · Feature Flag 基础设施（v1）
 - **时点**：M2 Week 5
 - **负责**：你
 - **工作量**：约 1 天
 - **交付**：UserDefaults 本地 flag + 远程 JSON 配置读取
 - **DoD**：可通过远程 JSON 动态开关任一功能
 - **禁做**：不在业务层散落 `if flag.xxx` 判断，统一由门控服务读取
-- **锚点**：D2 §2 设计原则
+- **锚点**：D2 §2 设计原则、ChatGPT A01
+
+**已交付**（Sources/Shared/FeatureFlags/）：
+- **FeatureFlag enum**（`FeatureFlag.swift`）：11 个 flag 分 5 命名空间（subscription / import / replay+review / alert / experimental）+ rawValue 与远程 JSON key 对齐（点号分隔）+ defaultValue（已实现功能默认开 / 商业化+实验性默认关）+ namespace 自动派生
+- **Store + Service 体系**（`FeatureFlagService.swift`）：FeatureFlagStore 协议 + 4 实现：
+  - InMemoryFlagStore actor（测试驱动）
+  - UserDefaultsFlagStore struct @unchecked Sendable（本地 override，自定义 keyPrefix 防冲突）
+  - RemoteJSONFlagStore actor（fetcher 闭包注入便于测试不依赖 URLSession，refresh 失败保留缓存，lastFetched 时间戳）
+  - CompositeFlagStore（按顺序优先级链 短路返回）
+  - FeatureFlagService actor（业务唯一入口 D2 §2 落实，isEnabled 用 ?? 兜底，snapshot 全量查询，makeDefault 默认装配）
+- **测试**：18 测试 6 suites（FeatureFlag 默认值 + namespace + Codable / InMemory CRUD / UserDefaults 隔离 suite + key 命名 / Remote refresh 成功+失败+lastFetched / Composite 3 层优先级链 / Service store 命中+miss 用默认值+snapshot+完整链路集成）
+- **代码质量**：code-simplifier 1 轮过审 · 净 -1 行（isEnabled 用 ?? 替代 if let 兜底，更直白表达优先级链语义）
+
+**留给后续 WP**：
+- 远程 fetcher 接 URLSession 真实 endpoint（需阿里云配置 + 后端 WP-80 提供 JSON）
+- UI 设置面板（开发调试用 / Mac SwiftUI）
+- 灰度发布按 Cohort 分配（v2，需后端 ID 哈希）
+- A/B 测试桩（v2，需事件埋点 WP-87）
+
+**禁做项**（已落实）：
+- ✅ 业务层 import Shared 后只调 service.isEnabled(_:)，不直接读 store / UserDefaults / JSON
+- ✅ 数据模型层不 import SwiftUI/AppKit
+- ✅ 远程 JSON 不依赖第三方库（用闭包注入解耦 URLSession）
+- ✅ UserDefaults 内部线程安全（@unchecked Sendable + 注释说明）
 
 ### ✅ WP-24 · Swift Package 模块骨架（源自 ChatGPT A01）· 完成 2026-04-24 · commit b1805e1
 - **时点**：M1 Week 2-3（与 PoC 同期启动）

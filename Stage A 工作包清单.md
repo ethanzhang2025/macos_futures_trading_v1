@@ -30,7 +30,7 @@
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
 | E5 | 产品 · 图表与指标 | 5 | M2-M3 | **5/5**（除 WP-40 Metal 引擎留 Mac）|
-| E6 | 产品 · 工作流功能 | 6 | M3-M5 | **1/6** |
+| E6 | 产品 · 工作流功能 | 6 | M3-M5 | **2/6** |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
 | E8 | 后端与基础设施 | 5 | M1-M6 | 0/5 |
 | E9 | 商业化与支付 | **7** | M3-M6 | 0/7 |
@@ -332,12 +332,21 @@
 - **DoD**：8 图均可从交割单 CSV 生成
 - **锚点**：D2 §2、产品设计书 §3.1 模块④
 
-### ⬜ WP-51 · K 线回放（沉浸式复盘）
+### ✅ WP-51 · K 线回放（数据模型层 v1）
 - **时点**：M4
 - **负责**：你
 - **交付**：历史日期+品种选择、回放控制（播放/暂停/2x-8x 加速/倒退/单步）、当日成交点叠加
 - **DoD**：任意合约任意日期均可回放、帧率稳定
-- **锚点**：D2 §2、产品设计书 §3.1 模块⑤
+- **锚点**：D2 §2、产品设计书 §3.1 模块⑤、ChatGPT A07
+
+**已交付**（Sources/ReplayCore/）：
+- **ReplayPlayerTypes**（`ReplayPlayerTypes.swift`）：ReplaySpeed 5 档（x05/x1/x2/x4/x8 + multiplier）+ ReplayState 3 态（stopped/playing/paused）+ ReplayDirection（forward/backward）+ ReplayCursor（currentIndex/totalCount/progress/isAtEnd/isAtStart）+ ReplayUpdate 4 case（barEmitted/stateChanged/seekFinished/tradeMarks）+ TradeMarkSide（buy/sell）+ TradeMark（id/instrumentID/time/price/side/volume）
+- **ReplayPlayer**（`ReplayPlayer.swift`）：actor 包装 + load(bars:tradeMarks:) 自动按 openTime 升序 + play/pause/stop（仅在 playing 时 pause；stop 重置 cursor）+ stepForward(count:)/stepBackward(count:) 边界 clamp + 实际推进数返回 + 末尾 stepForward 自动 paused（A07 验收）+ seek(to:) clamp + emit seekFinished 不 emit bar + setSpeed/setDirection 配置 + cursor/currentBar/currentState 查询 + tradeMarksAtCurrentBar 时间窗 [openTime, nextOpen)（最后一根用 .distantFuture 开放右边界）+ AsyncStream<ReplayUpdate> 多订阅者 + broadcast helper DRY + pauseIfPlayingAtEnd helper 自动暂停语义集中
+- **测试**：23 测试 8 suites（ReplaySpeed/Cursor/TradeMark Codable + 加载（空/N/乱序）+ 状态转移（play 需 loaded/pause 仅 playing/stop 重置）+ 步进（默认 1/N/末尾 clamp/末尾继续 0/起点 clamp）+ seek（指定/越界/当前 noop）+ speed/direction 设置 + AsyncStream 推送序列 + seek 推 seekFinished + TradeMark 时间窗（含 openTime 边界 + 不同 instrument 不串线））
+- **代码质量**：code-simplifier 1 轮过审 · 净 -7 行 DRY（broadcast helper 消除 3 处订阅者遍历重复 + pauseIfPlayingAtEnd 集中"playing 末尾必 paused"语义）
+
+**留给后续 UI WP**：回放控制栏 UI（播放/暂停按钮 / 速度滑块 / 进度条）· Timer 驱动器（按 ReplaySpeed.multiplier 决定调用 stepForward 频率，60fps DisplayLink）· 成交点叠加层（SwiftUI/Metal 渲染，复用图表代码）· 实时↔回放数据源切换（UnifiedDataSource 注入 ReplayPlayer 适配器）· CSV 历史数据导入
+**禁做**：✅ A07 不为回放复制图表代码（提供 KLine 流，UnifiedDataSource 切换数据源）· ✅ 数据模型层不持有 Timer/Task（时间外置）· ✅ 不 import SwiftUI/AppKit/CoreGraphics
 
 ### ✅ WP-52 · 条件预警中心（数据模型层 v1）
 - **时点**：M4

@@ -90,6 +90,12 @@ let package = Package(
             name: "AlertSmokeDemo",
             dependencies: ["Shared", "DataCore", "AlertCore"],
             path: "Tools/AlertSmokeDemo"
+        ),
+        // ReplaySmokeDemo · WP-51 K 线回放真数据冒烟（Sina 50 根 RB0 K 线 → 60x 回放 + 暂停/倒退/速度切换）
+        .executableTarget(
+            name: "ReplaySmokeDemo",
+            dependencies: ["Shared", "DataCore", "ReplayCore"],
+            path: "Tools/ReplaySmokeDemo"
         )
     ]
 )

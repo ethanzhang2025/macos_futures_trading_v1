@@ -29,8 +29,20 @@ let package = Package(
     ],
     dependencies: [],
     targets: [
+        // MARK: - CSQLite · 系统 SQLite3 C API（WP-19a 数据持久化基础）
+        // Linux: 需 libsqlite3-dev；macOS / iOS: 系统自带
+        .systemLibrary(
+            name: "CSQLite",
+            path: "Sources/CSQLite",
+            pkgConfig: "sqlite3",
+            providers: [
+                .apt(["libsqlite3-dev"]),
+                .brew(["sqlite3"])
+            ]
+        ),
+
         // MARK: - Shared · 跨端共用的模型 / 协议 / 工具
-        .target(name: "Shared", path: "Sources/Shared"),
+        .target(name: "Shared", dependencies: ["CSQLite"], path: "Sources/Shared"),
         .testTarget(name: "SharedTests", dependencies: ["Shared"], path: "Tests/SharedTests"),
 
         // MARK: - DataCore · Tick / K 线 / 合约 / 数据源协议

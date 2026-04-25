@@ -139,7 +139,7 @@
 - **DoD**：实测 10 万根 60fps 通过、延迟 <16ms
 - **锚点**：D2 §7 Week 2-3、产品设计书 §3.4 性能基准
 
-### ⬜ WP-21 · CTP SimNow 行情订阅 PoC + 数据管线
+### 🟨 WP-21 · CTP SimNow 行情订阅 PoC + 数据管线（21a Linux 子集完成）
 - **时点**：M1 Week 2-3
 - **负责**：你
 - **依赖**：SimNow 账号（免费申请）
@@ -150,6 +150,21 @@
   - ❌ 不先上复杂消息总线（Stage A 单机够用）
   - ❌ 不把多合约订阅串线（必须 contract-id 明确隔离）
 - **锚点**：D2 §7 Week 2-3、§4 技术栈、ChatGPT A02
+
+**分阶段策略**（Linux 全验子集 + Mac 真接入）：
+- **WP-21a** Linux 全验子集（无真 CTP 库依赖；本会话推进中）
+- **WP-21b** Mac 真 CTP 接入（D2 §4 Obj-C++ 桥接路线，留待 Mac 切机）
+
+**WP-21a 已交付**（Sources/DataCore/MarketData/）：
+- **断线重连**（`Connection/`）：BackoffPolicy 协议 + ExponentialBackoff（指数退避 + cap + ±jitter + RNG 注入便于测试）+ NoBackoff · ConnectionStateMachine actor（纯状态机：状态转移 + attempt 计数 + AsyncStream 多订阅者推送，不持有 Task / 不主动 sleep / 时间外置 → 测试 100% 确定性）+ reset/reportConnecting/reportConnected/reportDisconnected/reportConnectionLost/reportError 6 事件
+- **行情模拟 provider**（`Simulated/SimulatedMarketDataProvider.swift`）：actor 实现 MarketDataProvider 协议 + 集成 ConnectionStateMachine + connect/disconnect/simulateConnectionLost/simulateError/push/pushBatch/subscriberCount/isSubscribed · 多合约严格隔离（push 按 instrumentID 精确分发，未订阅静默丢弃）· production-ready 用作 SwiftUI demo 数据源 + 集成测试 fixture + WP-21b 真 CTP 实现的契约参考
+- **测试**：28 测试 8 suites（退避序列/cap/jitter 范围 / 状态转移完备性 / AsyncStream 多订阅者 / 多合约隔离 / 故障注入 + 状态机集成）
+- **代码质量**：code-simplifier 1 轮过审 0 改动（教科书式 fail-fast precondition + actor weak self + 职责单一）
+- **commit**: 待 commit
+
+**WP-21a 留给后续 WP-21a 推进**：KLineCacheStore（启动时优先恢复）/ UnifiedDataSource Facade（组装 historical + realtime + cache + reconnect）/ TradingCalendar 完善（夜盘日盘分界 case 验证）/ 数据管线时序图 docs
+
+**WP-21b 留给 Mac 切机器**：CTP Obj-C++ 桥接层 / CTPMarketDataProvider Swift 实现（替换 SimulatedMarketDataProvider 成为生产数据源）/ SimNow 账号实测 / SwiftUI demo 显示
 
 ### ⬜ WP-22 · PoC 结果评估 + MVP 清单锁死
 - **时点**：M1 Week 4

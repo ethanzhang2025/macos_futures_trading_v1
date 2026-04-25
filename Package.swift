@@ -108,6 +108,12 @@ let package = Package(
             name: "ReplaySmokeDemo",
             dependencies: ["Shared", "DataCore", "ReplayCore"],
             path: "Tools/ReplaySmokeDemo"
+        ),
+        // MultiPeriodKLineDemo · Sina tick → KLineBuilder 多周期实时合成（1m/3m/5m/15m 同步）
+        .executableTarget(
+            name: "MultiPeriodKLineDemo",
+            dependencies: ["Shared", "DataCore"],
+            path: "Tools/MultiPeriodKLineDemo"
         )
     ]
 )

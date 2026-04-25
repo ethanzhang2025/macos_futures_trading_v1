@@ -29,7 +29,7 @@
 | E2 | 团队与治理 | 4 | M1 | 0/4 |
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
-| E5 | 产品 · 图表与指标 | 5 | M2-M3 | **3/5** |
+| E5 | 产品 · 图表与指标 | 5 | M2-M3 | **4/5** |
 | E6 | 产品 · 工作流功能 | 6 | M3-M5 | 0/6 |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
 | E8 | 后端与基础设施 | 5 | M1-M6 | 0/5 |
@@ -337,12 +337,17 @@
 - **DoD**：模拟盘下单、成交、持仓、结算链路走通
 - **锚点**：D2 §2、产品设计书 §3.1 模块⑧
 
-### ⬜ WP-55 · 工作区模板
+### ✅ WP-55 · 工作区模板（数据模型层 v1）
 - **时点**：M3
 - **负责**：你
 - **交付**：多窗口布局保存、多套模板快速切换（盘前/盘中/盘后）、快捷键一键切换、CloudKit 同步
 - **DoD**：3+ 模板可保存 / 切换无闪烁
 - **锚点**：D2 §2、产品设计书 §3.1 模块⑨
+
+**已交付**（Sources/Shared/Workspaces/）：LayoutFrame（跨端 Rect · 避开 CGRect）+ WorkspaceShortcut（keyCode/modifierFlags 数据表示，不绑定平台键码常量）+ WindowLayout（id/instrumentID/period/indicatorIDs/drawingIDs/frame/zIndex · 引用 WP-42 Drawing UUID）+ WorkspaceTemplate.Kind 4 种（preMarket/inMarket/postMarket/custom）+ WorkspaceTemplate（id/name/kind/windows/shortcut/sortIndex/timestamps）+ WorkspaceBook 聚合根（templates/activeTemplateID + addTemplate/renameTemplate/removeTemplate/duplicateTemplate（深拷贝 windows · 不复制快捷键）/moveTemplate/setActive/updateTemplate（保留 id/sortIndex/createdAt 刷新 updatedAt）/setShortcut（全局唯一性强制：抢占清空旧绑定）+ 查询（template(id:)/templates(of:)/template(forShortcut:)）+ 通用 moveElement<T> 私有泛型函数（语义同 SwiftUI onMove，与 WP-43 同模式）· KLinePeriod Codable extension（rawValue: String 自动满足）· CloudKit 字段映射预埋（cloudKitRecordType/CloudKitField/cloudKitFields/init?(cloudKitRecordName:fields:) · windows 用 Codable JSON 嵌入 String 字段避免 CKReference 复杂性 · 不 import CloudKit · Linux 跨端兼容）· 29 测试 9 suites（LayoutFrame/WindowLayout/Template/Book CRUD/激活切换/快捷键唯一/查询/Codable 往返/CloudKit 字段往返）· code-simplifier 1 轮过审
+
+**留给后续 WP**：UI 切换动画 + 键盘绑定（NSEvent → WorkspaceShortcut 解析）+ CGRect 桥接 → 后续 UI WP；实际 CloudKit 同步（A12 M7-M9：CKContainer/CKSubscription/冲突合并）；本地持久化层（WP-19 SQLite/JSON）；多窗口同时渲染由 WP-44 + WP-40 联合实现
+**禁做**：✅ 数据模型层不 import SwiftUI/AppKit/CoreGraphics/CloudKit · ✅ 不只存 UI 截图式快照，存结构化 windows + frames · ✅ 不实际绑定键盘事件（数据层只存数据表示）
 
 ---
 

@@ -30,7 +30,7 @@
 | E3 | 技术 PoC 与架构基础 | **5** | M1-M2 | **1/5** |
 | E4 | Legacy 代码迁移 | 3 | M1-M3 | **1/3** |
 | E5 | 产品 · 图表与指标 | 5 | M2-M3 | **5/5**（除 WP-40 Metal 引擎留 Mac）|
-| E6 | 产品 · 工作流功能 | 6 | M3-M5 | 0/6 |
+| E6 | 产品 · 工作流功能 | 6 | M3-M5 | **1/6** |
 | E7 | 产品 · 多端与麦语言 | 5 | M7-M8 | 0/5 |
 | E8 | 后端与基础设施 | 5 | M1-M6 | 0/5 |
 | E9 | 商业化与支付 | **7** | M3-M6 | 0/7 |
@@ -339,12 +339,23 @@
 - **DoD**：任意合约任意日期均可回放、帧率稳定
 - **锚点**：D2 §2、产品设计书 §3.1 模块⑤
 
-### ⬜ WP-52 · 条件预警中心
+### ✅ WP-52 · 条件预警中心（数据模型层 v1）
 - **时点**：M4
 - **负责**：你
 - **交付**：价格预警 / 画线预警 / 波动率成交量异常、统一面板、通知渠道（App 内 / 通知中心 / 声音）、历史记录
 - **DoD**：3 类预警均可配置触发、无漏发
-- **锚点**：D2 §2、产品设计书 §3.1 模块⑥
+- **锚点**：D2 §2、产品设计书 §3.1 模块⑥、ChatGPT A08
+
+**已交付**（Sources/AlertCore/）：
+- **Alert 数据模型**（`Alert.swift`）：AlertCondition 6 类（priceAbove/Below/CrossAbove/CrossBelow + horizontalLineTouched + volumeSpike + priceMoveSpike）+ AlertStatus 4 态（active/triggered/paused/cancelled）+ NotificationChannelKind 3 渠道（inApp/systemNotice/sound）+ Alert struct（id/name/instrumentID/condition/status/channels/cooldownSeconds/timestamps）+ canTrigger(at:) 状态+冷却查询
+- **AlertHistory**（`AlertHistory.swift`）：AlertHistoryEntry struct（含 conditionSnapshot 触发瞬间快照）+ AlertHistoryStore 协议 + InMemoryAlertHistoryStore actor（按 triggeredAt 降序）
+- **NotificationChannel 统一层**（`NotificationChannel.swift`，A08 禁做项落实）：NotificationEvent + NotificationChannel 协议 + LoggingNotificationChannel（默认 + 注入 logger 便于测试）+ NotificationDispatcher actor（注册/移除/选择性广播；按 Alert.channels 过滤）
+- **AlertEvaluator**（`AlertEvaluator.swift`）：actor 包装 onTick(_:now:) 主驱动 + addAlert/removeAlert（联动清 history）/updateAlert（保留 lastTriggeredAt 不被覆盖）/pauseAlert/resumeAlert（仅 paused→active）+ 滑动窗口（volume capacity 1000 / price 时间 3600s）+ 频控冷却（A08 验收硬要求"边界不重复疯狂触发"）+ AsyncStream<AlertTriggeredEvent> 推送 + dispatcher 联动 + 时间外置 now 注入
+- **测试**：27 测试 9 suites（Alert 数据契约 + Codable / AlertHistory CRUD / NotificationChannel + Dispatcher 选择性广播 / Evaluator CRUD 含 updateAlert 保留频控 / 价格 6 子类含 cross 边界不重复 / 频控冷却 60s 边界 / volumeSpike 6 期均值倍数 / priceMoveSpike 时间窗口百分比 / 多 alert 多合约隔离 / removeAlert 联动 / 通知 dispatcher 联动选择性）
+- **代码质量**：code-simplifier 1 轮过审 · 净 -3 行（命名 tuple `outcome` / `abs(move)` / 删除 `.triggered → .active` 假动作 / averageVolume 窗口语义清晰化 / NotificationChannel 注入指引）
+
+**留给后续 UI WP**：实际通知通道（InAppOverlayChannel SwiftUI / SystemNoticeChannel UserNotifications / SoundChannel NSSound 留 Mac 切机）· 预警面板 UI（列表 + 编辑 + 启停按钮）· 画线预警 v2（趋势线/矩形/斐波那契接 DrawingGeometry，本 v1 仅 horizontalLine）· 后续 SQLite AlertHistoryStore（WP-19 数据持久化）
+**禁做**：✅ 通知发送逻辑统一在 NotificationChannel 层，不散落（A08 验收）· ✅ 数据模型层不 import SwiftUI/AppKit/UserNotifications · ✅ 不引入 print 散落生产路径（默认 logger 仅供测试）· ✅ 频控不依赖 wall-clock 真实时间（now 参数注入 → 100% 确定测试）
 
 ### ⬜ WP-53 · 交易日志（最强粘性）
 - **时点**：M5

@@ -164,13 +164,39 @@
 
 ## E3 · 技术 PoC 与架构基础
 
-### ⬜ WP-20 · Metal + SwiftUI K 线渲染 PoC
+### 🟨 WP-20 · Metal + SwiftUI K 线渲染 PoC（Linux 切机包 ✅ / Mac Metal 实现待）
 - **时点**：M1 Week 2-3
 - **负责**：你
 - **依赖**：Mac Studio + Xcode + Cursor/Claude 环境
 - **交付**：PoC demo（目标 10 万根 K 线 60fps + 滚动缩放流畅）
 - **DoD**：实测 10 万根 60fps 通过、延迟 <16ms
 - **锚点**：D2 §7 Week 2-3、产品设计书 §3.4 性能基准
+
+**Linux 切机包已交付**（v5.0+ · 2026-04-26）：
+- **`Sources/ChartCore/KLineRenderer.swift`**（~150 行 · Metal-agnostic 接口骨架）：
+  - `RenderViewport`（startIndex / visibleCount / priceRange · 含 panned/zoomed 操作）
+  - `RenderQuality`（balanced / high / ultra · M6 Pro 订阅可解锁 .ultra）
+  - `KLineRenderInput`（bars + indicators 预算好的 IndicatorSeries + viewport + quality · 渲染线程不算指标）
+  - `RenderStats`（lastFrameDuration / drawCallCount / visibleBarCount / droppedFrameCount · isHealthy60fps 判断）
+  - `KLineRenderer` 协议（quality / setQuality / render / lastStats · 全 async）
+  - `NoOpKLineRenderer` actor（测试占位 · 模拟 60fps stats · Linux 可跑）
+  - `RenderStats.frameBudget60fps` / `.healthyFrameTolerance` 命名常量
+- **`Tests/ChartCoreTests/KLineRendererTests.swift`**（+15 测试 +4 suite）：
+  - RenderViewport（4 测试 · 默认 clamp / panned / zoomed / Codable）
+  - RenderQuality（2 测试 · CaseIterable / rawValue）
+  - RenderStats（4 测试 · 默认 / 60fps 健康判断 3 档）
+  - NoOpKLineRenderer（5 测试 · setQuality / render 记录 / visible clamp / count 累加）
+- **`Docs/architecture/WP-20 Mac 切机指引.md`**：step-by-step 命令清单 · brew sqlcipher 安装 · 15 demo 验证 · MetalKLineRenderer 实施要点 + KLineShaders.metal 骨架 · 性能验收（10w K 60fps + Instruments 截图清单 5 项）· #if canImport(Metal) 包裹模式
+- **回归**：592/146 → **607/150 全绿**（基线维持 + 15 新测试）
+- **代码质量**：code-simplifier 1 轮过审 · 抽 frameBudget60fps + healthyFrameTolerance 命名常量
+
+**Mac 端待执行**（用户切到 `/Users/admin/...` 后实施 1-2 周）：
+- `brew install sqlcipher` 验证 Mac 端 6 store 加密层
+- 15 demo Mac 端跑通验证（swift run 各 demo 行为与 Linux 一致）
+- `Sources/ChartCore/Metal/MetalKLineRenderer.swift` 实现（actor + MTLDevice/CommandQueue/PipelineState）
+- `Sources/ChartCore/Metal/KLineShaders.metal` 顶点 + 片段 shader
+- `Sources/ChartCore/Bridging/KLineMetalView.swift`（NSViewRepresentable 包 MTKView）
+- 性能验收：1w K 60fps（PoC）→ 10w K 60fps（生死核心）+ Instruments 5 项截图
 
 ### 🟨 WP-21 · CTP SimNow 行情订阅 PoC + 数据管线（21a Linux 子集完成）
 - **时点**：M1 Week 2-3

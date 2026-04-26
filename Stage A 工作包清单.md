@@ -524,6 +524,16 @@
 **留给后续 UI WP**：实际通知通道（InAppOverlayChannel SwiftUI / SystemNoticeChannel UserNotifications / SoundChannel NSSound 留 Mac 切机）· 预警面板 UI（列表 + 编辑 + 启停按钮）· 画线预警 v2（趋势线/矩形/斐波那契接 DrawingGeometry，本 v1 仅 horizontalLine）· 后续 SQLite AlertHistoryStore（WP-19 数据持久化）
 **禁做**：✅ 通知发送逻辑统一在 NotificationChannel 层，不散落（A08 验收）· ✅ 数据模型层不 import SwiftUI/AppKit/UserNotifications · ✅ 不引入 print 散落生产路径（默认 logger 仅供测试）· ✅ 频控不依赖 wall-clock 真实时间（now 参数注入 → 100% 确定测试）
 
+**Linux 通道 v1 已交付**（v5.0+ · 2026-04-25）：
+- **NotificationChannelKind 扩展**：原 3 case（inApp/systemNotice/sound）+ 2 新 case（**console / file**）· rawValue 与 case 名对齐（向后兼容旧 JSON）
+- **`Sources/AlertCore/Channels/ConsoleChannel.swift`**：`struct` · stdout 调试通道 · 注入 prefix / timestampFormatter / writer · static let DateFormatter 复用（每次 send 不 alloc）
+- **`Sources/AlertCore/Channels/FileChannel.swift`**：`actor` · 本地文件追加日志 · FileHandle seekToEnd · 显式 close() · close 后 send 静默 noop · 跨实例打开同 path 追加不覆盖
+- **测试**：+12 测试 +4 suite（ConsoleChannel 3 / FileChannel 5 / Dispatcher 集成 2 / NotificationChannelKind 扩展 2）
+- **回归**：563/140 → **575/144 全绿**
+- **代码质量**：code-simplifier 1 轮过审 · 抽 static let timestampFormatter（与 SinaQuoteToTick / DealCSVParser 项目惯例一致）· actor 不能继承 / 跨文件 helper 不抽 · 无可改时明说
+- **流程修订**：本次开始严格执行 simplifier → build → test → run（一次到位）顺序，避免重复跑 build/test
+- **AlertCore 闭环**：NotificationDispatcher → LoggingChannel + **ConsoleChannel + FileChannel**（Linux 端通知通道 v1 完整）· macOS UserNotifications + NSSound 仍留 Mac 切机时做
+
 ### ✅ WP-53 · 交易日志（数据模型层 v1 · 最强粘性）
 - **时点**：M5
 - **负责**：你

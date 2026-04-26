@@ -646,8 +646,24 @@
     - withTransaction { } helper（KLine + Journal）· 列名常量（避免 SELECT 重复）· encodeJSON/decodeJSON 泛型 helper
     - INSERT OR REPLACE 保证 PRIMARY KEY 重复时覆盖（与 InMemory 去重语义一致）
   - **测试**：40 新测试 / 6 新 suite · Linux swift test 482/128 → **524/134 全绿**
+- **WP-19a-5/6 已交付**（v5.0+ · WatchlistBook + WorkspaceBook 持久化 · 6 store 闭环）：
+  - **新增 6 文件**：
+    - `Sources/Shared/Watchlists/WatchlistBookStore.swift`（协议 + InMemoryWatchlistBookStore + WatchlistBookStoreError）
+    - `Sources/Shared/Watchlists/Stores/SQLiteWatchlistBookStore.swift`（actor · 单表 watchlist_book id=1 单例 · JSON 整本存储 · UPSERT）
+    - `Sources/Shared/Workspaces/WorkspaceBookStore.swift`（协议 + InMemoryWorkspaceBookStore + WorkspaceBookStoreError）
+    - `Sources/Shared/Workspaces/Stores/SQLiteWorkspaceBookStore.swift`（actor · 单表 workspace_book · 含 templates/windows/shortcut JSON 嵌入）
+    - `Tests/SharedTests/WatchlistsTests/WatchlistBookStoreTests.swift`（11 测试 · InMemory 5 + SQLite 6 含 corrupt-JSON 检测）
+    - `Tests/SharedTests/WorkspacesTests/WorkspaceBookStoreTests.swift`（11 测试 · 双实现等价 + 跨进程持久化）
+  - **设计取舍**：
+    - 整本聚合根（Book）作为持久化单位（粒度匹配业务 · UI 启动 1 次 load）
+    - 单表 1 行 JSON（id=1 单例 · CHECK(id = 1) 约束保证）· UPSERT 整体覆盖
+    - 协议先 + 多实现并存（InMemory + SQLite · SQLCipher 留 WP-19b 接同协议）
+    - **脏 JSON 显式抛 decodeFailed**（不静默吞数据 · UI 层须感知数据损坏）
+  - **测试**：22 新测试 + 5 新 suite · Linux swift test 533/135 → **556/139 全绿**
+  - **6 store 闭环**：KLine + Journal + Alert + Analytics + **Watchlist + Workspace**（M5 SQLCipher 升级时一并加密）
+  - **代码质量**：code-simplifier 1 轮过审 · actor 不能继承 + JSON helper fileprivate 是项目惯例 · 无可消除重复 · 但识别出脏 JSON 静默吞数据 bug 顺手修复
 - **留待 WP-19b**（M3-M5）：
-  - SQLCipher 加密层（替换 SQLite library link · 接口零改动）
+  - SQLCipher 加密层（替换 SQLite library link · 接口零改动 · 6 store 一并升级）
   - 测试：加密往返 + 错误密钥拒绝
   - 可选：DBPool（多连接读 + 单连接写）/ schema 版本号 + 迁移脚本
 

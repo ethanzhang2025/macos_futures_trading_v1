@@ -144,6 +144,12 @@ let package = Package(
             name: "WatchlistWorkspacePersistDemo",
             dependencies: ["Shared"],
             path: "Tools/WatchlistWorkspacePersistDemo"
+        ),
+        // AlertHistorySmokeDemo · history(from:to:) 真数据 + 10000 条性能压测 + 索引命中对比
+        .executableTarget(
+            name: "AlertHistorySmokeDemo",
+            dependencies: ["Shared", "AlertCore"],
+            path: "Tools/AlertHistorySmokeDemo"
         )
     ]
 )

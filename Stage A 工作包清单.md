@@ -441,6 +441,31 @@
 
 ---
 
+### ✅ AlertHistory 时间区间查询真数据冒烟（v5.0+ · 第 12 个真数据 demo · 索引性能验证 54.5x）
+
+- **位置**：`Tools/AlertHistorySmokeDemo/main.swift` · `swift run AlertHistorySmokeDemo`（~20s 含 10000 条注入）
+- **拓扑**（5 段）：
+  - 段 1 · 注入 50 条历史（5 个 alertID 轮询 · 时刻分布 24h 内 · 每 28.8min 一条）
+  - 段 2 · 区间查询 3 档（最近 1h / 6h / 24h）
+  - 段 3 · 负向场景（from > to 返空 · 不抛错）
+  - 段 4 · 性能压测（10000 条注入 + 区间查询耗时）
+  - 段 5 · 索引命中对比（SQL BETWEEN + idx_alert_history_ts vs allHistory + Swift filter）
+- **真验证**（夜盘 2026-04-26 14:41）：
+  - 区间命中：1h=3 条 / 6h=13 条 / 24h=50 条 · 递增 ✅
+  - 注入 10000 条耗时：~17s（actor hop × 10000 next）· 单条 ~1.7ms
+  - 区间查询性能：1h=16ms / 6h=69ms / 24h=552ms（数据量越大耗时越多）
+  - **索引加速比 54.5x**（11.37ms vs 619.30ms · 同样取 1h 区间 417 条）✅
+  - 🎉 通过
+- **价值**：
+  - 验证 `idx_alert_history_ts` 索引在 SQLite 层真实生效（54.5x 不会撒谎）
+  - 确认 UI 历史面板"最近 7 天"等区间查询场景在万级数据下毫秒级响应
+  - 演示 Karpathy 第 4 要点"可验证成功标准"（性能数据替代主观判断）
+- **Swift 6 严格并发修复**：`timed<T: Sendable>(@Sendable () async throws -> T)` · 闭包跨 main actor 边界须 Sendable
+- **代码质量**：code-simplifier 1 轮过审 · 净 1 处简化（samples 抽常量消除 min(3, count) + prefix(3) 重复）
+- **回归**：586/145 swift test 全绿（基线维持）
+
+---
+
 ### ✅ Watchlist + Workspace 持久化端到端真数据冒烟（v5.0+ · 第 11 个真数据 demo · WP-19a-5/6 验收）
 
 - **位置**：`Tools/WatchlistWorkspacePersistDemo/main.swift` · `swift run WatchlistWorkspacePersistDemo`（~1s 纯本地）

@@ -358,3 +358,207 @@ struct UDSMultiInstrumentTests {
         await source.stopAll()
     }
 }
+
+// MARK: - v2 · 历史 K 线合并
+
+/// 测试 stub：可预设返回历史 K 线 / 注入失败
+private actor StubHistoricalProvider: HistoricalKLineProvider {
+    private var minutePayload: Result<[HistoricalKLine], Error> = .success([])
+    private var dailyPayload: Result<[HistoricalKLine], Error> = .success([])
+    private(set) var minuteCalls: [(symbol: String, interval: Int)] = []
+
+    func setMinute(_ result: Result<[HistoricalKLine], Error>) { minutePayload = result }
+    func setDaily(_ result: Result<[HistoricalKLine], Error>) { dailyPayload = result }
+
+    func historicalDaily(symbol: String) async throws -> [HistoricalKLine] {
+        switch dailyPayload {
+        case .success(let v): return v
+        case .failure(let e): throw e
+        }
+    }
+
+    func historicalMinute(symbol: String, intervalMinutes: Int) async throws -> [HistoricalKLine] {
+        minuteCalls.append((symbol: symbol, interval: intervalMinutes))
+        switch minutePayload {
+        case .success(let v): return v
+        case .failure(let e): throw e
+        }
+    }
+}
+
+private func hk(_ date: String, close: Decimal = 3500) -> HistoricalKLine {
+    HistoricalKLine(date: date, open: close, high: close, low: close, close: close, volume: 100, openInterest: 50)
+}
+
+@Suite("UnifiedDataSource v2 · 历史 K 线合并")
+struct UnifiedDataSourceHistoryMergeTests {
+
+    @Test("nil historical → 行为同 v1（snapshot 仅来自 cache）")
+    func nilHistoricalSameAsV1() async {
+        let cache = InMemoryKLineCacheStore()
+        let realtime = MockMarketDataProvider()
+        let source = UnifiedDataSource(cache: cache, realtime: realtime, historical: nil)
+        let stream = await source.start(instrumentID: "RB0", period: .hour1)
+
+        var iter = stream.makeAsyncIterator()
+        let first = await iter.next()
+        if case .snapshot(let bars) = first {
+            #expect(bars.isEmpty)  // cache 空 + 没注入 historical → 空
+        } else {
+            Issue.record("期望 snapshot")
+        }
+        await source.stopAll()
+    }
+
+    @Test("cache 空 + historical 3 根 → snapshot 3 根（按 openTime 升序）")
+    func emptyCachePlusHistorical() async {
+        let cache = InMemoryKLineCacheStore()
+        let realtime = MockMarketDataProvider()
+        let stub = StubHistoricalProvider()
+        await stub.setMinute(.success([
+            hk("2026-04-23 14:00:00", close: 3100),
+            hk("2026-04-23 15:00:00", close: 3110),
+            hk("2026-04-23 16:00:00", close: 3120)
+        ]))
+        let source = UnifiedDataSource(cache: cache, realtime: realtime, historical: stub)
+        let stream = await source.start(instrumentID: "RB0", period: .hour1)
+
+        var iter = stream.makeAsyncIterator()
+        if case .snapshot(let bars) = await iter.next() {
+            #expect(bars.count == 3)
+            #expect(bars[0].close == 3100)
+            #expect(bars[2].close == 3120)
+            #expect(bars[0].openTime < bars[1].openTime)
+            #expect(bars[1].openTime < bars[2].openTime)
+        } else {
+            Issue.record("期望 snapshot")
+        }
+        // 验证 historical fetcher 被调用（symbol + interval=60）
+        let calls = await stub.minuteCalls
+        #expect(calls.count == 1)
+        #expect(calls.first?.symbol == "RB0")
+        #expect(calls.first?.interval == 60)
+        await source.stopAll()
+    }
+
+    @Test("cache + historical 重叠 → cache 优先去重")
+    func overlapCachePreferred() async throws {
+        let cache = InMemoryKLineCacheStore()
+        // cache 有 1 根 14:00 close=9999（人为冲突值，测试是否被 cache 覆盖）
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        let cachedTime = f.date(from: "2026-04-23 14:00:00")!
+        let cachedKLine = KLine(
+            instrumentID: "RB0", period: .hour1, openTime: cachedTime,
+            open: 9999, high: 9999, low: 9999, close: 9999,
+            volume: 0, openInterest: 0, turnover: 0
+        )
+        try await cache.save([cachedKLine], instrumentID: "RB0", period: .hour1)
+
+        let realtime = MockMarketDataProvider()
+        let stub = StubHistoricalProvider()
+        await stub.setMinute(.success([
+            hk("2026-04-23 14:00:00", close: 3100),  // 与 cache 重叠
+            hk("2026-04-23 15:00:00", close: 3110)
+        ]))
+        let source = UnifiedDataSource(cache: cache, realtime: realtime, historical: stub)
+        let stream = await source.start(instrumentID: "RB0", period: .hour1)
+
+        var iter = stream.makeAsyncIterator()
+        if case .snapshot(let bars) = await iter.next() {
+            #expect(bars.count == 2)  // 去重后 2 根
+            // 14:00 应是 cache 的 9999，不是 historical 的 3100
+            let bar14 = bars.first { $0.openTime == cachedTime }
+            #expect(bar14?.close == 9999)
+        } else {
+            Issue.record("期望 snapshot")
+        }
+        await source.stopAll()
+    }
+
+    @Test("historical fetch 失败 → 静默回退到 cache（不阻断订阅）")
+    func historicalFetchFailureFallsBack() async {
+        let cache = InMemoryKLineCacheStore()
+        let realtime = MockMarketDataProvider()
+        let stub = StubHistoricalProvider()
+        await stub.setMinute(.failure(MarketDataError.providerError("network down")))
+        let source = UnifiedDataSource(cache: cache, realtime: realtime, historical: stub)
+        let stream = await source.start(instrumentID: "RB0", period: .hour1)
+
+        var iter = stream.makeAsyncIterator()
+        if case .snapshot(let bars) = await iter.next() {
+            #expect(bars.isEmpty)  // cache 也空 → 空数组而不是抛错
+        } else {
+            Issue.record("期望 snapshot 而非 stream 终止")
+        }
+        await source.stopAll()
+    }
+
+    @Test("不支持的 period（minute1）→ 不查 historical，回退到 cache")
+    func unsupportedPeriodSkipsHistorical() async {
+        let cache = InMemoryKLineCacheStore()
+        let realtime = MockMarketDataProvider()
+        let stub = StubHistoricalProvider()
+        await stub.setMinute(.success([hk("2026-04-23 14:00:00")]))  // 即使设了也不应被调用
+        let source = UnifiedDataSource(cache: cache, realtime: realtime, historical: stub)
+        let stream = await source.start(instrumentID: "RB0", period: .minute1)
+
+        var iter = stream.makeAsyncIterator()
+        if case .snapshot(let bars) = await iter.next() {
+            #expect(bars.isEmpty)
+        } else {
+            Issue.record("期望 snapshot")
+        }
+        // 不支持的 period 不应触发 historical fetch
+        let calls = await stub.minuteCalls
+        #expect(calls.isEmpty)
+        await source.stopAll()
+    }
+
+    @Test("cacheMaxBars 截尾应用到合并后的 snapshot")
+    func mergedSnapshotRespectsCacheMaxBars() async {
+        let cache = InMemoryKLineCacheStore()
+        let realtime = MockMarketDataProvider()
+        let stub = StubHistoricalProvider()
+        // 历史给 5 根，但 cacheMaxBars=3 → snapshot 只取最近 3 根
+        await stub.setMinute(.success([
+            hk("2026-04-23 11:00:00", close: 3100),
+            hk("2026-04-23 12:00:00", close: 3101),
+            hk("2026-04-23 13:00:00", close: 3102),
+            hk("2026-04-23 14:00:00", close: 3103),
+            hk("2026-04-23 15:00:00", close: 3104)
+        ]))
+        let source = UnifiedDataSource(cache: cache, realtime: realtime, historical: stub, cacheMaxBars: 3)
+        let stream = await source.start(instrumentID: "RB0", period: .hour1)
+
+        var iter = stream.makeAsyncIterator()
+        if case .snapshot(let bars) = await iter.next() {
+            #expect(bars.count == 3)
+            #expect(bars.first?.close == 3102)  // 截尾后保留最近 3 根
+            #expect(bars.last?.close == 3104)
+        } else {
+            Issue.record("期望 snapshot")
+        }
+        await source.stopAll()
+    }
+
+    @Test("interval 映射：minute5 → 5 / minute15 → 15 / hour1 → 60")
+    func intervalMinutesMapping() async {
+        let realtime = MockMarketDataProvider()
+        let stub = StubHistoricalProvider()
+        await stub.setMinute(.success([]))
+        let cache = InMemoryKLineCacheStore()
+        let source = UnifiedDataSource(cache: cache, realtime: realtime, historical: stub)
+
+        _ = await source.start(instrumentID: "RB0", period: .minute5)
+        _ = await source.start(instrumentID: "RB0", period: .minute15)
+        _ = await source.start(instrumentID: "RB0", period: .hour1)
+
+        let calls = await stub.minuteCalls
+        #expect(calls.count == 3)
+        #expect(calls.map(\.interval).sorted() == [5, 15, 60])
+        await source.stopAll()
+    }
+}

@@ -1,15 +1,20 @@
 // WP-21a 子模块 4 · 统一数据源 Facade
-// 组装 KLineCacheStore + MarketDataProvider + KLineBuilder，提供单一入口
+// 组装 KLineCacheStore + MarketDataProvider + (v2) HistoricalKLineProvider + KLineBuilder，提供单一入口
 //
 // 工作流：
 //   1. start(instrumentID:period:) → AsyncStream<DataSourceUpdate>
-//      a. 立即从 cache 加载并 yield .snapshot(cached)（启动不闪烁）
+//      a. 立即从 cache 加载（v1）+ 历史合并去重（v2 · 若注入了 historical provider）→ yield .snapshot(merged)
 //      b. 订阅实时 Tick → KLineBuilder 合成 → yield .completedBar(K)
 //      c. 完成的 K 线增量 append 到 cache（断电恢复友好）
 //   2. stop / stopAll：取消订阅 + 清理 builder + 关闭 stream
 //
-// v1 不做：
-//   - HistoricalKLineProvider 历史合并（HistoricalKLine vs KLine 类型适配留 v2）
+// v2 历史合并（本次新增）：
+//   - 注入 HistoricalKLineProvider（可选 · 默认 nil = 行为同 v1 仅 cache）
+//   - start 时拉历史 K + 与 cache 合并去重（cache 优先 · 经 KLineBuilder 严格合成）
+//   - fetch 失败静默回退到 cache（不阻断订阅启动）
+//   - 仅支持 KLinePeriod ∈ {minute5, minute15, hour1} + daily（Sina 历史 K 提供的周期）
+//
+// 仍不做：
 //   - 当前未完成 K 线推送（KLineBuilder 只在跨周期时返回完成 K 线）
 //   - Tick 级 emit（上层若需要走 MarketDataProvider 直接订阅）
 
@@ -31,6 +36,8 @@ public actor UnifiedDataSource {
 
     private let cache: KLineCacheStore
     private let realtime: any MarketDataProvider
+    /// v2 · 可选历史 K 线 provider（注入 → start 时合并；nil → 行为同 v1）
+    private let historical: (any HistoricalKLineProvider)?
     private let cacheMaxBars: Int
 
     // MARK: - 内部订阅状态
@@ -61,14 +68,19 @@ public actor UnifiedDataSource {
     ///     - Production：`SinaMarketDataProvider`（WP-31a 起生效）+ `SinaPollingDriver` 驱动
     ///     - Mock / 测试：`SimulatedMarketDataProvider`（WP-21a 已交付）/ `MockMarketDataProvider`
     ///     - Stage B：`CTPMarketDataProvider`（WP-220 真 CTP 接入）
+    ///   - historical: v2 历史 K 线 provider（可选 · nil = 行为同 v1 · 仅 cache 启动 snapshot）
+    ///     - Production：`SinaMarketData`（已通过 SinaMarketData+Provider 适配）
+    ///     - Stage B：`CTPHistoricalProvider`
     ///   - cacheMaxBars: 缓存上限（每 instrumentID + period）；0 = 不限
     public init(
         cache: KLineCacheStore,
         realtime: any MarketDataProvider,
+        historical: (any HistoricalKLineProvider)? = nil,
         cacheMaxBars: Int = 1000
     ) {
         self.cache = cache
         self.realtime = realtime
+        self.historical = historical
         self.cacheMaxBars = cacheMaxBars
     }
 
@@ -89,7 +101,9 @@ public actor UnifiedDataSource {
 
         // 2. 加载缓存快照（失败静默 → 空数组，不阻断订阅）
         let cached = (try? await cache.load(instrumentID: instrumentID, period: period)) ?? []
-        continuation.yield(.snapshot(cached))
+        // v2 · 历史合并：注入了 historical provider 时拉历史 K 与 cache 合并去重（cache 优先）
+        let merged = await loadHistorySnapshot(instrumentID: instrumentID, period: period, cache: cached)
+        continuation.yield(.snapshot(merged))
 
         // 3. 检查此 instrumentID 是否已经在 realtime 订阅中（决定是否注册 handler）
         let isFirstSubscriptionForInstrument = !subscriptions.keys.contains { $0.instrumentID == instrumentID }
@@ -167,5 +181,59 @@ public actor UnifiedDataSource {
         if !stillSubscribed, let token = realtimeTokens.removeValue(forKey: key.instrumentID) {
             await realtime.unsubscribe(key.instrumentID, token: token)
         }
+    }
+
+    // MARK: - v2 · 历史 K 线合并
+
+    /// 拉历史 K 与 cache 合并去重（cache 优先）；historical 不可用 / 失败 / 周期不支持 → 静默回退到 cache
+    private func loadHistorySnapshot(instrumentID: String, period: KLinePeriod, cache: [KLine]) async -> [KLine] {
+        guard let historical, let interval = Self.intervalMinutes(for: period) else { return cache }
+        guard let raw = try? await historical.historicalMinute(symbol: instrumentID, intervalMinutes: interval) else { return cache }
+        let historicalKLines = raw.compactMap { Self.toKLine($0, instrumentID: instrumentID, period: period) }
+        return Self.merge(historical: historicalKLines, cache: cache, maxBars: cacheMaxBars)
+    }
+
+    /// KLinePeriod → Sina 历史 K 周期分钟数（仅 5/15/60 三档；其他 period 返回 nil 回退到 cache）
+    private static func intervalMinutes(for period: KLinePeriod) -> Int? {
+        switch period {
+        case .minute5:  return 5
+        case .minute15: return 15
+        case .hour1:    return 60
+        default:        return nil
+        }
+    }
+
+    /// HistoricalKLine → KLine（按 Asia/Shanghai 解析 date 字符串）
+    private static func toKLine(_ h: HistoricalKLine, instrumentID: String, period: KLinePeriod) -> KLine? {
+        guard let openTime = parseHistoricalDate(h.date) else { return nil }
+        return KLine(
+            instrumentID: instrumentID, period: period, openTime: openTime,
+            open: h.open, high: h.high, low: h.low, close: h.close,
+            volume: h.volume, openInterest: Decimal(h.openInterest), turnover: 0
+        )
+    }
+
+    private static func parseHistoricalDate(_ s: String) -> Date? {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        for fmt in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd"] {
+            f.dateFormat = fmt
+            if let d = f.date(from: s) { return d }
+        }
+        return nil
+    }
+
+    /// 按 openTime 合并去重；cache 优先（cache 经 KLineBuilder 严格合成，比 historical 原始数据可靠）
+    /// 最终按 openTime 升序 + 截取最近 maxBars 根（maxBars=0 不截）
+    private static func merge(historical: [KLine], cache: [KLine], maxBars: Int) -> [KLine] {
+        var byTime: [Date: KLine] = [:]
+        for k in historical { byTime[k.openTime] = k }
+        for k in cache { byTime[k.openTime] = k }  // cache 覆盖 historical
+        let sorted = byTime.values.sorted { $0.openTime < $1.openTime }
+        if maxBars > 0, sorted.count > maxBars {
+            return Array(sorted.suffix(maxBars))
+        }
+        return sorted
     }
 }

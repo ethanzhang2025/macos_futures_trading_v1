@@ -387,6 +387,31 @@
 
 ---
 
+### ✅ UnifiedDataSource v2 · 历史 K 线合并（v5.0+ · cache + historical provider 启动合并去重）
+
+- **来源**：UDS v1 注释明确写"留 v2 做 HistoricalKLineProvider 历史合并"；UI 启动场景实战必备（开图表立刻看到完整历史 K + 实时合成最新一根）
+- **改动**：仅 `Sources/DataCore/DataSource/UnifiedDataSource.swift` 一文件
+- **已交付**：
+  - `init` 加 `historical: (any HistoricalKLineProvider)? = nil` 可选注入（默认 nil = 行为同 v1）
+  - `start` 内 `loadHistorySnapshot` helper：拉历史 K + 与 cache 合并去重 → yield 单次 `.snapshot(merged)`
+  - **合并语义**：按 openTime 字典键去重，**cache 优先**（cache 经 KLineBuilder 严格合成，比 historical 原始数据可靠）
+  - **失败静默回退**：historical fetch 失败 / 不支持的 period（仅 minute5/minute15/hour1）→ 不阻断启动，回退到仅 cache snapshot
+  - **支持 period**：minute5(=5min) / minute15(=15min) / hour1(=60min) · 对齐 Sina 历史 K 周期；其他 period 跳过 historical
+  - HistoricalKLine → KLine 转换：date 字符串 Asia/Shanghai 解析（3 种格式 fallback "yyyy-MM-dd HH:mm:ss" / "HH:mm" / "yyyy-MM-dd"）
+- **测试**：+7 测试 +1 suite（UnifiedDataSource v2 · 历史 K 线合并）
+  - nilHistoricalSameAsV1（v1 兼容）
+  - emptyCachePlusHistorical（cache 空时拉 historical）
+  - overlapCachePreferred（重叠 openTime · cache 优先）
+  - historicalFetchFailureFallsBack（fetch 失败静默回退）
+  - unsupportedPeriodSkipsHistorical（minute1 不查历史）
+  - mergedSnapshotRespectsCacheMaxBars（截尾应用合并后）
+  - intervalMinutesMapping（5/15/60 映射）
+- **回归**：556/139 → **563/140 全绿**（v1 已有 WP-44b/WP-44c 测试不破坏）
+- **代码质量**：code-simplifier 1 轮过审 · 确认无可改（4 个 static helper 单一职责 + double-guard 各承担一类回退）
+- **使用**：`UnifiedDataSource(cache: …, realtime: provider, historical: SinaMarketData())` · UI 层启动直接获得完整历史 + 实时拼接
+
+---
+
 ### ✅ WP-44c · MarketDataProvider 同合约多 handler 字典（端到端 demo 暴露问题修复）
 
 - **来源**：v5.0+ 端到端业务流 demo 暴露——同合约不能同时被 UnifiedDataSource + AlertEvaluator 订阅（原 `handlers[id] = handler` 字典覆盖语义）

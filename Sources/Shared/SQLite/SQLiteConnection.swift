@@ -17,6 +17,16 @@ public actor SQLiteConnection {
     /// 打开 / 创建数据库文件 · 自动创建上级目录
     /// - Parameter path: 文件路径；":memory:" 表示内存数据库（测试用）
     public init(path: String) throws {
+        try self.init(path: path, passphrase: nil)
+    }
+
+    /// WP-19b · 打开 / 创建加密数据库（SQLCipher）
+    /// - Parameters:
+    ///   - path: 文件路径；":memory:" 表示内存数据库（仍可加密 · 测试用）
+    ///   - passphrase: 加密密钥；nil 或空字符串 = 不加密（两者等价 · 行为同原生 SQLite · 向后兼容 6 store）
+    /// - Throws: openFailed（文件无法打开 / sqlite3_key 失败）
+    ///           execFailed（密钥错误时第一次访问 sqlite_master 触发 SQLITE_NOTADB）
+    public init(path: String, passphrase: String?) throws {
         if path != ":memory:" {
             let url = URL(fileURLWithPath: path).deletingLastPathComponent()
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -29,6 +39,30 @@ public actor SQLiteConnection {
             throw SQLiteError.openFailed(path: path, code: code, message: msg)
         }
         self.db = handle
+
+        // WP-19b · 应用 SQLCipher key（passphrase 为 nil/空时跳过 → 行为同原生 SQLite）
+        guard let passphrase, !passphrase.isEmpty else { return }
+
+        // 应用密钥
+        let keyCode = passphrase.withCString { cstr in
+            sqlite3_key(handle, cstr, Int32(strlen(cstr)))
+        }
+        if keyCode != SQLITE_OK {
+            let msg = String(cString: sqlite3_errmsg(handle))
+            sqlite3_close(handle)
+            self.db = nil
+            throw SQLiteError.openFailed(path: path, code: keyCode, message: "sqlite3_key failed: \(msg)")
+        }
+
+        // 触发对 sqlite_master 的访问以验证密钥是否正确（错误密钥读现有加密文件会在此抛 SQLITE_NOTADB）
+        // 对新建数据库这里只是轻量 noop（schema 还没初始化）· sqlite3_exec 单步够用
+        let verifyCode = sqlite3_exec(handle, "SELECT count(*) FROM sqlite_master;", nil, nil, nil)
+        if verifyCode != SQLITE_OK {
+            let msg = String(cString: sqlite3_errmsg(handle))
+            sqlite3_close(handle)
+            self.db = nil
+            throw SQLiteError.execFailed(sql: "(passphrase verify)", code: verifyCode, message: msg)
+        }
     }
 
     // 注意：Swift 6 严格并发禁止 nonisolated deinit 访问 actor 状态

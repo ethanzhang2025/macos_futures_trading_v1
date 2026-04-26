@@ -810,7 +810,7 @@
 - **DoD**：数据分层实现 + 两端同步验证 + 隐私政策对应更新
 - **锚点**：D2 §4、StageA补遗 G1、产品设计书 9.2
 
-### 🟨 WP-19 · 数据持久化 SQLCipher（19a 客户端 SQLite ✅ / 19b 加密待）
+### 🟨 WP-19 · 数据持久化 SQLCipher（19a 客户端 SQLite ✅ / 19a-5/6 ✅ / 19b 加密层 v1 ✅）
 - **时点**：M3-M5（M5 上线前必备 · 容量 + 加密双需求）
 - **负责**：你
 - **交付**：4 个 Store 升级到 SQLite + SQLCipher 加密层
@@ -850,10 +850,31 @@
   - **测试**：22 新测试 + 5 新 suite · Linux swift test 533/135 → **556/139 全绿**
   - **6 store 闭环**：KLine + Journal + Alert + Analytics + **Watchlist + Workspace**（M5 SQLCipher 升级时一并加密）
   - **代码质量**：code-simplifier 1 轮过审 · actor 不能继承 + JSON helper fileprivate 是项目惯例 · 无可消除重复 · 但识别出脏 JSON 静默吞数据 bug 顺手修复
-- **留待 WP-19b**（M3-M5）：
-  - SQLCipher 加密层（替换 SQLite library link · 接口零改动 · 6 store 一并升级）
-  - 测试：加密往返 + 错误密钥拒绝
-  - 可选：DBPool（多连接读 + 单连接写）/ schema 版本号 + 迁移脚本
+- **WP-19b 加密层 v1 已交付**（v5.0+ · 2026-04-26 · M5 实盘前刚性要求）：
+  - **CSQLite 切换 sqlite3 → sqlcipher**：
+    - `Sources/CSQLite/module.modulemap` link `sqlcipher`（替换 sqlite3）
+    - `Sources/CSQLite/shim.h` 加 `#define SQLITE_HAS_CODEC 1` + `#include <sqlcipher/sqlite3.h>`（必须定义此宏才暴露 sqlite3_key 符号）
+    - `Package.swift` CSQLite pkgConfig 改为 sqlcipher · providers 切 `apt(["libsqlcipher-dev"])` + `brew(["sqlcipher"])`
+    - drop-in 兼容：所有 SQLite3 API 行为完全一致（sqlcipher 是 sqlite3 fork + 加密扩展）
+  - **SQLiteConnection 加密接口**：
+    - 原 `init(path:)` 保留 → 内部委托 `init(path:passphrase: nil)`
+    - 新 `init(path: String, passphrase: String?) throws` · passphrase 非空时调 sqlite3_key + 验证 sqlite_master
+    - passphrase 为 nil 或空字符串 → 跳过加密路径，行为同原生 SQLite（向后兼容 6 store）
+    - 错误处理：sqlite3_key 失败 / 密钥不匹配 / 密钥访问 sqlite_master 失败时 → 关闭 handle + self.db = nil + throw
+  - **测试**：+6 测试 +1 suite（SQLiteConnection · WP-19b 加密层）：
+    - encryptedRoundTrip（加密往返）
+    - wrongPassphraseRejected（错误密钥拒绝）
+    - plaintextWithKeyRejected（非加密文件用密钥拒绝）
+    - encryptedWithoutKeyRejected（加密文件不传密钥拒绝）
+    - emptyPassphraseEquivalentToNoEncryption（空密码等价）
+    - nilPassphraseBackwardCompatible（nil 等价 · 6 store 不破）
+  - **6 store 协议零改动**：KLine + Journal + Alert + Analytics + Watchlist + Workspace 现有测试全部通过（passphrase=nil 路径）· M5 上线时各 store 升级方案：传 path + passphrase 即可，对外 API 零改动
+  - **回归**：586/145 → **592/146 全绿**（向后兼容验证通过）
+  - **代码质量**：code-simplifier 1 轮过审 · 加密路径 inline 错误处理（actor isolation 限制 nested func 不能改 self · 必须 inline）· 验证用 sqlite3_exec 单步（比 prepare/step/finalize 三步紧凑）
+- **留待 WP-19b v2**（M5 上线前）：
+  - 6 store 各加 init(path:passphrase:) 重载（统一传入 SQLiteConnection 即可，零侵入）
+  - 测试：旧明文升级到加密（schema 版本号 + 迁移脚本）
+  - 可选：DBPool（多连接读 + 单连接写）/ keychain 集成（passphrase 安全存储 · Mac 切机时做）
 
 ---
 

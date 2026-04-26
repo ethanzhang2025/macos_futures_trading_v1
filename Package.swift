@@ -29,15 +29,16 @@ let package = Package(
     ],
     dependencies: [],
     targets: [
-        // MARK: - CSQLite · 系统 SQLite3 C API（WP-19a 数据持久化基础）
-        // Linux: 需 libsqlite3-dev；macOS / iOS: 系统自带
+        // MARK: - CSQLite · SQLCipher（WP-19a 持久化 + WP-19b 加密层）
+        // 接口与 SQLite3 完全兼容（drop-in replacement）· 不传 passphrase 时行为同原生 SQLite
+        // Linux: 需 libsqlcipher-dev；macOS: brew install sqlcipher（M5 上线时按需安装）
         .systemLibrary(
             name: "CSQLite",
             path: "Sources/CSQLite",
-            pkgConfig: "sqlite3",
+            pkgConfig: "sqlcipher",
             providers: [
-                .apt(["libsqlite3-dev"]),
-                .brew(["sqlite3"])
+                .apt(["libsqlcipher-dev"]),
+                .brew(["sqlcipher"])
             ]
         ),
 

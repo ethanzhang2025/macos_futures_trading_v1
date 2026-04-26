@@ -467,6 +467,34 @@
 
 ---
 
+### ✅ ContractStore + ProductSpecLoader 真数据冒烟（v5.0+ · 第 16 个真数据 demo · DataCore 矩阵补全）
+
+- **位置**：`Tools/ContractStoreDemo/main.swift` · `swift run ContractStoreDemo`（~1s 纯本地）
+- **拓扑**（5 段）：
+  - 段 1 · 嵌入 5 品种 JSON（RB/IF/AU/CU/MA · 覆盖 SHFE+CFFEX+CZCE 三大所）
+  - 段 2 · ProductSpecLoader.load → 5 ProductSpec
+  - 段 3 · generateContracts(months: [1, 5, 10]) → 15 合约
+  - 段 4 · ContractStore 查询全套（get / byProduct / byExchange / search / mainContract）
+  - 段 5 · 跨 Core 乘数校验（与 WenhuaCSVImportDemo / PositionMatcher 实战一致）
+- **真验证**（夜盘 14:48）：
+  - 5 品种解析 + 15 合约生成 ✅（rb201/rb205/rb210 / if201/if205/if210 / MA01/MA05/MA10 等）
+  - 5 种查询全部命中 ✅
+    · get("rb201") → 螺纹钢201 · 乘数 10
+    · byProduct("RB") → 3 合约
+    · byExchange SHFE/CFFEX/CZCE → 9/3/3 合约
+    · search("黄金") + search("HS") → 各 3 合约（productName + pinyinInitials 匹配）
+    · mainContract → rb205（持仓量 120k 最高 · 与 50k/80k 对比）
+  - 5 个乘数全过 ✅（RB×10 / IF×300 / AU×1000 / CU×5 / MA×10）
+  - 🎉 通过
+- **价值**：
+  - DataCore demo 矩阵补全（之前 demo 都用硬编码 multipliers · 这次完整加载链路）
+  - 5 大交易所典型品种 instrumentID 生成规则文档化（CZCE 大写 / 其他小写 · 当前 API 硬编码年首位 "2"）
+  - 验证 ContractStore 5 种查询模式可用（productID 大写约定 + 拼音首字母搜索 + 主力合约持仓量）
+- **代码质量**：code-simplifier 1 轮过审 · simple-executor 修编译错（productID 大写 + 适配 instrumentID 格式 + 去冗余 await · final class 不是 actor）
+- **回归**：607/150 swift test 全绿（基线维持）
+
+---
+
 ### ✅ JournalGenerator 半自动日志初稿真数据冒烟（v5.0+ · 第 14 个真数据 demo · 文华没有的差异化能力）
 
 - **位置**：`Tools/JournalGeneratorDemo/main.swift` · `swift run JournalGeneratorDemo`（~1s 纯本地）

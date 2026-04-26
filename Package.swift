@@ -169,6 +169,12 @@ let package = Package(
             name: "EncryptionDemo",
             dependencies: ["Shared", "DataCore", "JournalCore", "AlertCore"],
             path: "Tools/EncryptionDemo"
+        ),
+        // ContractStoreDemo · 合约元数据加载完整链路（JSON → ProductSpec → Contract → ContractStore）
+        .executableTarget(
+            name: "ContractStoreDemo",
+            dependencies: ["Shared", "DataCore"],
+            path: "Tools/ContractStoreDemo"
         )
     ]
 )

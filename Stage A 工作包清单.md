@@ -441,6 +441,34 @@
 
 ---
 
+### ✅ 文华交割单 CSV 真实样本解析真数据冒烟（v5.0+ · 第 13 个真数据 demo · P3 文华迁移核心通路）
+
+- **位置**：`Tools/WenhuaCSVImportDemo/main.swift` · `swift run WenhuaCSVImportDemo`（~1s 纯本地）
+- **拓扑**（5 段）：
+  - 段 1 · 嵌入文华 5.0 格式 CSV 字符串（5 笔成交：RB2510 多 + IF2506 空 + AU2510 多未平）
+  - 段 2 · DealCSVParser.parse(.wenhua) → [RawDeal]（CSV 行 1:1 映射 · 全 String 字段）
+  - 段 3 · RawDeal.toTrade() 显式转换边界 → [Trade]（A09 禁做项 ① 落实：中文「买/卖/开/平」→ Direction/OffsetFlag enum）
+  - 段 4 · PositionMatcher.match + ReviewAnalytics（monthlyPnL / profitLossRatio / instrumentMatrix）
+  - 段 5 · 负向场景（缺列 / 非法 direction `购买` / 非法成交价 `not-a-number` 三档 · DealCSVError 显式可感知）
+- **真验证**（夜盘 2026-04-26 14:43）：
+  - 段 2 解析 5 条 RawDeal ✅
+  - 段 3 转 5 笔 Trade（含中文 → enum 转换）✅
+  - 段 4 FIFO 配对：闭合 2 笔 + 未平 1 组 · RB +1591 / IF +20995.40（IF300 倍乘数）/ 月度总盈 22586.40 ✅
+  - 段 5 三个负向场景全部抛 DealCSVError ✅
+    · `missingColumn(name=开平, line=1)`
+    · `invalidValue(field=买卖, value=购买, line=2)`
+    · `invalidValue(field=成交价, value=not-a-number, line=2)`
+  - 🎉 通过
+- **价值**：
+  - 验证 P3 文华迁移用户首要场景（"我能把文华历史交易导进来吗？"）
+  - A09 禁做项 ① 转换层（RawDeal → Trade）显式可见
+  - 多合约多 multiplier（RB=10 / IF=300 / AU=1000）真实数据验证
+  - DealCSVError 4 类全覆盖（除 .invalidEncoding 需特殊编码场景）
+- **代码质量**：code-simplifier 1 轮过审 · 净 -3 行（错误测试用 `[(label, work)]` 数组循环消除 3 段重复）
+- **回归**：586/145 swift test 全绿（基线维持）
+
+---
+
 ### ✅ AlertHistory 时间区间查询真数据冒烟（v5.0+ · 第 12 个真数据 demo · 索引性能验证 54.5x）
 
 - **位置**：`Tools/AlertHistorySmokeDemo/main.swift` · `swift run AlertHistorySmokeDemo`（~20s 含 10000 条注入）

@@ -150,6 +150,12 @@ let package = Package(
             name: "AlertHistorySmokeDemo",
             dependencies: ["Shared", "AlertCore"],
             path: "Tools/AlertHistorySmokeDemo"
+        ),
+        // WenhuaCSVImportDemo · 文华交割单 CSV 真实样本解析（CSV → RawDeal → Trade → 报表）
+        .executableTarget(
+            name: "WenhuaCSVImportDemo",
+            dependencies: ["Shared", "JournalCore"],
+            path: "Tools/WenhuaCSVImportDemo"
         )
     ]
 )

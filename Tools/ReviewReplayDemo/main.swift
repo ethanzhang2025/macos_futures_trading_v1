@@ -90,8 +90,8 @@ struct ReviewReplayDemo {
         print("  profitLossRatio     · 平盈 \(fmt(ratio.averageWin)) × \(ratio.winCount) / 平亏 \(fmt(ratio.averageLoss)) × \(ratio.lossCount) / 比 \(fmt(ratio.ratio))")
         print("  sessionPnL          · \(session.buckets.filter { $0.tradeCount > 0 }.count) 时段有成交")
 
-        // 4. ReplayCore 路径：回放 + TradeMark 标注
-        printSection("段 2 · ReplayCore 回放 + TradeMark 标注（8x 速度，每 30ms 一根 K）")
+        // 4. ReplayCore 路径：回放 + TradeMark 标注（v2 用 ReplayDriver 自动循环）
+        printSection("段 2 · ReplayCore 回放 + TradeMark 标注（8x 速度 · ReplayDriver 自动驱动）")
         let marks = trades.map { TradeMark(
             instrumentID: $0.instrumentID,
             time: $0.timestamp,
@@ -118,17 +118,21 @@ struct ReviewReplayDemo {
             }
         }
 
-        // 驱动：80 根 K · 每 30ms 一根 ≈ 2.4 秒
-        for _ in 0..<klines.count {
-            let advanced = await player.stepForward(count: 1)
-            if advanced == 0 { break }
-            try await Task.sleep(nanoseconds: 30_000_000)
-        }
+        // 驱动：ReplayDriver 自动循环 · baseInterval=0.24s × x8 = 30ms/步
+        // 80 根 × 30ms ≈ 2.4s · 末尾自动停（cursor.isAtEnd → player .paused）
+        let driver = ReplayDriver(player: player, baseInterval: 0.24)
+        await driver.start()
+        try await Task.sleep(nanoseconds: 3_000_000_000)  // 3s 安全余量等末尾自动停
+        await driver.stop()
         consumeTask.cancel()
 
         let barsEmitted = await stats.barsEmitted
         let marksMatched = await stats.marksMatched
+        let finalState = await player.currentState
+        let finalCursor = await player.cursor
+        let isRunning = await driver.isRunning
         print("\n回放完成：emit \(barsEmitted) 根 K · 标注 \(marksMatched) 个 TradeMark")
+        print("ReplayDriver 集成验证：cursor.isAtEnd=\(finalCursor.isAtEnd) · player 末尾态=\(finalState.rawValue) · driver.isRunning=\(isRunning)")
 
         // 5. 跨 Core 一致性校验
         printSection("段 3 · 跨 Core 一致性交叉校验")

@@ -486,6 +486,7 @@
 - **价值**：为 M4 复盘界面"图表 + 成交点叠加"准备数据流契约；同一交割单驱动两条业务流，任何一边跑偏会被对方暴露
 - **代码质量**：code-simplifier 1 轮过审 · 净 -12 行（链式调用 / count(where:) / map(\\.price) / allSatisfy 等 Karpathy 偏好）
 - **回归**：533/135 swift test 全绿（基线维持）
+- **v2 ReplayDriver 集成**（v5.0+ · 2026-04-26）：段 2 手动 for 循环 stepForward 升级为 `ReplayDriver(player, baseInterval=0.24)` · driver.start + Task.sleep(3s 安全余量) + driver.stop · 末尾自动停（cursor.isAtEnd=true / player .paused / driver.isRunning=false）· ReplayDriver 首次正式纳入 demo 生态（之前仅 unit test 验证）
 
 ---
 

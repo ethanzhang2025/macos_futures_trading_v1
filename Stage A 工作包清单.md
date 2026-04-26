@@ -523,8 +523,20 @@
 - **测试**：23 测试 8 suites（ReplaySpeed/Cursor/TradeMark Codable + 加载（空/N/乱序）+ 状态转移（play 需 loaded/pause 仅 playing/stop 重置）+ 步进（默认 1/N/末尾 clamp/末尾继续 0/起点 clamp）+ seek（指定/越界/当前 noop）+ speed/direction 设置 + AsyncStream 推送序列 + seek 推 seekFinished + TradeMark 时间窗（含 openTime 边界 + 不同 instrument 不串线））
 - **代码质量**：code-simplifier 1 轮过审 · 净 -7 行 DRY（broadcast helper 消除 3 处订阅者遍历重复 + pauseIfPlayingAtEnd 集中"playing 末尾必 paused"语义）
 
-**留给后续 UI WP**：回放控制栏 UI（播放/暂停按钮 / 速度滑块 / 进度条）· Timer 驱动器（按 ReplaySpeed.multiplier 决定调用 stepForward 频率，60fps DisplayLink）· 成交点叠加层（SwiftUI/Metal 渲染，复用图表代码）· 实时↔回放数据源切换（UnifiedDataSource 注入 ReplayPlayer 适配器）· CSV 历史数据导入
+**留给后续 UI WP**：回放控制栏 UI（播放/暂停按钮 / 速度滑块 / 进度条）· 成交点叠加层（SwiftUI/Metal 渲染，复用图表代码）· 实时↔回放数据源切换（UnifiedDataSource 注入 ReplayPlayer 适配器）· CSV 历史数据导入
 **禁做**：✅ A07 不为回放复制图表代码（提供 KLine 流，UnifiedDataSource 切换数据源）· ✅ 数据模型层不持有 Timer/Task（时间外置）· ✅ 不 import SwiftUI/AppKit/CoreGraphics
+
+**Timer 驱动器已交付**（v5.0+ · 2026-04-26）：
+- **`Sources/ReplayCore/ReplayDriver.swift`**：actor 包 Task 自动循环 stepForward · ~55 行
+  - init(player, baseInterval=1.0)：注入 ReplayPlayer + 1x 速度下每步基础间隔（默认 1s · UI 60fps 可设 0.016）
+  - start：启动 Task.detached 循环 · 每步动态读 player.currentSpeed → 间隔 = baseInterval / multiplier · setSpeed 不需重启 driver，下一步循环自动应用
+  - 自动停 3 条件（任一）：① player.currentState != .playing（pause/stop 后）② stepForward(count:1) == 0（末尾）③ 显式 stop()/cancel
+  - 重复 start 自动 cancel 旧 task（防双 task 抢推进）
+  - max(0.001, ...) 兜底防极端 multiplier 死循环
+- **测试**：+7 测试 +1 suite（ReplayDriver · Timer 自动驱动）：cursor 推进 / 末尾自动停 + player .paused / pause 后 driver 自动停 / 重复 start 不双 task / setSpeed 动态切换 / stop 立即停 / isRunning 内省
+- **回归**：575/144 → **582/145 全绿**
+- **代码质量**：code-simplifier 1 轮过审 · 净 -2 行（Task.sleep(for: .seconds) 替代 nanoseconds 字面量魔术 · isRunning 单行 ?.isCancelled == false）
+- **修订路线图**：原"留给后续 UI WP"中的"Timer 驱动器（60fps DisplayLink）"已交付（数据层 60fps 即 baseInterval=0.016s × x1 = 16ms）· UI 层只需 SwiftUI 按钮调 driver.start/stop
 
 ### ✅ WP-52 · 条件预警中心（数据模型层 v1）
 - **时点**：M4

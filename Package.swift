@@ -156,6 +156,12 @@ let package = Package(
             name: "WenhuaCSVImportDemo",
             dependencies: ["Shared", "JournalCore"],
             path: "Tools/WenhuaCSVImportDemo"
+        ),
+        // JournalGeneratorDemo · 半自动日志初稿（windowSeconds 配置对比 + A09 单向引用验证）
+        .executableTarget(
+            name: "JournalGeneratorDemo",
+            dependencies: ["Shared", "JournalCore"],
+            path: "Tools/JournalGeneratorDemo"
         )
     ]
 )

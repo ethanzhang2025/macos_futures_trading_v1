@@ -441,6 +441,30 @@
 
 ---
 
+### ✅ JournalGenerator 半自动日志初稿真数据冒烟（v5.0+ · 第 14 个真数据 demo · 文华没有的差异化能力）
+
+- **位置**：`Tools/JournalGeneratorDemo/main.swift` · `swift run JournalGeneratorDemo`（~1s 纯本地）
+- **拓扑**（5 段）：
+  - 段 1 · 构造 7 笔 3 合约 trades（RB d1 三段时段 / IF d2-d3 三笔 / AU d2 单笔）· 跨 3 天分散
+  - 段 2 · 默认 8h 窗口生成草稿 · 详细打印第 1 条（title / reason 模板 / tradeIDs.count）
+  - 段 3 · windowSeconds 配置对比（1h / 8h / 24h）→ 7 / 6 / 3 完美递减
+  - 段 4 · A09 禁做项 ② 验证（generator 调 3 次后 trades == tradesBefore · 单向引用）
+  - 段 5 · 总结
+- **真验证**（夜盘 2026-04-26 14:43）：
+  - 段 2 默认 8h 生成 6 条草稿（按 createdAt 倒序）：IF[1][2][3] 各独立 / AU[4] / RB[5] 22:30 单独 / RB[6] 09:30+14:00 合并
+  - 段 3 配置对比：**1h=7 / 8h=6 / 24h=3 完美递减** ✅
+  - 段 4 trades 集合在 3 次 generateDrafts 后保持不变 ✅（A09 禁做项 ② 落实）
+  - 🎉 通过
+- **价值**：
+  - 演示 P3 文华迁移用户的差异化能力："导入交割单后自动生成日志草稿"（文华没有）
+  - 验证 windowSeconds 不同配置对聚合行为的影响（用户可按交易风格调整）
+  - 验证 A09 禁做项 ②（generator 单向，journal.tradeIDs 不污染 trades）
+  - JournalCore 端到端用户旅程：CSV → Trade → ClosedPosition + **TradeJournal 草稿**
+- **代码质量**：code-simplifier 1 轮过审 · 段 4 改用数组循环 + 抽 tradeTimeFormatter static let 复用（避免每笔 mk 新建 DateFormatter）
+- **回归**：586/145 swift test 全绿（基线维持）
+
+---
+
 ### ✅ 文华交割单 CSV 真实样本解析真数据冒烟（v5.0+ · 第 13 个真数据 demo · P3 文华迁移核心通路）
 
 - **位置**：`Tools/WenhuaCSVImportDemo/main.swift` · `swift run WenhuaCSVImportDemo`（~1s 纯本地）

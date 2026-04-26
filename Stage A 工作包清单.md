@@ -798,7 +798,7 @@
 ### ⬜ WP-62 · 麦语言基础版 30-50 函数
 - **时点**：M8
 - **负责**：你
-- **依赖**：Legacy FormulaEngine（已 ~90% 完成 · v6.0+ 第 1 批扩展 5 函数）
+- **依赖**：Legacy FormulaEngine（已 ~95% 完成 · v6.0+ 第 1+2 批扩展 10 函数）
 - **交付**：覆盖 MA/EMA/MACD/KDJ/BOLL/RSI/CCI 等主流指标所需函数、用户可运行自定义指标公式
 - **DoD**：用户从文华复制 30-50 个常见公式均可运行、结果与文华一致
 - **禁做**：
@@ -818,7 +818,20 @@
     - 测试 helper（run / testBars）项目惯例不共享 · 接受重复
   - **测试**：+10 测试 +1 suite · `Tests/IndicatorCoreTests/FormulaEngineTests/MaiYuYanExtensionTests.swift` · Linux swift test 617/151 → **627/152 全绿** 1.028s
   - **代码质量**：code-simplifier 1 轮过审（测试 nil 检查改 for-value 风格 + MOD NSDecimalRound 注释对齐 CEILING/FLOOR）
-  - **后续批次预留**：BACKSET / VARIANCE / REVERSE / WINNER / COST 等剩 ~10% 函数（按用户实际复制的文华公式遇到时按需扩展）
+  - **后续批次预留**：BACKSET / VARIANCE / RANGE / MEDIAN / LASTPEAK 已在第 2 批落地 ↓
+- **已交付**（v6.0+ · 2026-04-26 · 麦语言扩展第 2 批 · 56 → 61 函数 · 兼容度 ~90% → ~95%）：
+  - **新增 5 函数**（端到端通过 Lexer → Parser → Interpreter 跑公式验证）：
+    - `MathFunctions.swift`：**VARIANCE**（N 周期总体方差 · STD² 等价）
+    - `StatFunctions.swift`：**BACKSET**（信号回写 N 根）+ **MEDIAN**（N 周期中位数 · 偶数取中两数平均）+ **LASTPEAK**（最近波峰值 · 与 PEAKBARS 配套返价位）
+    - `ReferenceFunctions.swift`：**RANGE**（开区间 A < X < B · 与 BETWEEN 闭区间互补）
+    - `BuiltinFunction.swift`：注册 5 函数到 `BuiltinFunctions.all`
+  - **设计取舍**：
+    - VARIANCE / LASTPEAK 不抽 helper（与 STD / PEAKBARS 同模式重复 · 项目惯例 · 单一 struct 即懂）
+    - BACKSET 用 `Decimal(0)` 显式字面量（与 CROSS / LONGCROSS 一致）· MEDIAN 偶数分支用 if/else（项目"显性优于紧凑"风格）
+    - RANGE 严格开区间（与 BETWEEN 闭区间分工明确 · 注释指明）
+  - **测试**：+10 测试 +1 suite · `Tests/IndicatorCoreTests/FormulaEngineTests/MaiYuYanExtensionBatch2Tests.swift` · Linux swift test 627/152 → **637/153 全绿** 1.009s
+  - **代码质量**：code-simplifier 1 轮过审（BACKSET `Decimal(0)` 显式 + MEDIAN if/else 替代三元）
+  - **后续批次（第 3 批 · 预留）**：剩 ~5% 边角函数（DRAWICON/STICKLINE/DRAWBAND 等画图函数留 ChartCore；WINNER/COST 需筹码分布数据；REVERSE 命名非标准跳过）
 
 ### ⬜ WP-63 · 文华麦语言公式（.wh）导入（源自 StageA补遗 G4）
 - **时点**：M8（与 WP-62 同期）

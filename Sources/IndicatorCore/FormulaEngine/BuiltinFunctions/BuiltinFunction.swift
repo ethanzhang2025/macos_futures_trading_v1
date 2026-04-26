@@ -79,6 +79,12 @@ public enum BuiltinFunctions {
             MODFunction(),
             PEAKBARSFunction(),
             TROUGHBARSFunction(),
+            // 麦语言扩展（第 2 批 · v6.0+ 兼容度 ~90% → ~95%）
+            BACKSETFunction(),
+            VARIANCEFunction(),
+            RANGEFunction(),
+            MEDIANFunction(),
+            LASTPEAKFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

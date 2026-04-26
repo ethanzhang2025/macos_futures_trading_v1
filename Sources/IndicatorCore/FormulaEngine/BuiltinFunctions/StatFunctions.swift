@@ -218,3 +218,95 @@ struct TROUGHBARSFunction: BuiltinFunction {
         return result
     }
 }
+
+/// BACKSET — 回设
+/// 用法: BACKSET(X, N) X 不为 0 时，将当前 bar 及之前 N-1 根（共 N 根）回设为 1
+/// 示例: 信号在 i=5 触发 + N=3 → bar 3/4/5 全设 1
+struct BACKSETFunction: BuiltinFunction {
+    let name = "BACKSET"
+
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 2 else {
+            throw InterpreterError(message: "BACKSET需要2个参数")
+        }
+        let source = args[0]
+        guard let nVal = args[1].first, let n = nVal else {
+            throw InterpreterError(message: "BACKSET的周期参数无效")
+        }
+        let period = Int(truncating: n as NSDecimalNumber)
+        guard period > 0 else { throw InterpreterError(message: "BACKSET的周期必须大于0") }
+        let count = source.count
+        var result = [Decimal?](repeating: Decimal(0), count: count)
+        for i in 0..<count {
+            guard let v = source[i], v != 0 else { continue }
+            let start = max(0, i - period + 1)
+            for j in start...i {
+                result[j] = 1
+            }
+        }
+        return result
+    }
+}
+
+/// MEDIAN — N 周期中位数
+/// 用法: MEDIAN(X, N) · 偶数周期取中间两数平均
+struct MEDIANFunction: BuiltinFunction {
+    let name = "MEDIAN"
+
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 2 else {
+            throw InterpreterError(message: "MEDIAN需要2个参数")
+        }
+        let source = args[0]
+        guard let nVal = args[1].first, let n = nVal else {
+            throw InterpreterError(message: "MEDIAN的周期参数无效")
+        }
+        let period = Int(truncating: n as NSDecimalNumber)
+        guard period > 0 else { throw InterpreterError(message: "MEDIAN的周期必须大于0") }
+        let count = source.count
+        var result = [Decimal?](repeating: nil, count: count)
+        for i in 0..<count {
+            if i < period - 1 { continue }
+            let start = i - period + 1
+            var window: [Decimal] = []
+            for j in start...i {
+                if let v = source[j] { window.append(v) }
+            }
+            guard window.count == period else { continue }
+            window.sort()
+            let mid = period / 2
+            if period % 2 == 0 {
+                result[i] = (window[mid - 1] + window[mid]) / 2
+            } else {
+                result[i] = window[mid]
+            }
+        }
+        return result
+    }
+}
+
+/// LASTPEAK — 最近一次波峰的值（与 PEAKBARS 配套 · PEAKBARS 返距离 / LASTPEAK 返价位）
+/// 波峰定义同 PEAKBARS：X[i-1] > X[i-2] && X[i-1] > X[i]
+/// 用法: LASTPEAK(CLOSE) 返回 CLOSE 序列最近一次局部最大值
+struct LASTPEAKFunction: BuiltinFunction {
+    let name = "LASTPEAK"
+
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 1 else {
+            throw InterpreterError(message: "LASTPEAK需要1个参数")
+        }
+        let x = args[0]
+        let count = x.count
+        var result = [Decimal?](repeating: nil, count: count)
+        var lastPeakValue: Decimal?
+        for i in 0..<count {
+            if i >= 2,
+               let prev = x[i - 1], let prev2 = x[i - 2], let curr = x[i],
+               prev > prev2 && prev > curr {
+                lastPeakValue = prev
+            }
+            result[i] = lastPeakValue
+        }
+        return result
+    }
+}

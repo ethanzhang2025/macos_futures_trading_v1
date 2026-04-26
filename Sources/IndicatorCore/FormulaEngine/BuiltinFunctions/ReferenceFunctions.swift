@@ -192,3 +192,26 @@ struct WMAFunction: BuiltinFunction {
         return result
     }
 }
+
+/// RANGE — 开区间判断（A < X < B）
+/// 用法: RANGE(X, A, B) X 落在开区间 (A, B) 返回 1，否则 0
+/// 注：与 BETWEEN 同类但严格开区间（BETWEEN 为闭区间约定 · 见各自实现）
+struct RANGEFunction: BuiltinFunction {
+    let name = "RANGE"
+
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 3 else {
+            throw InterpreterError(message: "RANGE需要3个参数")
+        }
+        let x = args[0], a = args[1], b = args[2]
+        let count = x.count
+        var result = [Decimal?](repeating: nil, count: count)
+        for i in 0..<count {
+            guard let vx = x[i],
+                  let va = i < a.count ? a[i] : nil,
+                  let vb = i < b.count ? b[i] : nil else { continue }
+            result[i] = (vx > va && vx < vb) ? 1 : 0
+        }
+        return result
+    }
+}

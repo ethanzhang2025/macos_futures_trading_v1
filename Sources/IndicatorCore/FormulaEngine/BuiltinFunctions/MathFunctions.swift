@@ -193,3 +193,40 @@ struct MODFunction: BuiltinFunction {
         return result
     }
 }
+
+/// VARIANCE — N 周期总体方差（STD 的平方版）
+/// 用法: VARIANCE(X, N) 求 X 的 N 周期方差
+struct VARIANCEFunction: BuiltinFunction {
+    let name = "VARIANCE"
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 2 else { throw InterpreterError(message: "VARIANCE需要2个参数") }
+        let source = args[0]
+        guard let nVal = args[1].first, let n = nVal else {
+            throw InterpreterError(message: "VARIANCE的周期参数无效")
+        }
+        let period = Int(truncating: n as NSDecimalNumber)
+        guard period > 0 else { throw InterpreterError(message: "VARIANCE的周期必须大于0") }
+        let count = source.count
+        var result = [Decimal?](repeating: nil, count: count)
+        for i in 0..<count {
+            if i < period - 1 { continue }
+            let start = i - period + 1
+            var sum: Decimal = 0
+            var validCount = 0
+            for j in start...i {
+                guard let v = source[j] else { continue }
+                sum += v
+                validCount += 1
+            }
+            guard validCount == period else { continue }
+            let avg = sum / Decimal(period)
+            var variance: Decimal = 0
+            for j in start...i {
+                let diff = (source[j] ?? 0) - avg
+                variance += diff * diff
+            }
+            result[i] = variance / Decimal(period)
+        }
+        return result
+    }
+}

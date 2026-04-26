@@ -161,3 +161,60 @@ struct BARSLASTFunction: BuiltinFunction {
         return result
     }
 }
+
+/// PEAKBARS — 距离最近波峰的 bar 数
+/// 用法: PEAKBARS(X) 返回 X 距离最近波峰的 bar 数；尚无波峰前 nil
+/// 波峰定义：X[i-1] > X[i-2] 且 X[i-1] > X[i]（i-1 为局部最大）
+/// 当前 bar 无右邻不能判断 → 当前 bar 不会成为新波峰
+struct PEAKBARSFunction: BuiltinFunction {
+    let name = "PEAKBARS"
+
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 1 else {
+            throw InterpreterError(message: "PEAKBARS需要1个参数")
+        }
+        let x = args[0]
+        let count = x.count
+        var result = [Decimal?](repeating: nil, count: count)
+        var lastPeak: Int?
+        for i in 0..<count {
+            if i >= 2,
+               let prev = x[i - 1], let prev2 = x[i - 2], let curr = x[i],
+               prev > prev2 && prev > curr {
+                lastPeak = i - 1
+            }
+            if let lp = lastPeak {
+                result[i] = Decimal(i - lp)
+            }
+        }
+        return result
+    }
+}
+
+/// TROUGHBARS — 距离最近波谷的 bar 数
+/// 用法: TROUGHBARS(X) 返回 X 距离最近波谷的 bar 数；尚无波谷前 nil
+/// 波谷定义：X[i-1] < X[i-2] 且 X[i-1] < X[i]（i-1 为局部最小）
+struct TROUGHBARSFunction: BuiltinFunction {
+    let name = "TROUGHBARS"
+
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 1 else {
+            throw InterpreterError(message: "TROUGHBARS需要1个参数")
+        }
+        let x = args[0]
+        let count = x.count
+        var result = [Decimal?](repeating: nil, count: count)
+        var lastTrough: Int?
+        for i in 0..<count {
+            if i >= 2,
+               let prev = x[i - 1], let prev2 = x[i - 2], let curr = x[i],
+               prev < prev2 && prev < curr {
+                lastTrough = i - 1
+            }
+            if let lt = lastTrough {
+                result[i] = Decimal(i - lt)
+            }
+        }
+        return result
+    }
+}

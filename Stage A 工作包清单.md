@@ -798,7 +798,7 @@
 ### ⬜ WP-62 · 麦语言基础版 30-50 函数
 - **时点**：M8
 - **负责**：你
-- **依赖**：Legacy FormulaEngine（已 85% 完成）
+- **依赖**：Legacy FormulaEngine（已 ~90% 完成 · v6.0+ 第 1 批扩展 5 函数）
 - **交付**：覆盖 MA/EMA/MACD/KDJ/BOLL/RSI/CCI 等主流指标所需函数、用户可运行自定义指标公式
 - **DoD**：用户从文华复制 30-50 个常见公式均可运行、结果与文华一致
 - **禁做**：
@@ -806,6 +806,19 @@
   - ❌ 不逆向文华二进制格式（只解析公开文本语法）
   - ❌ 不把麦语言解析与指标底层函数实现耦合（IndicatorCore 既服务原生指标也服务麦语言）
 - **锚点**：D2 §2 M7-M9、Legacy迁移融合方案.md、ChatGPT A12
+- **已交付**（v6.0+ · 2026-04-26 · 麦语言扩展第 1 批 · 51 → 56 函数 · 兼容度 85% → ~90%）：
+  - **新增 5 函数**（端到端通过 Lexer → Parser → Interpreter 跑公式验证）：
+    - `LogicFunctions.swift`：**NOT**（逻辑非）+ **CROSSDOWN**（下穿 · 与 CROSS 对称）
+    - `MathFunctions.swift`：**MOD**（取模 · floor 风格 · B=0 安全降级 nil）
+    - `StatFunctions.swift`：**PEAKBARS** / **TROUGHBARS**（距最近波峰/波谷的 bar 数 · 状态机式扫描 · 与 BARSLAST 同模式）
+    - `BuiltinFunction.swift`：注册 5 函数到 `BuiltinFunctions.all`
+  - **设计取舍**：
+    - MOD floor 风格（Python/Decimal 数学一致 · -7 MOD 3 = 2 · 注释说明）
+    - PEAKBARS/TROUGHBARS 双实现保留（不抽 helper · 闭包反而增层 · Karpathy "避免过度复杂"）
+    - 测试 helper（run / testBars）项目惯例不共享 · 接受重复
+  - **测试**：+10 测试 +1 suite · `Tests/IndicatorCoreTests/FormulaEngineTests/MaiYuYanExtensionTests.swift` · Linux swift test 617/151 → **627/152 全绿** 1.028s
+  - **代码质量**：code-simplifier 1 轮过审（测试 nil 检查改 for-value 风格 + MOD NSDecimalRound 注释对齐 CEILING/FLOOR）
+  - **后续批次预留**：BACKSET / VARIANCE / REVERSE / WINNER / COST 等剩 ~10% 函数（按用户实际复制的文华公式遇到时按需扩展）
 
 ### ⬜ WP-63 · 文华麦语言公式（.wh）导入（源自 StageA补遗 G4）
 - **时点**：M8（与 WP-62 同期）

@@ -171,3 +171,25 @@ struct AVEDEVFunction: BuiltinFunction {
         return result
     }
 }
+
+/// MOD — 取模（floor 风格 · -7 MOD 3 = 2 · 与 Decimal 数学定义一致）
+/// 用法: MOD(A, B) 返回 A 除以 B 的余数；B=0 时返回 nil
+struct MODFunction: BuiltinFunction {
+    let name = "MOD"
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 2 else { throw InterpreterError(message: "MOD需要2个参数") }
+        let a = args[0], b = args[1]
+        let count = max(a.count, b.count)
+        var result = [Decimal?](repeating: nil, count: count)
+        for i in 0..<count {
+            guard let va = i < a.count ? a[i] : nil,
+                  let vb = i < b.count ? b[i] : nil,
+                  vb != 0 else { continue }
+            var floored = Decimal()
+            var quotient = va / vb
+            NSDecimalRound(&floored, &quotient, 0, .down)  // 与 CEILING/FLOOR 同款 NSDecimalRound 写法
+            result[i] = va - floored * vb
+        }
+        return result
+    }
+}

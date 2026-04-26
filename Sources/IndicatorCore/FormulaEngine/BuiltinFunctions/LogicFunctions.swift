@@ -157,3 +157,42 @@ struct MINFunction: BuiltinFunction {
         return result
     }
 }
+
+/// NOT — 逻辑非
+/// 用法: NOT(X) X 为 0 返回 1；非 0 返回 0；nil 透传
+struct NOTFunction: BuiltinFunction {
+    let name = "NOT"
+
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 1 else {
+            throw InterpreterError(message: "NOT需要1个参数")
+        }
+        return args[0].map { v in
+            guard let v else { return nil }
+            return v == 0 ? 1 : 0
+        }
+    }
+}
+
+/// CROSSDOWN — 下穿（与 CROSS 对称 · CROSS 是上穿）
+/// 用法: CROSSDOWN(A, B) 当 A 从上方穿越 B 时返回 1
+struct CROSSDOWNFunction: BuiltinFunction {
+    let name = "CROSSDOWN"
+
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        guard args.count == 2 else {
+            throw InterpreterError(message: "CROSSDOWN需要2个参数")
+        }
+        let a = args[0], b = args[1]
+        let count = a.count
+        var result = [Decimal?](repeating: Decimal(0), count: count)
+        for i in 1..<count {
+            guard let currA = a[i], let currB = b[i],
+                  let prevA = a[i - 1], let prevB = b[i - 1] else { continue }
+            if prevA >= prevB && currA < currB {
+                result[i] = 1
+            }
+        }
+        return result
+    }
+}

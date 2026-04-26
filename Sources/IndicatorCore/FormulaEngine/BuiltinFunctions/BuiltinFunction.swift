@@ -73,6 +73,12 @@ public enum BuiltinFunctions {
             MINUTEFunction(),
             ISLASTBARFunction(),
             BARPOSFunction(),
+            // 麦语言扩展（第 1 批 · v6.0+ 兼容度 85% → ~90%）
+            NOTFunction(),
+            CROSSDOWNFunction(),
+            MODFunction(),
+            PEAKBARSFunction(),
+            TROUGHBARSFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

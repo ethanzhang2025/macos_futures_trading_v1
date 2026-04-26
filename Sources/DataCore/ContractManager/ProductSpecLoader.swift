@@ -12,6 +12,22 @@ public struct ProductSpec: Codable, Sendable {
     public let marginRatio: String
     public let unit: String
     public let nightSession: String
+
+    public init(
+        exchange: String, productID: String, name: String, pinyin: String,
+        multiple: Int, priceTick: String, marginRatio: String,
+        unit: String, nightSession: String
+    ) {
+        self.exchange = exchange
+        self.productID = productID
+        self.name = name
+        self.pinyin = pinyin
+        self.multiple = multiple
+        self.priceTick = priceTick
+        self.marginRatio = marginRatio
+        self.unit = unit
+        self.nightSession = nightSession
+    }
 }
 
 /// 品种规格加载器

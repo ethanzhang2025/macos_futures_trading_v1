@@ -395,6 +395,25 @@
   - **测试**：+10 测试 +1 suite · `Tests/DataCoreTests/ContractManagerTests/FuturesContextTests.swift` · sort/4 查询/日盘/跨日夜盘/空 hours/Codable · Linux swift test 637/153 → **647/154 全绿** 1.013s
   - **代码质量**：code-simplifier 1 轮过审（sameDayCalendar 抽 static + 循环变量 session 命名 + 注释精修）
   - **后续 Step 2/3（待推）**：4 占位指标 calculate(kline:context:) 实现 + Tick 级数据通道（StageB 多合约 / 实盘 OI 增量 / 主动买卖量）
+- **B1 Step 2 已交付**（v6.0+ · 2026-04-26 · 4 占位指标真实化 · 期货指标 2/12 → 6/12）：
+  - **新增 `Sources/IndicatorCore/ContextualIndicator.swift`**（~50 行 · 协议层）：
+    - `protocol ContextualIndicator: Sendable`（同 Indicator 但 calculate 多 barTimes + context 参数）
+    - 与 Indicator 协议并列 · 适用需要外部上下文的指标
+  - **新增 `Sources/IndicatorCore/Indicators/FuturesContextual.swift`**（~120 行 · 4 实现）：
+    - **LimitPriceLines** · `identifier="LIMIT"` · 输出 UPPER + LOWER · 用 latestLimit(asOf:)
+    - **DeliveryCountdown** · `identifier="DELIVERY"` · 输出 DAYS · 用 daysUntilDelivery(asOf:)
+    - **SettlementPriceLine** · `identifier="SETTLE"` · 输出 SETTLE · 用 latestSettlement(asOf:)
+    - **SessionDivider** · `identifier="SESSION"` · 输出 IN_SESSION（1/0）· 用 isInTradingSession + Asia/Shanghai 时区取 minuteOfDay
+  - **`Sources/DataCore/ContractManager/ProductSpecLoader.swift`** · `ProductSpec` 加 `public init`（修复跨模块构造可见性 · 测试 + 调用方需要）
+  - **设计取舍**：
+    - 全部 enum + 静态 calculate（与 Indicators/MA.swift 一致 · 单例语义）
+    - barTimes 必填 · 长度需等于 kline.count（明确 contract · fileprivate `requireSameLength` helper）
+    - 无对应数据点输出 nil（不抛错 · 让上层决定是否绘制）
+    - SessionDivider calendar 强制 Asia/Shanghai 时区（中国期货市场固定 · 与 TradingCalendar.chinaTimeZone 一致 · 避免 Linux UTC 默认时区误判）
+    - `latestLimit/Settlement asOf` 而非 `onTradingDay`（实时取最新已发布的 · 跨日 K 线自然对齐）
+  - **测试**：+9 测试 +1 suite · `Tests/IndicatorCoreTests/IndicatorsTests/FuturesContextualTests.swift` · 4 指标各 2-3 case + 长度校验 + metadata · Linux swift test 647/154 → **656/155 全绿** 1.148s
+  - **代码质量**：code-simplifier 1 轮过审（变量名全词化 + map 替代 for 循环 + 闭包数组替代 switch + ProductSpec.public init 补缺）
+  - **后续 Step 3（待推）**：剩 6 个占位指标（MainContractShift / LongShortForce / VolumeDensity / Spread / Basis / RelativeStrength）需 Tick 级数据通道 + 多合约同步 → 归 Stage B（M12+）· Stage A 至此期货指标 6/12 已完结
 
 ### ✅ WP-42 · 画线工具 v1 · 数据模型层完成 2026-04-24 · commit b41acc9
 

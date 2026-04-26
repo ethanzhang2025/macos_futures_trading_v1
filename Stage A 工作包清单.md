@@ -441,6 +441,20 @@
 
 ---
 
+### ✅ UDS v2 历史合并真数据冒烟（v5.0+ · 第 9 个真数据 demo · v1 vs v2 对比）
+
+- **位置**：`Tools/UDSHistoryMergeDemo/main.swift` · `swift run UDSHistoryMergeDemo`（~70s 真网络 · 60s 等实时 + 网络拉历史）
+- **拓扑**：
+  - 段 1（v1 基线对照）：UDS 不注入 historical → snapshot 0 根（cache 空 + 无 historical 兜底）
+  - 段 2（v2 历史合并）：注入 `SinaMarketData` 作为 historical → snapshot 200 根真实历史 K · 时间范围 03-09 14:15 ~ 04-24 23:00 · 起 3,114.00 → 末 3,194.00
+  - 段 3（实时拼接）：跑 60s SinaPollingDriver 3s 间隔 · 跨周期时 yield .completedBar 增量
+- **跨 Core 一致性校验**：snapshot 末尾 close=3,194.00 · Sina 实时 last=3,193.00 · 差 1.00（夜盘价差正常）
+- **输出对比验证**：v1=0 vs v2=200 → 启动即有完整历史 K（UI 层"开图表立刻有完整图"实战必备）
+- **代码质量**：code-simplifier 1 轮过审 · printSample 合并 head/tail 重复 + 3 个 formatter 抽 static let（避免每次调用 alloc · 段 3 60s 内调几十次的优化）
+- **回归**：563/140 swift test 全绿
+
+---
+
 ### ✅ 复盘 + 回放联动真数据冒烟（v5.0+ 跨 3 Core 集成 demo · 第 8 个真数据 demo）
 
 - **位置**：`Tools/ReviewReplayDemo/main.swift` · `swift run ReviewReplayDemo`（~3s 真网络 + 本地回放）

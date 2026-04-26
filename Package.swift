@@ -126,6 +126,12 @@ let package = Package(
             name: "ReviewReplayDemo",
             dependencies: ["Shared", "DataCore", "JournalCore", "ReplayCore"],
             path: "Tools/ReviewReplayDemo"
+        ),
+        // UDSHistoryMergeDemo · UDS v2 历史合并真数据冒烟（v1 空 snapshot vs v2 历史 N 根）
+        .executableTarget(
+            name: "UDSHistoryMergeDemo",
+            dependencies: ["Shared", "DataCore"],
+            path: "Tools/UDSHistoryMergeDemo"
         )
     ]
 )

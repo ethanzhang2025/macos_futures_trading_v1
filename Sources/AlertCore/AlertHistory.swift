@@ -53,6 +53,13 @@ public protocol AlertHistoryStore: Sendable {
     /// 加载所有 alert 的全量历史（按 triggeredAt 降序）
     func allHistory() async throws -> [AlertHistoryEntry]
 
+    /// 时间区间查询（[from, to] 闭区间 · 按 triggeredAt 降序，最近在前）
+    /// - Parameters:
+    ///   - from: 起始时间（含）
+    ///   - to: 结束时间（含）
+    /// - Returns: 区间内全部记录；from > to 时返回空数组
+    func history(from: Date, to: Date) async throws -> [AlertHistoryEntry]
+
     /// 清除指定 alertID 的历史（用户删除 alert 时联动）
     func clear(alertID: UUID) async throws
 
@@ -78,6 +85,13 @@ public actor InMemoryAlertHistoryStore: AlertHistoryStore {
 
     public func allHistory() async throws -> [AlertHistoryEntry] {
         entries.sorted { $0.triggeredAt > $1.triggeredAt }
+    }
+
+    public func history(from: Date, to: Date) async throws -> [AlertHistoryEntry] {
+        guard from <= to else { return [] }
+        return entries
+            .filter { $0.triggeredAt >= from && $0.triggeredAt <= to }
+            .sorted { $0.triggeredAt > $1.triggeredAt }
     }
 
     public func clear(alertID: UUID) async throws {

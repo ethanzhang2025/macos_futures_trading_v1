@@ -556,6 +556,15 @@
 **留给后续 UI WP**：实际通知通道（InAppOverlayChannel SwiftUI / SystemNoticeChannel UserNotifications / SoundChannel NSSound 留 Mac 切机）· 预警面板 UI（列表 + 编辑 + 启停按钮）· 画线预警 v2（趋势线/矩形/斐波那契接 DrawingGeometry，本 v1 仅 horizontalLine）· 后续 SQLite AlertHistoryStore（WP-19 数据持久化）
 **禁做**：✅ 通知发送逻辑统一在 NotificationChannel 层，不散落（A08 验收）· ✅ 数据模型层不 import SwiftUI/AppKit/UserNotifications · ✅ 不引入 print 散落生产路径（默认 logger 仅供测试）· ✅ 频控不依赖 wall-clock 真实时间（now 参数注入 → 100% 确定测试）
 
+**AlertHistory 时间区间查询已交付**（v5.0+ · 2026-04-26 · UI 历史面板必需）：
+- **协议**：`AlertHistoryStore` 加 `history(from: Date, to: Date) async throws -> [AlertHistoryEntry]`（[from, to] 闭区间，按 triggeredAt 降序）
+- **InMemory 实现**：`guard from <= to else { return [] }` + filter + sorted 降序
+- **SQLite 实现**：`WHERE triggered_at BETWEEN ? AND ?` 命中现有 `idx_alert_history_ts` 索引（O(log N) 查询）
+- **边界一致性**：from > to 双实现都返回空数组（不抛错）；from = to 命中精确时刻
+- **测试**：+4 测试（区间命中降序 / from=to 闭区间 / from>to 返空 / 空 store 返空）· 双实现等价
+- **回归**：582/145 → **586/145 全绿**
+- **代码质量**：code-simplifier 1 轮过审 · SQLite 抽 file-private `toMs/fromMs` helper（与 JournalCore 项目惯例一致 · 消除 4 处魔数 1000）
+
 **Linux 通道 v1 已交付**（v5.0+ · 2026-04-25）：
 - **NotificationChannelKind 扩展**：原 3 case（inApp/systemNotice/sound）+ 2 新 case（**console / file**）· rawValue 与 case 名对齐（向后兼容旧 JSON）
 - **`Sources/AlertCore/Channels/ConsoleChannel.swift`**：`struct` · stdout 调试通道 · 注入 prefix / timestampFormatter / writer · static let DateFormatter 复用（每次 send 不 alloc）

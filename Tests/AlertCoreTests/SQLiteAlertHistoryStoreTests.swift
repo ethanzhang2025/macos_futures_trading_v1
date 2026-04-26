@@ -130,4 +130,55 @@ struct SQLiteAlertHistoryStoreTests {
         #expect(try await store2.allHistory().count == 2)
         await store2.close()
     }
+
+    // MARK: - 时间区间查询（v5.0+ · UI 历史面板）
+
+    @Test("history(from:to:) 区间命中 · 按 triggeredAt 降序")
+    func rangeQueryDescending() async throws {
+        let store = try makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let t1 = Date(timeIntervalSince1970: 1_700_001_000)
+        let t2 = Date(timeIntervalSince1970: 1_700_002_000)
+        let t3 = Date(timeIntervalSince1970: 1_700_003_000)
+        try await store.append(makeEntry(triggeredAt: t0))
+        try await store.append(makeEntry(triggeredAt: t1))
+        try await store.append(makeEntry(triggeredAt: t2))
+        try await store.append(makeEntry(triggeredAt: t3))
+
+        let result = try await store.history(from: t1, to: t2)
+        #expect(result.count == 2)
+        #expect(result[0].triggeredAt == t2)  // 降序
+        #expect(result[1].triggeredAt == t1)
+    }
+
+    @Test("history(from:to:) 闭区间边界 · from = to 命中精确时刻")
+    func rangeQueryClosedBoundary() async throws {
+        let store = try makeStore()
+        let exact = Date(timeIntervalSince1970: 1_700_000_000)
+        try await store.append(makeEntry(triggeredAt: exact))
+        try await store.append(makeEntry(triggeredAt: exact.addingTimeInterval(1)))
+
+        let result = try await store.history(from: exact, to: exact)
+        #expect(result.count == 1)
+        #expect(result[0].triggeredAt == exact)
+    }
+
+    @Test("history(from:to:) from > to → 空数组（不抛错）")
+    func rangeQueryInvertedReturnsEmpty() async throws {
+        let store = try makeStore()
+        try await store.append(makeEntry())
+        let now = Date()
+        let result = try await store.history(from: now, to: now.addingTimeInterval(-3600))
+        #expect(result.isEmpty)
+    }
+
+    @Test("history(from:to:) 空 store → 空数组")
+    func rangeQueryOnEmptyStore() async throws {
+        let store = try makeStore()
+        let result = try await store.history(
+            from: Date(timeIntervalSince1970: 0),
+            to: Date(timeIntervalSince1970: 9_999_999_999)
+        )
+        #expect(result.isEmpty)
+    }
 }

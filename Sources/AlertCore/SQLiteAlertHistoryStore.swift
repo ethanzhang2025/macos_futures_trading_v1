@@ -54,7 +54,7 @@ public actor SQLiteAlertHistoryStore: AlertHistoryStore {
                 .text(entry.alertName),
                 .text(entry.instrumentID),
                 .text(encodeJSON(entry.conditionSnapshot)),
-                .integer(Int64(entry.triggeredAt.timeIntervalSince1970 * 1000)),
+                .integer(toMs(entry.triggeredAt)),
                 .text(NSDecimalNumber(decimal: entry.triggerPrice).stringValue),
                 .text(entry.message)
             ]
@@ -73,6 +73,15 @@ public actor SQLiteAlertHistoryStore: AlertHistoryStore {
         try await ensureSchema()
         return try await connection.query(
             "SELECT \(historyColumns) FROM alert_history ORDER BY triggered_at DESC;"
+        ) { decodeEntry(from: $0) }
+    }
+
+    public func history(from: Date, to: Date) async throws -> [AlertHistoryEntry] {
+        guard from <= to else { return [] }
+        try await ensureSchema()
+        return try await connection.query(
+            "SELECT \(historyColumns) FROM alert_history WHERE triggered_at BETWEEN ? AND ? ORDER BY triggered_at DESC;",
+            bind: [.integer(toMs(from)), .integer(toMs(to))]
         ) { decodeEntry(from: $0) }
     }
 
@@ -96,7 +105,6 @@ private let historyColumns = "id, alert_id, alert_name, instrument_id, condition
 
 private func decodeEntry(from stmt: SQLiteStatement) -> AlertHistoryEntry {
     let condition: AlertCondition = decodeJSON(stmt.string(at: 4)) ?? .priceAbove(0)
-    let triggeredMs = stmt.int64(at: 5)
     let triggerPrice = Decimal(string: stmt.string(at: 6) ?? "0") ?? 0
 
     return AlertHistoryEntry(
@@ -105,11 +113,14 @@ private func decodeEntry(from stmt: SQLiteStatement) -> AlertHistoryEntry {
         alertName: stmt.string(at: 2) ?? "",
         instrumentID: stmt.string(at: 3) ?? "",
         conditionSnapshot: condition,
-        triggeredAt: Date(timeIntervalSince1970: TimeInterval(triggeredMs) / 1000),
+        triggeredAt: fromMs(stmt.int64(at: 5)),
         triggerPrice: triggerPrice,
         message: stmt.string(at: 7) ?? ""
     )
 }
+
+private func toMs(_ date: Date) -> Int64 { Int64(date.timeIntervalSince1970 * 1000) }
+private func fromMs(_ ms: Int64) -> Date { Date(timeIntervalSince1970: TimeInterval(ms) / 1000) }
 
 private func encodeJSON<T: Encodable>(_ value: T) -> String {
     guard let data = try? JSONEncoder().encode(value),

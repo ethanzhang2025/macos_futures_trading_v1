@@ -126,10 +126,10 @@ let package = Package(
             dependencies: ["Shared", "DataCore"],
             path: "Tools/MultiPeriodKLineDemo"
         ),
-        // EndToEndDemo · 端到端业务流真数据冒烟（自选 + Sina 实时 + UDS + IndicatorCore + AlertCore）
+        // EndToEndDemo · 端到端业务流真数据冒烟（自选 + Sina 实时 + UDS + IndicatorCore + AlertCore + StoreCore v6.0+ 升级）
         .executableTarget(
             name: "EndToEndDemo",
-            dependencies: ["Shared", "DataCore", "IndicatorCore", "AlertCore"],
+            dependencies: ["Shared", "DataCore", "IndicatorCore", "AlertCore", "StoreCore"],
             path: "Tools/EndToEndDemo"
         ),
         // ReviewReplayDemo · 复盘 + 回放联动真数据冒烟（JournalCore × ReplayCore × DataCore-Sina）

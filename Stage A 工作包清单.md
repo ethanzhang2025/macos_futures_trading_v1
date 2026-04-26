@@ -1063,6 +1063,19 @@
     - 🎉 通过
   - **代码质量**：code-simplifier 1 轮过审（命名一致性微调 · helper 私有重复符合项目惯例）
   - **M5 Mac App 集成预案**：UI 一次性 `try StoreManager(rootDirectory: appSupportURL, passphrase: keychainKey)` → 注入到各功能模块；登出 / 切换数据库时 `await manager.close()`
+- **EndToEndDemo 升级 StoreManager 注入已交付**（v6.0+ · 2026-04-26 · M5 集成路径预演）：
+  - **改动**：`Tools/EndToEndDemo/main.swift` import StoreCore + 段 0 init StoreManager
+    - `cache: InMemoryKLineCacheStore()` → `cache: manager.kline`（SQLite 持久化）
+    - `history = InMemoryAlertHistoryStore()` → `history = manager.alertHistory`
+    - 末尾 `await manager.close()`（须在 `history.allHistory()` 之后 · 否则 close 后读返回空）
+    - `Package.swift` EndToEndDemo dependencies +StoreCore
+    - 6 Core 联通校验加 StoreCore 行
+  - **验证**：60s 实时跑 · history 落库 **2 条**（vs 升级前 in-memory · 修复 close 时序 bug 后正确读出）· 触发 2 次匹配 ✅
+  - **价值**：
+    - StoreManager 在跨 5 Core demo 中真用上（不只 isolated 测试）· 人体工学 OK
+    - close 时序教训文档化（manager.close 必须在所有 store 读完后）
+    - M5 Mac App 启动流程：一次 StoreManager init → 各功能模块从 manager 拿 store · 登出 close
+  - **回归**：Linux swift test 656/155 全绿（基线维持）
 - **留待 WP-19b v3**（M5 上线前）：
   - 旧明文升级到加密（schema 版本号 + 迁移脚本）
   - keychain 集成（passphrase 安全存储 · Mac 切机时做）

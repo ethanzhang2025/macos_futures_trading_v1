@@ -1,15 +1,17 @@
-// 端到端业务流真数据冒烟 demo
+// 端到端业务流真数据冒烟 demo（v6.0+ StoreManager 注入升级）
 //
 // 用途：
-// - 串联 6 Core（Shared / DataCore-Sina / DataCore-UDS / IndicatorCore / AlertCore）真行情管线
+// - 串联 6 Core（Shared / DataCore-Sina / DataCore-UDS / IndicatorCore / AlertCore / StoreCore）真行情管线
 // - 从「单 Core 可用」迈向「系统可用」的关键回归
 // - 验证：自选簿 → 历史 K + 指标 → UnifiedDataSource 实时合成 → AlertEvaluator 真触发
 // - WP-44c 起：RB0 同时走 UDS + AlertEvaluator（同合约多 handler 字典）→ 直接受益场景
+// - v6.0+ 升级：cache + history 由 StoreManager 一次注入（持久化到 SQLite · M5 集成路径预演）
 //
 // 拓扑：
+//   段 0 · StoreManager init（一次给 cache/history 提供持久化 store）
 //   段 1 · WatchlistBook + sina.fetchMinute60KLines × 3 合约 + IndicatorCore（永远稳定可见）
-//   段 2 · UnifiedDataSource（cache + RB0 .second30 实时 K 线流）
-//   段 3 · SinaProvider 直订 RB0 + IF0 → AlertEvaluator → AsyncStream 触发流
+//   段 2 · UnifiedDataSource（manager.kline + RB0 .second30 实时 K 线流）
+//   段 3 · SinaProvider 直订 RB0 + IF0 → AlertEvaluator(manager.alertHistory) → AsyncStream 触发流
 //          · RB0 同时被 UDS 与 AlertEvaluator 订阅（验证 WP-44c 修复）
 //
 // 段 2 + 段 3 共享 1 个 SinaMarketDataProvider + 1 个 SinaPollingDriver；
@@ -23,14 +25,24 @@ import Shared
 import DataCore
 import IndicatorCore
 import AlertCore
+import StoreCore
 
 @main
 struct EndToEndDemo {
 
     static func main() async throws {
-        printSection("端到端业务流真数据冒烟（自选 + Sina 实时 + 指标 + 预警）")
+        printSection("端到端业务流真数据冒烟（自选 + Sina 实时 + 指标 + 预警 + StoreManager 持久化）")
 
         let sina = SinaMarketData()
+
+        // 段 0：StoreManager 一次 init（v6.0+ 升级 · 段 2 cache + 段 3 history 都从 manager 取）
+        printSection("段 0 · StoreManager init（M5 Mac App 启动流程预演）")
+        let storeRoot = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("e2e_demo_\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: storeRoot) }
+        let manager = try StoreManager(rootDirectory: storeRoot)
+        print("  🗄️ rootDirectory=\(storeRoot.path)")
+        print("  🗄️ isEncrypted=\(manager.isEncrypted) · 6 store 文件就位")
 
         // 段 1：自选 + 历史 K + 指标末值
         let watchlist = buildWatchlistBook()
@@ -47,10 +59,9 @@ struct EndToEndDemo {
         let provider = SinaMarketDataProvider(fetcher: sina)
         await provider.connect()
 
-        // 段 2：UnifiedDataSource 实时 K 线
-        printSection("段 2 · UnifiedDataSource 实时合成 RB0 30s K 线")
-        let cache = InMemoryKLineCacheStore()
-        let uds = UnifiedDataSource(cache: cache, realtime: provider, cacheMaxBars: 200)
+        // 段 2：UnifiedDataSource 实时 K 线（cache 改用 manager.kline · SQLite 持久化）
+        printSection("段 2 · UnifiedDataSource 实时合成 RB0 30s K 线（cache=manager.kline）")
+        let uds = UnifiedDataSource(cache: manager.kline, realtime: provider, cacheMaxBars: 200)
         let stage2Counter = Stage2Counter()
         let stage2Stream = await uds.start(instrumentID: "RB0", period: .second30)
         let stage2Task = Task {
@@ -96,7 +107,8 @@ struct EndToEndDemo {
                 cooldownSeconds: 10000
             )
         ]
-        let history = InMemoryAlertHistoryStore()
+        // history 改用 manager.alertHistory · SQLite 持久化（M5 用户登出后历史可恢复）
+        let history = manager.alertHistory
         let evaluator = AlertEvaluator(history: history)
         for alert in alerts {
             await evaluator.addAlert(alert)
@@ -132,6 +144,7 @@ struct EndToEndDemo {
         await provider.disconnect()
         stage2Task.cancel()
         stage3Task.cancel()
+        // 注意：manager.close() 推迟到末尾 · 总结段 history.allHistory() 需先读出
 
         // 总结
         printSection("端到端结果统计")
@@ -162,6 +175,7 @@ struct EndToEndDemo {
             ("DataCore UDS    ", "snapshot=\(snapshotEvents) 事件 / completedBar=\(completedBars) 根"),
             ("IndicatorCore   ", "段 1 表格 MA20 / MACD-DIF / RSI14 末值"),
             ("AlertCore       ", "触发 \(totalTriggers) 次 / history 落库 \(allHistory.count) 条"),
+            ("StoreCore       ", "StoreManager 6 store 一次注入 · cache=kline / history=alertHistory · close 完成"),
         ]
         for (name, desc) in coreChecks {
             print("  ✅ \(name) · \(desc)")
@@ -175,8 +189,11 @@ struct EndToEndDemo {
 
         let allAlertsPassed = alerts.allSatisfy { matches(count: triggerCount($0), expected: expectedLabel($0)) }
         printSection(allAlertsPassed
-            ? "🎉 端到端业务流真数据冒烟通过（6 Core 联通验证）"
+            ? "🎉 端到端业务流真数据冒烟通过（6 Core 联通验证 + StoreManager 持久化）"
             : "⚠️  端到端业务流部分验收未达标（详见上方）")
+
+        // StoreManager 收尾 close（必须在 history.allHistory 读完后）
+        await manager.close()
     }
 
     // MARK: - 段 1 helpers

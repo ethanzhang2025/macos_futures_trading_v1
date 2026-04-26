@@ -832,6 +832,20 @@
   - **测试**：+10 测试 +1 suite · `Tests/IndicatorCoreTests/FormulaEngineTests/MaiYuYanExtensionBatch2Tests.swift` · Linux swift test 627/152 → **637/153 全绿** 1.009s
   - **代码质量**：code-simplifier 1 轮过审（BACKSET `Decimal(0)` 显式 + MEDIAN if/else 替代三元）
   - **后续批次（第 3 批 · 预留）**：剩 ~5% 边角函数（DRAWICON/STICKLINE/DRAWBAND 等画图函数留 ChartCore；WINNER/COST 需筹码分布数据；REVERSE 命名非标准跳过）
+- **MaiYuYanFormulaDemo · 第 18 个真数据 demo**（v6.0+ · 2026-04-26 · 第 1+2 批 10 函数真行情验证）：
+  - 位置：`Tools/MaiYuYanFormulaDemo/main.swift` · `swift run MaiYuYanFormulaDemo`（~3-5s 含 Sina 拉取）
+  - 4 段：拉 Sina RB0 60min K 线 / 跑 8 文华公式 / 10 新函数覆盖验证 / 总结
+  - **关键证据**（1023 根真行情 · 2025-08-07 ~ 2026-04-24）：
+    - 公式 1（金叉死叉）：CROSS 触发 34 次 / CROSSDOWN 触发 34 次 ✅
+    - 公式 2（布林通道外）：MA20=3186.75 / STD=7.94 / OUT 触发 108 次 ✅
+    - 公式 3（信号回设）：原信号 34 次 / BACKSET 后 102 次（≈3 倍 ✅）
+    - 公式 4-5（波峰/谷）：PEAKBARS 末值 1 / LASTPEAK 3206 / TROUGHBARS 末值 5 ✅
+    - 公式 6-7（VARIANCE/MEDIAN）：V=63.09 / MED=3187（与 MA20 接近 ✅）
+    - 公式 8（MOD）：CLOSE MOD 5 末值 4 ✅
+  - **10 新函数全覆盖**：NOT / CROSSDOWN / MOD / PEAKBARS / TROUGHBARS / BACKSET / VARIANCE / RANGE / MEDIAN / LASTPEAK ✅
+  - 🎉 通过
+  - **代码质量**：code-simplifier 1 轮过审（runFormula helper 抽出 + 注释 WHY 标注 + allCovered 局部变量删除）
+  - **销售/合规价值**：用户从文华复制公式 → 我们引擎跑出结果（演示物料就绪）
 
 ### ⬜ WP-63 · 文华麦语言公式（.wh）导入（源自 StageA补遗 G4）
 - **时点**：M8（与 WP-62 同期）

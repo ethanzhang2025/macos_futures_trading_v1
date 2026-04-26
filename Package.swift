@@ -191,6 +191,12 @@ let package = Package(
             name: "StoreManagerDemo",
             dependencies: ["Shared", "DataCore", "JournalCore", "AlertCore", "StoreCore"],
             path: "Tools/StoreManagerDemo"
+        ),
+        // MaiYuYanFormulaDemo · WP-62 第 18 个真数据 demo（Sina 真行情 + 8 公式 + 10 新函数全覆盖）
+        .executableTarget(
+            name: "MaiYuYanFormulaDemo",
+            dependencies: ["Shared", "DataCore", "IndicatorCore"],
+            path: "Tools/MaiYuYanFormulaDemo"
         )
     ]
 )

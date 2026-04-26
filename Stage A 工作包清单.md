@@ -414,6 +414,17 @@
   - **测试**：+9 测试 +1 suite · `Tests/IndicatorCoreTests/IndicatorsTests/FuturesContextualTests.swift` · 4 指标各 2-3 case + 长度校验 + metadata · Linux swift test 647/154 → **656/155 全绿** 1.148s
   - **代码质量**：code-simplifier 1 轮过审（变量名全词化 + map 替代 for 循环 + 闭包数组替代 switch + ProductSpec.public init 补缺）
   - **后续 Step 3（待推）**：剩 6 个占位指标（MainContractShift / LongShortForce / VolumeDensity / Spread / Basis / RelativeStrength）需 Tick 级数据通道 + 多合约同步 → 归 Stage B（M12+）· Stage A 至此期货指标 6/12 已完结
+- **FuturesContextualDemo · 第 19 个真数据 demo**（v6.0+ · 2026-04-26 · B1 Step 2 兑现）：
+  - 位置：`Tools/FuturesContextualDemo/main.swift` · `swift run FuturesContextualDemo`（~3-5s 含 Sina 拉取）
+  - 4 段：拉 Sina K 线 + 解析 barTimes / 构造 FuturesContext / 跑 4 ContextualIndicator / 总结
+  - **关键证据**（1023 根真行情 · 172 交易日 · 2025-08-07 ~ 2026-04-24）：
+    - LimitPriceLines · UPPER 3,416.51 / LOWER 2,969.49（末根 close 3,194 ± 7% ✅）
+    - DeliveryCountdown · DAYS 173（4-24 23:00 → 10-15 00:00 trunc ✅）
+    - SettlementPriceLine · SETTLE 3,194（当日末根 close ✅）
+    - SessionDivider · IN_SESSION 末值=1（23:00 在 21:00-23:30 夜盘内）· 整段触发 **851/1023 = 83%**（间隙 17% 含午休/收盘后 ✅）
+  - 🎉 通过
+  - **代码质量**：code-simplifier 1 轮过审（数据 helper WHY 注释 + ?? nil 摊平注释 + 中转变量内联）
+  - **销售/合规价值**：4 个期货特有指标 + Sina 真行情 + Asia/Shanghai 时区合规 · M5 Mac UI 集成预演 + 演示物料就绪
 
 ### ✅ WP-42 · 画线工具 v1 · 数据模型层完成 2026-04-24 · commit b41acc9
 

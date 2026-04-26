@@ -197,6 +197,13 @@ let package = Package(
             name: "MaiYuYanFormulaDemo",
             dependencies: ["Shared", "DataCore", "IndicatorCore"],
             path: "Tools/MaiYuYanFormulaDemo"
+        ),
+        // FuturesContextualDemo · WP-41 B1 Step 2 第 19 个真数据 demo
+        // (Sina RB0 真行情 + 模拟 FuturesContext + 4 ContextualIndicator)
+        .executableTarget(
+            name: "FuturesContextualDemo",
+            dependencies: ["Shared", "DataCore", "IndicatorCore"],
+            path: "Tools/FuturesContextualDemo"
         )
     ]
 )

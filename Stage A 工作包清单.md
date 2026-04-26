@@ -375,6 +375,26 @@
   - ❌ 不重复实现已存在于 Legacy FormulaEngine 的函数
   - ❌ 期货特有 12 指标数据口径不得和国内主流终端偏差 > 1%
 - **锚点**：D2 §2、产品设计书 §3.1 模块②、ChatGPT A04
+- **FuturesContext 数据结构骨架已交付**（v6.0+ · 2026-04-26 · B1 大块 Tick+FuturesContext 扩展的 Step 1）：
+  - **新增 `Sources/DataCore/ContractManager/FuturesContext.swift`**（~140 行）：
+    - 主类型：`FuturesContext: Sendable` 容器（instrumentID + ProductSpec + ProductTradingHours? + listingDate? + deliveryDate? + dailyLimits + dailySettlements）
+    - 新增子类型：`DailyLimit`（tradingDay/upperLimit/lowerLimit）+ `DailySettlement`（tradingDay/settlementPrice）· 都 Sendable + Equatable + Codable + Hashable
+    - 复用 DataCore 已有 `ProductSpec` + `ProductTradingHours` + `TradingSession`（不重复字段）
+    - 4 查询 helper：`daysUntilDelivery(asOf:)` / `limit(onTradingDay:)` + `latestLimit(asOf:)` / `settlement(onTradingDay:)` + `latestSettlement(asOf:)` / `isInTradingSession(minuteOfDay:)`
+    - dailyLimits/dailySettlements init 时按 tradingDay 升序排序（latest 查询 O(N) 反扫 sorted）
+    - 跨日夜盘（如 21:00→02:30）：endM<startM 表达 · isInTradingSession 已处理
+  - **铺路 4 个占位指标真实化**（Step 2/3 实现）：
+    - LimitPriceLines（用 dailyLimits）· DeliveryCountdown（用 deliveryDate）
+    - SettlementPriceLine（用 dailySettlements）· SessionDivider（用 isInTradingSession）
+  - **设计取舍**：
+    - struct + Sendable（不 actor · 值类型不可变快照语义）
+    - daysUntilDelivery 用 timeIntervalSince/86400 简单实现（A1 接受 · 不做 Asia/Shanghai 日历跨天）
+    - 不做 FuturesContext.Equatable（ProductSpec/ProductTradingHours 跨文件不能 auto-合成 · 测试按字段单独比较即可）
+    - sameDayCalendar 抽 `private static let`（避免每次查询 alloc）
+    - 不委托 TradingCalendar（避免越界 A1 改 TradingCalendar.swift）
+  - **测试**：+10 测试 +1 suite · `Tests/DataCoreTests/ContractManagerTests/FuturesContextTests.swift` · sort/4 查询/日盘/跨日夜盘/空 hours/Codable · Linux swift test 637/153 → **647/154 全绿** 1.013s
+  - **代码质量**：code-simplifier 1 轮过审（sameDayCalendar 抽 static + 循环变量 session 命名 + 注释精修）
+  - **后续 Step 2/3（待推）**：4 占位指标 calculate(kline:context:) 实现 + Tick 级数据通道（StageB 多合约 / 实盘 OI 增量 / 主动买卖量）
 
 ### ✅ WP-42 · 画线工具 v1 · 数据模型层完成 2026-04-24 · commit b41acc9
 

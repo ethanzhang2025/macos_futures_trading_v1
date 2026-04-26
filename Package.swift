@@ -120,6 +120,12 @@ let package = Package(
             name: "EndToEndDemo",
             dependencies: ["Shared", "DataCore", "IndicatorCore", "AlertCore"],
             path: "Tools/EndToEndDemo"
+        ),
+        // ReviewReplayDemo · 复盘 + 回放联动真数据冒烟（JournalCore × ReplayCore × DataCore-Sina）
+        .executableTarget(
+            name: "ReviewReplayDemo",
+            dependencies: ["Shared", "DataCore", "JournalCore", "ReplayCore"],
+            path: "Tools/ReviewReplayDemo"
         )
     ]
 )

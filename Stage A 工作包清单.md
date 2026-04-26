@@ -408,11 +408,25 @@
 ### ✅ 端到端业务流真数据冒烟（v5.0+ 跨 5 Core 集成 demo · 第 7 个真数据 demo）
 
 - **位置**：`Tools/EndToEndDemo/main.swift` · `swift run EndToEndDemo`（60s 真网络）
-- **拓扑**：段 1 自选簿 + sina.fetchMinute60KLines × 3 合约 + IndicatorCore 末值 / 段 2 UnifiedDataSource(cache + RB0 .second30) 实时合成 / 段 3 SinaProvider 直订 AU0+IF0 → AlertEvaluator 真触发 + history 落库
-- **共享**：1 个 SinaMarketDataProvider + 1 个 SinaPollingDriver；合约分流（RB0→UDS / AU0+IF0→AlertEvaluator）
+- **拓扑**：段 1 自选簿 + sina.fetchMinute60KLines × 3 合约 + IndicatorCore 末值 / 段 2 UnifiedDataSource(cache + RB0 .second30) 实时合成 / 段 3 SinaProvider 直订 RB0+IF0 → AlertEvaluator 真触发 + history 落库
+- **共享**：1 个 SinaMarketDataProvider + 1 个 SinaPollingDriver；WP-44c 修复后 RB0 同时被 UDS + AlertEvaluator 订阅（同合约多 handler）
 - **6 Core 联通**：Shared(Watchlist) ✅ + DataCore-Sina ✅ + DataCore-UDS ✅ + IndicatorCore ✅ + AlertCore ✅ · code-simplifier 1 轮过审
-- **暴露的真问题**：同合约不能同时被 UDS + AlertEvaluator 订阅（SinaProvider.subscribe 是 `handlers[id]=handler` 字典覆盖语义）→ 留 WP-44c 修（多 handler 字典）
-- **回归**：527/134 swift test 全绿（demo 不带测试，executableTarget 不入测试套）
+- **暴露 → 修复**：同合约多订阅暴露 SinaProvider.subscribe 字典覆盖问题 → WP-44c 已修（多 handler 字典 + token 化退订）
+- **回归**：527/134 → 533/135 swift test 全绿（demo 不带测试，executableTarget 不入测试套）
+
+---
+
+### ✅ 复盘 + 回放联动真数据冒烟（v5.0+ 跨 3 Core 集成 demo · 第 8 个真数据 demo）
+
+- **位置**：`Tools/ReviewReplayDemo/main.swift` · `swift run ReviewReplayDemo`（~3s 真网络 + 本地回放）
+- **拓扑**：拉 Sina RB0 60min K 线最近 80 根 → 基于真实 K 收盘价 + 时间动态构造 7 笔模拟成交（4 段：3 闭合 + 1 未平仓）→ 同一组 trades 同时驱动两条业务流
+  - 段 1（JournalCore）：PositionMatcher.match → ClosedPosition[] → ReviewAnalytics 5/8 个聚合算法（monthlyPnL / pnlDistribution / winRateCurve / profitLossRatio / sessionPnL）
+  - 段 2（ReplayCore）：trades → TradeMark[] → ReplayPlayer.load(bars, marks) → 8x 回放（每 30ms 一根 K · 80 根 ≈ 2.4s）→ 每 K emit 时 player.tradeMarksAtCurrentBar 查询 + 标注打印
+  - 段 3（跨 Core 一致性）：trade 总数 == TradeMark 标注命中数 ✅ + ClosedPosition.openPrice/closePrice ⊆ trades 价位集合 ✅ + 价位锚定真实 K close ✅
+- **3 Core 联通**：DataCore-Sina（fetchMinute60KLines）✅ + JournalCore（FIFO 配对 + 5 聚合算法）✅ + ReplayCore（5 档速度 + TradeMark 时间窗匹配）✅
+- **价值**：为 M4 复盘界面"图表 + 成交点叠加"准备数据流契约；同一交割单驱动两条业务流，任何一边跑偏会被对方暴露
+- **代码质量**：code-simplifier 1 轮过审 · 净 -12 行（链式调用 / count(where:) / map(\\.price) / allSatisfy 等 Karpathy 偏好）
+- **回归**：533/135 swift test 全绿（基线维持）
 
 ---
 

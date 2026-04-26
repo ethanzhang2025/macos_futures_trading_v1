@@ -185,6 +185,12 @@ let package = Package(
             name: "ContractStoreDemo",
             dependencies: ["Shared", "DataCore"],
             path: "Tools/ContractStoreDemo"
+        ),
+        // StoreManagerDemo · WP-19a-7 第 17 个真数据 demo（M5 启动流程预演 · 6 store 一次 init + 联动写读 + 加密重启）
+        .executableTarget(
+            name: "StoreManagerDemo",
+            dependencies: ["Shared", "DataCore", "JournalCore", "AlertCore", "StoreCore"],
+            path: "Tools/StoreManagerDemo"
         )
     ]
 )

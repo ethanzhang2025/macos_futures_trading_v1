@@ -963,6 +963,15 @@
     - init 失败时已构造 store 的 SQLite handle 泄漏到进程退出（Swift 6 actor deinit 不能调用 isolated 方法 · UI 启动失败 → OS 回收 · 注释显式标注）
   - **测试**：+10 测试 +1 suite · Linux swift test 607/150 → **617/151 全绿** 1.031s
   - **代码质量**：code-simplifier 1 轮过审 · `isEncrypted` 表达式简化（`!(... ?? true)` → `... == false`）+ 2 处 `(try? ...) == nil` 替代 do/catch+var 标志（项目惯例）
+  - **StoreManagerDemo · 第 17 个真数据 demo**（v6.0+ · 2026-04-26 · M5 启动流程端到端预演）：
+    - 位置：`Tools/StoreManagerDemo/main.swift` · `swift run StoreManagerDemo`（~1s 纯本地）
+    - 8 段：首次启动 init 加密 / 6 store 联动各写 1 笔 / close / 同密钥重开读回 / 错密钥拒绝 / 6 文件头 hexdump 无 magic / 配置内省 / 总结
+    - **关键证据**：
+      - 6 个文件头 hexdump 全部乱码 · 无 `SQLite format 3` magic ✅
+      - 同密钥重开后 Analytics / KLine / Trade / Alert / Watchlist / Workspace 6 项数据全部读回成功 ✅
+      - 错密钥 `WRONG-KEY` init 抛错拒绝 ✅
+    - 🎉 通过
+  - **代码质量**：code-simplifier 1 轮过审（命名一致性微调 · helper 私有重复符合项目惯例）
   - **M5 Mac App 集成预案**：UI 一次性 `try StoreManager(rootDirectory: appSupportURL, passphrase: keychainKey)` → 注入到各功能模块；登出 / 切换数据库时 `await manager.close()`
 - **留待 WP-19b v3**（M5 上线前）：
   - 旧明文升级到加密（schema 版本号 + 迁移脚本）

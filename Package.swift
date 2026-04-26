@@ -163,6 +163,12 @@ let package = Package(
             name: "JournalGeneratorDemo",
             dependencies: ["Shared", "JournalCore"],
             path: "Tools/JournalGeneratorDemo"
+        ),
+        // EncryptionDemo · WP-19b SQLCipher 加密层端到端（hexdump 字节差异 + 6 store 加密 init 串测）
+        .executableTarget(
+            name: "EncryptionDemo",
+            dependencies: ["Shared", "DataCore", "JournalCore", "AlertCore"],
+            path: "Tools/EncryptionDemo"
         )
     ]
 )

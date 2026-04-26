@@ -17,6 +17,11 @@ public actor SQLiteWorkspaceBookStore: WorkspaceBookStore {
         self.connection = try SQLiteConnection(path: path)
     }
 
+    /// WP-19b v2 · 加密构造（passphrase 为 nil/空时行为同非加密 init）
+    public init(path: String, passphrase: String?) throws {
+        self.connection = try SQLiteConnection(path: path, passphrase: passphrase)
+    }
+
     public func close() async {
         await connection.close()
     }

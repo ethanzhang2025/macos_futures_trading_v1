@@ -19,6 +19,11 @@ public actor SQLiteAnalyticsEventStore: AnalyticsEventStore {
         self.connection = try SQLiteConnection(path: path)
     }
 
+    /// WP-19b v2 · 加密构造（passphrase 为 nil/空时行为同非加密 init）
+    public init(path: String, passphrase: String?) throws {
+        self.connection = try SQLiteConnection(path: path, passphrase: passphrase)
+    }
+
     /// 关闭底层连接 · Swift 6 deinit 不能访问 actor 状态，需显式 close
     public func close() async {
         await connection.close()

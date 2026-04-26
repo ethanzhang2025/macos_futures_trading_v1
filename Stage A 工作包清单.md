@@ -810,7 +810,7 @@
 - **DoD**：数据分层实现 + 两端同步验证 + 隐私政策对应更新
 - **锚点**：D2 §4、StageA补遗 G1、产品设计书 9.2
 
-### 🟨 WP-19 · 数据持久化 SQLCipher（19a 客户端 SQLite ✅ / 19a-5/6 ✅ / 19b 加密层 v1 ✅）
+### 🟨 WP-19 · 数据持久化 SQLCipher（19a ✅ / 19a-5/6 ✅ / 19b v1 ✅ / 19b v2 ✅ · 留 v3 迁移+keychain）
 - **时点**：M3-M5（M5 上线前必备 · 容量 + 加密双需求）
 - **负责**：你
 - **交付**：4 个 Store 升级到 SQLite + SQLCipher 加密层
@@ -871,10 +871,31 @@
   - **6 store 协议零改动**：KLine + Journal + Alert + Analytics + Watchlist + Workspace 现有测试全部通过（passphrase=nil 路径）· M5 上线时各 store 升级方案：传 path + passphrase 即可，对外 API 零改动
   - **回归**：586/145 → **592/146 全绿**（向后兼容验证通过）
   - **代码质量**：code-simplifier 1 轮过审 · 加密路径 inline 错误处理（actor isolation 限制 nested func 不能改 self · 必须 inline）· 验证用 sqlite3_exec 单步（比 prepare/step/finalize 三步紧凑）
-- **留待 WP-19b v2**（M5 上线前）：
-  - 6 store 各加 init(path:passphrase:) 重载（统一传入 SQLiteConnection 即可，零侵入）
-  - 测试：旧明文升级到加密（schema 版本号 + 迁移脚本）
-  - 可选：DBPool（多连接读 + 单连接写）/ keychain 集成（passphrase 安全存储 · Mac 切机时做）
+- **WP-19b v2 已交付**（v5.0+ · 2026-04-26 · 6 store 加密直通）：
+  - **6 store 各加 init(path:passphrase:) 重载**：每 store 5 行 · 直通 SQLiteConnection 同名 init
+    - SQLiteAnalyticsEventStore / SQLiteKLineCacheStore / SQLiteJournalStore
+    - SQLiteAlertHistoryStore / SQLiteWatchlistBookStore / SQLiteWorkspaceBookStore
+    - 调用模式统一：`SQLiteJournalStore(path: ..., passphrase: keychainKey)`
+    - 对外 API 零改动 · UI 层 M5 升级时只需替换 init 调用
+  - **EncryptionDemo（第 15 个真数据 demo）**：
+    - 位置：`Tools/EncryptionDemo/main.swift` · `swift run EncryptionDemo`（~1s 纯本地）
+    - 5 段：加密写入 / 明文写入 / hexdump 字节对比 / 错误密钥拒绝 / 6 store 加密 init 串测
+    - **关键证据**：
+      - 明文文件前 64 字节包含 `SQLite format 3` 字符串 ✅
+      - 加密文件前 64 字节完全乱码 · 不含 `SQLite format 3` ✅
+      - 错误密钥打开加密文件 → 抛错拒绝 ✅
+      - 6 store 加密 init 全部成功（Analytics 16KB / KLine 16KB / Journal 32KB / Alert 20KB / Watchlist 8KB / Workspace 8KB）✅
+    - 🎉 通过
+  - **代码质量**：code-simplifier 1 轮过审
+    - 抽 `sqliteHeader / hexdumpBytes / storeExts` static let 常量
+    - `printBytesBlock(label:bytes:)` + `containsHeader(_:)` helper 消除重复
+    - 段 4 用 `(try? Init) == nil` 替代 do/catch + var 标志（Karpathy 偏好）
+    - `pathFor(_:)` nested func 消除路径模板漂移
+  - **回归**：592/146 全绿（基线维持）
+- **留待 WP-19b v3**（M5 上线前）：
+  - 旧明文升级到加密（schema 版本号 + 迁移脚本）
+  - keychain 集成（passphrase 安全存储 · Mac 切机时做）
+  - 可选：DBPool（多连接读 + 单连接写）
 
 ---
 

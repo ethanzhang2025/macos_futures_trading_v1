@@ -60,12 +60,14 @@ public struct Interpreter: Sendable {
             return Array(repeating: nil, count: count)
 
         case .variable(let name):
-            // 内置行情变量
-            if let series = context.getBuiltinSeries(name) {
+            // 用户定义的中间变量优先（lexical scoping · 用户 V: 应能 shadow VOLUME）
+            // 修复 bug：原顺序 builtin 优先导致 V/C/O/H/L/S 等单字符变量被遮蔽
+            // （如 V:VARIANCE(CLOSE,20); DIFF:V-X 中的 V 实际取 VOLUME 而非 VARIANCE 结果）
+            if let series = context.variables[name] {
                 return series
             }
-            // 用户定义的中间变量
-            if let series = context.variables[name] {
+            // 内置行情变量
+            if let series = context.getBuiltinSeries(name) {
                 return series
             }
             throw InterpreterError(message: "未定义的变量: \(name)")

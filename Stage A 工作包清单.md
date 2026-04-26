@@ -896,6 +896,18 @@
   - 🎉 通过
   - **代码质量**：code-simplifier 1 轮过审（runFormula helper 抽出 + 注释 WHY 标注 + allCovered 局部变量删除）
   - **销售/合规价值**：用户从文华复制公式 → 我们引擎跑出结果（演示物料就绪）
+- **Interpreter bug 修复 · 用户变量优先于 builtin**（v6.0+ · 2026-04-26 · MaiYuYanFormulaDemo 公式 6 揭露）：
+  - **现象**：`V:VARIANCE(CLOSE,20); S:STD(CLOSE,20); DIFF:V-S*S;` · DIFF 末值 = -8.0875（应 ≈ 0）
+  - **根因**：`ExecutionContext.getBuiltinSeries` 含 `case "VOL", "V", "VOLUME"` · 原 `evaluateSeries` 顺序 builtin 优先 · 用户 `V:` 被 VOLUME 序列遮蔽 · DIFF 实际计算为 `VOLUME[末] - STD²[末] ≈ 100 - 33.25 = 66.75`
+  - **修复**：`Sources/IndicatorCore/FormulaEngine/Interpreter/Interpreter.swift` `case .variable` 顺序改为 user variables 优先（标准 lexical scoping · 与大多数语言一致 · 用户 V/C/H/L/O/S 等单字符 shadow 同名 builtin）
+  - **回归测试**：+3 测试 +1 suite · `Tests/IndicatorCoreTests/FormulaEngineTests/VarianceStdInvestigationTests.swift`：
+    - `testUserVariableShadowsBuiltin`（V/C/H/L/O/S 都验证）
+    - `testVarianceStdSquaredInMultiStatement`（修复后 DIFF ≈ 0）
+    - `testMultiStatementVariableLookup`（中间变量按定义顺序生效）
+  - **回归**：Linux swift test 656/155 → **659/156 全绿** 0.808s
+  - **Demo 验证**：`swift run MaiYuYanFormulaDemo` · 公式 6 DIFF 末值从 **-8.0875 → 0** ✅
+  - **影响范围**：所有麦语言用户算术运算的可靠性 · 后续 `.wh` 公式导入（WP-63）依赖此修复
+  - **教训**：内置变量名（VOLUME/V/C/H/L/O/CLOSE/HIGH/LOW/OPEN/AMOUNT/OPI 等）优先级问题 · 早期 demo 揭露真实 bug 价值
 
 ### ⬜ WP-63 · 文华麦语言公式（.wh）导入（源自 StageA补遗 G4）
 - **时点**：M8（与 WP-62 同期）

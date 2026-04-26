@@ -132,6 +132,12 @@ let package = Package(
             name: "UDSHistoryMergeDemo",
             dependencies: ["Shared", "DataCore"],
             path: "Tools/UDSHistoryMergeDemo"
+        ),
+        // IndicatorAlertDemo · IndicatorCore + AlertCore 联动（MA20 crossAbove 动态预警 + Console + File 通道）
+        .executableTarget(
+            name: "IndicatorAlertDemo",
+            dependencies: ["Shared", "DataCore", "IndicatorCore", "AlertCore"],
+            path: "Tools/IndicatorAlertDemo"
         )
     ]
 )

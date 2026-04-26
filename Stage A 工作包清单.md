@@ -441,6 +441,26 @@
 
 ---
 
+### ✅ IndicatorCore + AlertCore 联动真数据冒烟（v5.0+ · 第 10 个真数据 demo · 6 Core 全闭环）
+
+- **位置**：`Tools/IndicatorAlertDemo/main.swift` · `swift run IndicatorAlertDemo`（~70s 真网络）
+- **拓扑**（5 段）：
+  - 段 1 · UDS v2 加载 200 根历史 K → IndicatorCore 计算初始 MA20=3186.75
+  - 段 2 · 注册 2 预警（静态 priceAbove 必触发 / 动态 priceCrossAbove 跟随 MA20）+ 2 真通道（ConsoleChannel + FileChannel）
+  - 段 3 · 跑 60s · WP-44c 同合约 UDS + Alert 双订阅 · UDS .completedBar → 重算 MA20 → updateAlert（保留 lastTriggeredAt）
+  - 段 4 · 触发统计 + FileChannel log 文件读回末 N 行
+  - 段 5 · 6 Core 联通校验
+- **6 Core 全闭环**：Shared + DataCore-Sina + DataCore-UDS v2 + IndicatorCore + AlertCore + AlertChannels（Console + File）全部真落地
+- **真验证**（夜盘 23:55 跑通）：
+  - 静态预警必触发 1 次（priceAbove(3136.75)）→ 触发 stream + console stdout（`[ALERT-CN] [2026-04-26 13:55:30] 🔔 ...`）+ FileChannel log 文件 1 行
+  - history 落库 1 条 · 动态预警 0 次（价格未跨 MA20，符合预期）
+  - 🎉 通过
+- **代码质量**：code-simplifier 1 轮过审 · 净 +5 行（抽 makeDynamicAlert helper 收口 7 字段不变量）
+- **修复**：KLine.openInterest(Decimal) → KLineSeries.openInterests([Int]) 类型差 + 三层 Optional 表达式编译挂掉 · 共 2 个手术式修复
+- **回归**：575/144 swift test 全绿（基线维持）
+
+---
+
 ### ✅ UDS v2 历史合并真数据冒烟（v5.0+ · 第 9 个真数据 demo · v1 vs v2 对比）
 
 - **位置**：`Tools/UDSHistoryMergeDemo/main.swift` · `swift run UDSHistoryMergeDemo`（~70s 真网络 · 60s 等实时 + 网络拉历史）

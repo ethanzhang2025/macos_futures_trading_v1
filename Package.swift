@@ -138,6 +138,12 @@ let package = Package(
             name: "IndicatorAlertDemo",
             dependencies: ["Shared", "DataCore", "IndicatorCore", "AlertCore"],
             path: "Tools/IndicatorAlertDemo"
+        ),
+        // WatchlistWorkspacePersistDemo · WP-19a-5/6 SQLite 持久化端到端（写入 + 重启恢复 + 脏 JSON 保护）
+        .executableTarget(
+            name: "WatchlistWorkspacePersistDemo",
+            dependencies: ["Shared"],
+            path: "Tools/WatchlistWorkspacePersistDemo"
         )
     ]
 )

@@ -441,6 +441,26 @@
 
 ---
 
+### ✅ Watchlist + Workspace 持久化端到端真数据冒烟（v5.0+ · 第 11 个真数据 demo · WP-19a-5/6 验收）
+
+- **位置**：`Tools/WatchlistWorkspacePersistDemo/main.swift` · `swift run WatchlistWorkspacePersistDemo`（~1s 纯本地）
+- **拓扑**（5 段）：
+  - 段 1 · 准备临时 SQLite 文件路径（不依赖 Sina 网络）
+  - 段 2 · 写入：WatchlistBook 3 组 9 合约（核心 / 备选 / 套利）+ WorkspaceBook 3 模板（盘前 / 盘中（激活，2 窗口）/ 盘后）+ Cmd+1 快捷键 · save + close
+  - 段 3 · 模拟进程重启 · 重新打开同 path → load 验证完整往返（==）
+  - 段 4 · 文件大小内省（各 8192 字节 = SQLite 默认页大小 · 数据 < 几 KB）
+  - 段 5 · 负向场景 · 脏 JSON 触发 `WatchlistBookStoreError.decodeFailed`（不静默吞数据）
+- **真验证**（夜盘 23:38）：
+  - WatchlistBook load 完整往返 ✅（3 组 9 合约逐字恢复）
+  - WorkspaceBook load 完整往返 ✅（含 templates / windows / shortcut / activeTemplateID 全字段）
+  - 脏 JSON 显式抛 decodeFailed ✅（UI 层可感知 · 不丢数据）
+  - 🎉 通过
+- **价值**：验证 WP-19a-5/6 在 production-like "持久化 → 进程退出 → 重启 → 恢复" 链路工作 · UI 启动恢复自选 + 工作区铺路 · UI 层数据契约就绪
+- **代码质量**：code-simplifier 1 轮过审 · 确认无可改（do-catch + bool 标志在 Result(catching:) 不支持 async 闭包约束下已最简）
+- **回归**：586/145 swift test 全绿（基线维持）
+
+---
+
 ### ✅ IndicatorCore + AlertCore 联动真数据冒烟（v5.0+ · 第 10 个真数据 demo · 6 Core 全闭环）
 
 - **位置**：`Tools/IndicatorAlertDemo/main.swift` · `swift run IndicatorAlertDemo`（~70s 真网络）

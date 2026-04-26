@@ -946,6 +946,24 @@
     - 段 4 用 `(try? Init) == nil` 替代 do/catch + var 标志（Karpathy 偏好）
     - `pathFor(_:)` nested func 消除路径模板漂移
   - **回归**：592/146 全绿（基线维持）
+- **WP-19a-7 已交付**（v6.0+ · 2026-04-26 · 6 store 统一管理器 · M5 Mac App 启动入口）：
+  - **新增顶层模块 StoreCore**（library · 依赖 Shared + DataCore + JournalCore + AlertCore · 解决 Shared 不能反向依赖问题）：
+    - `Sources/StoreCore/StoreManager.swift`（~115 行 · `struct + Sendable` 容器 · 各 store 自隔离 actor）
+    - `Tests/StoreCoreTests/StoreManagerTests.swift`（10 测试 · 覆盖路径自动创建 / 加密 vs 明文 / 文件头 hexdump / 同密钥往返 / 错密钥拒绝 / close 后不可用 / 内省 / 文件名常量契约）
+    - `Package.swift`：+1 product + 1 target + 1 testTarget
+  - **职责集中**：
+    - 路径模板（6 个文件名固化为 `public static` 常量 + `allFileNames` 数组 · 迁移/备份脚本可引用 · 避免 UI 各处自拼路径漂移）
+    - passphrase 注入（nil/空 → 6 store 全走明文 · 一次注入 · 上层不需逐 store 传）
+    - 自动创建 `rootDirectory`（含多级嵌套）
+    - 生命周期 `close()`（串行 await 6 store · 顺序无关 · 简单优先）
+    - `rootDirectory` / `isEncrypted` 内省 properties
+  - **设计取舍**：
+    - struct + Sendable + 各 store 自隔离 actor（不嵌套 actor · 容器仅做引用聚合）
+    - 6 store init 类型异构无法循环抽 helper（Karpathy "避免过度复杂" · 接受 6 行重复）
+    - init 失败时已构造 store 的 SQLite handle 泄漏到进程退出（Swift 6 actor deinit 不能调用 isolated 方法 · UI 启动失败 → OS 回收 · 注释显式标注）
+  - **测试**：+10 测试 +1 suite · Linux swift test 607/150 → **617/151 全绿** 1.031s
+  - **代码质量**：code-simplifier 1 轮过审 · `isEncrypted` 表达式简化（`!(... ?? true)` → `... == false`）+ 2 处 `(try? ...) == nil` 替代 do/catch+var 标志（项目惯例）
+  - **M5 Mac App 集成预案**：UI 一次性 `try StoreManager(rootDirectory: appSupportURL, passphrase: keychainKey)` → 注入到各功能模块；登出 / 切换数据库时 `await manager.close()`
 - **留待 WP-19b v3**（M5 上线前）：
   - 旧明文升级到加密（schema 版本号 + 迁移脚本）
   - keychain 集成（passphrase 安全存储 · Mac 切机时做）

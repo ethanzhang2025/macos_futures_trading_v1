@@ -25,7 +25,8 @@ let package = Package(
         .library(name: "AlertCore", targets: ["AlertCore"]),
         .library(name: "ReplayCore", targets: ["ReplayCore"]),
         .library(name: "WorkspaceCore", targets: ["WorkspaceCore"]),
-        .library(name: "TradingCore", targets: ["TradingCore"])
+        .library(name: "TradingCore", targets: ["TradingCore"]),
+        .library(name: "StoreCore", targets: ["StoreCore"])
     ],
     dependencies: [],
     targets: [
@@ -78,6 +79,15 @@ let package = Package(
         // Stage A 不激活到 App；Stage B WP-220 起使用
         .target(name: "TradingCore", dependencies: ["Shared", "DataCore"], path: "Sources/TradingCore"),
         .testTarget(name: "TradingCoreTests", dependencies: ["TradingCore"], path: "Tests/TradingCoreTests"),
+
+        // MARK: - StoreCore · 6 store 统一管理器（WP-19a-7 · M5 Mac App 启动入口）
+        // 集中：path 模板 + passphrase 注入 + 生命周期；依赖 Shared + 3 个 store 宿主模块
+        .target(
+            name: "StoreCore",
+            dependencies: ["Shared", "DataCore", "JournalCore", "AlertCore"],
+            path: "Sources/StoreCore"
+        ),
+        .testTarget(name: "StoreCoreTests", dependencies: ["StoreCore"], path: "Tests/StoreCoreTests"),
 
         // MARK: - Tools · 命令行验证工具（非生产代码，CI 可跳过）
         // SinaTickDemo · WP-31a 真网络回归（拉 RB0/IF0/AU0/CU0 实时报价 30s）

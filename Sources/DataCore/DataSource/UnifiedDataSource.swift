@@ -50,6 +50,8 @@ public actor UnifiedDataSource {
     }
 
     private var subscriptions: [Key: SubscriptionState] = [:]
+    /// WP-44c · 每个 instrumentID 在 realtime 上的订阅 token（首次订阅时记录，cleanup 时精确退订）
+    private var realtimeTokens: [String: SubscriptionToken] = [:]
 
     // MARK: - 初始化
 
@@ -103,10 +105,12 @@ public actor UnifiedDataSource {
 
         // 6. 仅当此 instrumentID 是首次订阅时注册 realtime handler
         //    后续同 instrumentID 的其他 period 共享此 handler（避免 MarketDataProvider 字典覆盖）
+        // WP-44c · 保存 token 以便 cleanup 精确退订（不影响同合约其他模块的 handler）
         if isFirstSubscriptionForInstrument {
-            await realtime.subscribe(instrumentID) { [weak self] tick in
+            let token = await realtime.subscribe(instrumentID) { [weak self] tick in
                 Task { await self?.handleTick(tick) }
             }
+            realtimeTokens[instrumentID] = token
         }
 
         return stream
@@ -157,10 +161,11 @@ public actor UnifiedDataSource {
         guard let sub = subscriptions.removeValue(forKey: key) else { return }
         sub.continuation.finish()
 
-        // 若该 instrumentID 已无任何 period 订阅，取消上游 realtime 订阅
+        // 若该 instrumentID 已无任何 period 订阅，按 token 精确退订上游 realtime
+        // WP-44c · 不再调 unsubscribe(_:) 清空整个 bucket（避免误清同合约其他模块的 handler）
         let stillSubscribed = subscriptions.keys.contains { $0.instrumentID == key.instrumentID }
-        if !stillSubscribed {
-            await realtime.unsubscribe(key.instrumentID)
+        if !stillSubscribed, let token = realtimeTokens.removeValue(forKey: key.instrumentID) {
+            await realtime.unsubscribe(key.instrumentID, token: token)
         }
     }
 }

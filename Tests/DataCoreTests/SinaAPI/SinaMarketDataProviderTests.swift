@@ -326,3 +326,116 @@ struct SinaProviderLifecycleTests {
         #expect(await provider.connectionState() == .disconnected)
     }
 }
+
+// MARK: - 6. WP-44c · 同合约多 handler 字典
+
+@Suite("SinaMarketDataProvider · WP-44c 多 handler")
+struct SinaProviderMultiHandlerTests {
+
+    @Test("同合约 2 个 handler · 单次 pollOnce 都收到 tick")
+    func sameInstrumentTwoHandlersBothReceive() async {
+        let stub = StubQuoteFetcher()
+        await stub.enqueue(.success([sampleQuote(symbol: "RB0", lastPrice: 3193)]))
+        let provider = SinaMarketDataProvider(fetcher: stub)
+        let collectorA = TickCollector()
+        let collectorB = TickCollector()
+
+        await provider.subscribe("RB0") { tick in Task { await collectorA.append(tick) } }
+        await provider.subscribe("RB0") { tick in Task { await collectorB.append(tick) } }
+        #expect(await provider.handlerCount(for: "RB0") == 2)
+        #expect(await provider.subscriberCount() == 1)  // 仍是 1 个合约 key
+
+        let dispatched = await provider.pollOnce(now: Date())
+        #expect(dispatched == 1)  // 1 个合约成功分发
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 等异步 Task 落到 collector
+        #expect(await collectorA.count("RB0") == 1)
+        #expect(await collectorB.count("RB0") == 1)
+    }
+
+    @Test("token 化精确退订 · 不影响同合约其他 handler")
+    func unsubscribeByTokenLeavesOthers() async {
+        let stub = StubQuoteFetcher()
+        await stub.enqueue(.success([sampleQuote(symbol: "RB0", lastPrice: 3193)]))
+        let provider = SinaMarketDataProvider(fetcher: stub)
+        let collectorA = TickCollector()
+        let collectorB = TickCollector()
+
+        let tokenA = await provider.subscribe("RB0") { tick in Task { await collectorA.append(tick) } }
+        await provider.subscribe("RB0") { tick in Task { await collectorB.append(tick) } }
+        #expect(await provider.handlerCount(for: "RB0") == 2)
+
+        await provider.unsubscribe("RB0", token: tokenA)
+        #expect(await provider.handlerCount(for: "RB0") == 1)
+        #expect(await provider.isSubscribed("RB0") == true)  // B 仍在
+
+        await provider.pollOnce(now: Date())
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(await collectorA.count("RB0") == 0)  // A 已退订，无 tick
+        #expect(await collectorB.count("RB0") == 1)  // B 仍收到
+    }
+
+    @Test("最后一个 token 退订 → 合约从 handlers 字典移除")
+    func unsubscribeLastTokenRemovesInstrument() async {
+        let provider = SinaMarketDataProvider(fetcher: StubQuoteFetcher())
+        let token = await provider.subscribe("RB0") { _ in }
+        #expect(await provider.subscriberCount() == 1)
+
+        await provider.unsubscribe("RB0", token: token)
+        #expect(await provider.subscriberCount() == 0)
+        #expect(await provider.isSubscribed("RB0") == false)
+        #expect(await provider.handlerCount(for: "RB0") == 0)
+    }
+
+    @Test("unsubscribe(_:) 清空合约所有 handler（兼容路径）")
+    func unsubscribeWithoutTokenClearsAllHandlers() async {
+        let provider = SinaMarketDataProvider(fetcher: StubQuoteFetcher())
+        await provider.subscribe("RB0") { _ in }
+        await provider.subscribe("RB0") { _ in }
+        await provider.subscribe("RB0") { _ in }
+        #expect(await provider.handlerCount(for: "RB0") == 3)
+
+        await provider.unsubscribe("RB0")
+        #expect(await provider.handlerCount(for: "RB0") == 0)
+        #expect(await provider.isSubscribed("RB0") == false)
+    }
+
+    @Test("不同合约 + 同合约多 handler 混合分发")
+    func mixedInstrumentsAndHandlersDispatch() async {
+        let stub = StubQuoteFetcher()
+        await stub.enqueue(.success([
+            sampleQuote(symbol: "RB0", lastPrice: 3193),
+            sampleQuote(symbol: "IF0", lastPrice: 4713)
+        ]))
+        let provider = SinaMarketDataProvider(fetcher: stub)
+        let rbA = TickCollector()
+        let rbB = TickCollector()
+        let ifA = TickCollector()
+
+        await provider.subscribe("RB0") { tick in Task { await rbA.append(tick) } }
+        await provider.subscribe("RB0") { tick in Task { await rbB.append(tick) } }
+        await provider.subscribe("IF0") { tick in Task { await ifA.append(tick) } }
+
+        #expect(await provider.subscriberCount() == 2)  // 2 合约
+        #expect(await provider.handlerCount(for: "RB0") == 2)
+        #expect(await provider.handlerCount(for: "IF0") == 1)
+
+        await provider.pollOnce(now: Date())
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(await rbA.count("RB0") == 1)
+        #expect(await rbB.count("RB0") == 1)
+        #expect(await ifA.count("IF0") == 1)
+    }
+
+    @Test("退订不存在的 token 静默 noop（不抛错）")
+    func unsubscribeUnknownTokenIsNoop() async {
+        let provider = SinaMarketDataProvider(fetcher: StubQuoteFetcher())
+        let collector = TickCollector()
+        await provider.subscribe("RB0") { tick in Task { await collector.append(tick) } }
+
+        await provider.unsubscribe("RB0", token: UUID())  // 陌生 token
+        #expect(await provider.handlerCount(for: "RB0") == 1)
+
+        await provider.unsubscribe("XX99", token: UUID())  // 未订阅的合约
+        #expect(await provider.subscriberCount() == 1)
+    }
+}

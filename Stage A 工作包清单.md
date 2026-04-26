@@ -387,6 +387,24 @@
 
 ---
 
+### ✅ WP-44c · MarketDataProvider 同合约多 handler 字典（端到端 demo 暴露问题修复）
+
+- **来源**：v5.0+ 端到端业务流 demo 暴露——同合约不能同时被 UnifiedDataSource + AlertEvaluator 订阅（原 `handlers[id] = handler` 字典覆盖语义）
+- **范围**：协议 + 3 个 provider 实现 + UDS 四处协同改动
+- **已交付**：
+  - `MarketDataProvider` 协议：`subscribe` 改 `@discardableResult` 返回 `SubscriptionToken`（typealias UUID）+ 新增 `unsubscribe(_:token:)` 精确退订；保留 `unsubscribe(_:)` 清空合约语义
+  - 3 个实现统一改 `[String: [SubscriptionToken: handler]]` 字典：`SinaMarketDataProvider` / `SimulatedMarketDataProvider` / `MockMarketDataProvider`（pollOnce/push 内 `for handler in bucket.values { handler(tick) }`）
+  - `UnifiedDataSource` 保存 `realtimeTokens: [String: SubscriptionToken]`，cleanup 用 token 精确退订（不再调 `unsubscribe(_:)` 误清同合约其他模块的 handler）
+  - 新增内省 API `handlerCount(for:)`（同合约多订阅者计数）
+- **测试**：+6 测试 / +1 suite（`WP-44c 多 handler`）：sameInstrument/byToken/lastToken/unsubscribeAll/mixed/unknownToken
+- **回归**：527 → **533 测试 / 134 → 135 suite 全绿**（向后兼容：原协议方法签名保持，加 `@discardableResult` 老 caller 不破）
+- **demo 受益验证**：`Tools/EndToEndDemo` 段 3 改用 RB0 + IF0（替换原 AU0/IF0），RB0 同时被 UDS + AlertEvaluator 订阅；运行时 `handlerCount(for: "RB0") == 2` + 单次 HTTP 拉取 bucket 内 2 handler 都收 tick + RB0 必触发预警 ×2 全过
+- **代码质量**：code-simplifier 1 轮过审 · 净改动 2 行（`isSubscribed` 表达式简化）· actor 隔离边界保持 · 跨 actor 重复代码不硬抽（actor 不支持继承）
+
+**留待**：CTPMarketDataProvider（WP-220 Stage B）按同协议实现即可
+
+---
+
 ### ✅ 端到端业务流真数据冒烟（v5.0+ 跨 5 Core 集成 demo · 第 7 个真数据 demo）
 
 - **位置**：`Tools/EndToEndDemo/main.swift` · `swift run EndToEndDemo`（60s 真网络）

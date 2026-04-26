@@ -20,7 +20,8 @@ public actor SimulatedMarketDataProvider: MarketDataProvider {
     /// 暴露状态机供上层订阅状态变化（observe AsyncStream）或读取 attemptCount
     public let stateMachine: ConnectionStateMachine
 
-    private var handlers: [String: @Sendable (Tick) -> Void] = [:]
+    /// WP-44c · [instrumentID: [token: handler]]：同合约多订阅者
+    private var handlers: [String: [SubscriptionToken: @Sendable (Tick) -> Void]] = [:]
 
     public init(backoff: BackoffPolicy = ExponentialBackoff()) {
         self.stateMachine = ConnectionStateMachine(backoff: backoff)
@@ -32,8 +33,18 @@ public actor SimulatedMarketDataProvider: MarketDataProvider {
         await stateMachine.state
     }
 
-    public func subscribe(_ instrumentID: String, handler: @escaping @Sendable (Tick) -> Void) async {
-        handlers[instrumentID] = handler
+    @discardableResult
+    public func subscribe(_ instrumentID: String, handler: @escaping @Sendable (Tick) -> Void) async -> SubscriptionToken {
+        let token = UUID()
+        handlers[instrumentID, default: [:]][token] = handler
+        return token
+    }
+
+    public func unsubscribe(_ instrumentID: String, token: SubscriptionToken) async {
+        handlers[instrumentID]?.removeValue(forKey: token)
+        if handlers[instrumentID]?.isEmpty == true {
+            handlers.removeValue(forKey: instrumentID)
+        }
     }
 
     public func unsubscribe(_ instrumentID: String) async {
@@ -75,17 +86,17 @@ public actor SimulatedMarketDataProvider: MarketDataProvider {
 
     // MARK: - 数据注入
 
-    /// 推送 Tick 到对应 instrumentID 的订阅 handler
-    /// - Returns: 是否成功找到订阅者
+    /// 推送 Tick 到对应 instrumentID 的订阅 handler（WP-44c 起 dispatch 给 bucket 内每个 handler）
+    /// - Returns: 是否成功找到至少一个订阅者
     @discardableResult
     public func push(_ tick: Tick) -> Bool {
-        guard let handler = handlers[tick.instrumentID] else { return false }
-        handler(tick)
+        guard let bucket = handlers[tick.instrumentID], !bucket.isEmpty else { return false }
+        for handler in bucket.values { handler(tick) }
         return true
     }
 
     /// 批量推送（按合约精确分发，未订阅的 Tick 静默丢弃）
-    /// - Returns: 实际推送成功的 Tick 数
+    /// - Returns: 实际有订阅者收到 tick 的合约数
     @discardableResult
     public func pushBatch(_ ticks: [Tick]) -> Int {
         ticks.reduce(0) { $0 + (push($1) ? 1 : 0) }
@@ -93,6 +104,9 @@ public actor SimulatedMarketDataProvider: MarketDataProvider {
 
     // MARK: - 内省（测试 / demo 用）
 
+    /// 订阅的合约数（即 handlers 字典的 key 数量）
     public func subscriberCount() -> Int { handlers.count }
-    public func isSubscribed(_ instrumentID: String) -> Bool { handlers[instrumentID] != nil }
+    /// 指定合约的 handler 数（WP-44c · 同合约多订阅者计数）
+    public func handlerCount(for instrumentID: String) -> Int { handlers[instrumentID]?.count ?? 0 }
+    public func isSubscribed(_ instrumentID: String) -> Bool { handlers[instrumentID]?.isEmpty == false }
 }

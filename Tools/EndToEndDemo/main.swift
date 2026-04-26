@@ -4,14 +4,16 @@
 // - 串联 6 Core（Shared / DataCore-Sina / DataCore-UDS / IndicatorCore / AlertCore）真行情管线
 // - 从「单 Core 可用」迈向「系统可用」的关键回归
 // - 验证：自选簿 → 历史 K + 指标 → UnifiedDataSource 实时合成 → AlertEvaluator 真触发
+// - WP-44c 起：RB0 同时走 UDS + AlertEvaluator（同合约多 handler 字典）→ 直接受益场景
 //
 // 拓扑：
 //   段 1 · WatchlistBook + sina.fetchMinute60KLines × 3 合约 + IndicatorCore（永远稳定可见）
 //   段 2 · UnifiedDataSource（cache + RB0 .second30 实时 K 线流）
-//   段 3 · SinaProvider 直订 AU0/IF0 → AlertEvaluator → AsyncStream 触发流
+//   段 3 · SinaProvider 直订 RB0 + IF0 → AlertEvaluator → AsyncStream 触发流
+//          · RB0 同时被 UDS 与 AlertEvaluator 订阅（验证 WP-44c 修复）
 //
 // 段 2 + 段 3 共享 1 个 SinaMarketDataProvider + 1 个 SinaPollingDriver；
-// RB0 走 UDS / AU0+IF0 走 AlertEvaluator，避开 SinaProvider.subscribe 字典覆盖（同合约只能 1 handler）
+// 单次 HTTP 拉取，bucket 内每个 handler 都收到 tick。
 //
 // 运行：swift run EndToEndDemo
 // 注意：非交易时段段 2 completedBar 可能为 0（Sina lastPrice 停滞，KLineBuilder 无法跨周期对齐）
@@ -64,25 +66,25 @@ struct EndToEndDemo {
             }
         }
 
-        // 段 3：AlertEvaluator 真触发
-        printSection("段 3 · AlertEvaluator 真实预警（AU0 必触发 + IF0 不应触发）")
-        let auBaseline = (try? await sina.fetchQuote(symbol: "AU0"))?.lastPrice ?? Decimal(1041)
-        let auLow = auBaseline - 50
-        let auHigh = auBaseline + 50
-        print(stamp() + "  ✅ AU0 基线报价 last=\(auBaseline)")
+        // 段 3：AlertEvaluator 真触发（RB0 同时走 UDS + Alert · 验证 WP-44c）
+        printSection("段 3 · AlertEvaluator 真实预警（RB0 必触发 + IF0 不应触发）")
+        let rbBaseline = (try? await sina.fetchQuote(symbol: "RB0"))?.lastPrice ?? Decimal(3193)
+        let rbLow = rbBaseline - 50
+        let rbHigh = rbBaseline + 50
+        print(stamp() + "  ✅ RB0 基线报价 last=\(rbBaseline)（同合约也被段 2 UDS 订阅）")
 
         let alerts: [Alert] = [
             Alert(
-                name: "AU0 涨破 \(auLow) [必触发]",
-                instrumentID: "AU0",
-                condition: .priceAbove(auLow),
+                name: "RB0 涨破 \(rbLow) [必触发]",
+                instrumentID: "RB0",
+                condition: .priceAbove(rbLow),
                 channels: [],
                 cooldownSeconds: 10000
             ),
             Alert(
-                name: "AU0 跌破 \(auHigh) [必触发]",
-                instrumentID: "AU0",
-                condition: .priceBelow(auHigh),
+                name: "RB0 跌破 \(rbHigh) [必触发]",
+                instrumentID: "RB0",
+                condition: .priceBelow(rbHigh),
                 channels: [],
                 cooldownSeconds: 10000
             ),
@@ -110,11 +112,14 @@ struct EndToEndDemo {
         }
 
         let evaluatorRef = evaluator
-        for symbol in ["AU0", "IF0"] {
+        for symbol in ["RB0", "IF0"] {
             await provider.subscribe(symbol) { tick in
                 Task { await evaluatorRef.onTick(tick) }
             }
         }
+        // 验证 WP-44c：RB0 此时应有 2 个 handler（UDS 1 个 + AlertEvaluator 1 个）
+        let rbHandlerCount = await provider.handlerCount(for: "RB0")
+        print(stamp() + "  ✅ WP-44c 多 handler 验证：RB0 当前订阅者 \(rbHandlerCount)（期望 2 = UDS + Alert）")
 
         // 启动 driver + 跑 60s
         printSection("启动 SinaPollingDriver(3s 间隔) · 跑 60 秒")
@@ -162,12 +167,11 @@ struct EndToEndDemo {
             print("  ✅ \(name) · \(desc)")
         }
 
-        printSection("已知限制（demo 同时暴露的真问题）")
+        printSection("已知限制 + WP-44c 修复确认")
         print("  ⚠️  非交易时段段 2 completedBar 可能 = 0（Sina lastPrice 停滞 → KLineBuilder 无法跨周期对齐）")
-        print("  ⚠️  同合约不能同时被 UnifiedDataSource + AlertEvaluator 订阅")
-        print("      原因：SinaProvider.subscribe 是字典覆盖语义（handlers[id] = handler）")
-        print("      规避：合约分流（RB0 → UDS / AU0+IF0 → AlertEvaluator）")
-        print("      待修：SinaProvider 增加多 handler 字典（留 WP-44c）")
+        print("  ✅ WP-44c 已修复：同合约可被 UDS + AlertEvaluator 同时订阅")
+        print("      实现：[instrumentID: [token: handler]] 字典 + subscribe 返回 SubscriptionToken + unsubscribe(_:token:) 精确退订")
+        print("      验证：本次 demo RB0 同时走 UDS（K 线合成）+ Alert（必触发预警），单次 HTTP 拉取，bucket 内 2 handler 都收到 tick")
 
         let allAlertsPassed = alerts.allSatisfy { matches(count: triggerCount($0), expected: expectedLabel($0)) }
         printSection(allAlertsPassed

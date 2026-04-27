@@ -120,21 +120,31 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
 
     // MARK: - KLineRenderer 协议（async getter / async method 由 sync 实现满足 · 编译器自动桥接）
 
+    // 协议 async 方法仅作签名包装 · 实际走 sync helper（Swift 6 禁 NSLock.lock 在 async context · 防 await 跨锁死锁）
+
     public var quality: RenderQuality {
-        get async {
-            stateLock.lock(); defer { stateLock.unlock() }
-            return _quality
-        }
+        get async { readQuality() }
     }
 
     public var lastStats: RenderStats {
-        get async {
-            stateLock.lock(); defer { stateLock.unlock() }
-            return _lastStats
-        }
+        get async { readLastStats() }
     }
 
     public func setQuality(_ quality: RenderQuality) async {
+        writeQuality(quality)
+    }
+
+    private func readQuality() -> RenderQuality {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return _quality
+    }
+
+    private func readLastStats() -> RenderStats {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return _lastStats
+    }
+
+    private func writeQuality(_ quality: RenderQuality) {
         stateLock.lock(); defer { stateLock.unlock() }
         _quality = quality
     }
@@ -149,6 +159,10 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
     /// - Mac UI 渲染走 renderToDrawable(input:passDescriptor:drawable:)
     @discardableResult
     public func render(_ input: KLineRenderInput) async -> RenderStats {
+        renderSync(input)
+    }
+
+    private func renderSync(_ input: KLineRenderInput) -> RenderStats {
         stateLock.lock(); defer { stateLock.unlock() }
         rebuildVertexBuffersIfNeededLocked(input: input)
         let visible = effectiveVisibleCount(input: input)

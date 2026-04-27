@@ -164,7 +164,35 @@
 
 ## E3 · 技术 PoC 与架构基础
 
-### 🚧 WP-20 · Metal + SwiftUI K 线渲染 PoC（Linux 实现 ✅ / Mac 编译 + Instruments 验收待）
+### ✅ WP-20 · Metal + SwiftUI K 线渲染 PoC（DoD 完整兑现 · M6 生死核心通过 · 2026-04-27）
+
+**Mac 端验收（M4 Pro · 2026-04-27）**：
+- ✅ MetalKLineDemo headless：1w K avg 0.684 ms · 10w K avg 0.712 ms · 100/100 healthy · drawCall=2
+- ✅ MetalKLineWindowDemo 真窗口：last frame 1.42 ms（含 vsync + present）· 60fps 健康 · 余量 11x
+- ✅ trackpad pinch zoom（visible 20..5000 流畅切换）· drag pan（10w K 末根流畅滑回起点）
+- ✅ 涨红跌绿 #F54545/#2DBC6B（中国期货约定）· 深色 #12141A 背景
+- ✅ 测试：667/158 全绿（Linux 659/156 + Mac-only Metal 8 +2 suite）
+
+**Mac 切机后修复链路（10 commit · 2026-04-27 当日）**：
+1. `7f316a4` PoC 实施（actor + Metal pipeline + KLineMetalView + 8 测试）
+2. `c1404fd` SwiftUI 真窗口 + zoom/pan gesture
+3. `61fa2ed` guard let scope（MetalKLineRenderer cmdBuf 不在 else scope）
+4. `8c371bf` Swift 6 sending 修饰符（MTLRenderPassDescriptor 跨 actor）
+5. `453619b` makePassDescriptor sending 返回类型
+6. `849bb28` actor → final class @unchecked Sendable + NSLock（彻底消除 sending ceremony）
+7. `d4b1c46` NSLock 操作移出 async context（Swift 6 禁锁跨 await）
+8. `ffad2f3` ContentView .frame(maxWidth: maxHeight: .infinity)
+9. `eb19541` NSHostingController + MTKView autoresizingMask + 显式 device
+10. `c2d39d7` KLineVertex SIMD padding bug（SIMD4 alignment=16 → struct stride 32 · 改 6 Float packed = 24）+ HUD 100ms 定时采样
+
+**经验沉淀（写入"可能踩的坑"）**：
+- Linux #if canImport(Metal) 跳过 · 不能验 Mac 端 sending / NSLock / SIMD padding · Mac 编译才暴露
+- actor + Metal 类型跨边界要 sending · 引发连锁报错 · 直接走 final class @unchecked Sendable + NSLock 最稳
+- SIMD2/SIMD4 自动 alignment padding 让 vertex stride 与 hand-calc 不符 · 必须用 packed Float 或 MemoryLayout.offset(of:) 显式偏移
+
+---
+
+
 - **时点**：M1 Week 2-3
 - **负责**：你
 - **依赖**：Mac Studio（Apple Silicon）+ Xcode + Cursor/Claude 环境

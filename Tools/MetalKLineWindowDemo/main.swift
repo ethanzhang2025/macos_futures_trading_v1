@@ -60,7 +60,8 @@ struct MetalKLineWindowDemoApp {
             bars: bars,
             initialViewport: initialViewport
         )
-        window.contentView = NSHostingView(rootView: rootView)
+        // NSHostingController 自动处理 SwiftUI ↔ AppKit layout（NSHostingView 直接 set contentView 不会 stretch）
+        window.contentViewController = NSHostingController(rootView: rootView)
         window.makeKeyAndOrderFront(nil)
         app.activate(ignoringOtherApps: true)
 

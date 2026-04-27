@@ -37,6 +37,7 @@ public struct KLineMetalView: NSViewRepresentable {
 
     public func makeNSView(context: Context) -> MTKView {
         let view = MTKView()
+        view.device = context.coordinator.renderer.metalDevice  // 显式设 device · 与 renderer init 同 device
         view.delegate = context.coordinator
         view.colorPixelFormat = .bgra8Unorm
         view.preferredFramesPerSecond = 60
@@ -44,6 +45,7 @@ public struct KLineMetalView: NSViewRepresentable {
         view.framebufferOnly = true
         view.enableSetNeedsDisplay = false
         view.isPaused = false
+        view.autoresizingMask = [.width, .height]  // 让 MTKView 跟父视图 stretch（防 zero size 不渲染）
         return view
     }
 

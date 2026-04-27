@@ -111,7 +111,8 @@ struct MetalKLineDemoMain {
         return device.makeTexture(descriptor: desc)
     }
 
-    static func makePassDescriptor(texture: MTLTexture) -> MTLRenderPassDescriptor {
+    /// `sending` 返回类型：标记 descriptor unique-owner · 调用方可直接 send 给 actor（Swift 6 strict concurrency）
+    static func makePassDescriptor(texture: MTLTexture) -> sending MTLRenderPassDescriptor {
         let desc = MTLRenderPassDescriptor()
         desc.colorAttachments[0].texture = texture
         desc.colorAttachments[0].loadAction = .clear

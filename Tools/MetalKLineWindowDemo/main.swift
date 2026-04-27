@@ -132,6 +132,12 @@ struct ContentView: View {
     static let minVisible = 20
     static let maxVisible = 5000
 
+    /// 惯性衰减率（每帧）· 0.94 ≈ 1 秒衰减到不可见
+    /// 太大（0.98+）拖太久 · 太小（< 0.9）戛然而止 · 0.94 是 iPhone Safari 体验近似值
+    static let inertiaDecayPerFrame: Float = 0.94
+    /// 惯性最小速度阈值（K 数 / 帧 · 低于此值停止动画）
+    static let inertiaStopThreshold: Float = 0.05
+
     let renderer: MetalKLineRenderer
     let bars: [KLine]
     let indicators: [IndicatorSeries]
@@ -139,6 +145,7 @@ struct ContentView: View {
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
     @State var zoomStartViewport: RenderViewport?
+    @State var inertiaTask: Task<Void, Never>?
 
     init(renderer: MetalKLineRenderer, bars: [KLine], indicators: [IndicatorSeries], initialViewport: RenderViewport) {
         self.renderer = renderer
@@ -162,22 +169,34 @@ struct ContentView: View {
         // simultaneousGesture 让 drag 与 magnification 并行识别 · 不互相覆盖
         // DragGesture(minimumDistance: 0) 起手即响应 · 消除"延迟感"
         // pannedSmooth(byBars:) Float 浮点平移 · viewport.startOffset 累加 · 渲染端 viewMatrix
-        // 走 startIndex+startOffset · 真正 sub-bar 像素级丝滑（不再 Int startIndex 阶梯跳跃）
+        // 走 startIndex+startOffset · 真正 sub-bar 像素级丝滑
+        // onEnded 启动惯性衰减动画（轻甩飞远 · 像 iPhone Safari 滚动）
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
+                    inertiaTask?.cancel()  // 用户重新 drag · 取消正在跑的惯性
                     let base = dragStartViewport ?? viewport
                     dragStartViewport = base
-                    // 每根 K 占屏幕 px 数 = 窗口宽 / base.visibleCount（zoom 后自动跟随）
                     let perBar = Self.assumedViewWidth / CGFloat(max(1, base.visibleCount))
                     let deltaBars = Float(-value.translation.width / perBar)
                     viewport = clamp(base.pannedSmooth(byBars: deltaBars))
                 }
-                .onEnded { _ in dragStartViewport = nil }
+                .onEnded { value in
+                    dragStartViewport = nil
+                    // 惯性速度：predictedEndTranslation - 当前 translation = 系统估算的"如果继续手感"位移
+                    let perBar = Self.assumedViewWidth / CGFloat(max(1, viewport.visibleCount))
+                    let predictedExtraPx = value.predictedEndTranslation.width - value.translation.width
+                    // 把"剩余预估位移"分摊到 ~30 帧（0.5s · 60fps）· 然后让衰减接管
+                    let initialVelocity = Float(-predictedExtraPx / perBar) / 30.0
+                    if abs(initialVelocity) > Self.inertiaStopThreshold {
+                        startInertia(velocity: initialVelocity)
+                    }
+                }
         )
         .simultaneousGesture(
             MagnificationGesture()
                 .onChanged { scale in
+                    inertiaTask?.cancel()  // zoom 时也取消惯性
                     let base = zoomStartViewport ?? viewport
                     zoomStartViewport = base
                     let factor = 1.0 / Double(scale)
@@ -217,6 +236,25 @@ struct ContentView: View {
     private func latestText(_ series: IndicatorSeries) -> String {
         guard let last = series.values.compactMap({ $0 }).last else { return "—" }
         return String(format: "%.2f", NSDecimalNumber(decimal: last).doubleValue)
+    }
+
+    /// 启动惯性滚动动画（onEnded 调 · 速度逐帧衰减直到低于阈值或触底）
+    private func startInertia(velocity initialVelocity: Float) {
+        inertiaTask?.cancel()
+        inertiaTask = Task { @MainActor in
+            var v = initialVelocity
+            while !Task.isCancelled && abs(v) > Self.inertiaStopThreshold {
+                try? await Task.sleep(nanoseconds: 16_666_666)  // 16.67 ms · 60fps · ProMotion 屏自动叠加
+                if Task.isCancelled { break }
+                let prev = viewport
+                viewport = clamp(viewport.pannedSmooth(byBars: v))
+                // 触底（边界 clamp 让 viewport 没动）· 立即停止惯性
+                if viewport.startIndex == prev.startIndex && viewport.startOffset == prev.startOffset {
+                    break
+                }
+                v *= Self.inertiaDecayPerFrame  // 速度衰减
+            }
+        }
     }
 
     func clamp(_ v: RenderViewport) -> RenderViewport {

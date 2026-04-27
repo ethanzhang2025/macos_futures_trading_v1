@@ -15,9 +15,19 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import AppKit
 
 @main
 struct FuturesTerminalApp: App {
+
+    init() {
+        // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
+        // 菜单栏不切换 · ⌘N / ⌘L / ⌘, 全部落到 Terminal 上。
+        // 显式声明 .regular 让主菜单栏 + 全局快捷键 + Dock 图标正常工作。
+        // M6 打包 .app bundle 后此调用变成 no-op（Bundle Info.plist 已声明）。
+        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
 
     var body: some Scene {
         // 主图表窗口（默认启动 + Cmd+N 新建多个 · 每窗口独立 renderer / viewport）

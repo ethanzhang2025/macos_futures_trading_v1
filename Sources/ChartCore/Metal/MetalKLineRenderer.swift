@@ -177,10 +177,12 @@ public actor MetalKLineRenderer: KLineRenderer {
         guard visible > 0,
               let bodyBuf = bodyVertexBuffer,
               let wickBuf = wickVertexBuffer,
-              let cmdBuf = commandQueue.makeCommandBuffer(),
-              let encoder = cmdBuf.makeRenderCommandEncoder(descriptor: passDescriptor)
+              let cmdBuf = commandQueue.makeCommandBuffer()
         else {
-            cmdBuf?.commit()
+            return _lastStats
+        }
+        guard let encoder = cmdBuf.makeRenderCommandEncoder(descriptor: passDescriptor) else {
+            cmdBuf.commit()  // encoder 失败 · commit 空 buffer 让 GPU 释放资源
             return _lastStats
         }
         encoder.setRenderPipelineState(pipelineState)

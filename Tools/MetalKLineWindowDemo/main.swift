@@ -88,7 +88,8 @@ struct MetalKLineWindowDemoApp {
         )
         let ma20 = (try? MA.calculate(kline: series, params: [20])) ?? []
         let ma60 = (try? MA.calculate(kline: series, params: [60])) ?? []
-        return ma20 + ma60
+        let boll = (try? BOLL.calculate(kline: series, params: [20, 2])) ?? []  // BOLL-MID/UPPER/LOWER 三轨
+        return ma20 + ma60 + boll
     }
 
     // MARK: - 模拟 10w 根 K 数据（random walk · 起价 3000 · ±2 步长）

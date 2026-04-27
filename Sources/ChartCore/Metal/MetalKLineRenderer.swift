@@ -47,6 +47,12 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
     private var cachedVertexHash = 0
     private var cachedBarsCount = 0
 
+    /// 指标折线缓存 · 与 input.indicators 顺序对齐 · 每个 indicator 一个 buffer + vertex 数
+    /// 折线用 .line primitive · 每相邻非 nil 对 = 1 段 = 2 顶点 · nil 邻接断开
+    /// 与 K 线 buffer 共用 cachedVertexHash · K 数据或 indicator 任一变化都全量重建
+    private var indicatorVertexBuffers: [MTLBuffer] = []
+    private var indicatorVertexCounts: [Int] = []
+
     // MARK: - 顶点结构（packed Float 布局 · 严格 24 bytes/vertex 与 MSL VertexIn 对齐）
     //
     // 为何不用 SIMD2 + SIMD4：SIMD4<Float> alignment=16 会让编译器在 position 后插 8 bytes padding，
@@ -75,6 +81,20 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
 
     private static let upColor = SIMD4<Float>(0.96, 0.27, 0.27, 1.0)   // #F54545
     private static let downColor = SIMD4<Float>(0.18, 0.74, 0.42, 1.0)  // #2DBC6B
+
+    /// 指标折线调色板（按 input.indicators 顺序循环取色 · 专业图表配色）
+    /// 0 黄 #FFC72E  1 紫 #A06CD5  2 蓝 #3498DB  3 橙 #F39C12  4 粉 #E84B8C
+    private static let indicatorPalette: [SIMD4<Float>] = [
+        SIMD4(1.00, 0.78, 0.18, 1.0),
+        SIMD4(0.63, 0.42, 0.84, 1.0),
+        SIMD4(0.20, 0.60, 0.86, 1.0),
+        SIMD4(0.95, 0.61, 0.07, 1.0),
+        SIMD4(0.91, 0.30, 0.55, 1.0)
+    ]
+
+    private static func indicatorColor(at index: Int) -> SIMD4<Float> {
+        indicatorPalette[index % indicatorPalette.count]
+    }
 
     /// K 实体宽度（占 1 单位 bar 的 70% · 留 30% 间距 · 文华惯例）
     private static let bodyWidthRatio: Float = 0.7
@@ -183,9 +203,11 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
         stateLock.lock(); defer { stateLock.unlock() }
         rebuildVertexBuffersIfNeededLocked(input: input)
         let visible = effectiveVisibleCount(input: input)
+        // K 实体 + 影线 = 2 · 每个 indicator 折线 = 1 · 与 K 数无关（合批契约）
+        let drawCalls = visible > 0 ? 2 + indicatorVertexBuffers.count : 0
         let stats = RenderStats(
             lastFrameDuration: RenderStats.frameBudget60fps,
-            drawCallCount: visible > 0 ? 2 : 0,
+            drawCallCount: drawCalls,
             visibleBarCount: visible,
             droppedFrameCount: 0
         )
@@ -245,13 +267,20 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
         encoder.drawPrimitives(type: .triangle, vertexStart: startBody, vertexCount: visible * 6)
         encoder.setVertexBuffer(wickBuf, offset: 0, index: 0)
         encoder.drawPrimitives(type: .line, vertexStart: startWick, vertexCount: visible * 2)
+        // 指标折线（PoC：draw 全 vertex · GPU 自动 clip 窗口外 · 每 series 1 draw call · 与 K 数无关）
+        for (i, indBuf) in indicatorVertexBuffers.enumerated() {
+            let lineCount = indicatorVertexCounts[i]
+            guard lineCount > 0 else { continue }
+            encoder.setVertexBuffer(indBuf, offset: 0, index: 0)
+            encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: lineCount)
+        }
         encoder.endEncoding()
         if let drawable { cmdBuf.present(drawable) }
         cmdBuf.commit()
         cmdBuf.waitUntilCompleted()  // PoC stats 精确测量 · 生产改 addCompletedHandler 异步
         let stats = RenderStats(
             lastFrameDuration: CACurrentMediaTime() - frameStart,
-            drawCallCount: 2,
+            drawCallCount: 2 + indicatorVertexBuffers.count,
             visibleBarCount: visible,
             droppedFrameCount: 0
         )
@@ -266,8 +295,9 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
         return min(input.viewport.visibleCount, avail)
     }
 
-    /// K 数据 hash（count + 首/末 close）· 检测是否需要重建 vertex buffer
-    /// （PoC 假设：K 数据 append-only · count 变化 + 末根 close 变化即视为新数据 · 误判率极低）
+    /// 顶点 hash（K 数据 + indicator 数据）· 检测是否需要重建 vertex buffer
+    /// 任一变化触发全量重建（K 线 + 全 indicators · 同步刷新 · 简化模型）
+    /// PoC 假设：append-only · count + 首末 close + indicator name/count 即视为新数据 · 误判率极低
     private func vertexHash(input: KLineRenderInput) -> Int {
         let count = input.bars.count
         let firstClose = input.bars.first.map { Self.float($0.close).bitPattern } ?? 0
@@ -275,6 +305,11 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
         var h = count
         h = h &* 31 &+ Int(firstClose)
         h = h &* 31 &+ Int(lastClose)
+        h = h &* 31 &+ input.indicators.count
+        for series in input.indicators {
+            h = h &* 31 &+ series.values.count
+            h = h &* 31 &+ series.name.hashValue
+        }
         return h
     }
 
@@ -318,6 +353,28 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
         wickVertexBuffer = wickBytes > 0
             ? device.makeBuffer(bytes: wick, length: wickBytes, options: .storageModeShared)
             : nil
+        // 指标折线（每相邻非 nil 对 = 1 段 = 2 顶点 · nil 邻接断开 · 调用方 .line primitive）
+        indicatorVertexBuffers.removeAll(keepingCapacity: true)
+        indicatorVertexCounts.removeAll(keepingCapacity: true)
+        for (idx, series) in input.indicators.enumerated() {
+            let color = Self.indicatorColor(at: idx)
+            var line: [KLineVertex] = []
+            line.reserveCapacity(series.values.count * 2)
+            // 相邻对 zip · 自动跳过末尾无后继的元素 · 长度 0/1 时序列为空（无需 max(0,n-1) 防御）
+            for (i, pair) in zip(series.values, series.values.dropFirst()).enumerated() {
+                guard let v0 = pair.0, let v1 = pair.1 else { continue }
+                let x0 = Float(i) + 0.5
+                let x1 = Float(i + 1) + 0.5
+                line.append(KLineVertex(position: SIMD2(x0, Self.float(v0)), color: color))
+                line.append(KLineVertex(position: SIMD2(x1, Self.float(v1)), color: color))
+            }
+            let lineBytes = MemoryLayout<KLineVertex>.stride * line.count
+            if lineBytes > 0,
+               let buf = device.makeBuffer(bytes: line, length: lineBytes, options: .storageModeShared) {
+                indicatorVertexBuffers.append(buf)
+                indicatorVertexCounts.append(line.count)
+            }
+        }
     }
 
     private func makeViewMatrix(input: KLineRenderInput, visible: Int) -> simd_float4x4 {

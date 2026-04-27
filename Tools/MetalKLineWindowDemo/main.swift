@@ -21,6 +21,7 @@ import SwiftUI
 import Metal
 import Shared
 import ChartCore
+import IndicatorCore
 
 @main
 struct MetalKLineWindowDemoApp {
@@ -38,6 +39,8 @@ struct MetalKLineWindowDemoApp {
             return
         }
         let bars = generateMockBars(100_000)
+        // MA20 / MA60 通过 IndicatorCore.MA 公开 API 计算（基于 Legacy FormulaEngine 演化的算法）
+        let indicators = computeIndicators(bars: bars)
         let initialViewport = RenderViewport(
             startIndex: max(0, bars.count - 200),
             visibleCount: 200
@@ -58,6 +61,7 @@ struct MetalKLineWindowDemoApp {
         let rootView = ContentView(
             renderer: renderer,
             bars: bars,
+            indicators: indicators,
             initialViewport: initialViewport
         )
         // NSHostingController 自动处理 SwiftUI ↔ AppKit layout（NSHostingView 直接 set contentView 不会 stretch）
@@ -66,6 +70,22 @@ struct MetalKLineWindowDemoApp {
         app.activate(ignoringOtherApps: true)
 
         app.run()
+    }
+
+    // MARK: - 指标计算（IndicatorCore 公开 API · 基于 Legacy FormulaEngine 演化的 MA 算法）
+
+    static func computeIndicators(bars: [KLine]) -> [IndicatorSeries] {
+        let series = KLineSeries(
+            opens: bars.map(\.open),
+            highs: bars.map(\.high),
+            lows: bars.map(\.low),
+            closes: bars.map(\.close),
+            volumes: bars.map(\.volume),
+            openInterests: bars.map { _ in 0 }
+        )
+        let ma20 = (try? MA.calculate(kline: series, params: [20])) ?? []
+        let ma60 = (try? MA.calculate(kline: series, params: [60])) ?? []
+        return ma20 + ma60
     }
 
     // MARK: - 模拟 10w 根 K 数据（random walk · 起价 3000 · ±2 步长）
@@ -111,14 +131,16 @@ struct ContentView: View {
 
     let renderer: MetalKLineRenderer
     let bars: [KLine]
+    let indicators: [IndicatorSeries]
     @State var viewport: RenderViewport
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
     @State var zoomStartViewport: RenderViewport?
 
-    init(renderer: MetalKLineRenderer, bars: [KLine], initialViewport: RenderViewport) {
+    init(renderer: MetalKLineRenderer, bars: [KLine], indicators: [IndicatorSeries], initialViewport: RenderViewport) {
         self.renderer = renderer
         self.bars = bars
+        self.indicators = indicators
         self._viewport = State(initialValue: initialViewport)
     }
 
@@ -127,7 +149,7 @@ struct ContentView: View {
             // 必须 .frame 拉满 · 否则 NSViewRepresentable 默认 zero size → MTKView drawableSize=0 → currentDrawable 永远 nil → 不渲染
             KLineMetalView(
                 renderer: renderer,
-                input: KLineRenderInput(bars: bars, viewport: viewport)
+                input: KLineRenderInput(bars: bars, indicators: indicators, viewport: viewport)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             hud
@@ -166,6 +188,9 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("📊 visible: \(viewport.visibleCount) · start: \(viewport.startIndex) / \(bars.count)")
             Text("⏱️  last frame: \(String(format: "%.2f", lastFrameMs)) ms · budget 16.67 ms")
+            ForEach(Array(indicators.enumerated()), id: \.offset) { idx, series in
+                Text("📈 \(series.name): \(latestText(series))")
+            }
             Text("🎮 trackpad pinch=zoom · drag=pan")
         }
         .font(.system(size: 12, design: .monospaced))
@@ -174,6 +199,13 @@ struct ContentView: View {
         .background(Color.black.opacity(0.6))
         .cornerRadius(6)
         .padding(12)
+    }
+
+    /// 取 indicator series 末根非 nil 值（HUD 显示当前值）
+    /// compactMap 剥一层 Optional · 比 `last(where:) ?? nil` 双层 unwrap 直观
+    private func latestText(_ series: IndicatorSeries) -> String {
+        guard let last = series.values.compactMap({ $0 }).last else { return "—" }
+        return String(format: "%.2f", NSDecimalNumber(decimal: last).doubleValue)
     }
 
     func clamp(_ v: RenderViewport) -> RenderViewport {

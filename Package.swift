@@ -65,7 +65,7 @@ let package = Package(
             path: "Sources/ChartCore",
             exclude: ["Metal/KLineShaders.metal"]
         ),
-        .testTarget(name: "ChartCoreTests", dependencies: ["ChartCore"], path: "Tests/ChartCoreTests"),
+        .testTarget(name: "ChartCoreTests", dependencies: ["ChartCore", "IndicatorCore"], path: "Tests/ChartCoreTests"),
 
         // MARK: - JournalCore · 交易日志 + 复盘分析
         .target(name: "JournalCore", dependencies: ["Shared", "DataCore"], path: "Sources/JournalCore"),
@@ -220,12 +220,13 @@ let package = Package(
             dependencies: ["Shared", "ChartCore"],
             path: "Tools/MetalKLineDemo"
         ),
-        // MetalKLineWindowDemo · WP-20 SwiftUI 真窗口 + zoom/pan gesture（验 DoD "10w K + 流畅滚动缩放"）
+        // MetalKLineWindowDemo · WP-20 SwiftUI 真窗口 + zoom/pan gesture + WP-40 起步 MA20/MA60 折线
         // NSApplication + NSWindow + NSHostingView · ContentView pinch zoom + drag pan · 10w K 模拟数据
+        // IndicatorCore 算 MA（基于 Legacy FormulaEngine 演化）· renderer 叠折线 · 同 viewMatrix
         // Mac 端 swift run 直接见画面 + trackpad 交互 · Linux 端跳过
         .executableTarget(
             name: "MetalKLineWindowDemo",
-            dependencies: ["Shared", "ChartCore"],
+            dependencies: ["Shared", "ChartCore", "IndicatorCore"],
             path: "Tools/MetalKLineWindowDemo"
         )
     ]

@@ -16,6 +16,7 @@ import Testing
 import Foundation
 import Metal
 import Shared
+import IndicatorCore
 @testable import ChartCore
 
 private func makeKLines(_ count: Int, basePrice: Decimal = 3000) -> [KLine] {
@@ -114,6 +115,28 @@ struct MetalKLineRendererRenderTests {
         )
         let stats = await r.render(input)
         #expect(stats.visibleBarCount == 20)  // 50 - 30
+    }
+
+    @Test("WP-40 起步：2 个 indicator · drawCall = 4（实体 + 影线 + 2 折线 · 与 K 数无关）")
+    func drawCallWithTwoIndicators() async throws {
+        guard let r = try makeRendererOrSkip() else { return }
+        let bars = makeKLines(100)
+        let ma20 = IndicatorSeries(
+            name: "MA(20)",
+            values: (0..<100).map { i in i >= 19 ? Decimal(3000 + i % 20) : nil }
+        )
+        let ma60 = IndicatorSeries(
+            name: "MA(60)",
+            values: (0..<100).map { i in i >= 59 ? Decimal(3000 + i % 60) : nil }
+        )
+        let input = KLineRenderInput(
+            bars: bars,
+            indicators: [ma20, ma60],
+            viewport: RenderViewport(startIndex: 0, visibleCount: 100)
+        )
+        let stats = await r.render(input)
+        #expect(stats.drawCallCount == 4)
+        #expect(stats.visibleBarCount == 100)
     }
 
     @Test("lastStats 反映最近一次 render（多次连续调用）")

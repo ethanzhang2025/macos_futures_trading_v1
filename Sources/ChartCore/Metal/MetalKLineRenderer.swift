@@ -145,11 +145,12 @@ public actor MetalKLineRenderer: KLineRenderer {
     // MARK: - Mac 实际绘制入口
 
     /// 提交一帧渲染到 drawable（MTKViewDelegate.draw 主线程拿到 drawable 后调用）
+    /// `sending` 标记跨 actor 转移所有权（MTLRenderPassDescriptor / MTLDrawable 非 Sendable · Swift 6 strict 要求）
     @discardableResult
     public func renderToDrawable(
         input: KLineRenderInput,
-        passDescriptor: MTLRenderPassDescriptor,
-        drawable: any MTLDrawable
+        passDescriptor: sending MTLRenderPassDescriptor,
+        drawable: sending any MTLDrawable
     ) -> RenderStats {
         encodeAndCommit(input: input, passDescriptor: passDescriptor, drawable: drawable)
     }
@@ -159,7 +160,7 @@ public actor MetalKLineRenderer: KLineRenderer {
     @discardableResult
     public func renderHeadless(
         input: KLineRenderInput,
-        passDescriptor: MTLRenderPassDescriptor
+        passDescriptor: sending MTLRenderPassDescriptor
     ) -> RenderStats {
         encodeAndCommit(input: input, passDescriptor: passDescriptor, drawable: nil)
     }
@@ -168,8 +169,8 @@ public actor MetalKLineRenderer: KLineRenderer {
 
     private func encodeAndCommit(
         input: KLineRenderInput,
-        passDescriptor: MTLRenderPassDescriptor,
-        drawable: (any MTLDrawable)?
+        passDescriptor: sending MTLRenderPassDescriptor,
+        drawable: sending (any MTLDrawable)?
     ) -> RenderStats {
         let frameStart = CACurrentMediaTime()
         rebuildVertexBuffersIfNeeded(input: input)

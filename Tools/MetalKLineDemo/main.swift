@@ -43,7 +43,6 @@ struct MetalKLineDemoMain {
             print("❌ Offscreen texture 创建失败")
             return
         }
-        let passDesc = makePassDescriptor(texture: texture)
 
         // 1w K · baseline
         await runBenchmark(
@@ -52,7 +51,7 @@ struct MetalKLineDemoMain {
             barCount: 10_000,
             visibleCount: 1_000,
             frames: 100,
-            passDescriptor: passDesc
+            texture: texture
         )
         print("")
         // 10w K · M6 生死
@@ -62,7 +61,7 @@ struct MetalKLineDemoMain {
             barCount: 100_000,
             visibleCount: 1_000,
             frames: 100,
-            passDescriptor: passDesc
+            texture: texture
         )
         print("")
         print("=== 验收完成 · 详细 GPU 时间走 Instruments → Metal System Trace ===")
@@ -129,7 +128,7 @@ struct MetalKLineDemoMain {
         barCount: Int,
         visibleCount: Int,
         frames: Int,
-        passDescriptor: MTLRenderPassDescriptor
+        texture: MTLTexture
     ) async {
         let bars = generateMockBars(barCount)
         let viewport = RenderViewport(
@@ -140,11 +139,19 @@ struct MetalKLineDemoMain {
         var durations: [TimeInterval] = []
         var lastStats = RenderStats()
         durations.reserveCapacity(frames)
+        // 每帧重建 passDescriptor（sending 参数语义 · MTLRenderPassDescriptor 非 Sendable · 不能跨 actor 重复 send）
+        // class init 开销极小（几 µs · 远小于 16.67ms 帧预算）
         // 第一帧不算（顶点 buffer 构建 cold path · 单独打印）
-        let coldStats = await renderer.renderHeadless(input: input, passDescriptor: passDescriptor)
+        let coldStats = await renderer.renderHeadless(
+            input: input,
+            passDescriptor: makePassDescriptor(texture: texture)
+        )
         let coldMs = coldStats.lastFrameDuration * 1000
         for _ in 0..<frames {
-            let stats = await renderer.renderHeadless(input: input, passDescriptor: passDescriptor)
+            let stats = await renderer.renderHeadless(
+                input: input,
+                passDescriptor: makePassDescriptor(texture: texture)
+            )
             durations.append(stats.lastFrameDuration)
             lastStats = stats
         }

@@ -40,7 +40,7 @@ public struct KLineMetalView: NSViewRepresentable {
         view.device = context.coordinator.renderer.metalDevice  // 显式设 device · 与 renderer init 同 device
         view.delegate = context.coordinator
         view.colorPixelFormat = .bgra8Unorm
-        view.preferredFramesPerSecond = 60
+        view.preferredFramesPerSecond = 120  // ProMotion 屏 120Hz · 普通 60Hz · 系统取实际可用上限
         view.clearColor = Self.defaultClearColor
         view.framebufferOnly = true
         view.enableSetNeedsDisplay = false

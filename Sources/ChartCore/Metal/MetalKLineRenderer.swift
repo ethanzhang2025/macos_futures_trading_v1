@@ -217,23 +217,25 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
 
     // MARK: - Mac 实际绘制入口（同步调用 · MTKViewDelegate.draw 主线程直接调）
 
+    /// UI 路径（fire-and-forget · 不 wait GPU · 主线程立刻返回 · 拖拽丝滑关键）
     @discardableResult
     public func renderToDrawable(
         input: KLineRenderInput,
         passDescriptor: MTLRenderPassDescriptor,
         drawable: any MTLDrawable
     ) -> RenderStats {
-        encodeAndCommit(input: input, passDescriptor: passDescriptor, drawable: drawable)
+        encodeAndCommit(input: input, passDescriptor: passDescriptor, drawable: drawable, waitForCompletion: false)
     }
 
     /// Headless 渲染（offscreen texture · 用于 benchmark / 截图 / CI）· 不 present · 仅 commit
     /// passDescriptor 由调用方构造 · colorAttachments[0].texture 指向 MTLTexture（非 CAMetalDrawable）
+    /// waitForCompletion=true · 精确测量 GPU 完成时间（UI 路径设 false 让主线程不阻塞）
     @discardableResult
     public func renderHeadless(
         input: KLineRenderInput,
         passDescriptor: MTLRenderPassDescriptor
     ) -> RenderStats {
-        encodeAndCommit(input: input, passDescriptor: passDescriptor, drawable: nil)
+        encodeAndCommit(input: input, passDescriptor: passDescriptor, drawable: nil, waitForCompletion: true)
     }
 
     // MARK: - 渲染共享逻辑（NSLock 保护可变状态 · GPU 命令提交也在锁内 · 简化模型）
@@ -241,7 +243,8 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
     private func encodeAndCommit(
         input: KLineRenderInput,
         passDescriptor: MTLRenderPassDescriptor,
-        drawable: (any MTLDrawable)?
+        drawable: (any MTLDrawable)?,
+        waitForCompletion: Bool
     ) -> RenderStats {
         stateLock.lock(); defer { stateLock.unlock() }
         let frameStart = CACurrentMediaTime()
@@ -277,7 +280,9 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
         encoder.endEncoding()
         if let drawable { cmdBuf.present(drawable) }
         cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()  // PoC stats 精确测量 · 生产改 addCompletedHandler 异步
+        // UI 路径不 wait · GPU 异步并行 · 主线程立即处理下一个 drag event（拖拽丝滑关键）
+        // headless benchmark 路径 wait · 精确测量包含 GPU 完成时间
+        if waitForCompletion { cmdBuf.waitUntilCompleted() }
         let stats = RenderStats(
             lastFrameDuration: CACurrentMediaTime() - frameStart,
             drawCallCount: 2 + indicatorVertexBuffers.count,

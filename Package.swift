@@ -97,6 +97,16 @@ let package = Package(
         ),
         .testTarget(name: "StoreCoreTests", dependencies: ["StoreCore"], path: "Tests/StoreCoreTests"),
 
+        // MARK: - MainApp · macOS App 主框架（demo → 真 App · M5 集成入口）
+        // SwiftUI App 协议 · WindowGroup × 2（K 线图表 / 自选合约）· Settings Scene · 主菜单 .commands
+        // Linux 端 #if 跳过整 target body · @main fallback 仅打印提示后退出
+        // 后续 WP 接入：WP-43 自选 UI / WP-44 多窗口 / WP-90 订阅 / M5 StoreCore 注入
+        .executableTarget(
+            name: "MainApp",
+            dependencies: ["Shared", "ChartCore", "IndicatorCore"],
+            path: "Sources/MainApp"
+        ),
+
         // MARK: - Tools · 命令行验证工具（非生产代码，CI 可跳过）
         // SinaTickDemo · WP-31a 真网络回归（拉 RB0/IF0/AU0/CU0 实时报价 30s）
         .executableTarget(

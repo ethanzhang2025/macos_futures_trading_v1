@@ -253,11 +253,13 @@ struct ContentView: View {
         .padding(12)
     }
 
-    /// 取 indicator series 末根非 nil 值（HUD 显示当前值）
-    /// compactMap 剥一层 Optional · 比 `last(where:) ?? nil` 双层 unwrap 直观
+    /// 取 visible window 末位的 indicator 值（HUD 显示与画面 K 线对齐 · 不是全段末位）
+    /// 全段 100,000 根 · 用户拖到 99,730 看 200 根 · indicator 末根（99,999）的 MA20 与画面无关
     private func latestText(_ series: IndicatorSeries) -> String {
-        guard let last = series.values.compactMap({ $0 }).last else { return "—" }
-        return String(format: "%.2f", NSDecimalNumber(decimal: last).doubleValue)
+        let end = min(series.values.count, viewport.startIndex + viewport.visibleCount)
+        let prefix = series.values.prefix(end)
+        guard let value = prefix.compactMap({ $0 }).last else { return "—" }
+        return String(format: "%.2f", NSDecimalNumber(decimal: value).doubleValue)
     }
 
     /// 启动惯性滚动动画（onEnded 调 · 速度逐帧衰减直到低于阈值或触底）

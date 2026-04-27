@@ -157,8 +157,31 @@ struct ContentView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                chartMainArea
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                KLineAxisView(bars: bars, viewport: viewport, priceRange: currentPriceRange, orientation: .price)
+                    .frame(width: 60)
+            }
+            KLineAxisView(bars: bars, viewport: viewport, priceRange: currentPriceRange, orientation: .time)
+                .frame(height: 28)
+        }
+        // 让 NSHostingController 知道 ideal 1280x720（防止窗口启动时缩成指甲盖）
+        .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
+        .task {
+            // 每 100ms 采样 lastStats（render 在每帧 16.67ms 跑 · viewport 不变也要更新 HUD）
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                let stats = await renderer.lastStats
+                lastFrameMs = stats.lastFrameDuration * 1000
+            }
+        }
+    }
+
+    /// 主图区（K 线 + indicators + HUD）· gesture 挂这里 · 让 axis 区域不抢手势
+    var chartMainArea: some View {
         ZStack(alignment: .topLeading) {
-            // 必须 .frame 拉满 · 否则 NSViewRepresentable 默认 zero size → MTKView drawableSize=0 → currentDrawable 永远 nil → 不渲染
             KLineMetalView(
                 renderer: renderer,
                 input: KLineRenderInput(bars: bars, indicators: indicators, viewport: viewport)
@@ -166,17 +189,13 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             hud
         }
-        // 让 NSHostingController 知道 ideal 1280x720（防止窗口启动时缩成指甲盖）
-        .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         // simultaneousGesture 让 drag 与 magnification 并行识别 · 不互相覆盖
         // DragGesture(minimumDistance: 0) 起手即响应 · 消除"延迟感"
-        // pannedSmooth(byBars:) Float 浮点平移 · viewport.startOffset 累加 · 渲染端 viewMatrix
-        // 走 startIndex+startOffset · 真正 sub-bar 像素级丝滑
         // onEnded 启动惯性衰减动画（轻甩飞远 · 像 iPhone Safari 滚动）
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
-                    inertiaTask?.cancel()  // 用户重新 drag · 取消正在跑的惯性
+                    inertiaTask?.cancel()
                     let base = dragStartViewport ?? viewport
                     dragStartViewport = base
                     let perBar = Self.assumedViewWidth / CGFloat(max(1, base.visibleCount))
@@ -185,10 +204,8 @@ struct ContentView: View {
                 }
                 .onEnded { value in
                     dragStartViewport = nil
-                    // 惯性速度：predictedEndTranslation - 当前 translation = 系统估算的"如果继续手感"位移
                     let perBar = Self.assumedViewWidth / CGFloat(max(1, viewport.visibleCount))
                     let predictedExtraPx = value.predictedEndTranslation.width - value.translation.width
-                    // 分摊到 inertiaSpreadFrames 帧 · 让轻甩也能跨过阈值
                     let initialVelocity = Float(-predictedExtraPx / perBar) / Self.inertiaSpreadFrames
                     if abs(initialVelocity) > Self.inertiaStopThreshold {
                         startInertia(velocity: initialVelocity)
@@ -198,7 +215,7 @@ struct ContentView: View {
         .simultaneousGesture(
             MagnificationGesture()
                 .onChanged { scale in
-                    inertiaTask?.cancel()  // zoom 时也取消惯性
+                    inertiaTask?.cancel()
                     let base = zoomStartViewport ?? viewport
                     zoomStartViewport = base
                     let factor = 1.0 / Double(scale)
@@ -206,14 +223,17 @@ struct ContentView: View {
                 }
                 .onEnded { _ in zoomStartViewport = nil }
         )
-        .task {
-            // 每 100ms 采样 lastStats（render 在每帧 16.67ms 跑 · viewport 不变也要更新 HUD）
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-                let stats = await renderer.lastStats
-                lastFrameMs = stats.lastFrameDuration * 1000
-            }
-        }
+    }
+
+    /// 当前 visible 范围价格区间（与 renderer 内部 derivePriceRange 同 fallback 逻辑 · 确保 axis 与 K 线对齐）
+    var currentPriceRange: ClosedRange<Decimal> {
+        if let r = viewport.priceRange { return r }
+        let visible = min(viewport.visibleCount, max(0, bars.count - viewport.startIndex))
+        guard visible > 0 else { return Decimal(0)...Decimal(1) }
+        let slice = bars[viewport.startIndex..<(viewport.startIndex + visible)]
+        let lo = slice.map(\.low).min() ?? Decimal(0)
+        let hi = slice.map(\.high).max() ?? Decimal(1)
+        return lo...max(hi, lo + Decimal(1))
     }
 
     var hud: some View {

@@ -2,10 +2,10 @@
 //
 // 设计要点：
 // - NSViewRepresentable 包 MTKView · 让 SwiftUI 上层用 KLineMetalView(renderer:input:) 即可挂图表
-// - Coordinator @MainActor 持有最新 input · MTKViewDelegate.draw 拿到 drawable 后 Task 异步发给 actor renderer
-// - @preconcurrency import Metal 抑制 MTLDrawable / MTLRenderPassDescriptor 跨 actor 警告
-//   （PoC 阶段安全：drawable 在 present 前 immutable · passDescriptor 同样）
-// - PoC 不接交互（zoom/pan）· input 由调用方 SwiftUI @State 驱动 · MTKView 60fps 自动重绘下一帧反映
+// - Coordinator @MainActor 持有最新 input · MTKViewDelegate.draw 拿到 drawable 后**同步**调 renderer.renderToDrawable
+//   * MetalKLineRenderer 是 final class @unchecked Sendable + NSLock · 同步调用即可 · 不开 Task / 不跨 actor
+//   * draw 阻塞主线程 ~3-5ms（10w K · M2 Pro · 在 16.67ms 帧预算内）· PoC 阶段简化模型
+// - PoC 交互（zoom/pan）由调用方 SwiftUI @State 驱动（见 MetalKLineWindowDemo）· KLineMetalView 不持有 viewport 状态
 //
 // 跨平台约束：
 // - canImport(Metal) + canImport(MetalKit) + canImport(SwiftUI) + canImport(AppKit)
@@ -13,8 +13,8 @@
 
 #if canImport(Metal) && canImport(MetalKit) && canImport(SwiftUI) && canImport(AppKit)
 
-@preconcurrency import Metal
-@preconcurrency import MetalKit
+import Metal
+import MetalKit
 import SwiftUI
 import AppKit
 
@@ -70,15 +70,11 @@ public struct KLineMetalView: NSViewRepresentable {
         public func draw(in view: MTKView) {
             guard let drawable = view.currentDrawable,
                   let passDescriptor = view.currentRenderPassDescriptor else { return }
-            let input = currentInput
-            let renderer = renderer
-            Task.detached {
-                await renderer.renderToDrawable(
-                    input: input,
-                    passDescriptor: passDescriptor,
-                    drawable: drawable
-                )
-            }
+            renderer.renderToDrawable(
+                input: currentInput,
+                passDescriptor: passDescriptor,
+                drawable: drawable
+            )
         }
     }
 }

@@ -1,7 +1,11 @@
 // ChartCore · WP-20 Metal K 线渲染器（M6 生死核心 PoC）
 //
 // 设计要点（与 KLineRenderer 协议契约对齐）：
-// - actor 隔离：device/commandQueue/pipelineState 持有 + 顶点缓存 _vertexHash 一并隔离
+// - final class @unchecked Sendable + NSLock 序列化可变状态（替代 actor · 避免 Swift 6 严格 sending ceremony）
+//   * 选 final class 而非 actor 的原因：MTLRenderPassDescriptor / MTLDrawable 跨 actor 边界触发 SendingRisksDataRace
+//     （Swift 6 严格 concurrency 对非 Sendable Metal 类型要 sending 修饰符 · 引发连锁报错）
+//   * NSLock 阻塞主线程时间 = 顶点构建 + GPU encode + waitUntilCompleted ~3-5ms（10w K · M2 Pro）
+//   * MTKViewDelegate.draw 同步调用 · 不再开 Task · 简化 Coordinator
 // - 单 vertex layout：position(float2 = [barIndex, price]) + color(float4 = rgba) → 24 bytes/vertex
 // - GPU 端 viewMatrix transform · 顶点是逻辑坐标 · zoom/pan 仅更新 4×4 matrix（M6 60fps zoom 关键）
 // - 单合批：实体 1 draw call（triangleList · 6 顶点/K）· 影线 1 draw call（line · 2 顶点/K）· 总 drawCall = 2
@@ -23,7 +27,7 @@ import Shared
 import IndicatorCore
 import QuartzCore  // CACurrentMediaTime
 
-public actor MetalKLineRenderer: KLineRenderer {
+public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
 
     // MARK: - 不变状态（init 注入）
 
@@ -32,8 +36,9 @@ public actor MetalKLineRenderer: KLineRenderer {
     private let pipelineState: MTLRenderPipelineState
     private let pixelFormat: MTLPixelFormat
 
-    // MARK: - 可变状态（actor 隔离）
+    // MARK: - 可变状态（NSLock 序列化）
 
+    private let stateLock = NSLock()
     private var _quality: RenderQuality = .high
     private var _lastStats = RenderStats()
 
@@ -113,24 +118,39 @@ public actor MetalKLineRenderer: KLineRenderer {
         self.pixelFormat = pixelFormat
     }
 
-    // MARK: - KLineRenderer 协议
+    // MARK: - KLineRenderer 协议（async getter / async method 由 sync 实现满足 · 编译器自动桥接）
 
-    public var quality: RenderQuality { _quality }
-    public var lastStats: RenderStats { _lastStats }
+    public var quality: RenderQuality {
+        get async {
+            stateLock.lock(); defer { stateLock.unlock() }
+            return _quality
+        }
+    }
 
-    public func setQuality(_ quality: RenderQuality) { _quality = quality }
+    public var lastStats: RenderStats {
+        get async {
+            stateLock.lock(); defer { stateLock.unlock() }
+            return _lastStats
+        }
+    }
+
+    public func setQuality(_ quality: RenderQuality) async {
+        stateLock.lock(); defer { stateLock.unlock() }
+        _quality = quality
+    }
 
     /// 暴露 MTLDevice（demo / SwiftUI 桥接需要构造同 device 的 texture / drawable）
-    /// nonisolated：MTLDevice 文档保证 thread-safe
-    public nonisolated var metalDevice: MTLDevice { device }
+    /// MTLDevice 文档保证 thread-safe · 无需 lock
+    public var metalDevice: MTLDevice { device }
 
     /// 协议 render · 无 drawable 上下文（如纯单元测试 / Linux 占位语义）：
     /// - 仍按 input 重建 vertex buffer（验顶点构造正确性）
     /// - 不实际提交 GPU 命令 · 返回估算 stats（drawCallCount = 2 · visibleBarCount 实际可见）
     /// - Mac UI 渲染走 renderToDrawable(input:passDescriptor:drawable:)
     @discardableResult
-    public func render(_ input: KLineRenderInput) -> RenderStats {
-        rebuildVertexBuffersIfNeeded(input: input)
+    public func render(_ input: KLineRenderInput) async -> RenderStats {
+        stateLock.lock(); defer { stateLock.unlock() }
+        rebuildVertexBuffersIfNeededLocked(input: input)
         let visible = effectiveVisibleCount(input: input)
         let stats = RenderStats(
             lastFrameDuration: RenderStats.frameBudget60fps,
@@ -142,15 +162,13 @@ public actor MetalKLineRenderer: KLineRenderer {
         return stats
     }
 
-    // MARK: - Mac 实际绘制入口
+    // MARK: - Mac 实际绘制入口（同步调用 · MTKViewDelegate.draw 主线程直接调）
 
-    /// 提交一帧渲染到 drawable（MTKViewDelegate.draw 主线程拿到 drawable 后调用）
-    /// `sending` 标记跨 actor 转移所有权（MTLRenderPassDescriptor / MTLDrawable 非 Sendable · Swift 6 strict 要求）
     @discardableResult
     public func renderToDrawable(
         input: KLineRenderInput,
-        passDescriptor: sending MTLRenderPassDescriptor,
-        drawable: sending any MTLDrawable
+        passDescriptor: MTLRenderPassDescriptor,
+        drawable: any MTLDrawable
     ) -> RenderStats {
         encodeAndCommit(input: input, passDescriptor: passDescriptor, drawable: drawable)
     }
@@ -160,20 +178,21 @@ public actor MetalKLineRenderer: KLineRenderer {
     @discardableResult
     public func renderHeadless(
         input: KLineRenderInput,
-        passDescriptor: sending MTLRenderPassDescriptor
+        passDescriptor: MTLRenderPassDescriptor
     ) -> RenderStats {
         encodeAndCommit(input: input, passDescriptor: passDescriptor, drawable: nil)
     }
 
-    // MARK: - 渲染共享逻辑
+    // MARK: - 渲染共享逻辑（NSLock 保护可变状态 · GPU 命令提交也在锁内 · 简化模型）
 
     private func encodeAndCommit(
         input: KLineRenderInput,
-        passDescriptor: sending MTLRenderPassDescriptor,
-        drawable: sending (any MTLDrawable)?
+        passDescriptor: MTLRenderPassDescriptor,
+        drawable: (any MTLDrawable)?
     ) -> RenderStats {
+        stateLock.lock(); defer { stateLock.unlock() }
         let frameStart = CACurrentMediaTime()
-        rebuildVertexBuffersIfNeeded(input: input)
+        rebuildVertexBuffersIfNeededLocked(input: input)
         let visible = effectiveVisibleCount(input: input)
         guard visible > 0,
               let bodyBuf = bodyVertexBuffer,
@@ -209,7 +228,7 @@ public actor MetalKLineRenderer: KLineRenderer {
         return stats
     }
 
-    // MARK: - 内部辅助
+    // MARK: - 内部辅助（Locked 后缀表示假定调用方已持锁）
 
     private func effectiveVisibleCount(input: KLineRenderInput) -> Int {
         let avail = max(0, input.bars.count - input.viewport.startIndex)
@@ -228,7 +247,7 @@ public actor MetalKLineRenderer: KLineRenderer {
         return h
     }
 
-    private func rebuildVertexBuffersIfNeeded(input: KLineRenderInput) {
+    private func rebuildVertexBuffersIfNeededLocked(input: KLineRenderInput) {
         let hash = vertexHash(input: input)
         if hash == cachedVertexHash, bodyVertexBuffer != nil, wickVertexBuffer != nil { return }
         cachedVertexHash = hash

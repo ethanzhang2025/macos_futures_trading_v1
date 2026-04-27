@@ -23,7 +23,7 @@ import ChartCore
 @main
 struct MetalKLineDemoMain {
 
-    static func main() async {
+    static func main() {
         guard MTLCreateSystemDefaultDevice() != nil else {
             print("⚠️ Metal not available · 退出")
             return
@@ -45,7 +45,7 @@ struct MetalKLineDemoMain {
         }
 
         // 1w K · baseline
-        await runBenchmark(
+        runBenchmark(
             label: "1w K（PoC baseline）",
             renderer: renderer,
             barCount: 10_000,
@@ -55,7 +55,7 @@ struct MetalKLineDemoMain {
         )
         print("")
         // 10w K · M6 生死
-        await runBenchmark(
+        runBenchmark(
             label: "10w K（M6 生死核心）",
             renderer: renderer,
             barCount: 100_000,
@@ -111,8 +111,7 @@ struct MetalKLineDemoMain {
         return device.makeTexture(descriptor: desc)
     }
 
-    /// `sending` 返回类型：标记 descriptor unique-owner · 调用方可直接 send 给 actor（Swift 6 strict concurrency）
-    static func makePassDescriptor(texture: MTLTexture) -> sending MTLRenderPassDescriptor {
+    static func makePassDescriptor(texture: MTLTexture) -> MTLRenderPassDescriptor {
         let desc = MTLRenderPassDescriptor()
         desc.colorAttachments[0].texture = texture
         desc.colorAttachments[0].loadAction = .clear
@@ -130,7 +129,7 @@ struct MetalKLineDemoMain {
         visibleCount: Int,
         frames: Int,
         texture: MTLTexture
-    ) async {
+    ) {
         let bars = generateMockBars(barCount)
         let viewport = RenderViewport(
             startIndex: max(0, barCount - visibleCount),
@@ -140,16 +139,15 @@ struct MetalKLineDemoMain {
         var durations: [TimeInterval] = []
         var lastStats = RenderStats()
         durations.reserveCapacity(frames)
-        // 每帧重建 passDescriptor（sending 参数语义 · MTLRenderPassDescriptor 非 Sendable · 不能跨 actor 重复 send）
-        // class init 开销极小（几 µs · 远小于 16.67ms 帧预算）
+        // 每帧重建 passDescriptor（loadAction = clear 每次重置 · 几 µs · 不影响 fps 测量）
         // 第一帧不算（顶点 buffer 构建 cold path · 单独打印）
-        let coldStats = await renderer.renderHeadless(
+        let coldStats = renderer.renderHeadless(
             input: input,
             passDescriptor: makePassDescriptor(texture: texture)
         )
         let coldMs = coldStats.lastFrameDuration * 1000
         for _ in 0..<frames {
-            let stats = await renderer.renderHeadless(
+            let stats = renderer.renderHeadless(
                 input: input,
                 passDescriptor: makePassDescriptor(texture: texture)
             )

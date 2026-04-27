@@ -132,11 +132,12 @@ struct ContentView: View {
     static let minVisible = 20
     static let maxVisible = 5000
 
-    /// 惯性衰减率（每帧）· 0.94 ≈ 1 秒衰减到不可见
-    /// 太大（0.98+）拖太久 · 太小（< 0.9）戛然而止 · 0.94 是 iPhone Safari 体验近似值
-    static let inertiaDecayPerFrame: Float = 0.94
-    /// 惯性最小速度阈值（K 数 / 帧 · 低于此值停止动画）
-    static let inertiaStopThreshold: Float = 0.05
+    /// 惯性衰减率（每帧）· 0.97 ≈ 2 秒衰减（更接近老代码"轻甩飞远"体验）
+    static let inertiaDecayPerFrame: Float = 0.97
+    /// 惯性最小速度阈值（K 数 / 帧 · 低于此值停止动画）· 0.02 让轻甩也能触发
+    static let inertiaStopThreshold: Float = 0.02
+    /// 初始速度分摊帧数（predictedExtraPx / 该值 = 启动速度）· 越小启动越快·轻甩越敏感
+    static let inertiaSpreadFrames: Float = 20
 
     let renderer: MetalKLineRenderer
     let bars: [KLine]
@@ -186,8 +187,8 @@ struct ContentView: View {
                     // 惯性速度：predictedEndTranslation - 当前 translation = 系统估算的"如果继续手感"位移
                     let perBar = Self.assumedViewWidth / CGFloat(max(1, viewport.visibleCount))
                     let predictedExtraPx = value.predictedEndTranslation.width - value.translation.width
-                    // 把"剩余预估位移"分摊到 ~30 帧（0.5s · 60fps）· 然后让衰减接管
-                    let initialVelocity = Float(-predictedExtraPx / perBar) / 30.0
+                    // 分摊到 inertiaSpreadFrames 帧 · 让轻甩也能跨过阈值
+                    let initialVelocity = Float(-predictedExtraPx / perBar) / Self.inertiaSpreadFrames
                     if abs(initialVelocity) > Self.inertiaStopThreshold {
                         startInertia(velocity: initialVelocity)
                     }

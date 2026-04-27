@@ -38,7 +38,7 @@ struct ChartScene: View {
             } else if let loadError {
                 errorView(loadError)
             } else {
-                ProgressView("加载 10w K 行情数据…")
+                ProgressView("加载行情数据…")
             }
         }
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
@@ -46,9 +46,11 @@ struct ChartScene: View {
             // 重活全部搬到 Task.detached · 不阻塞 MainActor / NSWindow 创建
             // 否则 ⌘N 新建窗口要等 generateBars+computeIndicators ~1-3s 才弹出
             do {
+                // 5000 根足够展示视觉密度（Decimal 算术约束 10w 根需 ~1.9s · 5k 仅 ~100ms）
+                // 真 App 接行情后从 SQLite 加载历史 K · 不再走这条 mock 路径
                 let result = try await Task.detached(priority: .userInitiated) {
                     let r = try MetalKLineRenderer()
-                    let b = MockKLineData.generateBars(100_000)
+                    let b = MockKLineData.generateBars(5_000)
                     let i = MockKLineData.computeIndicators(bars: b)
                     return (r, b, i)
                 }.value

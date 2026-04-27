@@ -123,8 +123,8 @@ struct MetalKLineWindowDemoApp {
 
 struct ContentView: View {
 
-    /// 拖拽灵敏度：每根 K 占屏幕 5 px（约 1280/256）
-    static let pixelsPerBar: CGFloat = 5
+    /// 默认窗口宽度（用于计算 dynamic pixelsPerBar · 让 pan 灵敏度跟随 zoom 自动调整）
+    static let assumedViewWidth: CGFloat = 1280
     /// visibleCount 范围（防止 zoom 越界）
     static let minVisible = 20
     static let maxVisible = 5000
@@ -154,17 +154,21 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             hud
         }
-        .gesture(
-            DragGesture()
+        // simultaneousGesture 让 drag 与 magnification 并行识别 · 不互相覆盖
+        // DragGesture(minimumDistance: 0) 起手即响应 · 消除"延迟感"
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     let base = dragStartViewport ?? viewport
                     dragStartViewport = base
-                    let delta = Int(-value.translation.width / Self.pixelsPerBar)
+                    // 每根 K 实际占屏幕 px 数 = 窗口宽 / base.visibleCount（zoom 后自动跟随）
+                    let perBar = Self.assumedViewWidth / CGFloat(max(1, base.visibleCount))
+                    let delta = Int(-value.translation.width / perBar)
                     viewport = clamp(base.panned(by: delta))
                 }
                 .onEnded { _ in dragStartViewport = nil }
         )
-        .gesture(
+        .simultaneousGesture(
             MagnificationGesture()
                 .onChanged { scale in
                     let base = zoomStartViewport ?? viewport

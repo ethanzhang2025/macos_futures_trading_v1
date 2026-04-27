@@ -56,7 +56,7 @@ struct MetalKLineWindowDemoApp {
             defer: false
         )
         window.title = "WP-20 · Metal K 线 PoC（双指缩放 · 拖拽平移 · 10w K · 60fps）"
-        window.center()
+        window.contentMinSize = NSSize(width: 800, height: 480)
 
         let rootView = ContentView(
             renderer: renderer,
@@ -64,8 +64,11 @@ struct MetalKLineWindowDemoApp {
             indicators: indicators,
             initialViewport: initialViewport
         )
-        // NSHostingController 自动处理 SwiftUI ↔ AppKit layout（NSHostingView 直接 set contentView 不会 stretch）
+        // NSHostingController 自动处理 SwiftUI ↔ AppKit layout
         window.contentViewController = NSHostingController(rootView: rootView)
+        // 强制覆盖 NSHostingController.intrinsicContentSize · 防止窗口被 SwiftUI ContentView 缩成指甲盖
+        window.setContentSize(NSSize(width: 1280, height: 720))
+        window.center()
         window.makeKeyAndOrderFront(nil)
         app.activate(ignoringOtherApps: true)
 
@@ -154,17 +157,21 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             hud
         }
+        // 让 NSHostingController 知道 ideal 1280x720（防止窗口启动时缩成指甲盖）
+        .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         // simultaneousGesture 让 drag 与 magnification 并行识别 · 不互相覆盖
         // DragGesture(minimumDistance: 0) 起手即响应 · 消除"延迟感"
+        // pannedSmooth(byBars:) Float 浮点平移 · viewport.startOffset 累加 · 渲染端 viewMatrix
+        // 走 startIndex+startOffset · 真正 sub-bar 像素级丝滑（不再 Int startIndex 阶梯跳跃）
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     let base = dragStartViewport ?? viewport
                     dragStartViewport = base
-                    // 每根 K 实际占屏幕 px 数 = 窗口宽 / base.visibleCount（zoom 后自动跟随）
+                    // 每根 K 占屏幕 px 数 = 窗口宽 / base.visibleCount（zoom 后自动跟随）
                     let perBar = Self.assumedViewWidth / CGFloat(max(1, base.visibleCount))
-                    let delta = Int(-value.translation.width / perBar)
-                    viewport = clamp(base.panned(by: delta))
+                    let deltaBars = Float(-value.translation.width / perBar)
+                    viewport = clamp(base.pannedSmooth(byBars: deltaBars))
                 }
                 .onEnded { _ in dragStartViewport = nil }
         )
@@ -216,7 +223,9 @@ struct ContentView: View {
         let visible = min(max(Self.minVisible, v.visibleCount), Self.maxVisible)
         let maxStart = max(0, bars.count - visible)
         let start = min(maxStart, max(0, v.startIndex))
-        return RenderViewport(startIndex: start, visibleCount: visible)
+        // 触底（最末根）时清零 startOffset 防止超出 · 中段保留 sub-bar 偏移
+        let offset = (start >= maxStart || start <= 0) ? 0 : v.startOffset
+        return RenderViewport(startIndex: start, visibleCount: visible, priceRange: v.priceRange, startOffset: offset)
     }
 }
 

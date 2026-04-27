@@ -22,19 +22,38 @@ public struct RenderViewport: Sendable, Equatable, Hashable, Codable {
     public var visibleCount: Int
     /// Y 轴价格范围（min/max · 让出一定 padding 由 renderer 决定）
     public var priceRange: ClosedRange<Decimal>?
+    /// 子 bar 偏移（0..<1 · pixel-precise pan 关键）
+    /// pan 时累加浮点 K 数 · 满 1 进位 startIndex · 渲染端 viewMatrix 用 startIndex+startOffset
+    /// 让 trackpad 拖拽不依赖 startIndex Int 跳跃 · 视觉连续丝滑
+    public var startOffset: Float
 
-    public init(startIndex: Int, visibleCount: Int, priceRange: ClosedRange<Decimal>? = nil) {
+    public init(startIndex: Int, visibleCount: Int, priceRange: ClosedRange<Decimal>? = nil, startOffset: Float = 0) {
         self.startIndex = max(0, startIndex)
         self.visibleCount = max(1, visibleCount)
         self.priceRange = priceRange
+        self.startOffset = max(0, min(0.999, startOffset))
     }
 
-    /// 平移视口（startIndex += delta · visibleCount 不变）
+    /// 平移视口 · 整数 K 数（旧 API · 兼容已有调用）
     public func panned(by delta: Int) -> RenderViewport {
-        RenderViewport(startIndex: startIndex + delta, visibleCount: visibleCount, priceRange: priceRange)
+        RenderViewport(startIndex: startIndex + delta, visibleCount: visibleCount, priceRange: priceRange, startOffset: startOffset)
     }
 
-    /// 缩放视口（visibleCount × factor · startIndex 围绕中心调整）
+    /// 平移视口 · 浮点 K 数（pixel-precise · sub-bar 偏移自动累加 + 满 1 进位）
+    public func pannedSmooth(byBars deltaBars: Float) -> RenderViewport {
+        let total = Float(startIndex) + startOffset + deltaBars
+        let clamped = max(0, total)
+        let newIndex = Int(clamped.rounded(.down))
+        let newOffset = clamped - Float(newIndex)
+        return RenderViewport(
+            startIndex: newIndex,
+            visibleCount: visibleCount,
+            priceRange: priceRange,
+            startOffset: newOffset
+        )
+    }
+
+    /// 缩放视口（visibleCount × factor · startIndex 围绕中心调整 · startOffset 重置 0）
     public func zoomed(by factor: Double) -> RenderViewport {
         let newCount = max(1, Int(Double(visibleCount) * factor))
         let center = startIndex + visibleCount / 2

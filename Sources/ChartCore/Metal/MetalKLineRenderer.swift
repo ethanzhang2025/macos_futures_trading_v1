@@ -378,8 +378,9 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
     }
 
     private func makeViewMatrix(input: KLineRenderInput, visible: Int) -> simd_float4x4 {
-        let xLeft = Float(input.viewport.startIndex)
-        let xRight = Float(input.viewport.startIndex + visible)
+        // sub-bar pixel-precise pan：xLeft 用 startIndex + startOffset（Float · 浮点平移）
+        let xLeft = Float(input.viewport.startIndex) + input.viewport.startOffset
+        let xRight = xLeft + Float(visible)
         let priceRange = input.viewport.priceRange ?? derivePriceRange(input: input, visible: visible)
         let yBottom = Self.float(priceRange.lowerBound)
         let yTop = Self.float(priceRange.upperBound)

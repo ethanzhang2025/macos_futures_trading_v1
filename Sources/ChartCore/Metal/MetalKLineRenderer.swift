@@ -47,11 +47,28 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
     private var cachedVertexHash = 0
     private var cachedBarsCount = 0
 
-    // MARK: - 顶点结构（与 MSL VertexIn 严格内存对齐 · 24 bytes/vertex）
+    // MARK: - 顶点结构（packed Float 布局 · 严格 24 bytes/vertex 与 MSL VertexIn 对齐）
+    //
+    // 为何不用 SIMD2 + SIMD4：SIMD4<Float> alignment=16 会让编译器在 position 后插 8 bytes padding，
+    // 导致 stride 变 32 · vertex descriptor 配的 attribute offset / layout stride 错位 · GPU 读到垃圾。
+    // 6 Float 字段都是 Float（align 4）· 无自动 padding · stride = 24（精确对齐）。
 
     private struct KLineVertex {
-        var position: SIMD2<Float>
-        var color: SIMD4<Float>
+        var x: Float
+        var y: Float
+        var r: Float
+        var g: Float
+        var b: Float
+        var a: Float
+
+        init(position: SIMD2<Float>, color: SIMD4<Float>) {
+            self.x = position.x
+            self.y = position.y
+            self.r = color.x
+            self.g = color.y
+            self.b = color.z
+            self.a = color.w
+        }
     }
 
     // MARK: - 涨跌色（中国期货约定：涨红跌绿）

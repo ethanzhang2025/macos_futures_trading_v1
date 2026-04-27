@@ -152,9 +152,13 @@ struct ContentView: View {
                 }
                 .onEnded { _ in zoomStartViewport = nil }
         )
-        .task(id: viewport) {
-            let stats = await renderer.lastStats
-            lastFrameMs = stats.lastFrameDuration * 1000
+        .task {
+            // 每 100ms 采样 lastStats（render 在每帧 16.67ms 跑 · viewport 不变也要更新 HUD）
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                let stats = await renderer.lastStats
+                lastFrameMs = stats.lastFrameDuration * 1000
+            }
         }
     }
 

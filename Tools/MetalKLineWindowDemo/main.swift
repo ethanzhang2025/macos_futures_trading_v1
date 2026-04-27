@@ -86,10 +86,13 @@ struct MetalKLineWindowDemoApp {
             volumes: bars.map(\.volume),
             openInterests: bars.map { _ in 0 }
         )
-        let ma20 = (try? MA.calculate(kline: series, params: [20])) ?? []
-        let ma60 = (try? MA.calculate(kline: series, params: [60])) ?? []
-        let boll = (try? BOLL.calculate(kline: series, params: [20, 2])) ?? []  // BOLL-MID/UPPER/LOWER 三轨
-        return ma20 + ma60 + boll
+        // 5 条不重合的折线（BOLL-MID = MA(20) 完全相同 · 必须过滤避免像素级覆盖）
+        let ma5 = (try? MA.calculate(kline: series, params: [5])) ?? []   // 短期 · 黄
+        let ma20 = (try? MA.calculate(kline: series, params: [20])) ?? [] // 中期 · 紫
+        let ma60 = (try? MA.calculate(kline: series, params: [60])) ?? [] // 长期 · 蓝
+        let boll = (try? BOLL.calculate(kline: series, params: [20, 2])) ?? []
+        let bollBands = boll.filter { $0.name != "BOLL-MID" }  // 仅保留 UPPER/LOWER（橙 · 粉）
+        return ma5 + ma20 + ma60 + bollBands
     }
 
     // MARK: - 模拟 10w 根 K 数据（random walk · 起价 3000 · ±2 步长）

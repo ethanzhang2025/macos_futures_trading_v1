@@ -56,7 +56,15 @@ let package = Package(
         .testTarget(name: "IndicatorCoreTests", dependencies: ["IndicatorCore"], path: "Tests/IndicatorCoreTests"),
 
         // MARK: - ChartCore · Metal 图表渲染管线
-        .target(name: "ChartCore", dependencies: ["Shared", "DataCore", "IndicatorCore"], path: "Sources/ChartCore"),
+        // KLineShaders.metal 是 reference 文件（仅供 Xcode 浏览 + IDE 高亮）·
+        // 实际 shader 通过 KLineShaderSource.metalSourceCode 内嵌字符串 device.makeLibrary(source:) 运行时编译。
+        // exclude 该文件避免 Swift PM 在 Linux 端尝试 process .metal（无 metal compiler）。
+        .target(
+            name: "ChartCore",
+            dependencies: ["Shared", "DataCore", "IndicatorCore"],
+            path: "Sources/ChartCore",
+            exclude: ["Metal/KLineShaders.metal"]
+        ),
         .testTarget(name: "ChartCoreTests", dependencies: ["ChartCore"], path: "Tests/ChartCoreTests"),
 
         // MARK: - JournalCore · 交易日志 + 复盘分析
@@ -204,6 +212,13 @@ let package = Package(
             name: "FuturesContextualDemo",
             dependencies: ["Shared", "DataCore", "IndicatorCore"],
             path: "Tools/FuturesContextualDemo"
+        ),
+        // MetalKLineDemo · WP-20 Metal K 线 PoC 性能验收（M6 生死核心 · 10w K 60fps）
+        // headless offscreen 1280x720 · 1w/10w K 各 100 帧 · 报告 avg/max/healthy60fps · Linux 端跳过
+        .executableTarget(
+            name: "MetalKLineDemo",
+            dependencies: ["Shared", "ChartCore"],
+            path: "Tools/MetalKLineDemo"
         )
     ]
 )

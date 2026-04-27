@@ -164,10 +164,10 @@
 
 ## E3 · 技术 PoC 与架构基础
 
-### 🟨 WP-20 · Metal + SwiftUI K 线渲染 PoC（Linux 切机包 ✅ / Mac Metal 实现待）
+### 🚧 WP-20 · Metal + SwiftUI K 线渲染 PoC（Linux 实现 ✅ / Mac 编译 + Instruments 验收待）
 - **时点**：M1 Week 2-3
 - **负责**：你
-- **依赖**：Mac Studio + Xcode + Cursor/Claude 环境
+- **依赖**：Mac Studio（Apple Silicon）+ Xcode + Cursor/Claude 环境
 - **交付**：PoC demo（目标 10 万根 K 线 60fps + 滚动缩放流畅）
 - **DoD**：实测 10 万根 60fps 通过、延迟 <16ms
 - **锚点**：D2 §7 Week 2-3、产品设计书 §3.4 性能基准
@@ -190,13 +190,40 @@
 - **回归**：592/146 → **607/150 全绿**（基线维持 + 15 新测试）
 - **代码质量**：code-simplifier 1 轮过审 · 抽 frameBudget60fps + healthyFrameTolerance 命名常量
 
-**Mac 端待执行**（用户切到 `/Users/admin/...` 后实施 1-2 周）：
-- `brew install sqlcipher` 验证 Mac 端 6 store 加密层
-- 15 demo Mac 端跑通验证（swift run 各 demo 行为与 Linux 一致）
-- `Sources/ChartCore/Metal/MetalKLineRenderer.swift` 实现（actor + MTLDevice/CommandQueue/PipelineState）
-- `Sources/ChartCore/Metal/KLineShaders.metal` 顶点 + 片段 shader
-- `Sources/ChartCore/Bridging/KLineMetalView.swift`（NSViewRepresentable 包 MTKView）
-- 性能验收：1w K 60fps（PoC）→ 10w K 60fps（生死核心）+ Instruments 5 项截图
+**Linux 端 Metal PoC 实现已交付**（v6.2 · 2026-04-26 · 切机后第 1 个 WP · Linux 写代码 + Mac 编译验证）：
+- **`Sources/ChartCore/RenderError.swift`**（错误类型 · 4 case · 跨平台）：
+  `metalNotSupported` / `shaderCompilationFailed(String)` / `pipelineCreationFailed(String)` / `invalidInput(String)`
+- **`Sources/ChartCore/Metal/MetalKLineRenderer.swift`**（~250 行 · `actor` 实现 KLineRenderer · 全文 `#if canImport(Metal)` 包裹）：
+  - MTLDevice + MTLCommandQueue + MTLRenderPipelineState 持有
+  - **顶点 layout**：`position(float2) + color(float4) = 24 bytes/vertex`（与 MSL VertexIn 严格内存对齐）
+  - **GPU 端 viewMatrix transform**：顶点是逻辑坐标 · zoom/pan 仅更新 4×4 ortho matrix（M6 60fps zoom 关键）
+  - **单合批 drawCall = 2**：实体（triangleList · 6 顶点/K · 涨红跌绿）+ 影线（line · 2 顶点/K）· 独立于 K 数
+  - **顶点缓存**：K 数据 hash（count + 首/末 close）变化才重建 buffer · 视口变化只更新 matrix
+  - 涨红跌绿 #F54545/#2DBC6B（中国期货约定）· bodyWidthRatio 0.7 · priceRangePadding 5%
+  - 双入口：`renderToDrawable(input:passDescriptor:drawable:)`（MTKView UI）+ `renderHeadless(input:passDescriptor:)`（demo/CI/Instruments）
+  - `metalDevice` nonisolated 暴露（demo / SwiftUI 桥接构造同 device 的 texture / drawable）
+  - `Self.float(_:)` 静态 helper 简化 6 处 `NSDecimalNumber(decimal:).floatValue`（simplifier 抽出）
+- **`Sources/ChartCore/Metal/KLineShaderSource.swift`**（内嵌 MSL string · 运行时 `device.makeLibrary(source:)` 编译 · 省 Swift PM resources 配置）
+- **`Sources/ChartCore/Metal/KLineShaders.metal`**（reference 文件 · Package.swift `exclude` · 仅供 Xcode 浏览 + IDE 高亮 · 与 Swift 内嵌 source 同步）
+- **`Sources/ChartCore/Bridging/KLineMetalView.swift`**（NSViewRepresentable 包 MTKView · `#if canImport(Metal/MetalKit/SwiftUI/AppKit)`）：
+  - Coordinator @MainActor + `Task.detached` 跨 actor 桥接 · `@preconcurrency import Metal` 抑制 Sendable 警告
+  - 60fps 自动重绘 · 深色背景 #12141A · `framebufferOnly = true` · `enableSetNeedsDisplay = false`
+- **`Tests/ChartCoreTests/MetalKLineRendererTests.swift`**（+8 测试 +2 suite · `#if canImport(Metal)` · Mac-only · Linux 跳过 · 1 helper）：
+  - init 套件（3 测试 · init 不抛错 / 默认 quality / setQuality 切档）
+  - render 套件（5 测试 · drawCall=2 与 K 数无关 100/10000/empty · clamp 边界 · lastStats 反映最近一帧）
+  - `makeRendererOrSkip` helper（simplifier 抽出 · 替换 6 处样板代码）
+- **`Tools/MetalKLineDemo/main.swift`**（headless benchmark · `#if canImport(Metal)` · 性能验收物料）：
+  - 1w K 100 帧（PoC baseline）+ 10w K 100 帧（M6 生死核心）
+  - 1280×720 offscreen MTLTexture · 报告 cold/avg/min/max ms · 60fps 健康率 · drawCall · visibleBars
+  - Linux 端打印 "Metal unavailable" 退出 0（不阻塞跨平台 build）
+- **`Package.swift` 更新**：ChartCore target `exclude: ["Metal/KLineShaders.metal"]` + `MetalKLineDemo` executableTarget
+- **回归**：659/156 全绿（Linux 维持 v6.1 基线 · Mac-only 8 测试在 Mac 端激活 → 期望 667/158）
+- **代码质量**：code-simplifier 1 轮过审（抽 `Self.float(_:)` Decimal→Float helper · 抽 `makeRendererOrSkip` 测试 helper · 净 -10 行）
+
+**Mac 端待执行**（用户在 Mac terminal 一条命令拉取 + 编译 + 验收）：
+- `git pull && swift package clean && swift build && swift test 2>&1 | tail -3`（期望 667/158 全绿 · 多出 Mac-only Metal 8 测试）
+- `swift run MetalKLineDemo 2>&1 | tail -30`（期望 1w/10w K avg < 16.67ms · healthy ≥ 90/100）
+- Instruments 5 项截图：Time Profiler / Metal System Trace / Memory / Energy Log / fps 曲线（M6 提案 / 销售素材）
 
 ### 🟨 WP-21 · CTP SimNow 行情订阅 PoC + 数据管线（21a Linux 子集完成）
 - **时点**：M1 Week 2-3

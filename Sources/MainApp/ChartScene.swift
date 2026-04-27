@@ -38,18 +38,23 @@ struct ChartScene: View {
             } else if let loadError {
                 errorView(loadError)
             } else {
-                ProgressView("初始化 Metal 渲染器…")
+                ProgressView("加载 10w K 行情数据…")
             }
         }
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         .task {
+            // 重活全部搬到 Task.detached · 不阻塞 MainActor / NSWindow 创建
+            // 否则 ⌘N 新建窗口要等 generateBars+computeIndicators ~1-3s 才弹出
             do {
-                let r = try MetalKLineRenderer()
-                let b = MockKLineData.generateBars(100_000)
-                let i = MockKLineData.computeIndicators(bars: b)
-                renderer = r
-                bars = b
-                indicators = i
+                let result = try await Task.detached(priority: .userInitiated) {
+                    let r = try MetalKLineRenderer()
+                    let b = MockKLineData.generateBars(100_000)
+                    let i = MockKLineData.computeIndicators(bars: b)
+                    return (r, b, i)
+                }.value
+                renderer = result.0
+                bars = result.1
+                indicators = result.2
             } catch {
                 loadError = "\(error)"
             }

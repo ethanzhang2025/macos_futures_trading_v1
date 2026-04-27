@@ -219,6 +219,14 @@ let package = Package(
             name: "MetalKLineDemo",
             dependencies: ["Shared", "ChartCore"],
             path: "Tools/MetalKLineDemo"
+        ),
+        // MetalKLineWindowDemo · WP-20 SwiftUI 真窗口 + zoom/pan gesture（验 DoD "10w K + 流畅滚动缩放"）
+        // NSApplication + NSWindow + NSHostingView · ContentView pinch zoom + drag pan · 10w K 模拟数据
+        // Mac 端 swift run 直接见画面 + trackpad 交互 · Linux 端跳过
+        .executableTarget(
+            name: "MetalKLineWindowDemo",
+            dependencies: ["Shared", "ChartCore"],
+            path: "Tools/MetalKLineWindowDemo"
         )
     ]
 )

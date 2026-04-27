@@ -216,7 +216,12 @@
   - 1w K 100 帧（PoC baseline）+ 10w K 100 帧（M6 生死核心）
   - 1280×720 offscreen MTLTexture · 报告 cold/avg/min/max ms · 60fps 健康率 · drawCall · visibleBars
   - Linux 端打印 "Metal unavailable" 退出 0（不阻塞跨平台 build）
-- **`Package.swift` 更新**：ChartCore target `exclude: ["Metal/KLineShaders.metal"]` + `MetalKLineDemo` executableTarget
+- **`Tools/MetalKLineWindowDemo/main.swift`**（SwiftUI 真窗口 · pinch zoom + drag pan · 完成 DoD "10w K + 流畅滚动缩放"）：
+  - NSApplication + NSWindow + NSHostingView + ContentView 包 KLineMetalView
+  - @State viewport · DragGesture（pan · pixelsPerBar=5）+ MagnificationGesture（zoom · factor=1/scale · clamp 20..5000）
+  - HUD 显示 visible/start/lastFrameMs · 10w K 模拟数据默认看末尾 200 根
+  - Linux 端打印 "WindowDemo macOS only" 退出 0
+- **`Package.swift` 更新**：ChartCore target `exclude: ["Metal/KLineShaders.metal"]` + `MetalKLineDemo` + `MetalKLineWindowDemo` executableTarget
 - **回归**：659/156 全绿（Linux 维持 v6.1 基线 · Mac-only 8 测试在 Mac 端激活 → 期望 667/158）
 - **代码质量**：code-simplifier 1 轮过审（抽 `Self.float(_:)` Decimal→Float helper · 抽 `makeRendererOrSkip` 测试 helper · 净 -10 行）
 

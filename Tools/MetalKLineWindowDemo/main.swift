@@ -55,7 +55,7 @@ struct MetalKLineWindowDemoApp {
             backing: .buffered,
             defer: false
         )
-        window.title = "WP-20 · Metal K 线 PoC（pinch zoom · drag pan · 10w K · 60fps）"
+        window.title = "WP-20 · Metal K 线 PoC（双指缩放 · 拖拽平移 · 10w K · 60fps）"
         window.center()
 
         let rootView = ContentView(
@@ -186,12 +186,12 @@ struct ContentView: View {
 
     var hud: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("📊 visible: \(viewport.visibleCount) · start: \(viewport.startIndex) / \(bars.count)")
-            Text("⏱️  last frame: \(String(format: "%.2f", lastFrameMs)) ms · budget 16.67 ms")
+            Text("📊 可见: \(viewport.visibleCount) · 起点: \(viewport.startIndex) / \(bars.count)")
+            Text("⏱️  上一帧: \(String(format: "%.2f", lastFrameMs)) ms · 预算 16.67 ms")
             ForEach(Array(indicators.enumerated()), id: \.offset) { idx, series in
                 Text("📈 \(series.name): \(latestText(series))")
             }
-            Text("🎮 trackpad pinch=zoom · drag=pan")
+            Text("🎮 触控板：双指缩放 · 拖拽平移")
         }
         .font(.system(size: 12, design: .monospaced))
         .foregroundColor(.white)
@@ -221,7 +221,7 @@ struct ContentView: View {
 @main
 struct MetalKLineWindowDemoApp {
     static func main() {
-        print("⚠️  WindowDemo 仅在 macOS 可用（依赖 Metal + AppKit + SwiftUI）· 当前平台跳过")
+        print("⚠️  窗口 Demo 仅在 macOS 可用（依赖 Metal + AppKit + SwiftUI）· 当前平台跳过")
     }
 }
 

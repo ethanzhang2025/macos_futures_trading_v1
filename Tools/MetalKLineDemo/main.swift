@@ -25,28 +25,28 @@ struct MetalKLineDemoMain {
 
     static func main() {
         guard MTLCreateSystemDefaultDevice() != nil else {
-            print("⚠️ Metal not available · 退出")
+            print("⚠️ Metal 不可用 · 退出")
             return
         }
         print("=== WP-20 Metal K 线 PoC 性能验收 ===")
-        print("（headless · offscreen 1280x720 · 100 帧 baseline）")
+        print("（无窗 · 离屏 1280x720 · 100 帧基线）")
         print("")
         let renderer: MetalKLineRenderer
         do {
             renderer = try MetalKLineRenderer()
         } catch {
-            print("❌ MetalKLineRenderer init 失败：\(error)")
+            print("❌ MetalKLineRenderer 初始化失败：\(error)")
             return
         }
         let texture = makeOffscreenTexture(device: renderer.metalDevice, width: 1280, height: 720)
         guard let texture else {
-            print("❌ Offscreen texture 创建失败")
+            print("❌ 离屏纹理创建失败")
             return
         }
 
-        // 1w K · baseline
+        // 1w K · 基线
         runBenchmark(
-            label: "1w K（PoC baseline）",
+            label: "1w K（PoC 基线）",
             renderer: renderer,
             barCount: 10_000,
             visibleCount: 1_000,
@@ -161,10 +161,10 @@ struct MetalKLineDemoMain {
             $0 <= RenderStats.frameBudget60fps + RenderStats.healthyFrameTolerance
         }.count
         print("📊 \(label)")
-        print("   bars: \(barCount) · visible: \(visibleCount) · frames: \(frames)")
-        print("   cold(顶点构建首帧): \(formatMs(coldMs)) ms")
-        print("   avg: \(formatMs(avgMs)) ms · min: \(formatMs(minMs)) · max: \(formatMs(maxMs))")
-        print("   60fps 健康: \(healthy)/\(frames) · drawCall: \(lastStats.drawCallCount) · visibleBars: \(lastStats.visibleBarCount)")
+        print("   K 线: \(barCount) · 可见: \(visibleCount) · 帧数: \(frames)")
+        print("   冷启动（顶点构建首帧）: \(formatMs(coldMs)) ms")
+        print("   均值: \(formatMs(avgMs)) ms · 最小: \(formatMs(minMs)) · 最大: \(formatMs(maxMs))")
+        print("   60fps 健康: \(healthy)/\(frames) · 绘制调用: \(lastStats.drawCallCount) · 可见 K: \(lastStats.visibleBarCount)")
         print("   60fps 预算: \(formatMs(RenderStats.frameBudget60fps * 1000)) ms")
         let pass = avgMs <= RenderStats.frameBudget60fps * 1000 && healthy >= frames * 9 / 10
         print("   验收：\(pass ? "🎉 通过" : "⚠️  未达标 · 见 Instruments Metal System Trace 定位瓶颈")")
@@ -180,7 +180,7 @@ struct MetalKLineDemoMain {
 @main
 struct MetalKLineDemoMain {
     static func main() {
-        print("⚠️  Metal 仅在 macOS 可用 · 当前平台跳过 PoC benchmark")
+        print("⚠️  Metal 仅在 macOS 可用 · 当前平台跳过 PoC 基准测试")
     }
 }
 

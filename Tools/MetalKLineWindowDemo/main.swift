@@ -123,10 +123,12 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            // 必须 .frame 拉满 · 否则 NSViewRepresentable 默认 zero size → MTKView drawableSize=0 → currentDrawable 永远 nil → 不渲染
             KLineMetalView(
                 renderer: renderer,
                 input: KLineRenderInput(bars: bars, viewport: viewport)
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             hud
         }
         .gesture(

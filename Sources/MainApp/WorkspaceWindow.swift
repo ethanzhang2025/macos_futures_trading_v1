@@ -1,15 +1,14 @@
-// MainApp · 工作区模板面板（WP-55 UI · commit 2/4 · CRUD + 切换激活）
+// MainApp · 工作区模板面板（WP-55 UI · commit 3/4 · 网格预设 + windows 编辑）
 //
 // commit 1 已交付：NavigationSplitView 双栏 · WorkspaceBook 真模型 · Mock 4 模板（每 Kind 各 1）
-// commit 2 本次新增：
-// - 顶部 "+" 按钮（⌘⇧K · 添加模板 sheet）
-// - 行 contextMenu：重命名 / 复制（duplicateTemplate）/ 删除（destructive）
-// - 删除前 confirmationDialog（含级联清空 N 窗口警示）
-// - TemplateEditorSheet（add/edit 共用 · 字段 name + Kind picker · 4 类预设）
-// - detail header "设为当前激活"按钮（非激活时显示 · 双击 sidebar 行同效）
-// - 操作 helper：addTemplate / renameAndRekind / duplicateTemplate / deleteTemplate / activate
+// commit 2 已交付：CRUD（添加/删除/重命名/复制）+ setActive 切换激活 · TemplateEditorSheet
+// commit 3 本次新增：
+// - detail windows 区顶部 "+ 添加窗口" + "应用网格预设" actions
+// - windowRow 双击编辑 / contextMenu 编辑/删除
+// - WindowEditorSheet（add/edit 共用 · 合约 ID + 周期 Picker 9 周期 + 指标 IDs 逗号串）
+// - ApplyGridSheet（LazyVGrid 6 张卡片 · WindowGridPreset.allCases · mini preview + maxWindows 截断警告）
+// - 5 windows helper：updateWindows / addWindow / removeWindow / updateWindow(at:) / applyGrid
 //
-// 留待 commit 3/4：网格预设 6 卡片 + windows 列表编辑（合约/周期/指标 picker）
 // 留待 commit 4/4：快捷键编辑器（CommandRecorder）+ 全局唯一性 + 主图联动 stub
 //
 // 留待 M5：StoreManager 注入 SQLiteWorkspaceBookStore · 替换 Mock 真持久化数据
@@ -25,11 +24,17 @@ import Shared
 private enum WorkspaceSheetState: Identifiable {
     case addTemplate
     case editTemplate(WorkspaceTemplate)
+    case addWindow(template: WorkspaceTemplate)
+    case editWindow(template: WorkspaceTemplate, index: Int)
+    case applyGrid(template: WorkspaceTemplate)
 
     var id: String {
         switch self {
-        case .addTemplate:        return "add-template"
-        case .editTemplate(let t): return "edit-template-\(t.id)"
+        case .addTemplate:                      return "add-template"
+        case .editTemplate(let t):              return "edit-template-\(t.id)"
+        case .addWindow(let t):                 return "add-window-\(t.id)"
+        case .editWindow(let t, let i):         return "edit-window-\(t.id)-\(i)"
+        case .applyGrid(let t):                 return "apply-grid-\(t.id)"
         }
     }
 }
@@ -66,6 +71,20 @@ struct WorkspaceWindow: View {
             case .editTemplate(let template):
                 TemplateEditorSheet(mode: .edit(template: template)) { name, kind in
                     renameAndRekind(template, name: name, kind: kind)
+                }
+            case .addWindow(let template):
+                WindowEditorSheet(mode: .add) { layout in
+                    addWindow(layout, to: template)
+                }
+            case .editWindow(let template, let index):
+                if template.windows.indices.contains(index) {
+                    WindowEditorSheet(mode: .edit(layout: template.windows[index])) { layout in
+                        updateWindow(at: index, to: layout, in: template)
+                    }
+                }
+            case .applyGrid(let template):
+                ApplyGridSheet(template: template) { preset in
+                    applyGrid(preset, to: template)
                 }
             }
         }
@@ -247,19 +266,40 @@ struct WorkspaceWindow: View {
 
     private func windowsCard(_ template: WorkspaceTemplate) -> some View {
         infoCard("窗口布局（\(template.windows.count) 个）") {
+            HStack {
+                Button {
+                    sheetState = .addWindow(template: template)
+                } label: {
+                    Label("添加窗口", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                Button {
+                    sheetState = .applyGrid(template: template)
+                } label: {
+                    Label("应用网格预设", systemImage: "rectangle.split.2x2")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(template.windows.isEmpty)
+                .help("把当前 N 个窗口的 frame 替换为预设网格（不变合约/周期/指标）")
+                Spacer()
+            }
+            .padding(.bottom, 4)
+
             if template.windows.isEmpty {
-                Text("空模板 · 暂无窗口（commit 3 加网格预设可一键生成）")
+                Text("空模板 · 点击「添加窗口」开始 · 或先添加再应用网格预设")
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
                 ForEach(Array(template.windows.enumerated()), id: \.element.id) { index, window in
-                    windowRow(index: index, window: window)
+                    windowRow(index: index, window: window, template: template)
                 }
             }
         }
     }
 
-    private func windowRow(index: Int, window: WindowLayout) -> some View {
+    private func windowRow(index: Int, window: WindowLayout, template: WorkspaceTemplate) -> some View {
         HStack(spacing: 0) {
             Text("窗口 \(index + 1)")
                 .font(.system(.caption, design: .monospaced))
@@ -285,6 +325,19 @@ struct WorkspaceWindow: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            sheetState = .editWindow(template: template, index: index)
+        }
+        .contextMenu {
+            Button("编辑窗口") {
+                sheetState = .editWindow(template: template, index: index)
+            }
+            Divider()
+            Button("删除窗口", role: .destructive) {
+                removeWindow(at: index, from: template)
+            }
+        }
     }
 
     private func shortcutCard(_ template: WorkspaceTemplate) -> some View {
@@ -329,7 +382,7 @@ struct WorkspaceWindow: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
-            Text("commit 2/4 · CRUD + 切换激活 · 网格 + 编辑 待 commit 3")
+            Text("commit 3/4 · 网格 + windows 编辑 · 快捷键 待 commit 4")
                 .font(.caption2)
                 .foregroundColor(.secondary)
         }
@@ -390,6 +443,45 @@ struct WorkspaceWindow: View {
 
     private func activate(_ template: WorkspaceTemplate) {
         book.setActive(id: template.id)
+    }
+
+    // MARK: - Mutations · windows 编辑
+
+    /// windows 改动统一入口：取最新 template（避免 stale 引用）→ 跑 transform → updateTemplate 整体覆盖
+    /// 之所以重新查 book.template(id:) 而不直接用入参 template：sheet 关闭时 book 可能已被其他操作改动
+    private func updateWindows(of template: WorkspaceTemplate, transform: (inout [WindowLayout]) -> Void) {
+        guard var fresh = book.template(id: template.id) else { return }
+        transform(&fresh.windows)
+        book.updateTemplate(fresh)
+    }
+
+    private func addWindow(_ layout: WindowLayout, to template: WorkspaceTemplate) {
+        updateWindows(of: template) { $0.append(layout) }
+    }
+
+    private func updateWindow(at index: Int, to layout: WindowLayout, in template: WorkspaceTemplate) {
+        updateWindows(of: template) { windows in
+            guard windows.indices.contains(index) else { return }
+            // 保留原 id（避免 ForEach diff 全量重渲染 + frame/zIndex 由网格预设决定，编辑时不动几何）
+            var updated = layout
+            updated.id = windows[index].id
+            updated.frame = windows[index].frame
+            updated.zIndex = windows[index].zIndex
+            windows[index] = updated
+        }
+    }
+
+    private func removeWindow(at index: Int, from template: WorkspaceTemplate) {
+        updateWindows(of: template) { windows in
+            guard windows.indices.contains(index) else { return }
+            windows.remove(at: index)
+        }
+    }
+
+    /// 网格预设应用：保留 instrumentID/period/indicatorIDs，仅替换 frame
+    /// 多余的 windows 会被 WindowGridPreset.applyTo 截断（数据层语义）
+    private func applyGrid(_ preset: WindowGridPreset, to template: WorkspaceTemplate) {
+        updateWindows(of: template) { $0 = preset.applyTo($0) }
     }
 }
 
@@ -514,6 +606,225 @@ private struct TemplateEditorSheet: View {
             return true
         case .edit(let template):
             return trimmed != template.name || kind != template.kind
+        }
+    }
+}
+
+// MARK: - Sheet · 单窗口编辑（add / edit 共用）
+
+private struct WindowEditorSheet: View {
+
+    enum Mode {
+        case add
+        case edit(layout: WindowLayout)
+    }
+
+    let mode: Mode
+    let onSubmit: (WindowLayout) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var instrumentID: String
+    @State private var period: KLinePeriod
+    @State private var indicatorIDsRaw: String
+
+    init(mode: Mode, onSubmit: @escaping (WindowLayout) -> Void) {
+        self.mode = mode
+        self.onSubmit = onSubmit
+        switch mode {
+        case .add:
+            self._instrumentID = State(initialValue: "")
+            self._period = State(initialValue: .minute5)
+            self._indicatorIDsRaw = State(initialValue: "")
+        case .edit(let layout):
+            self._instrumentID = State(initialValue: layout.instrumentID)
+            self._period = State(initialValue: layout.period)
+            self._indicatorIDsRaw = State(initialValue: layout.indicatorIDs.joined(separator: ", "))
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.title2).bold()
+
+            Form {
+                TextField("合约代码（如 RB0 / IF0）", text: $instrumentID)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 280)
+
+                // PeriodSwitcher.default9Periods 与默认 ⌘1~9 快捷键映射对齐
+                Picker("周期", selection: $period) {
+                    ForEach(PeriodSwitcher.default9Periods, id: \.self) { p in
+                        Text(p.displayName).tag(p)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                TextField("指标 IDs（逗号分隔 · 如 MA5, MA20, BOLL）", text: $indicatorIDsRaw)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 280)
+
+                Text("commit 4 / M5 可加指标多选 UI · v1 用逗号分隔字符串简化")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .formStyle(.grouped)
+
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(actionLabel) {
+                    onSubmit(buildLayout())
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSubmit)
+            }
+        }
+        .padding(20)
+        .frame(width: 460, height: 360)
+    }
+
+    private var title: String {
+        switch mode {
+        case .add:  return "添加窗口"
+        case .edit: return "编辑窗口"
+        }
+    }
+
+    private var actionLabel: String {
+        switch mode {
+        case .add:  return "添加"
+        case .edit: return "更新"
+        }
+    }
+
+    private var canSubmit: Bool {
+        instrumentID.trimmedOrNil != nil
+    }
+
+    /// 把 raw 字符串拆成 indicatorIDs 数组（trim · 大写 · 去空 · 去重保留顺序）
+    private func buildLayout() -> WindowLayout {
+        let id = instrumentID.trimmedOrNil?.uppercased() ?? ""
+        let indicators = indicatorIDsRaw
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces).uppercased() }
+            .filter { !$0.isEmpty }
+        var seen = Set<String>()
+        let dedup = indicators.filter { seen.insert($0).inserted }
+        return WindowLayout(
+            instrumentID: id,
+            period: period,
+            indicatorIDs: dedup
+        )
+    }
+}
+
+// MARK: - Sheet · 应用网格预设（6 张卡片）
+
+private struct ApplyGridSheet: View {
+
+    let template: WorkspaceTemplate
+    let onApply: (WindowGridPreset) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: WindowGridPreset?
+
+    private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("应用网格预设").font(.title2).bold()
+            Text("当前 \(template.windows.count) 个窗口 · 选择网格后会按「先列后行」顺序填入 · 多余的窗口会被截断")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(WindowGridPreset.allCases, id: \.self) { preset in
+                    gridCard(preset)
+                }
+            }
+
+            HStack {
+                if let sel = selected, sel.maxWindows < template.windows.count {
+                    Label(
+                        "应用后将截断 \(template.windows.count - sel.maxWindows) 个窗口",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                }
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("应用") {
+                    if let sel = selected { onApply(sel) }
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(selected == nil)
+            }
+        }
+        .padding(20)
+        .frame(width: 520, height: 460)
+    }
+
+    private func gridCard(_ preset: WindowGridPreset) -> some View {
+        let isSelected = selected == preset
+        return Button {
+            selected = preset
+        } label: {
+            VStack(spacing: 8) {
+                gridPreview(preset)
+                    .frame(height: 64)
+                Text(preset.displayName)
+                    .font(.caption)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                Text("最多 \(preset.maxWindows) 窗口")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.06))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 网格 mini preview · 用 dimensions 直出格子 · 保持 4:3 视觉比例
+    private func gridPreview(_ preset: WindowGridPreset) -> some View {
+        let (rows, cols) = preset.dimensions
+        return VStack(spacing: 2) {
+            ForEach(0..<rows, id: \.self) { _ in
+                HStack(spacing: 2) {
+                    ForEach(0..<cols, id: \.self) { _ in
+                        Rectangle()
+                            .fill(Color.accentColor.opacity(0.3))
+                            .overlay(
+                                Rectangle().stroke(Color.accentColor, lineWidth: 1)
+                            )
+                    }
+                }
+            }
+        }
+        .padding(4)
+    }
+}
+
+fileprivate extension WindowGridPreset {
+    var displayName: String {
+        switch self {
+        case .single:      return "单窗口"
+        case .horizontal2: return "1×2 横排"
+        case .vertical2:   return "2×1 竖排"
+        case .grid2x2:     return "2×2 四宫"
+        case .grid2x3:     return "2×3 六宫"
+        case .grid3x2:     return "3×2 六宫"
         }
     }
 }

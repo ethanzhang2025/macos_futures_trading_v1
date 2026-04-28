@@ -1,17 +1,12 @@
-// MainApp · 工作区模板面板（WP-55 UI · commit 3/4 · 网格预设 + windows 编辑）
+// MainApp · 工作区模板面板（WP-55 收官 · 双栏模板管理 + 网格预设 + 快捷键编辑器）
 //
-// commit 1 已交付：NavigationSplitView 双栏 · WorkspaceBook 真模型 · Mock 4 模板（每 Kind 各 1）
-// commit 2 已交付：CRUD（添加/删除/重命名/复制）+ setActive 切换激活 · TemplateEditorSheet
-// commit 3 本次新增：
-// - detail windows 区顶部 "+ 添加窗口" + "应用网格预设" actions
-// - windowRow 双击编辑 / contextMenu 编辑/删除
-// - WindowEditorSheet（add/edit 共用 · 合约 ID + 周期 Picker 9 周期 + 指标 IDs 逗号串）
-// - ApplyGridSheet（LazyVGrid 6 张卡片 · WindowGridPreset.allCases · mini preview + maxWindows 截断警告）
-// - 5 windows helper：updateWindows / addWindow / removeWindow / updateWindow(at:) / applyGrid
+// 能力：NavigationSplitView 双栏 · 模板 CRUD + setActive · windows 增删改 + 6 网格预设
+//      · 快捷键设置/修改/清除（A-Z + 0-9 字符 × ⌘⇧⌥⌃ modifier · 全局唯一 · 抢占提示）
+//      · activate 时 NotificationCenter post .workspaceTemplateActivated（跨窗口联动）
 //
-// 留待 commit 4/4：快捷键编辑器（CommandRecorder）+ 全局唯一性 + 主图联动 stub
-//
-// 留待 M5：StoreManager 注入 SQLiteWorkspaceBookStore · 替换 Mock 真持久化数据
+// 留待 M5：StoreManager 注入 SQLiteWorkspaceBookStore · 替换 Mock 真持久化
+// 留待 M5：多窗口同时渲染（WP-44 + WP-40）+ CGRect 桥接 + 接收 .workspaceTemplateActivated
+// 留待 A12 (M7-M9)：CloudKit 同步（CKContainer/CKSubscription/冲突合并）
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -27,6 +22,7 @@ private enum WorkspaceSheetState: Identifiable {
     case addWindow(template: WorkspaceTemplate)
     case editWindow(template: WorkspaceTemplate, index: Int)
     case applyGrid(template: WorkspaceTemplate)
+    case editShortcut(template: WorkspaceTemplate)
 
     var id: String {
         switch self {
@@ -35,6 +31,7 @@ private enum WorkspaceSheetState: Identifiable {
         case .addWindow(let t):                 return "add-window-\(t.id)"
         case .editWindow(let t, let i):         return "edit-window-\(t.id)-\(i)"
         case .applyGrid(let t):                 return "apply-grid-\(t.id)"
+        case .editShortcut(let t):              return "edit-shortcut-\(t.id)"
         }
     }
 }
@@ -85,6 +82,13 @@ struct WorkspaceWindow: View {
             case .applyGrid(let template):
                 ApplyGridSheet(template: template) { preset in
                     applyGrid(preset, to: template)
+                }
+            case .editShortcut(let template):
+                ShortcutEditorSheet(
+                    template: template,
+                    occupiedBy: { shortcut in book.template(forShortcut: shortcut) }
+                ) { shortcut in
+                    setShortcut(shortcut, for: template)
                 }
             }
         }
@@ -342,14 +346,34 @@ struct WorkspaceWindow: View {
 
     private func shortcutCard(_ template: WorkspaceTemplate) -> some View {
         infoCard("一键切换快捷键") {
-            if let shortcut = template.shortcut {
-                Text(formatShortcut(shortcut))
-                    .font(.system(.body, design: .monospaced))
-            } else {
-                Text("未绑定 · commit 4 加快捷键编辑器（CommandRecorder）")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            HStack {
+                if let shortcut = template.shortcut {
+                    Text(formatShortcut(shortcut))
+                        .font(.system(.body, design: .monospaced))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.15))
+                        .clipShape(Capsule())
+                    Spacer()
+                    Button("修改") { sheetState = .editShortcut(template: template) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    Button("清除", role: .destructive) { setShortcut(nil, for: template) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                } else {
+                    Text("未绑定")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("设置快捷键") { sheetState = .editShortcut(template: template) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
             }
+            Text("强制全局唯一 · 抢占其他模板的相同快捷键时会自动清空对方绑定")
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -382,9 +406,14 @@ struct WorkspaceWindow: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
-            Text("commit 3/4 · 网格 + windows 编辑 · 快捷键 待 commit 4")
+            Text("WP-55 收官 🎉")
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .fontWeight(.semibold)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.green.opacity(0.18))
+                .foregroundColor(.green)
+                .clipShape(Capsule())
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -404,9 +433,12 @@ struct WorkspaceWindow: View {
 
     // MARK: - 显示辅助
 
-    /// 快捷键展示（commit 1 仅显示 keyCode/modifiers · commit 4 完整 Carbon → 字符映射）
+    /// 快捷键展示：⌃⌥⇧⌘ + 单字符（如 ⌘K / ⌘⇧K）· keyCode 不在表中时回落到 hex
     private func formatShortcut(_ shortcut: WorkspaceShortcut) -> String {
-        "keyCode \(shortcut.keyCode) · modifiers 0x\(String(shortcut.modifierFlags, radix: 16))"
+        let prefix = ShortcutKey.symbolPrefix(for: shortcut.modifierFlags)
+        let suffix = ShortcutKey.char(for: shortcut.keyCode)
+            ?? "0x\(String(shortcut.keyCode, radix: 16))"
+        return prefix + suffix
     }
 
     // MARK: - Mutations · CRUD + 激活切换
@@ -441,8 +473,18 @@ struct WorkspaceWindow: View {
         pendingDeleteTemplate = nil
     }
 
+    /// 切换激活模板 · 同时通知主图（M5 多窗口实际渲染时接收 · v1 仅 stub）
     private func activate(_ template: WorkspaceTemplate) {
         book.setActive(id: template.id)
+        NotificationCenter.default.post(
+            name: .workspaceTemplateActivated,
+            object: template.id.uuidString
+        )
+    }
+
+    /// 设置/清除快捷键（数据层 setShortcut 强制全局唯一 · 抢占自动清空旧绑定）
+    private func setShortcut(_ shortcut: WorkspaceShortcut?, for template: WorkspaceTemplate) {
+        book.setShortcut(shortcut, for: template.id)
     }
 
     // MARK: - Mutations · windows 编辑
@@ -829,6 +871,191 @@ fileprivate extension WindowGridPreset {
     }
 }
 
+// MARK: - 快捷键编码 · macOS Carbon keyCode 双向表
+
+/// 字符 ↔ Carbon kVK_ANSI_X keyCode 双向映射（仅 A-Z + 0-9 · 已覆盖工作区切换典型场景）
+/// keyCode 数值非连续（HID Usage 顺序）· 所以表格写死 · 不算"魔法数字"
+fileprivate enum ShortcutKey {
+
+    /// NSEvent.ModifierFlags rawValue 位掩码（与 PeriodSwitcher.commandModifier 同口径）
+    static let commandMask: UInt32 = 0x100000   // .command  (1 << 20)
+    static let shiftMask:   UInt32 = 0x020000   // .shift    (1 << 17)
+    static let optionMask:  UInt32 = 0x080000   // .option   (1 << 19)
+    static let controlMask: UInt32 = 0x040000   // .control  (1 << 18)
+
+    static let charToKeyCode: [(char: String, keyCode: UInt16)] = [
+        ("A", 0x00), ("B", 0x0B), ("C", 0x08), ("D", 0x02), ("E", 0x0E),
+        ("F", 0x03), ("G", 0x05), ("H", 0x04), ("I", 0x22), ("J", 0x26),
+        ("K", 0x28), ("L", 0x25), ("M", 0x2E), ("N", 0x2D), ("O", 0x1F),
+        ("P", 0x23), ("Q", 0x0C), ("R", 0x0F), ("S", 0x01), ("T", 0x11),
+        ("U", 0x20), ("V", 0x09), ("W", 0x0D), ("X", 0x07), ("Y", 0x10),
+        ("Z", 0x06),
+        ("0", 0x1D), ("1", 0x12), ("2", 0x13), ("3", 0x14), ("4", 0x15),
+        ("5", 0x17), ("6", 0x16), ("7", 0x1A), ("8", 0x1C), ("9", 0x19),
+    ]
+
+    private static let keyCodeToCharMap: [UInt16: String] = Dictionary(
+        uniqueKeysWithValues: charToKeyCode.map { ($0.keyCode, $0.char) }
+    )
+
+    static func char(for keyCode: UInt16) -> String? {
+        keyCodeToCharMap[keyCode]
+    }
+
+    static func keyCode(for char: String) -> UInt16? {
+        charToKeyCode.first(where: { $0.char == char })?.keyCode
+    }
+
+    static var allChars: [String] {
+        charToKeyCode.map { $0.char }
+    }
+
+    /// modifierFlags 位掩码 → ⌃⌥⇧⌘ 符号串（顺序与 Apple HIG 一致 · formatShortcut 与 previewString 共用）
+    static func symbolPrefix(for modifierFlags: UInt32) -> String {
+        var s = ""
+        if modifierFlags & controlMask != 0 { s += "⌃" }
+        if modifierFlags & optionMask  != 0 { s += "⌥" }
+        if modifierFlags & shiftMask   != 0 { s += "⇧" }
+        if modifierFlags & commandMask != 0 { s += "⌘" }
+        return s
+    }
+}
+
+// MARK: - Sheet · 快捷键编辑（设置 / 修改 · 字符 + 4 modifier）
+
+private struct ShortcutEditorSheet: View {
+
+    let template: WorkspaceTemplate
+    /// 检查给定 shortcut 是否被其他模板占用（命中则提示"会抢占"）
+    let occupiedBy: (WorkspaceShortcut) -> WorkspaceTemplate?
+    let onApply: (WorkspaceShortcut) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedChar: String
+    @State private var commandOn: Bool
+    @State private var shiftOn:   Bool
+    @State private var optionOn:  Bool
+    @State private var controlOn: Bool
+
+    init(
+        template: WorkspaceTemplate,
+        occupiedBy: @escaping (WorkspaceShortcut) -> WorkspaceTemplate?,
+        onApply: @escaping (WorkspaceShortcut) -> Void
+    ) {
+        self.template = template
+        self.occupiedBy = occupiedBy
+        self.onApply = onApply
+
+        let initial = template.shortcut
+        let initialChar = initial.flatMap { ShortcutKey.char(for: $0.keyCode) } ?? "K"
+        let initialMods = initial?.modifierFlags ?? ShortcutKey.commandMask
+
+        self._selectedChar = State(initialValue: initialChar)
+        self._commandOn = State(initialValue: initialMods & ShortcutKey.commandMask != 0)
+        self._shiftOn   = State(initialValue: initialMods & ShortcutKey.shiftMask   != 0)
+        self._optionOn  = State(initialValue: initialMods & ShortcutKey.optionMask  != 0)
+        self._controlOn = State(initialValue: initialMods & ShortcutKey.controlMask != 0)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("设置快捷键 · 「\(template.name)」").font(.title2).bold()
+
+            Form {
+                LabeledContent("修饰键") {
+                    HStack(spacing: 8) {
+                        Toggle("⌘", isOn: $commandOn)
+                        Toggle("⇧", isOn: $shiftOn)
+                        Toggle("⌥", isOn: $optionOn)
+                        Toggle("⌃", isOn: $controlOn)
+                    }
+                    .toggleStyle(.button)
+                }
+
+                Picker("按键", selection: $selectedChar) {
+                    ForEach(ShortcutKey.allChars, id: \.self) { c in
+                        Text(c).tag(c)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                LabeledContent("预览") {
+                    Text(previewString)
+                        .font(.system(.title3, design: .monospaced))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.15))
+                        .clipShape(Capsule())
+                }
+
+                if let occupant = occupiedTemplate {
+                    Label(
+                        "该快捷键当前由「\(occupant.name)」占用 · 应用后将自动从对方清除（数据层强制全局唯一）",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                }
+            }
+            .formStyle(.grouped)
+
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("应用") {
+                    if let s = buildShortcut() {
+                        onApply(s)
+                    }
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSubmit)
+            }
+        }
+        .padding(20)
+        .frame(width: 480, height: 380)
+    }
+
+    /// 至少需要一个修饰键（避免裸字符快捷键劫持普通输入）
+    private var canSubmit: Bool {
+        commandOn || shiftOn || optionOn || controlOn
+    }
+
+    private var modifierFlags: UInt32 {
+        var flags: UInt32 = 0
+        if commandOn { flags |= ShortcutKey.commandMask }
+        if shiftOn   { flags |= ShortcutKey.shiftMask }
+        if optionOn  { flags |= ShortcutKey.optionMask }
+        if controlOn { flags |= ShortcutKey.controlMask }
+        return flags
+    }
+
+    private func buildShortcut() -> WorkspaceShortcut? {
+        guard let keyCode = ShortcutKey.keyCode(for: selectedChar) else { return nil }
+        return WorkspaceShortcut(keyCode: keyCode, modifierFlags: modifierFlags)
+    }
+
+    private var previewString: String {
+        ShortcutKey.symbolPrefix(for: modifierFlags) + selectedChar
+    }
+
+    /// 抢占检查：拿到当前预览中的 shortcut 是否被另一模板占用（不是当前 template 自己）
+    private var occupiedTemplate: WorkspaceTemplate? {
+        guard canSubmit, let s = buildShortcut() else { return nil }
+        guard let occupant = occupiedBy(s) else { return nil }
+        return occupant.id == template.id ? nil : occupant
+    }
+}
+
+// MARK: - Notification.Name · 跨窗口联动
+
+extension Notification.Name {
+    /// WP-55 commit 4 · WorkspaceWindow 切换激活 → 主图/多窗口接收切换布局（object: templateID String）
+    /// M5 多窗口实际渲染时接收 + frame 桥接 CGRect · v1 仅 stub
+    static let workspaceTemplateActivated = Notification.Name("workspaceTemplateActivated")
+}
+
 // MARK: - Mock 数据（commit 1 静态 · M5 替换 SQLiteWorkspaceBookStore）
 
 private enum MockWorkspaceBook {
@@ -887,6 +1114,15 @@ private enum MockWorkspaceBook {
         // 默认激活"盘中主交易"（最常用 · 不依赖 init 时 first auto-active 的副作用）
         if book.templates.count >= 2 {
             book.setActive(id: book.templates[1].id)
+        }
+
+        // commit 4 · 演示快捷键效果：盘中主交易 ⌘⇧1 · 盘后复盘 ⌘⇧2 · 让 sidebar 行 ⌘ icon 立即可见
+        if book.templates.count >= 3,
+           let key1 = ShortcutKey.keyCode(for: "1"),
+           let key2 = ShortcutKey.keyCode(for: "2") {
+            let cmdShift = ShortcutKey.commandMask | ShortcutKey.shiftMask
+            book.setShortcut(WorkspaceShortcut(keyCode: key1, modifierFlags: cmdShift), for: book.templates[1].id)
+            book.setShortcut(WorkspaceShortcut(keyCode: key2, modifierFlags: cmdShift), for: book.templates[2].id)
         }
 
         return book

@@ -1,9 +1,9 @@
 // MainApp · 预警面板 Scene（WP-52 UI · 共 4 commit）
 //
 // 进度：
-//   ✅ 1/4：开窗 + Mock alerts + 列表占位（条件编辑器/历史/通知通道留后续 commit）
-//   ⏳ 2/4：条件编辑器 Sheet（添加/编辑 Alert · 6 类 condition 表单）
-//   ⏳ 3/4：启停按钮 + 触发历史列表（AlertEvaluator + AlertHistoryStore 接入）
+//   ✅ 1/4：开窗 + Mock alerts + 列表占位
+//   ✅ 2/4：添加预警 Sheet（6 类 condition 表单 · 不含 horizontalLineTouched 留 v2）
+//   ⏳ 3/4：编辑/删除/启停 + 触发历史列表（AlertEvaluator + AlertHistoryStore 接入）
 //   ⏳ 4/4：通知通道（系统通知 / 声音 留 Mac 验收）
 //
 // 留待 M5：StoreManager 注入 AlertEvaluator + 持久化 alerts
@@ -17,6 +17,7 @@ import AlertCore
 struct AlertWindow: View {
 
     @State private var alerts: [Alert] = []
+    @State private var showAddSheet: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,6 +34,11 @@ struct AlertWindow: View {
         }
         .frame(minWidth: 720, idealWidth: 880, minHeight: 480, idealHeight: 640)
         .task { alerts = MockAlerts.generate() }
+        .sheet(isPresented: $showAddSheet) {
+            AddAlertSheet(isPresented: $showAddSheet) { newAlert in
+                alerts.append(newAlert)
+            }
+        }
     }
 
     // MARK: - 顶部 stats
@@ -50,9 +56,13 @@ struct AlertWindow: View {
             stat("已触发", "\(triggered)", color: .red)
             stat("已暂停", "\(paused)", color: .secondary)
             Spacer()
-            Text("v1 mock · 待 M5 接 AlertEvaluator + 持久化")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
+            Button {
+                showAddSheet = true
+            } label: {
+                Label("添加", systemImage: "plus")
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .help("添加预警（⌘⇧N）")
         }
         .padding(.horizontal, 16)
         .frame(height: 48)
@@ -152,15 +162,184 @@ struct AlertWindow: View {
 
     private var footerHint: some View {
         HStack(spacing: 16) {
-            Label("条件编辑器 · 待 commit 2", systemImage: "square.and.pencil")
+            Label("编辑/删除/启停 · 待 commit 3", systemImage: "square.and.pencil")
             Label("触发历史 · 待 commit 3", systemImage: "clock.arrow.circlepath")
             Label("通知通道 · 待 commit 4", systemImage: "bell.badge")
             Spacer()
+            Text("v1 mock · 待 M5 接 AlertEvaluator + 持久化")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
         }
         .font(.system(size: 11, design: .monospaced))
         .foregroundColor(.secondary)
         .padding(.horizontal, 16)
         .frame(height: 28)
+    }
+}
+
+// MARK: - 添加预警 Sheet（commit 2/4）
+
+/// 6 类可编辑 condition（horizontalLineTouched 需要 drawingID 选择 · 留 v2）
+private enum ConditionKind: String, CaseIterable, Identifiable {
+    case priceAbove       = "价格 >"
+    case priceBelow       = "价格 <"
+    case priceCrossAbove  = "上穿"
+    case priceCrossBelow  = "下穿"
+    case volumeSpike      = "成交量异常"
+    case priceMoveSpike   = "价格急动"
+    var id: String { rawValue }
+}
+
+struct AddAlertSheet: View {
+    @Binding var isPresented: Bool
+    let onSave: (Alert) -> Void
+
+    // 基本字段
+    @State private var name: String = ""
+    @State private var instrumentID: String = "RB0"
+    @State private var status: AlertStatus = .active
+    @State private var cooldownSeconds: Int = 60
+
+    // 条件类型 + 6 套参数
+    @State private var conditionKind: ConditionKind = .priceAbove
+    @State private var priceThreshold: Double = 3900
+    @State private var volumeMultiple: Double = 3
+    @State private var volumeWindowBars: Int = 20
+    @State private var movePercent: Double = 1
+    @State private var moveSeconds: Int = 60
+
+    // 通知渠道
+    @State private var enableInApp: Bool = true
+    @State private var enableSystemNotice: Bool = true
+    @State private var enableSound: Bool = false
+    @State private var enableConsole: Bool = false
+    @State private var enableFile: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("添加预警").font(.title2).bold().padding(.bottom, 12)
+
+            Form {
+                Section("基本") {
+                    TextField("名称（必填）", text: $name)
+                    TextField("合约", text: $instrumentID)
+                    Picker("状态", selection: $status) {
+                        ForEach(AlertStatus.allCases, id: \.self) { s in
+                            Text(Self.statusLabel(s)).tag(s)
+                        }
+                    }
+                }
+
+                Section("条件") {
+                    Picker("类型", selection: $conditionKind) {
+                        ForEach(ConditionKind.allCases) { k in
+                            Text(k.rawValue).tag(k)
+                        }
+                    }
+                    conditionParams
+                }
+
+                Section("通知通道") {
+                    Toggle("App 内浮窗", isOn: $enableInApp)
+                    Toggle("系统通知中心", isOn: $enableSystemNotice)
+                    Toggle("声音", isOn: $enableSound)
+                    Toggle("控制台日志", isOn: $enableConsole)
+                    Toggle("文件日志", isOn: $enableFile)
+                    HStack {
+                        Text("冷却（秒）")
+                        TextField("", value: $cooldownSeconds, format: .number)
+                            .frame(width: 80)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+
+            HStack(spacing: 12) {
+                Spacer()
+                Button("取消") { isPresented = false }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") { save() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(name.isEmpty)
+            }
+            .padding(.top, 12)
+        }
+        .padding(20)
+        .frame(width: 520, height: 620)
+    }
+
+    @ViewBuilder
+    private var conditionParams: some View {
+        switch conditionKind {
+        case .priceAbove, .priceBelow, .priceCrossAbove, .priceCrossBelow:
+            HStack {
+                Text("阈值价格")
+                TextField("", value: $priceThreshold, format: .number)
+                    .frame(width: 120)
+            }
+        case .volumeSpike:
+            HStack {
+                Text("倍数 ≥")
+                TextField("", value: $volumeMultiple, format: .number)
+                    .frame(width: 80)
+                Text("近")
+                TextField("", value: $volumeWindowBars, format: .number)
+                    .frame(width: 60)
+                Text("期均值")
+            }
+        case .priceMoveSpike:
+            HStack {
+                Text("变化 ≥")
+                TextField("", value: $movePercent, format: .number)
+                    .frame(width: 80)
+                Text("% / 窗口")
+                TextField("", value: $moveSeconds, format: .number)
+                    .frame(width: 60)
+                Text("秒")
+            }
+        }
+    }
+
+    private func save() {
+        let condition: AlertCondition = {
+            switch conditionKind {
+            case .priceAbove:      return .priceAbove(Decimal(priceThreshold))
+            case .priceBelow:      return .priceBelow(Decimal(priceThreshold))
+            case .priceCrossAbove: return .priceCrossAbove(Decimal(priceThreshold))
+            case .priceCrossBelow: return .priceCrossBelow(Decimal(priceThreshold))
+            case .volumeSpike:
+                return .volumeSpike(multiple: Decimal(volumeMultiple), windowBars: volumeWindowBars)
+            case .priceMoveSpike:
+                return .priceMoveSpike(percentThreshold: Decimal(movePercent), windowSeconds: moveSeconds)
+            }
+        }()
+
+        var channels: Set<NotificationChannelKind> = []
+        if enableInApp { channels.insert(.inApp) }
+        if enableSystemNotice { channels.insert(.systemNotice) }
+        if enableSound { channels.insert(.sound) }
+        if enableConsole { channels.insert(.console) }
+        if enableFile { channels.insert(.file) }
+
+        let alert = Alert(
+            name: name,
+            instrumentID: instrumentID.isEmpty ? "RB0" : instrumentID,
+            condition: condition,
+            status: status,
+            channels: channels,
+            cooldownSeconds: TimeInterval(cooldownSeconds)
+        )
+        onSave(alert)
+        isPresented = false
+    }
+
+    private static func statusLabel(_ s: AlertStatus) -> String {
+        switch s {
+        case .active:    return "活跃"
+        case .triggered: return "已触发"
+        case .paused:    return "暂停"
+        case .cancelled: return "已取消"
+        }
     }
 }
 

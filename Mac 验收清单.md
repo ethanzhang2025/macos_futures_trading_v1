@@ -88,8 +88,20 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] 窗口最小 720×480 · 默认 880×640
 - [ ] LazyVStack + Divider 分隔 · 滚动顺畅
 
-### commit 2-4（待累积）
-后续 commit 追加：条件编辑器 Sheet / 启停按钮 / 触发历史 / 通知通道 / 系统通知验收
+### commit 2（添加预警 Sheet）
+- [ ] 列表上方"+ 添加"按钮（⌘⇧N 快捷键）
+- [ ] AddAlertSheet 弹出（520×620 · macOS 标准 sheet 动画）
+- [ ] Form .grouped 布局：基本 / 条件 / 通知通道 三 Section
+- [ ] ConditionKind Picker 切换 6 类（价格 4 + 成交量 + 急动）
+- [ ] conditionParams 动态切换：价格类 1 字段 · 成交量 2 字段 · 急动 2 字段
+- [ ] 5 个 channel Toggle（内/通/声/控/文）+ 冷却秒数 TextField
+- [ ] 保存按钮 disabled 当 name 空 · ⌘Return 触发
+- [ ] 取消按钮 ⌘. 触发
+- [ ] 保存后 alerts 增 1 项 · 列表立即更新
+- [ ] horizontalLineTouched 类型未在 Picker 显示（留 v2 · 需 drawingID 选择）
+
+### commit 3-4（待累积）
+后续 commit 追加：编辑/删除/启停 / 触发历史 / 通知通道 / 系统通知验收
 
 ---
 

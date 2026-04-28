@@ -252,6 +252,50 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## 交易日志面板 ⌘J（WP-53 UI · 4 commit · 1/4 已交付）
+
+### commit 1（⌘J 起步 · 双 Tab + Mock 13 trades + 5 journals）
+- [ ] ⌘J 打开独立窗口（与主图 ⌘N / 自选 ⌘L / 复盘 ⌘R / 预警 ⌘B / 设置 ⌘, 分离 · 单实例）
+- [ ] 顶部 stats 正确显示：
+  - [ ] "📔 交易日志"标题（title2 + bold）+ 分隔符
+  - [ ] "总成交：13 笔"（caption + monospaced）
+  - [ ] "总日志：5 篇"
+  - [ ] 右上"commit 1/4 · ⌘J 起步"胶囊标签（灰底）
+- [ ] TabView segmented 双 Tab 切换：
+  - [ ] "成交记录" Tab（默认选中）
+  - [ ] "交易日志" Tab
+  - [ ] 切换无延迟 · 数据立即渲染
+- [ ] 成交记录 Tab：
+  - [ ] Table 8 列：合约 / 方向 / 开/平 / 成交价（右对齐）/ 数量 / 手续费 / 时间 / 来源
+  - [ ] 外层 monospaced 字体继承（全表统一 · 来源列 caption2 显式覆盖）
+  - [ ] Direction 颜色：买（红 · 中国习惯）/ 卖（绿）· 用 displayName 中文
+  - [ ] OffsetFlag displayName 中文：开仓 / 平仓 / 平今 / 平昨
+  - [ ] 来源 Capsule 标签：文华 / 通用 / 手填（灰底）
+  - [ ] 成交价 1 位小数 · 手续费 2 位小数（NumberFormatter static 缓存）
+  - [ ] 时间格式 MM-dd HH:mm:ss · Asia/Shanghai · POSIX locale
+  - [ ] 13 笔数据全显示（RB2510 × 7 / IF2509 × 3 / AU2512 × 2 / CU2511 × 1）· 时间倒序
+- [ ] 交易日志 Tab：
+  - [ ] Table 6 列：标题 / 成交（N 笔）/ 情绪 / 偏差 / 标签 / 更新时间
+  - [ ] 标题 fontWeight medium · 关联成交数 monospaced + 灰
+  - [ ] 情绪 Capsule 5 色 + 背景 opacity 0.18：自信绿 / 犹豫橙 / 恐惧红 / 贪婪紫 / 平静蓝
+  - [ ] 偏差颜色：asPlanned 绿 / 其他偏差橙
+  - [ ] 标签 " · " 分隔（如 "RB · 日内 · 趋势跟随"）· lineLimit(1)
+  - [ ] 5 篇 journal 全显示（涵盖 5 类情绪 + 5 类偏差中的 4 种 asPlanned/earlyExit/chaseHigh/other）
+- [ ] 底部提示行 "Mock 数据 · 待 commit 2 CSV 导入 · commit 3 日志编辑器 · commit 4 月度统计 · M5 接 SQLiteJournalStore"
+- [ ] 窗口最小 880×520 · 默认 1100×720
+- [ ] ⌘J 在前台时生效 · 不与全局 ⌘N/⌘L/⌘R/⌘B/⌘, 冲突
+
+### commit 2（CSV 导入面板 · 待 · NSOpenPanel + DealCSVParser + 格式选择 + 错误展示）
+（commit 2 完成后追加 checklist）
+
+### commit 3（日志编辑器 Sheet + JournalGenerator 自动生成 · 待）
+（commit 3 完成后追加 checklist · 情绪/偏差 Picker · 标签输入 · batch 自动生成预览）
+
+### commit 4（标签搜索 + 月度/季度统计 · 待）
+（commit 4 完成后追加 checklist · 实时 filter · 月度聚合卡片）
+
+---
+
 ## 待补（后续 commit 累积）
 
 后续每个 commit 完成功能后追加到对应章节 · 切机前在此清单逐项验收。

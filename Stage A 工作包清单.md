@@ -862,6 +862,8 @@
 **留给 WP-50 复盘 8 图**：基于 JournalStore 提供的 trades 数据生成 8 张分析图
 **禁做**：✅ A09 三大禁做项全落实（RawDeal→Trade 显式转换边界 / tradeIDs 单向引用日志改不污染 trades / SQLCipher 加密边界协议层文档化）· ✅ 数据模型层不 import SwiftUI/AppKit/SQLCipher · ✅ 不引入第三方库
 
+**UI 进度**：commit 1/4 已交付（2026-04-28 · `Sources/MainApp/JournalWindow.swift` · ⌘J 双 Tab + Mock 13 trades + 5 journals · code-simplifier 1 轮过审 · Linux swift test 659/156 全绿）· commit 2/4 CSV 导入面板 / commit 3/4 日志编辑器 Sheet / commit 4/4 标签搜索 + 月度统计 待续
+
 ### ⬜ WP-54 · 模拟训练（SimNow）
 - **时点**：M5
 - **负责**：你

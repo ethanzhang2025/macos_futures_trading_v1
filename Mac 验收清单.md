@@ -419,6 +419,41 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 扩展（WP-41 v3 · KDJ/CCI/ATR · 4 commit 全部交付 🎉）
+
+### commit 1（9cebc3a · KDJ 增量 · O(n) per step）
+- [ ] KDJ.makeIncrementalState + stepIncremental 与 KDJ.calculate 算法等价（IncrementalIndicatorTests 已断言）
+- [ ] history 满 + 增量推进 50 根 K/D/J 与全量精确一致（period=9）
+- [ ] history 空 · 前 8 步 nil · 第 9 步起匹配全量
+- [ ] 全平 close → rsv=0 → K = K * 2/3 收敛 · 22 步后 < 0.1
+- [ ] processStep 共享 init+step 核心（与 RSI 同模式 · ring 写入 O(1) · 扫描 O(n)）
+
+### commit 2（64a1f21 · CCI 增量 · TP ring + sum + O(n) MD）
+- [ ] CCI 与全量精确一致（period=20）
+- [ ] history 空 · 前 9 步 nil · 第 10 步起匹配全量
+- [ ] 全平 close → md=0 → 始终 nil（与 calculate 一致）
+- [ ] TP=(H+L+C)/3 滑窗 sum 增量更新 · MD = Σ|tp - ma| ring 扫描 O(n)
+
+### commit 3（30bacd9 · ATR 增量 · Wilder 平滑 O(1)）
+- [ ] ATR 与全量精确一致（period=14）
+- [ ] 第 1 根 K · TR = high - low（无 prevClose · 边界）
+- [ ] period=1 边界 · 每步 ATR == 当前根 TR
+- [ ] state.atr 流式未 round（与 Kernels.wilder 内部 prev 一致 · 输出 round8）
+- [ ] processStep 共享 init+step（与 RSI 同模式）
+
+### commit 4（性能基准扩展 · 8 指标全测 · WP-41 v3 收官 🎉）
+- [ ] swift run -c release IncrementalIndicatorBenchmark 输出 8 指标全测：
+  - [ ] MA(20) / EMA(12) / RSI(14) / MACD(12,26,9) / BOLL(20,2)（v2 五指标）
+  - [ ] KDJ(9,3,3) / CCI(20) / ATR(14)（v3 三指标）
+- [ ] 满批同等工作量加速比 1.0-2.2×（增量 makeState 一次性成本均摊 · 实际回放每帧 step 1 次 ≈ 1000×）
+- [ ] 实际回放性能验证：8 指标接入 ChartScene（M5）后 16× 速度无卡顿
+
+### Mac 切机替换（M5）
+- [ ] ChartScene.ChartIndicatorRunner 扩展支持新 3 指标（同 MA/BOLL pattern · 加 KDJ/CCI/ATR state 字段）
+- [ ] 8 指标增量同时推进时回放 16× 帧率 ≥ 60fps（无掉帧）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

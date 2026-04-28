@@ -1,15 +1,17 @@
-// WP-41 v2 commit 3/4 · IndicatorCore 增量 vs 全量 性能基准
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（8 指标 · v3 commit 4/4 扩展 KDJ/CCI/ATR）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 5 个指标（MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2）
+// 测试 8 个指标：
+//   v2 commit 1-3：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
+//   v3 commit 1-3：KDJ 9-3-3 / CCI 20 / ATR 14
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
 // 解读：
 // - 加速比 = 全量/批 ÷ 增量/批（同等工作量）
 // - 实际回放：每帧只 step 1 次 · 等价对比"全量 1000K calculate vs 1 次 step" · 实际加速量级 ~1000×
-// - 性能瓶颈位置：ChartScene.handleReplayUpdate 内 computeIndicatorsAsync(bars 全量) · commit 4 接入增量后消除
+// - 性能瓶颈位置：ChartScene.handleReplayUpdate 内 computeIndicatorsAsync(bars 全量) · v2 commit 4 接入增量后消除
 
 import Foundation
 import Shared
@@ -111,6 +113,35 @@ benchmark("BOLL(20,2)") {
     guard var state = try? BOLL.makeIncrementalState(kline: emptyHistory, params: [20, 2]) else { return }
     for bar in bars {
         _ = BOLL.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 commit 4/4 · 扩展 3 指标（KDJ / CCI / ATR）
+
+benchmark("KDJ(9,3,3)") {
+    _ = try? KDJ.calculate(kline: series, params: [9, 3, 3])
+} incremental: {
+    guard var state = try? KDJ.makeIncrementalState(kline: emptyHistory, params: [9, 3, 3]) else { return }
+    for bar in bars {
+        _ = KDJ.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("CCI(20)") {
+    _ = try? CCI.calculate(kline: series, params: [20])
+} incremental: {
+    guard var state = try? CCI.makeIncrementalState(kline: emptyHistory, params: [20]) else { return }
+    for bar in bars {
+        _ = CCI.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("ATR(14)") {
+    _ = try? ATR.calculate(kline: series, params: [14])
+} incremental: {
+    guard var state = try? ATR.makeIncrementalState(kline: emptyHistory, params: [14]) else { return }
+    for bar in bars {
+        _ = ATR.stepIncremental(state: &state, newBar: bar)
     }
 }
 

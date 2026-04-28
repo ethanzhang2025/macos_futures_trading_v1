@@ -131,6 +131,47 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## 自选合约面板 ⌘L（WP-43 UI · 4 commit · 1/4 已交付）
+
+### commit 1（⌘L 起步 · NavigationSplitView + Mock 3 组 9 合约）
+- [ ] ⌘L 打开独立窗口（与主图/复盘/预警分离 · 单实例）
+- [ ] NavigationSplitView 双栏布局正确：
+  - [ ] 左栏宽度区间生效（min 200 / ideal 220 / max 280）
+  - [ ] 拖拽分栏分隔线可调整宽度
+  - [ ] 左侧 sidebar 样式（半透明背景 · macOS 原生）
+- [ ] 左栏分组列表 3 项渲染：
+  - [ ] "主力合约 · 3 个合约"（folder icon · accentColor 蓝）
+  - [ ] "黑色系 · 3 个合约"
+  - [ ] "贵金属 · 3 个合约"
+  - [ ] List selection 单选 · 切换分组右栏内容立即更新
+- [ ] 默认选中第一组（"主力合约"· onAppear 触发）
+- [ ] 右栏 header 正确：
+  - [ ] 分组名（title3 · semibold）+ "· N 合约"（caption · 灰）
+  - [ ] 右上 "commit 1/4 · ⌘L 起步" 胶囊标签（灰底）
+- [ ] Table 4 列正确（合约 / 最新价 / 涨跌幅 / 持仓量 · 全 monospaced 等宽字体）
+- [ ] 涨跌幅颜色（中国习惯 · 涨红跌绿）：
+  - [ ] "+1.21%" / "+0.83%" / "+2.05%" / "+1.78%" / "+1.45%" → 红
+  - [ ] "-0.45%" / "-0.32%" → 绿
+- [ ] 9 个合约 Mock 数据全显示（RB0/IF0/AU0/CU0/HC0/I0/AG0 · 价/涨跌/持仓）
+- [ ] 底部提示行 "Mock 数据 · 待 M5 接真实行情 + commit 4 主图联动"（caption2 灰）
+- [ ] 窗口最小 720×480 · 默认 880×600
+- [ ] 切换不同分组：
+  - [ ] 主力合约 显示 RB0/IF0/AU0
+  - [ ] 黑色系 显示 RB0/HC0/I0
+  - [ ] 贵金属 显示 AU0/AG0/CU0
+- [ ] empty state（如手动构造空分组测试 · 暂无入口）：tray icon + "分组为空" + "(待 commit 2 添加合约入口)"
+
+### commit 2（添加/删除/重命名 · 待）
+（commit 2 完成后追加 checklist）
+
+### commit 3（拖拽排序 · 待 · macOS 13+ .draggable / .dropDestination）
+（commit 3 完成后追加 checklist · Mac 切机时重点验证拖拽视觉反馈 + 落点指示 + 列表动画）
+
+### commit 4（主图联动 · 待）
+（commit 4 完成后追加 checklist · 双击合约 → ⌘N 主图打开/切换合约）
+
+---
+
 ## 待补（后续 commit 累积）
 
 后续每个 commit 完成功能后追加到对应章节 · 切机前在此清单逐项验收。

@@ -48,9 +48,9 @@ struct FuturesTerminalApp: App {
             }
         }
 
-        // 自选合约窗口（菜单触发打开 · 单实例）
+        // 自选合约窗口（菜单触发打开 · 单实例 · WP-43 UI commit 1/4 起接 WatchlistWindow）
         WindowGroup("自选合约", id: "watchlist") {
-            WatchlistContentView()
+            WatchlistWindow()
         }
 
         // 复盘工作台（⌘R · 8 图独立窗口 · 与 K 线主图区分离）

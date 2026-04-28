@@ -1,31 +1,12 @@
-// MainApp · 自选 / 偏好设置占位 Scene
+// MainApp · 偏好设置占位 Scene
 //
 // spike 阶段只验证多窗口路径是否打通；真实 UI 留给后续 WP：
-// - WatchlistContentView → WP-43 自选管理 UI 层
-// - SettingsContentView  → WP-90 上线决策（订阅 / 账号 / 偏好）
+// - SettingsContentView → WP-90 上线决策（订阅 / 账号 / 偏好）
+// - WatchlistContentView 已被 WatchlistWindow.swift 取代（WP-43 UI commit 1/4 起）
 
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
-
-// MARK: - 自选合约（stub · 待 WP-43 UI 层）
-
-struct WatchlistContentView: View {
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("📋 自选合约")
-                .font(.title)
-            Text("（待 WP-43 自选管理 UI 接入）")
-                .foregroundColor(.secondary)
-            Text("数据模型层已就绪：WatchlistBook / 3 组 9 合约 / SQLite 持久化 ✅")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
-        }
-        .frame(minWidth: 480, idealWidth: 600, minHeight: 360, idealHeight: 480)
-        .padding()
-    }
-}
 
 // MARK: - 偏好设置（stub · 待 WP-90 / Settings Scene 真内容）
 

@@ -359,8 +359,40 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] footer 文案更新为"⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 待 commit 4 月度统计 · M5 接 SQLiteJournalStore"
 - [ ] ⌘⇧J / ⌘⇧A 在 ⌘J 窗口为前台时生效 · 不与全局 ⌘N/⌘L/⌘R/⌘B/⌘J/⌘, 冲突
 
-### commit 4（标签搜索 + 月度/季度统计 · 待）
-（commit 4 完成后追加 checklist · 实时 filter · 月度聚合卡片）
+### commit 4（标签搜索 + 月度统计 · WP-53 收官 🎉）
+- [ ] 进度标签更新为"commit 4/4 · WP-53 收官"（绿色背景 + 绿色文字 · 区别于 commit 1-3 灰色）
+- [ ] 交易日志 Tab toolbar 加搜索框：
+  - [ ] magnifyingglass icon + TextField roundedBorder（占位"搜索 标题 / 原因 / 教训 / 标签（空格 AND）"）
+  - [ ] 280 px 宽
+  - [ ] 输入"日内"→ 实时 filter journals · 显示 tags/title/reason/lesson 含"日内"的
+  - [ ] 输入"日内 RB"（多 query）→ AND 匹配（必须同时含"日内"和"RB"）
+  - [ ] 大小写不敏感（localizedCaseInsensitiveContains）
+  - [ ] 清空搜索 → 显示全部 journals
+  - [ ] 搜索作用于 list 和 monthly 两个视图（filteredJournals 上游 computed）
+- [ ] toolbar 加视图模式 segmented Picker：
+  - [ ] "列表" / "月度" 两选项（130 px）· 默认"列表"
+  - [ ] 切换"月度"→ journalsContent 切换到 monthlyView
+  - [ ] "已选 N 篇"提示仅在"列表"模式显示
+- [ ] 月度视图（journalViewMode == .monthly）：
+  - [ ] aggregateMonthly 按 createdAt yyyy-MM 分桶（Asia/Shanghai POSIX）
+  - [ ] 月份倒序展示（最近月在前）
+  - [ ] 每月一张卡片（灰底 0.06 + 8px 圆角）：
+    - [ ] 卡片标题"yyyy-MM"+ "· N 篇"（title3 + caption 灰）
+    - [ ] 情绪分布列：仅显示有计数的（圆点彩色 + displayName + 数字 monospaced 灰）
+    - [ ] 偏差分布列：仅显示有计数的（asPlanned 绿 / 其他橙）
+    - [ ] 热门标签行："热门标签：A · B · C · D · E"（top 5 by count）
+  - [ ] 数据空（aggregates.isEmpty）时：
+    - [ ] calendar.badge.exclamationmark icon + "无可聚合的日志"
+    - [ ] 搜索条件下 → 提示"搜索条件下没有匹配项"
+    - [ ] 无搜索 + journals 空 → 提示"添加日志后这里会按月汇总"
+- [ ] simplifier 优化体现：
+  - [ ] MonthlyCard 用 distributionColumn<Case: Hashable> 泛型 helper（情绪 / 偏差 调用同函数 · label 闭包注入差异化渲染）
+- [ ] footer 文案"⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 搜索 + 月度聚合 · M5 接 SQLiteJournalStore"
+- [ ] WP-53 4 commit 全部完成 · ⌘J 完整工作流：
+  - [ ] commit 1 双 Tab + Mock 13 trades + 5 journals
+  - [ ] commit 2 CSV 导入 + 错误展示
+  - [ ] commit 3 编辑器 + 自动生成 + contextMenu
+  - [ ] commit 4 搜索 + 月度统计
 
 ---
 

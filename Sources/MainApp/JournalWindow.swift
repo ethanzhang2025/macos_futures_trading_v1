@@ -1,18 +1,16 @@
-// MainApp · 交易日志面板（WP-53 UI · commit 3/4 · 日志编辑器 + JournalGenerator 自动生成）
+// MainApp · 交易日志面板（WP-53 UI · commit 4/4 · 标签搜索 + 月度统计 · WP-53 收官）
 //
 // commit 1 已交付：⌘J 双 Tab + Mock 13 trades + 5 journals
 // commit 2 已交付：CSV 导入面板（NSOpenPanel + DealCSVParser + 格式 Picker + 错误展示）
-// commit 3 本次新增：
-// - 交易日志 Tab 顶部 toolbar："+ 新建日志"（⌘⇧J）/ "✨ 自动生成"（⌘⇧A）
-// - JournalEditorSheet（add / edit 共用 · 620×720）：
-//   · 标题（必填）/ 关联成交（DisclosureGroup 多选 Toggle）/ 原因 TextEditor / 情绪 Picker × 5 / 偏差 Picker × 8 / 教训 / 标签（空格分隔）
-//   · 编辑模式预填字段 · 保留原 id + createdAt · 仅刷新 updatedAt
-// - 行右键菜单：编辑 / 删除（destructive）· 删除前 confirmationDialog
-// - GeneratorPreviewSheet：JournalGenerator.generateDrafts → 草稿预览（多选 Toggle · batch 添加 / 取消）
-// - fileprivate extension JournalEmotion / JournalDeviation displayName + color（替代 free function · sheet 共享）
+// commit 3 已交付：日志编辑器 + JournalGenerator 自动生成 + contextMenu + confirmationDialog
+// commit 4 本次新增：
+// - 搜索框（toolbar · 空格分隔多 query · AND 匹配 title/reason/lesson/tags · localizedCaseInsensitiveContains）
+// - 视图模式 Picker（列表 / 月度统计 · segmented · toolbar 内）
+// - 月度统计视图：按 createdAt 月份聚合卡片（篇数 / 情绪分布 5 类彩点 / 偏差分布 8 类 / top5 热门标签）
+// - aggregateMonthly + MonthlyAggregate fileprivate struct（filter + 聚合）
+// - 搜索作用于列表和月度（filteredJournals computed · 上游统一过滤 · viewMode 仅切换渲染）
 //
-// 留给 commit 4/4：标签搜索 + 月度/季度统计聚合
-//
+// 留待 v2：季度视图 / 倒排索引搜索 / 标签自动补全（v1 用 contains 已够）
 // 留待 M5：StoreManager 注入 SQLiteJournalStore（已就绪 · trades + journals CRUD）替换 Mock
 
 #if canImport(SwiftUI) && os(macOS)
@@ -30,6 +28,26 @@ private enum JournalTab: String, CaseIterable, Identifiable {
     case trades   = "成交记录"
     case journals = "交易日志"
     var id: String { rawValue }
+}
+
+// MARK: - 日志视图模式（commit 4/4）
+
+private enum JournalViewMode: String, CaseIterable, Identifiable {
+    case list    = "列表"
+    case monthly = "月度"
+    var id: String { rawValue }
+}
+
+// MARK: - 月度聚合（commit 4/4）
+
+private struct MonthlyAggregate: Identifiable {
+    let month: String                          // "2026-04"
+    let count: Int
+    let emotionCounts: [JournalEmotion: Int]
+    let deviationCounts: [JournalDeviation: Int]
+    let topTags: [String]                      // 出现次数 top 5
+
+    var id: String { month }
 }
 
 // MARK: - 日志 Sheet 状态（commit 3/4）
@@ -79,6 +97,10 @@ struct JournalWindow: View {
     @State private var journalSheetState: JournalSheetState?
     @State private var pendingDeleteJournal: TradeJournal?
     @State private var selectedJournalIDs: Set<TradeJournal.ID> = []
+
+    // 搜索 + 视图模式（commit 4/4）
+    @State private var searchText: String = ""
+    @State private var journalViewMode: JournalViewMode = .list
 
     var body: some View {
         VStack(spacing: 0) {
@@ -168,12 +190,12 @@ struct JournalWindow: View {
             .keyboardShortcut("m", modifiers: [.command, .shift])
             .help("导入交割单 CSV（⌘⇧M · 文华 / 通用格式）")
 
-            Text("commit 3/4 · 日志编辑器")
+            Text("commit 4/4 · WP-53 收官")
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(.green)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Color.gray.opacity(0.15))
+                .background(Color.green.opacity(0.18))
                 .clipShape(Capsule())
         }
         .padding(.horizontal, 16)
@@ -211,11 +233,15 @@ struct JournalWindow: View {
 
     // MARK: - 交易日志 Tab 容器（toolbar + Table）
 
+    @ViewBuilder
     private var journalsContent: some View {
         VStack(spacing: 0) {
             journalsToolbar
             Divider()
-            journalsTable
+            switch journalViewMode {
+            case .list:    journalsTable
+            case .monthly: monthlyView
+            }
         }
     }
 
@@ -238,9 +264,28 @@ struct JournalWindow: View {
             .help("从成交记录自动生成日志草稿（⌘⇧A · 按合约 + 8h 时间窗口聚合）")
             .disabled(trades.isEmpty)
 
+            Divider().frame(height: 18)
+
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("搜索 标题 / 原因 / 教训 / 标签（空格 AND）", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+            }
+            .frame(width: 280)
+
             Spacer()
 
-            if !selectedJournalIDs.isEmpty {
+            Picker("视图", selection: $journalViewMode) {
+                ForEach(JournalViewMode.allCases) { m in
+                    Text(m.rawValue).tag(m)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 130)
+            .labelsHidden()
+
+            if !selectedJournalIDs.isEmpty && journalViewMode == .list {
                 Text("已选 \(selectedJournalIDs.count) 篇")
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -312,7 +357,7 @@ struct JournalWindow: View {
     // MARK: - 交易日志 Tab
 
     private var journalsTable: some View {
-        Table(journals, selection: $selectedJournalIDs) {
+        Table(filteredJournals, selection: $selectedJournalIDs) {
             TableColumn("标题") { j in
                 Text(j.title).fontWeight(.medium)
             }
@@ -373,11 +418,92 @@ struct JournalWindow: View {
         }
     }
 
+    // MARK: - 月度视图（commit 4/4）
+
+    @ViewBuilder
+    private var monthlyView: some View {
+        let aggregates = Self.aggregateMonthly(filteredJournals)
+        if aggregates.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "calendar.badge.exclamationmark")
+                    .font(.system(size: 42))
+                    .foregroundColor(.secondary.opacity(0.5))
+                Text("无可聚合的日志").font(.title3).foregroundColor(.secondary)
+                Text(searchText.isEmpty ? "添加日志后这里会按月汇总" : "搜索条件下没有匹配项")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(aggregates) { agg in
+                        MonthlyCard(aggregate: agg)
+                    }
+                }
+                .padding(16)
+            }
+        }
+    }
+
+    /// 过滤：空格分隔多个 query · AND 匹配（所有 query 都需命中 title / reason / lesson / tags 任一字段）
+    /// 大小写不敏感 · v1 简单 contains（v2 留倒排索引）
+    private var filteredJournals: [TradeJournal] {
+        let queries = searchText
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+        guard !queries.isEmpty else { return journals }
+        return journals.filter { j in
+            queries.allSatisfy { q in
+                j.title.localizedCaseInsensitiveContains(q)
+                    || j.reason.localizedCaseInsensitiveContains(q)
+                    || j.lesson.localizedCaseInsensitiveContains(q)
+                    || j.tags.contains(where: { $0.localizedCaseInsensitiveContains(q) })
+            }
+        }
+    }
+
+    /// 按 createdAt 月份（"yyyy-MM"）聚合 · Asia/Shanghai 时区
+    private static func aggregateMonthly(_ journals: [TradeJournal]) -> [MonthlyAggregate] {
+        guard !journals.isEmpty else { return [] }
+        var byMonth: [String: [TradeJournal]] = [:]
+        for j in journals {
+            byMonth[Self.monthFormatter.string(from: j.createdAt), default: []].append(j)
+        }
+        return byMonth.map { (month, items) in
+            var emotionCounts: [JournalEmotion: Int] = [:]
+            var deviationCounts: [JournalDeviation: Int] = [:]
+            var tagCounts: [String: Int] = [:]
+            for j in items {
+                emotionCounts[j.emotion, default: 0] += 1
+                deviationCounts[j.deviation, default: 0] += 1
+                for t in j.tags {
+                    tagCounts[t, default: 0] += 1
+                }
+            }
+            let topTags = tagCounts.sorted { $0.value > $1.value }.prefix(5).map(\.key)
+            return MonthlyAggregate(
+                month: month,
+                count: items.count,
+                emotionCounts: emotionCounts,
+                deviationCounts: deviationCounts,
+                topTags: topTags
+            )
+        }.sorted { $0.month > $1.month }
+    }
+
+    private static let monthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
     // MARK: - Footer
 
     private var footer: some View {
         HStack {
-            Text("⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 待 commit 4 月度统计 · M5 接 SQLiteJournalStore")
+            Text("⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 搜索 + 月度聚合 · M5 接 SQLiteJournalStore")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()
@@ -941,6 +1067,85 @@ private struct GeneratorPreviewSheet: View {
                 if isOn { selectedDraftIDs.insert(id) } else { selectedDraftIDs.remove(id) }
             }
         )
+    }
+}
+
+// MARK: - MonthlyCard（commit 4/4 · 月度聚合卡片）
+
+private struct MonthlyCard: View {
+
+    let aggregate: MonthlyAggregate
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(aggregate.month)
+                    .font(.title3)
+                    .bold()
+                Text("· \(aggregate.count) 篇")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+
+            HStack(alignment: .top, spacing: 24) {
+                distributionColumn(
+                    title: "情绪分布",
+                    cases: JournalEmotion.allCases,
+                    counts: aggregate.emotionCounts
+                ) { emotion in
+                    HStack(spacing: 6) {
+                        Circle().fill(emotion.color).frame(width: 6, height: 6)
+                        Text(emotion.displayName).font(.caption)
+                    }
+                }
+
+                distributionColumn(
+                    title: "偏差分布",
+                    cases: JournalDeviation.allCases,
+                    counts: aggregate.deviationCounts
+                ) { deviation in
+                    Text(deviation.displayName)
+                        .font(.caption)
+                        .foregroundColor(deviation == .asPlanned ? .green : .orange)
+                }
+            }
+
+            if !aggregate.topTags.isEmpty {
+                Text("热门标签：\(aggregate.topTags.joined(separator: " · "))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.gray.opacity(0.06))
+        .cornerRadius(8)
+    }
+
+    /// 单列分布（情绪 / 偏差共用）· 仅渲染 count > 0 的 case
+    @ViewBuilder
+    private func distributionColumn<Case: Hashable>(
+        title: String,
+        cases: [Case],
+        counts: [Case: Int],
+        @ViewBuilder label: @escaping (Case) -> some View
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption).foregroundColor(.secondary)
+            ForEach(cases, id: \.self) { c in
+                if let n = counts[c], n > 0 {
+                    HStack(spacing: 6) {
+                        label(c)
+                        Text("\(n)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

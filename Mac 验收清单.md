@@ -73,6 +73,26 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] LazyVGrid 8 SwiftUI Charts 卡片首屏渲染时长
 - [ ] 多窗口 4 个 ChartScene 并行内存占用
 
+## 预警面板 ⌘B（WP-52 UI · 4 commit · 1/4 已交付）
+
+### commit 1（开窗 + Mock alerts + 列表占位）
+- [ ] ⌘B 打开独立窗口（与主图/复盘分离）
+- [ ] 顶部 stats（总数/活跃/已触发/已暂停 · 颜色：绿/红/橙/灰）
+- [ ] 列表表头：名称 / 合约 / 条件 / 状态 / 通道 / 冷却（6 列 · monospaced）
+- [ ] 8 个 Mock alerts 渲染：
+  - [ ] 6 类 condition displayDescription 中文显示（价格 > / < / 上穿 / 下穿 / 触线 / 成交量 / 急动）
+  - [ ] 4 类 status badge（活跃绿 / 已触发红 / 暂停橙 / 已取消灰）
+  - [ ] 通道简写中文（内/通/声/控/文）
+  - [ ] 冷却秒数（默认 60s · IF0 跌破设 300s · cancelled 设 0s）
+- [ ] 底部"待 commit 2-4" 提示行（Label + SF Symbol）
+- [ ] 窗口最小 720×480 · 默认 880×640
+- [ ] LazyVStack + Divider 分隔 · 滚动顺畅
+
+### commit 2-4（待累积）
+后续 commit 追加：条件编辑器 Sheet / 启停按钮 / 触发历史 / 通知通道 / 系统通知验收
+
+---
+
 ## 待补（后续 commit 累积）
 
 后续每个 commit 完成功能后追加到对应章节 · 切机前在此清单逐项验收。

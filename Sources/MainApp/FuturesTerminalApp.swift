@@ -40,6 +40,7 @@ struct FuturesTerminalApp: App {
                 Divider()
                 OpenWatchlistButton()
                 OpenReviewButton()
+                OpenAlertButton()
             }
             CommandMenu("视图") {
                 Text("（多周期切换已支持工具条 Picker · 键盘 ⌘1~9 待 Mac 切机集中接）")
@@ -55,6 +56,11 @@ struct FuturesTerminalApp: App {
         // 复盘工作台（⌘R · 8 图独立窗口 · 与 K 线主图区分离）
         WindowGroup("复盘", id: "review") {
             ReviewWindow()
+        }
+
+        // 预警面板（⌘B · Bell · 独立窗口）
+        WindowGroup("预警", id: "alert") {
+            AlertWindow()
         }
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
@@ -87,6 +93,14 @@ private struct OpenReviewButton: View {
     var body: some View {
         Button("复盘工作台") { openWindow(id: "review") }
             .keyboardShortcut("r", modifiers: [.command])
+    }
+}
+
+private struct OpenAlertButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("预警面板") { openWindow(id: "alert") }
+            .keyboardShortcut("b", modifiers: [.command])
     }
 }
 

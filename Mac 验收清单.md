@@ -161,8 +161,38 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
   - [ ] 贵金属 显示 AU0/AG0/CU0
 - [ ] empty state（如手动构造空分组测试 · 暂无入口）：tray icon + "分组为空" + "(待 commit 2 添加合约入口)"
 
-### commit 2（添加/删除/重命名 · 待）
-（commit 2 完成后追加 checklist）
+### commit 2（添加/删除/重命名分组与合约 + 右键菜单 + confirmation）
+- [ ] 左 sidebar 顶部"添加分组"按钮（plus icon · ⌘⇧G）
+- [ ] 点击 → 弹出 GroupNameSheet（标题"添加分组"· 按钮"保存"· 360×220）
+  - [ ] 输入空名时"保存"按钮 disabled
+  - [ ] 输入合法名 + ⌘Return → 新分组追加到列表末尾 + 自动选中
+  - [ ] 取消按钮 / Esc → 不新增
+- [ ] 分组行右键菜单（contextMenu）：
+  - [ ] "重命名" → 弹出 GroupNameSheet（标题"重命名分组"· 按钮"更新"· 预填现有名）
+  - [ ] 输入新名 + 更新 → 列表标签立即变更
+  - [ ] 名字与原名相同时"更新"按钮 disabled（避免 no-op）
+  - [ ] "删除分组"（destructive 红色）→ 弹出 confirmationDialog
+- [ ] 删除分组 confirmationDialog：
+  - [ ] 标题"删除分组？"
+  - [ ] 内容"分组「X」内的 N 个合约将一并移除。该操作无法撤销。"
+  - [ ] 主按钮"删除「X」"（红色 destructive）
+  - [ ] 取消按钮回滚 · 不删
+  - [ ] 删除当前选中分组 → 自动切换到第一个 / 若全删空 → empty state
+- [ ] 右 detail header "添加合约"按钮（Label "添加合约" plus icon · ⌘⇧I）
+- [ ] 点击 → 弹出 InstrumentIDSheet（标题"添加合约到「X」"· 380×280）
+  - [ ] 输入 RB0 / IF2509 等 → 自动 uppercased + trim 空白
+  - [ ] 提示文案"主力合约支持：RB0/IF0/AU0/CU0"显示
+  - [ ] 输入空时"添加"按钮 disabled
+  - [ ] 同组重复合约 addInstrument 返回 false（去重）→ 不会出现重复行
+- [ ] Table 多选合约（按住 ⌘ / Shift 多选）
+- [ ] Table 行右键菜单（contextMenu(forSelectionType:)）：
+  - [ ] 单选时菜单文字"从分组移除「X」"
+  - [ ] 多选时菜单文字"从分组移除选中的 N 个合约"（destructive 红色）
+  - [ ] 选中 0 个时不显示菜单项
+  - [ ] 移除后选中状态清空
+- [ ] 切换分组（点击 sidebar 不同分组）→ Table 选中状态自动清空
+- [ ] footerHint 选中数提示："已选 N 个 · 右键移除"（仅当有选中时显示）
+- [ ] ⌘⇧G/⌘⇧I 快捷键在 ⌘L 自选窗口为前台时生效 · 不与全局 ⌘N/⌘L/⌘R/⌘B 冲突
 
 ### commit 3（拖拽排序 · 待 · macOS 13+ .draggable / .dropDestination）
 （commit 3 完成后追加 checklist · Mac 切机时重点验证拖拽视觉反馈 + 落点指示 + 列表动画）

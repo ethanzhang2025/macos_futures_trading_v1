@@ -1,13 +1,14 @@
-// MainApp · 工作区模板面板（WP-55 UI · commit 1/4 · ⌘K 起步）
+// MainApp · 工作区模板面板（WP-55 UI · commit 2/4 · CRUD + 切换激活）
 //
-// commit 1 本次新增：
-// - NavigationSplitView 双栏（左 sidebar 4 Kind 分组 / 右 detail 模板基础信息）
-// - 接 WorkspaceBook 真模型（Sources/Shared/Workspaces/）· Mock 4 模板（每 Kind 各 1）
-// - sidebar：模板按 Kind 分 4 Section（盘前/盘中/盘后/自定义）· 当前激活 ★ 强调
-// - detail：模板信息卡片（Kind capsule + 窗口列表 + 快捷键状态）+ 空 state
-// - FuturesTerminalApp 加 OpenWorkspaceButton ⌘K + WindowGroup("工作区模板", id: "workspace")
+// commit 1 已交付：NavigationSplitView 双栏 · WorkspaceBook 真模型 · Mock 4 模板（每 Kind 各 1）
+// commit 2 本次新增：
+// - 顶部 "+" 按钮（⌘⇧K · 添加模板 sheet）
+// - 行 contextMenu：重命名 / 复制（duplicateTemplate）/ 删除（destructive）
+// - 删除前 confirmationDialog（含级联清空 N 窗口警示）
+// - TemplateEditorSheet（add/edit 共用 · 字段 name + Kind picker · 4 类预设）
+// - detail header "设为当前激活"按钮（非激活时显示 · 双击 sidebar 行同效）
+// - 操作 helper：addTemplate / renameAndRekind / duplicateTemplate / deleteTemplate / activate
 //
-// 留待 commit 2/4：CRUD（添加/删除/重命名/复制）+ setActive 切换激活
 // 留待 commit 3/4：网格预设 6 卡片 + windows 列表编辑（合约/周期/指标 picker）
 // 留待 commit 4/4：快捷键编辑器（CommandRecorder）+ 全局唯一性 + 主图联动 stub
 //
@@ -19,12 +20,28 @@ import SwiftUI
 import Foundation
 import Shared
 
+// MARK: - Sheet 状态
+
+private enum WorkspaceSheetState: Identifiable {
+    case addTemplate
+    case editTemplate(WorkspaceTemplate)
+
+    var id: String {
+        switch self {
+        case .addTemplate:        return "add-template"
+        case .editTemplate(let t): return "edit-template-\(t.id)"
+        }
+    }
+}
+
 // MARK: - 主窗口
 
 struct WorkspaceWindow: View {
 
     @State private var book: WorkspaceBook = MockWorkspaceBook.generate()
     @State private var selectedTemplateID: UUID?
+    @State private var sheetState: WorkspaceSheetState?
+    @State private var pendingDeleteTemplate: WorkspaceTemplate?
 
     var body: some View {
         NavigationSplitView {
@@ -40,6 +57,40 @@ struct WorkspaceWindow: View {
                 selectedTemplateID = book.activeTemplateID ?? book.templates.first?.id
             }
         }
+        .sheet(item: $sheetState) { state in
+            switch state {
+            case .addTemplate:
+                TemplateEditorSheet(mode: .add) { name, kind in
+                    addTemplate(name: name, kind: kind)
+                }
+            case .editTemplate(let template):
+                TemplateEditorSheet(mode: .edit(template: template)) { name, kind in
+                    renameAndRekind(template, name: name, kind: kind)
+                }
+            }
+        }
+        .confirmationDialog(
+            "删除模板？",
+            isPresented: deleteConfirmBinding,
+            titleVisibility: .visible,
+            presenting: pendingDeleteTemplate
+        ) { template in
+            Button("删除「\(template.name)」", role: .destructive) {
+                deleteTemplate(template)
+            }
+            Button("取消", role: .cancel) {
+                pendingDeleteTemplate = nil
+            }
+        } message: { template in
+            Text("模板「\(template.name)」内的 \(template.windows.count) 个窗口布局将一并清空。该操作无法撤销。")
+        }
+    }
+
+    private var deleteConfirmBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteTemplate != nil },
+            set: { if !$0 { pendingDeleteTemplate = nil } }
+        )
     }
 
     // MARK: - 左栏 · 按 Kind 分组的模板列表
@@ -52,6 +103,14 @@ struct WorkspaceWindow: View {
                 Text("\(book.templates.count) 个")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                Button {
+                    sheetState = .addTemplate
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderless)
+                .help("添加模板（⌘⇧K）")
+                .keyboardShortcut("k", modifiers: [.command, .shift])
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -92,6 +151,28 @@ struct WorkspaceWindow: View {
                 }
                 .font(.caption2)
                 .foregroundColor(.secondary)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            activate(template)
+        }
+        .contextMenu {
+            Button("重命名 / 修改类型") {
+                sheetState = .editTemplate(template)
+            }
+            Button("复制为副本") {
+                duplicateTemplate(template)
+            }
+            if !isActive {
+                Divider()
+                Button("设为当前激活") {
+                    activate(template)
+                }
+            }
+            Divider()
+            Button("删除模板", role: .destructive) {
+                pendingDeleteTemplate = template
             }
         }
     }
@@ -135,6 +216,15 @@ struct WorkspaceWindow: View {
                         .padding(.vertical, 4)
                         .background(Color.accentColor.opacity(0.15))
                         .clipShape(Capsule())
+                } else {
+                    Button {
+                        activate(template)
+                    } label: {
+                        Label("设为当前激活", systemImage: "star")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .help("把此模板标为当前激活（双击 sidebar 行同效）")
                 }
             }
             .padding(20)
@@ -239,7 +329,7 @@ struct WorkspaceWindow: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
-            Text("commit 1/4 · 起步展示 · CRUD 待 commit 2")
+            Text("commit 2/4 · CRUD + 切换激活 · 网格 + 编辑 待 commit 3")
                 .font(.caption2)
                 .foregroundColor(.secondary)
         }
@@ -265,6 +355,42 @@ struct WorkspaceWindow: View {
     private func formatShortcut(_ shortcut: WorkspaceShortcut) -> String {
         "keyCode \(shortcut.keyCode) · modifiers 0x\(String(shortcut.modifierFlags, radix: 16))"
     }
+
+    // MARK: - Mutations · CRUD + 激活切换
+
+    private func addTemplate(name: String, kind: WorkspaceTemplate.Kind) {
+        guard let trimmed = name.trimmedOrNil else { return }
+        let template = book.addTemplate(name: trimmed, kind: kind)
+        selectedTemplateID = template.id
+    }
+
+    /// 数据层 renameTemplate 只改 name；要改 kind 必须走 updateTemplate（保留 id/sortIndex/createdAt）
+    /// 无变更短路由 sheet 的 canSubmit 拦截（edit 模式 disabled 按钮）
+    private func renameAndRekind(_ template: WorkspaceTemplate, name: String, kind: WorkspaceTemplate.Kind) {
+        guard let trimmed = name.trimmedOrNil else { return }
+        var updated = template
+        updated.name = trimmed
+        updated.kind = kind
+        book.updateTemplate(updated)
+    }
+
+    private func duplicateTemplate(_ template: WorkspaceTemplate) {
+        guard let copy = book.duplicateTemplate(id: template.id) else { return }
+        selectedTemplateID = copy.id
+    }
+
+    private func deleteTemplate(_ template: WorkspaceTemplate) {
+        let wasSelected = selectedTemplateID == template.id
+        book.removeTemplate(id: template.id)
+        if wasSelected {
+            selectedTemplateID = book.activeTemplateID ?? book.templates.first?.id
+        }
+        pendingDeleteTemplate = nil
+    }
+
+    private func activate(_ template: WorkspaceTemplate) {
+        book.setActive(id: template.id)
+    }
 }
 
 // MARK: - 显示辅助 extension（与 JournalEmotion / JournalDeviation 同模式）
@@ -285,6 +411,109 @@ fileprivate extension WorkspaceTemplate.Kind {
         case .inMarket:   return .red
         case .postMarket: return .blue
         case .custom:     return .gray
+        }
+    }
+}
+
+// MARK: - String 私有扩展
+
+private extension String {
+    /// 去前后空白后返回；若为空返回 nil
+    var trimmedOrNil: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+// MARK: - Sheet · 模板编辑（add / edit 共用）
+
+private struct TemplateEditorSheet: View {
+
+    enum Mode {
+        case add
+        case edit(template: WorkspaceTemplate)
+    }
+
+    let mode: Mode
+    let onSubmit: (String, WorkspaceTemplate.Kind) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var kind: WorkspaceTemplate.Kind
+
+    init(mode: Mode, onSubmit: @escaping (String, WorkspaceTemplate.Kind) -> Void) {
+        self.mode = mode
+        self.onSubmit = onSubmit
+        switch mode {
+        case .add:
+            self._name = State(initialValue: "")
+            self._kind = State(initialValue: .custom)
+        case .edit(let template):
+            self._name = State(initialValue: template.name)
+            self._kind = State(initialValue: template.kind)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.title2).bold()
+
+            Form {
+                TextField("模板名称", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 280)
+
+                Picker("类型", selection: $kind) {
+                    ForEach(WorkspaceTemplate.Kind.allCases, id: \.self) { k in
+                        Text(k.displayName).tag(k)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text("4 类预设：盘前刷新自选 / 盘中主交易 / 盘后复盘 / 自定义临时模板")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .formStyle(.grouped)
+
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(actionLabel) {
+                    onSubmit(name, kind)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSubmit)
+            }
+        }
+        .padding(20)
+        .frame(width: 420, height: 280)
+    }
+
+    private var title: String {
+        switch mode {
+        case .add:  return "添加工作区模板"
+        case .edit: return "编辑模板"
+        }
+    }
+
+    private var actionLabel: String {
+        switch mode {
+        case .add:  return "保存"
+        case .edit: return "更新"
+        }
+    }
+
+    /// add 模式必须有名字；edit 模式必须有名字且与原值不同（任一字段变更）
+    private var canSubmit: Bool {
+        guard let trimmed = name.trimmedOrNil else { return false }
+        switch mode {
+        case .add:
+            return true
+        case .edit(let template):
+            return trimmed != template.name || kind != template.kind
         }
     }
 }

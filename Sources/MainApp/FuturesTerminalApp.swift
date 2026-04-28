@@ -39,9 +39,10 @@ struct FuturesTerminalApp: App {
                 NewChartButton()
                 Divider()
                 OpenWatchlistButton()
+                OpenReviewButton()
             }
             CommandMenu("视图") {
-                Text("（待 WP-44 多周期切换 ⌘1~9）")
+                Text("（多周期切换已支持工具条 Picker · 键盘 ⌘1~9 待 Mac 切机集中接）")
                     .foregroundColor(.secondary)
             }
         }
@@ -49,6 +50,11 @@ struct FuturesTerminalApp: App {
         // 自选合约窗口（菜单触发打开 · 单实例）
         WindowGroup("自选合约", id: "watchlist") {
             WatchlistContentView()
+        }
+
+        // 复盘工作台（⌘R · 8 图独立窗口 · 与 K 线主图区分离）
+        WindowGroup("复盘", id: "review") {
+            ReviewWindow()
         }
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
@@ -73,6 +79,14 @@ private struct OpenWatchlistButton: View {
     var body: some View {
         Button("自选合约") { openWindow(id: "watchlist") }
             .keyboardShortcut("l", modifiers: [.command])
+    }
+}
+
+private struct OpenReviewButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("复盘工作台") { openWindow(id: "review") }
+            .keyboardShortcut("r", modifiers: [.command])
     }
 }
 

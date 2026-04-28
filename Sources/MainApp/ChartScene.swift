@@ -11,6 +11,7 @@ import Foundation
 import SwiftUI
 import Metal
 import Shared
+import DataCore
 import ChartCore
 import IndicatorCore
 
@@ -22,6 +23,10 @@ struct ChartScene: View {
     @State private var bars: [KLine] = []
     @State private var indicators: [IndicatorSeries] = []
     @State private var loadError: String?
+    @State private var instrumentLabel: String = "—"
+    @State private var periodLabel: String = "—"
+    @State private var dataSourceLabel: String = "加载中…"
+    @State private var pipeline: MarketDataPipeline?
 
     var body: some View {
         Group {
@@ -30,6 +35,9 @@ struct ChartScene: View {
                     renderer: renderer,
                     bars: bars,
                     indicators: indicators,
+                    instrumentLabel: instrumentLabel,
+                    periodLabel: periodLabel,
+                    dataSourceLabel: dataSourceLabel,
                     initialViewport: RenderViewport(
                         startIndex: max(0, bars.count - 200),
                         visibleCount: 200
@@ -38,29 +46,79 @@ struct ChartScene: View {
             } else if let loadError {
                 errorView(loadError)
             } else {
-                ProgressView("加载行情数据…")
+                ProgressView("加载 RB0 真行情…")
             }
         }
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
-        .task {
-            // 重活全部搬到 Task.detached · 不阻塞 MainActor / NSWindow 创建
-            // 否则 ⌘N 新建窗口要等 generateBars+computeIndicators ~1-3s 才弹出
-            do {
-                // 5000 根足够展示视觉密度（Decimal 算术约束 10w 根需 ~1.9s · 5k 仅 ~100ms）
-                // 真 App 接行情后从 SQLite 加载历史 K · 不再走这条 mock 路径
-                let result = try await Task.detached(priority: .userInitiated) {
-                    let r = try MetalKLineRenderer()
-                    let b = MockKLineData.generateBars(5_000)
-                    let i = MockKLineData.computeIndicators(bars: b)
-                    return (r, b, i)
-                }.value
-                renderer = result.0
-                bars = result.1
-                indicators = result.2
-            } catch {
-                loadError = "\(error)"
+        .task { await loadAndStream() }
+        .onDisappear {
+            // 窗口关闭 · 撤订阅 + 停轮询（避免 pipeline 持续后台占资源）
+            Task { await pipeline?.stop() }
+        }
+    }
+
+    /// 主流程：renderer init → pipeline 启动 → 监听 stream 增量更新
+    /// 失败兜底：renderer init 抛错 → loadError；首次 snapshot 拉空 → Mock 兜底
+    private func loadAndStream() async {
+        // 1. renderer 后台 init（几 ms · 但 Metal device init 仍走 detached 不阻塞 main）
+        do {
+            renderer = try await Task.detached(priority: .userInitiated) {
+                try MetalKLineRenderer()
+            }.value
+        } catch {
+            loadError = "渲染器初始化失败：\(error)"
+            return
+        }
+
+        // 2. 启 pipeline 拉真行情
+        let pipe = MarketDataPipeline()
+        pipeline = pipe
+        instrumentLabel = pipe.instrumentID
+        periodLabel = pipe.periodLabel
+        let stream = await pipe.start()
+
+        // 3. 监听 snapshot + 实时增量
+        var snapshotReceived = false
+        for await update in stream {
+            switch update {
+            case .snapshot(let snapBars):
+                if snapBars.isEmpty && !snapshotReceived {
+                    // 首次 snapshot 拉空 → Sina 不可达 / 节假日 → 回退 Mock
+                    await pipe.stop()
+                    pipeline = nil
+                    await loadMockFallback()
+                    return
+                }
+                snapshotReceived = true
+                bars = snapBars
+                indicators = await computeIndicatorsAsync(snapBars)
+                dataSourceLabel = "Sina 真行情"
+            case .completedBar(let k):
+                bars.append(k)
+                indicators = await computeIndicatorsAsync(bars)
             }
         }
+    }
+
+    /// Sina 不可达兜底：5000 根 random walk Mock · 数据源标记清楚以便用户知道是假数据
+    private func loadMockFallback() async {
+        let result = await Task.detached(priority: .userInitiated) {
+            let b = MockKLineData.generateBars(5_000)
+            let i = MockKLineData.computeIndicators(bars: b)
+            return (b, i)
+        }.value
+        bars = result.0
+        indicators = result.1
+        instrumentLabel = "MOCK"
+        periodLabel = "1m"
+        dataSourceLabel = "Sina 不可达 · 已退回 Mock"
+    }
+
+    /// 指标计算搬到后台（200 根 ~10ms / 5k 根 ~50ms · 但保持架构一致）
+    private func computeIndicatorsAsync(_ snap: [KLine]) async -> [IndicatorSeries] {
+        await Task.detached(priority: .userInitiated) {
+            MockKLineData.computeIndicators(bars: snap)
+        }.value
     }
 
     private func errorView(_ message: String) -> some View {
@@ -93,16 +151,30 @@ struct ChartContentView: View {
     let renderer: MetalKLineRenderer
     let bars: [KLine]
     let indicators: [IndicatorSeries]
+    let instrumentLabel: String
+    let periodLabel: String
+    let dataSourceLabel: String
     @State var viewport: RenderViewport
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
     @State var zoomStartViewport: RenderViewport?
     @State var inertiaTask: Task<Void, Never>?
 
-    init(renderer: MetalKLineRenderer, bars: [KLine], indicators: [IndicatorSeries], initialViewport: RenderViewport) {
+    init(
+        renderer: MetalKLineRenderer,
+        bars: [KLine],
+        indicators: [IndicatorSeries],
+        instrumentLabel: String,
+        periodLabel: String,
+        dataSourceLabel: String,
+        initialViewport: RenderViewport
+    ) {
         self.renderer = renderer
         self.bars = bars
         self.indicators = indicators
+        self.instrumentLabel = instrumentLabel
+        self.periodLabel = periodLabel
+        self.dataSourceLabel = dataSourceLabel
         self._viewport = State(initialValue: initialViewport)
     }
 
@@ -188,6 +260,7 @@ struct ChartContentView: View {
 
     var hud: some View {
         VStack(alignment: .leading, spacing: 4) {
+            Text("📌 合约 \(instrumentLabel) · \(periodLabel) · 🌐 \(dataSourceLabel)")
             Text("📊 可见: \(viewport.visibleCount) · 起点: \(viewport.startIndex) / \(bars.count)")
             Text("⏱️  上一帧: \(String(format: "%.2f", lastFrameMs)) ms · 预算 16.67 ms")
             ForEach(Array(indicators.enumerated()), id: \.offset) { _, series in

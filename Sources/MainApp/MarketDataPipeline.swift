@@ -25,6 +25,10 @@ final class MarketDataPipeline {
     static let pollingInterval: TimeInterval = 5.0
     static let cacheMaxBars: Int = 200
 
+    /// 主图可切换的合约清单（spike 硬编码 · 后续 WP-43 接 WatchlistBook UI 替换）
+    /// 复用 EndToEndDemo 验证过的 4 个 Sina 主力合约
+    static let supportedContracts: [String] = ["RB0", "IF0", "AU0", "CU0"]
+
     let instrumentID: String
     let period: KLinePeriod
 

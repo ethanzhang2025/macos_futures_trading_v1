@@ -27,51 +27,96 @@ struct ChartScene: View {
     @State private var periodLabel: String = "—"
     @State private var dataSourceLabel: String = "加载中…"
     @State private var pipeline: MarketDataPipeline?
+    @State private var currentInstrumentID: String = MarketDataPipeline.defaultInstrumentID
 
     var body: some View {
-        Group {
-            if let renderer, !bars.isEmpty {
-                ChartContentView(
-                    renderer: renderer,
-                    bars: bars,
-                    indicators: indicators,
-                    instrumentLabel: instrumentLabel,
-                    periodLabel: periodLabel,
-                    dataSourceLabel: dataSourceLabel,
-                    initialViewport: RenderViewport(
-                        startIndex: max(0, bars.count - 200),
-                        visibleCount: 200
-                    )
-                )
-            } else if let loadError {
-                errorView(loadError)
-            } else {
-                ProgressView("加载 RB0 真行情…")
-            }
+        VStack(spacing: 0) {
+            toolbar  // 切换合约 · 始终可见（切换时主区切到 ProgressView 但 toolbar 不消失）
+            mainContent
         }
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
-        .task { await loadAndStream() }
+        // .task(id:) 在 id 变化时自动取消旧 task + 启动新 task · pipeline 资源由 closure 入口手动 stop
+        .task(id: currentInstrumentID) {
+            await resetForNewContract()
+            await loadAndStream(instrumentID: currentInstrumentID)
+        }
         .onDisappear {
-            // 窗口关闭 · 撤订阅 + 停轮询（避免 pipeline 持续后台占资源）
             Task { await pipeline?.stop() }
         }
     }
 
-    /// 主流程：renderer init → pipeline 启动 → 监听 stream 增量更新
+    /// 切换合约前重置：停旧管线 + 清空数据 + 重置 HUD label（renderer 不动 · 跨合约复用）
+    private func resetForNewContract() async {
+        await pipeline?.stop()
+        pipeline = nil
+        bars = []
+        indicators = []
+        dataSourceLabel = "加载中…"
+        instrumentLabel = currentInstrumentID
+    }
+
+    /// 顶部工具条 · 合约 Picker（切换时驱动 .task(id:) 重启 pipeline）
+    private var toolbar: some View {
+        HStack(spacing: 12) {
+            Text("合约：").foregroundColor(.secondary)
+            Picker("", selection: $currentInstrumentID) {
+                ForEach(MarketDataPipeline.supportedContracts, id: \.self) { sym in
+                    Text(sym).tag(sym)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 90)
+            .labelsHidden()
+            Spacer()
+            Text("⌘N 新窗口 · ⌘L 自选 · ⌘, 设置")
+                .foregroundColor(.secondary)
+        }
+        .font(.system(size: 12, design: .monospaced))
+        .padding(.horizontal, 12)
+        .frame(height: 32)
+        .background(Color(white: 0.12))
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
+        if let renderer, !bars.isEmpty {
+            ChartContentView(
+                renderer: renderer,
+                bars: bars,
+                indicators: indicators,
+                instrumentLabel: instrumentLabel,
+                periodLabel: periodLabel,
+                dataSourceLabel: dataSourceLabel,
+                initialViewport: RenderViewport(
+                    startIndex: max(0, bars.count - 200),
+                    visibleCount: 200
+                )
+            )
+        } else if let loadError {
+            errorView(loadError)
+        } else {
+            ProgressView("加载 \(currentInstrumentID) 真行情…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// 主流程：renderer init（首次）→ pipeline 启动 → 监听 stream 增量更新
     /// 失败兜底：renderer init 抛错 → loadError；首次 snapshot 拉空 → Mock 兜底
-    private func loadAndStream() async {
-        // 1. renderer 后台 init（几 ms · 但 Metal device init 仍走 detached 不阻塞 main）
-        do {
-            renderer = try await Task.detached(priority: .userInitiated) {
-                try MetalKLineRenderer()
-            }.value
-        } catch {
-            loadError = "渲染器初始化失败：\(error)"
-            return
+    private func loadAndStream(instrumentID: String) async {
+        // 1. renderer 仅首次 init（切换合约时复用 · MetalKLineRenderer 与合约无关）
+        if renderer == nil {
+            do {
+                renderer = try await Task.detached(priority: .userInitiated) {
+                    try MetalKLineRenderer()
+                }.value
+            } catch {
+                loadError = "渲染器初始化失败：\(error)"
+                return
+            }
         }
 
-        // 2. 启 pipeline 拉真行情
-        let pipe = MarketDataPipeline()
+        // 2. 启新 pipeline 拉指定合约真行情
+        let pipe = MarketDataPipeline(instrumentID: instrumentID)
         pipeline = pipe
         instrumentLabel = pipe.instrumentID
         periodLabel = pipe.periodLabel
@@ -100,7 +145,7 @@ struct ChartScene: View {
         }
     }
 
-    /// Sina 不可达兜底：5000 根 random walk Mock · 数据源标记清楚以便用户知道是假数据
+    /// Sina 不可达兜底：5000 根 random walk Mock · 保留用户选的 instrumentLabel · 仅 dataSourceLabel 标 fallback
     private func loadMockFallback() async {
         let result = await Task.detached(priority: .userInitiated) {
             let b = MockKLineData.generateBars(5_000)
@@ -109,8 +154,6 @@ struct ChartScene: View {
         }.value
         bars = result.0
         indicators = result.1
-        instrumentLabel = "MOCK"
-        periodLabel = "1m"
         dataSourceLabel = "Sina 不可达 · 已退回 Mock"
     }
 

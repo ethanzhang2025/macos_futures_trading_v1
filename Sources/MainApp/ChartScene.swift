@@ -74,8 +74,9 @@ struct ChartScene: View {
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 12)
         .frame(height: 32)
-        // K 线区域 clear color 是 #11141A（≈ white 0.07）· 工具条用 white 0.22 留出明显对比
-        .background(Color(white: 0.22))
+        // macOS 13+ 系统 toolbar 标准材质 · 自动适配明暗模式 · 比硬编码 Color(white: x) 更可靠
+        // 之前 white 0.22 在暗色模式下与 K 线区 #11141A 视觉差异仍不够 · 用户反馈"看不清"
+        .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
     }
 

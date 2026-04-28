@@ -1,12 +1,13 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（13 指标 · v3 第 3 批扩展 Stochastic）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（14 指标 · v3 第 4 批扩展 TRIX）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 13 个指标：
+// 测试 14 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
 //   v3 第 3 批（1）：Stochastic 14-3
+//   v3 第 4 批（1）：TRIX 12（内嵌 3 层 EMA · 同 MACD 模式）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -193,6 +194,17 @@ benchmark("STOCH(14,3)") {
     guard var state = try? Stochastic.makeIncrementalState(kline: emptyHistory, params: [14, 3]) else { return }
     for bar in bars {
         _ = Stochastic.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 4 批 · TRIX（内嵌 3 EMA · 同 MACD 模式）
+
+benchmark("TRIX(12)") {
+    _ = try? TRIX.calculate(kline: series, params: [12])
+} incremental: {
+    guard var state = try? TRIX.makeIncrementalState(kline: emptyHistory, params: [12]) else { return }
+    for bar in bars {
+        _ = TRIX.stepIncremental(state: &state, newBar: bar)
     }
 }
 

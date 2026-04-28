@@ -5,6 +5,7 @@
 // WP-41 v3 commit 2/4：CCI 实现 IncrementalIndicator · ring buffer + sum + O(n) MD 重算
 // WP-41 v3 第 2 批 commit 2/4：WilliamsR 实现 IncrementalIndicator · KDJ ring 简化版（无 SMA 平滑）
 // WP-41 v3 第 3 批：Stochastic 实现 IncrementalIndicator · ring HHV/LLV + %K_raw 滑动 sum %D
+// WP-41 v3 第 4 批：TRIX 实现 IncrementalIndicator · 内嵌 3 EMA + prevE3 差分（同 MACD 复合 EMA 模式）
 
 import Foundation
 import Shared
@@ -606,5 +607,62 @@ extension Stochastic: IncrementalIndicator {
             : nil
 
         return [kValid, dValue]
+    }
+}
+
+// MARK: - WP-41 v3 第 4 批 · TRIX 增量 API（内嵌 3 EMA + prevE3 差分 · 同 MACD 复合模式）
+
+extension TRIX: IncrementalIndicator {
+
+    /// state：3 个 EMA.IncrementalState + prevE3
+    /// 与 MACD 不同：TRIX 的 e2/e3 必须每步无条件 advance（用 0 代替 nil · 与 Kernels.nextEMA 行为一致）
+    /// MACD signal EMA 仅在 fv/sv 都有效时 advance（calculate 用 firstDIFIdx 切片）· 此处不同
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var e1: EMA.IncrementalState
+        public var e2: EMA.IncrementalState
+        public var e3: EMA.IncrementalState
+        /// e3 上一根 round8 后的值（与 calculate 用 e3 数组中 round8 输出一致 · 流式裸值会差末位精度）
+        public var prevE3: Decimal?
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "TRIX period")
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = IncrementalState(
+            period: n,
+            e1: try EMA.makeIncrementalState(kline: empty, params: [Decimal(n)]),
+            e2: try EMA.makeIncrementalState(kline: empty, params: [Decimal(n)]),
+            e3: try EMA.makeIncrementalState(kline: empty, params: [Decimal(n)]),
+            prevE3: nil
+        )
+        for close in kline.closes {
+            _ = processStep(state: &state, close: close)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close)]
+    }
+
+    /// 三层 EMA · prevE3 差分：
+    /// - e1 接 close · e2 接 e1 ?? 0 · e3 接 e2 ?? 0（与 calculate Kernels.nextEMA 一致）
+    /// - 三个 EMA 都必须每步 advance（不能短路）· 才能与全量等价（计数同步）
+    /// - TRIX = (e3_cur - e3_prev) / e3_prev * 100 当 prev != 0 · 否则 nil
+    private static func processStep(state: inout IncrementalState, close: Decimal) -> Decimal? {
+        let e1Out = state.e1.advance(close: close)
+        let e2Out = state.e2.advance(close: e1Out ?? 0)
+        let e3Out = state.e3.advance(close: e2Out ?? 0)
+
+        let trix: Decimal?
+        if let cur = e3Out, let prev = state.prevE3, prev != 0 {
+            trix = Kernels.round8((cur - prev) / prev * Decimal(100))
+        } else {
+            trix = nil
+        }
+        // 含 nil（warm-up 期 prevE3 保持 nil · 与 calculate e3[i-1] == nil 时不输出语义一致）
+        state.prevE3 = e3Out
+        return trix
     }
 }

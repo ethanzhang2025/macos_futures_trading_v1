@@ -947,6 +947,56 @@ struct StochasticIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 4 批 · TRIX 增量 API（内嵌 3 EMA · 同 MACD 模式）
+
+@Suite("WP-41 v3 第 4 批 · TRIX 增量 API")
+struct TRIXIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=12）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try TRIX.calculate(kline: series, params: [12])
+        let fullValues = full[0].values
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try TRIX.makeIncrementalState(kline: history, params: [12])
+
+        for i in historyCount..<bars.count {
+            let row = TRIX.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "TRIX[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 60 根 K 全程匹配全量（3 层 EMA + prevE3 差分）")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 60)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try TRIX.makeIncrementalState(kline: empty, params: [12])
+
+        let series = makeSeries(from: bars)
+        let full = try TRIX.calculate(kline: series, params: [12])
+
+        for i in 0..<bars.count {
+            let row = TRIX.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "TRIX[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try TRIX.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try TRIX.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

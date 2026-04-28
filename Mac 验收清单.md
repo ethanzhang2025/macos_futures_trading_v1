@@ -503,6 +503,22 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 4 批（TRIX · 内嵌 3 EMA · 14 指标全覆盖）
+
+### TRIX 增量（同 MACD 复合 EMA 模式 · prevE3 round8 差分）
+- [ ] TRIX 与全量精确一致（period=12 · 100 K · history 50）
+- [ ] history 空 · 60 根 K 全程匹配全量（3 层 EMA 同步推进）
+- [ ] 参数缺失 / period<1 抛错
+- [ ] 内嵌 EMA.IncrementalState × 3（与 MACD 复用 advance 接口）
+- [ ] e2/e3 每步无条件 advance（用 e1 ?? 0 / e2 ?? 0 替换 nil · 与 Kernels.nextEMA 一致）
+- [ ] benchmark TRIX(12) 满批 ~1.0× 加速（3 层 EMA 同步推进 · 与 MACD 同等工作量级）
+
+### 14 指标增量基础
+- [ ] benchmark 完整输出 14 行
+- [ ] 增量 API 覆盖率：14/56 = 25%（IndicatorCore 1/4 已增量化 · 涵盖 K 线主图所有常用）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

@@ -3,7 +3,7 @@
 // 进度：
 //   ✅ 1/4：开窗 + Mock 数据流 + 8 卡片占位
 //   ✅ 2/4：折线类 2 图（胜率曲线 / 最大回撤）· SwiftUI Charts LineMark
-//   ⏳ 3/4：柱状类 4 图（月度盈亏 / 分布直方 / 持仓时间 / 时段分析）· BarMark
+//   ✅ 3/4：柱状类 4 图（月度盈亏 / 分布直方 / 持仓时间 / 时段分析）· BarMark
 //   ⏳ 4/4：其他 2 图（品种矩阵 / 盈亏比）+ JournalCore 真数据接入
 
 #if canImport(SwiftUI) && os(macOS)
@@ -64,11 +64,11 @@ struct ReviewWindow: View {
                 LazyVGrid(columns: gridColumns, spacing: 16) {
                     chartCard("月度盈亏",
                               subtitle: "MonthlyPnL · \(s.monthlyPnL.buckets.count) 月跨度") {
-                        placeholderArt("calendar")
+                        monthlyPnLChart(s.monthlyPnL)
                     }
                     chartCard("分布直方",
                               subtitle: "PnLDistribution · \(s.pnlDistribution.bins.count) 桶 · 盈\(s.pnlDistribution.positiveCount)/亏\(s.pnlDistribution.negativeCount)") {
-                        placeholderArt("chart.bar.fill")
+                        pnlDistributionChart(s.pnlDistribution)
                     }
                     chartCard("胜率曲线",
                               subtitle: "WinRateCurve · 终值 \(pct(s.winRateCurve.finalWinRate))") {
@@ -80,7 +80,7 @@ struct ReviewWindow: View {
                     }
                     chartCard("持仓时间",
                               subtitle: "中位 \(durationLabel(s.holdingDuration.medianSeconds)) · 平均 \(durationLabel(s.holdingDuration.averageSeconds))") {
-                        placeholderArt("clock")
+                        holdingDurationChart(s.holdingDuration)
                     }
                     chartCard("最大回撤",
                               subtitle: "MaxDrawdown · ¥-\(decimal(s.maxDrawdown.maxDrawdown))") {
@@ -92,7 +92,7 @@ struct ReviewWindow: View {
                     }
                     chartCard("时段分析",
                               subtitle: "SessionPnL · \(s.sessionPnL.buckets.count) 段") {
-                        placeholderArt("moon.stars")
+                        sessionPnLChart(s.sessionPnL)
                     }
                 }
                 .padding(16)
@@ -261,6 +261,117 @@ struct ReviewWindow: View {
         let abs = Swift.abs(n)
         if abs >= 10_000 { return String(format: "%.1fw", n / 10_000) }
         return String(format: "%.0f", n)
+    }
+
+    // MARK: - 柱状类图（commit 3/4）
+
+    /// 月度盈亏 · 涨红跌绿（中国期货约定）
+    private func monthlyPnLChart(_ data: MonthlyPnL) -> some View {
+        Chart {
+            ForEach(data.buckets, id: \.self) { bucket in
+                BarMark(
+                    x: .value("月", String(format: "%02d/%02d", bucket.year % 100, bucket.month)),
+                    y: .value("PnL", Self.toDouble(bucket.realizedPnL))
+                )
+                .foregroundStyle(bucket.realizedPnL >= 0 ? Color.red.opacity(0.75) : Color.green.opacity(0.75))
+            }
+        }
+        .chartXAxis { axisCategoryX() }
+        .chartYAxis { axisYuanY() }
+    }
+
+    /// 分布直方 · 按桶下界 · 负桶绿/正桶红
+    private func pnlDistributionChart(_ data: PnLDistribution) -> some View {
+        Chart {
+            ForEach(data.bins, id: \.self) { bin in
+                BarMark(
+                    x: .value("起", Self.toDouble(bin.lowerBound)),
+                    y: .value("笔数", bin.count),
+                    width: .ratio(0.9)
+                )
+                .foregroundStyle(bin.lowerBound >= 0 ? Color.red.opacity(0.75) : Color.green.opacity(0.75))
+            }
+        }
+        .chartXAxis { axisYuanX() }
+        .chartYAxis { axisIntegerY() }
+    }
+
+    /// 持仓时间 · 6 桶（label + count）· 中性蓝
+    private func holdingDurationChart(_ data: HoldingDurationStats) -> some View {
+        Chart {
+            ForEach(data.buckets, id: \.self) { bucket in
+                BarMark(
+                    x: .value("时长", bucket.label),
+                    y: .value("笔数", bucket.count)
+                )
+                .foregroundStyle(Color.blue.opacity(0.75))
+            }
+        }
+        .chartXAxis { axisCategoryX() }
+        .chartYAxis { axisIntegerY() }
+    }
+
+    /// 时段分析 · 5 段 · 涨红跌绿
+    private func sessionPnLChart(_ data: SessionPnL) -> some View {
+        Chart {
+            ForEach(data.buckets, id: \.self) { bucket in
+                BarMark(
+                    x: .value("时段", Self.slotLabel(bucket.slot)),
+                    y: .value("PnL", Self.toDouble(bucket.totalPnL))
+                )
+                .foregroundStyle(bucket.totalPnL >= 0 ? Color.red.opacity(0.75) : Color.green.opacity(0.75))
+            }
+        }
+        .chartXAxis { axisCategoryX() }
+        .chartYAxis { axisYuanY() }
+    }
+
+    // MARK: - 复用的 axis builder（commit 3/4 起 4 个柱图共用）
+
+    private func axisCategoryX() -> some AxisContent {
+        AxisMarks(values: .automatic) { _ in
+            AxisGridLine()
+            AxisValueLabel().font(.system(size: 9))
+        }
+    }
+
+    private func axisYuanX() -> some AxisContent {
+        AxisMarks { v in
+            AxisGridLine()
+            AxisValueLabel {
+                if let n = v.as(Double.self) {
+                    Text(formatYuan(n)).font(.system(size: 9, design: .monospaced))
+                }
+            }
+        }
+    }
+
+    private func axisYuanY() -> some AxisContent {
+        AxisMarks { v in
+            AxisGridLine()
+            AxisValueLabel {
+                if let n = v.as(Double.self) {
+                    Text(formatYuan(n)).font(.system(size: 9, design: .monospaced))
+                }
+            }
+        }
+    }
+
+    private func axisIntegerY() -> some AxisContent {
+        AxisMarks { _ in
+            AxisGridLine()
+            AxisValueLabel().font(.system(size: 9, design: .monospaced))
+        }
+    }
+
+    private static func slotLabel(_ s: TradingSlot) -> String {
+        switch s {
+        case .morning:   return "早盘"
+        case .afternoon: return "午盘"
+        case .night:     return "夜盘"
+        case .midnight:  return "凌晨"
+        case .other:     return "其他"
+        }
     }
 
     // MARK: - 格式化

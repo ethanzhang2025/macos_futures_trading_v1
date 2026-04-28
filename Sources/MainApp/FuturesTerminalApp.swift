@@ -42,6 +42,7 @@ struct FuturesTerminalApp: App {
                 OpenReviewButton()
                 OpenAlertButton()
                 OpenJournalButton()
+                OpenWorkspaceButton()
             }
             CommandMenu("视图") {
                 Text("（多周期切换已支持工具条 Picker · 键盘 ⌘1~9 待 Mac 切机集中接）")
@@ -67,6 +68,11 @@ struct FuturesTerminalApp: App {
         // 交易日志（⌘J · Journal · 独立窗口 · WP-53 UI commit 1/4 起）
         WindowGroup("交易日志", id: "journal") {
             JournalWindow()
+        }
+
+        // 工作区模板（⌘K · workspace · 独立窗口 · WP-55 UI commit 1/4 起）
+        WindowGroup("工作区模板", id: "workspace") {
+            WorkspaceWindow()
         }
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
@@ -115,6 +121,14 @@ private struct OpenJournalButton: View {
     var body: some View {
         Button("交易日志") { openWindow(id: "journal") }
             .keyboardShortcut("j", modifiers: [.command])
+    }
+}
+
+private struct OpenWorkspaceButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("工作区模板") { openWindow(id: "workspace") }
+            .keyboardShortcut("k", modifiers: [.command])
     }
 }
 

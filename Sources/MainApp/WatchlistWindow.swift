@@ -467,12 +467,14 @@ struct WatchlistWindow: View {
             else { return false }
             return book.moveInstrument(in: targetGroupID, from: from, to: to)
         }
-        return book.moveInstrument(
+        let result = book.moveInstrument(
             ref.instrumentID,
             from: ref.sourceGroupID,
             to: targetGroupID,
             targetIndex: targetIndex
         )
+        if result { selectedInstruments.remove(ref.instrumentID) }
+        return result
     }
 
     /// 拖合约到分组行（sidebar）→ 移到目标组末尾（同组源 → no-op · 已在目标组同 ID → 仅删源）
@@ -480,12 +482,14 @@ struct WatchlistWindow: View {
     private func moveInstrumentToGroupTail(_ ref: WatchlistInstrumentRef, target targetGroupID: UUID) -> Bool {
         defer { clearHover() }
         if ref.sourceGroupID == targetGroupID { return false }
-        return book.moveInstrument(
+        let result = book.moveInstrument(
             ref.instrumentID,
             from: ref.sourceGroupID,
             to: targetGroupID,
             targetIndex: nil
         )
+        if result { selectedInstruments.remove(ref.instrumentID) }
+        return result
     }
 
     // MARK: - 主图联动（commit 4）

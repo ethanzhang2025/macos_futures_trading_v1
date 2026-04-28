@@ -1,10 +1,11 @@
-// MainApp · 工作区模板面板（WP-55 收官 + v1.5 拖拽 + v1.7 JSON 导入导出）
+// MainApp · 工作区模板面板（WP-55 收官 + v1.5 拖拽 + v1.7 JSON + v2 模板预览图）
 //
 // 能力：NavigationSplitView 双栏 · 模板 CRUD + setActive · windows 增删改 + 6 网格预设
 //      · 快捷键设置/修改/清除（A-Z + 0-9 字符 × ⌘⇧⌥⌃ modifier · 全局唯一 · 抢占提示）
 //      · activate 时 NotificationCenter post .workspaceTemplateActivated（跨窗口联动）
 //      · 同 Kind 内拖拽排序（跨 Kind 拒绝 · 通过 contextMenu「修改类型」改 kind · 同 WP-43 模式）
 //      · JSON 导入/导出（NSSavePanel + NSOpenPanel · 整本 WorkspaceBook Codable · sortedKeys 稳定）
+//      · 模板预览图（sidebar 行右侧 mini layout · 直接渲染 windows.frame · 32×20px · 同 ApplyGridSheet 思路）
 //
 // 留待 M5：StoreManager 注入 SQLiteWorkspaceBookStore · 替换 Mock 真持久化
 // 留待 M5：多窗口同时渲染（WP-44 + WP-40）+ CGRect 桥接 + 接收 .workspaceTemplateActivated
@@ -235,6 +236,8 @@ struct WorkspaceWindow: View {
                 .font(.caption2)
                 .foregroundColor(.secondary)
             }
+            Spacer(minLength: 4)
+            templateMiniPreview(template, width: 32, height: 20)
         }
         .contentShape(Rectangle())
         .overlay(alignment: .top) { insertionIndicator(for: template.id) }
@@ -287,6 +290,29 @@ struct WorkspaceWindow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    /// sidebar 行右侧 mini layout · 直接按 windows[i].frame（normalized 0..1）渲染缩略图
+    /// frame 全 zero（用户未应用网格）→ 重叠 zero rect 都在 (0,0) 角落 · 视觉提示"未配置布局"
+    /// 与 ApplyGridSheet.gridPreview 同思路 · 但用 windows.frame 而非 dimensions（dimensions 仅在预设卡片用）
+    private func templateMiniPreview(_ template: WorkspaceTemplate, width: CGFloat, height: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(Color.secondary.opacity(0.1))
+            ForEach(template.windows) { window in
+                let f = window.frame
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.35))
+                    .overlay(Rectangle().strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 0.5))
+                    .frame(
+                        width: max(2, CGFloat(f.width) * width),
+                        height: max(2, CGFloat(f.height) * height)
+                    )
+                    .offset(x: CGFloat(f.x) * width, y: CGFloat(f.y) * height)
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 2))
     }
 
     // MARK: - 右栏 · 模板详情

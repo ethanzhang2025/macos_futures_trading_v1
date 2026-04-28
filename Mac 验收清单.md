@@ -598,6 +598,16 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] 拖拽过程不影响其他交互（双击激活 / contextMenu 仍可用）
 - [ ] 拖拽完成后 hoverTemplateID 自动清空（defer 守卫）
 
+### v2（模板预览图 · sidebar 行右侧 mini layout · 同 ApplyGridSheet 思路）
+- [ ] 每个 sidebar 行右侧显示 32×20px mini preview
+- [ ] 已应用网格预设的模板（盘前 1 全屏 / 盘中 2×2 grid / 盘后 vertical2）→ 准确反映 windows.frame 布局
+- [ ] 自定义模板（windows 空 / frame zero）→ mini preview 灰底无内容（视觉提示"未配置"）
+- [ ] 添加新窗口（commit 3 默认 frame=.zero）→ mini preview 仍灰 · 应用网格预设后立即更新
+- [ ] 行高度合适（不显得太挤 · 不挤压模板名 + N 窗口/⌘ 描述）
+- [ ] 拖拽排序时 mini preview 跟随移动（不影响 .draggable 模式）
+- [ ] accentColor.opacity(0.35) 填充 + 0.6 描边（hue 与活态 ★ 一致）
+- [ ] 圆角 2px clipShape（与卡片视觉系统一致）
+
 ### v1.7（JSON 导入 / 导出 · 与 WP-53 CSV 风格对称）
 - [ ] sidebar 顶部 3 按钮顺序：导入（square.and.arrow.down）/ 导出（square.and.arrow.up · 模板空时 disabled）/ 添加（+）
 - [ ] 导出：

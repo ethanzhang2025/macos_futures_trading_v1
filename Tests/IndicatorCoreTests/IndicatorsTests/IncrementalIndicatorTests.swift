@@ -656,6 +656,69 @@ struct ATRIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 2 批 commit 1/4 · OBV 增量 API
+
+@Suite("WP-41 v3 第 2 批 commit 1/4 · OBV 增量 API")
+struct OBVIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（OBV 无 period · 累积式）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try OBV.calculate(kline: series, params: [])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try OBV.makeIncrementalState(kline: history, params: [])
+
+        for i in historyCount..<bars.count {
+            let row = OBV.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "OBV[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 第 1 根 OBV = volume · 后续按涨跌累加（无 warm-up）")
+    func incrementalNoWarmup() throws {
+        let bars = makeBars(count: 20)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try OBV.makeIncrementalState(kline: empty, params: [])
+
+        // 第 1 根 OBV 即有值（与 calculate out[0] = volumes[0] 一致）
+        let row1 = OBV.stepIncremental(state: &state, newBar: bars[0])
+        #expect(row1[0] == Decimal(bars[0].volume))
+
+        let series = makeSeries(from: bars)
+        let full = try OBV.calculate(kline: series, params: [])
+        for i in 1..<bars.count {
+            let row = OBV.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i])
+        }
+    }
+
+    @Test("close 全平（每根 close 不变）→ OBV 始终 = 第 1 根 volume")
+    func incrementalAllSame() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let flat = (0..<10).map { i in
+            KLine(
+                instrumentID: "TEST", period: .minute1,
+                openTime: baseDate.addingTimeInterval(TimeInterval(i * 60)),
+                open: 100, high: 100, low: 100, close: 100,
+                volume: 100 + i,
+                openInterest: 0, turnover: 0
+            )
+        }
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try OBV.makeIncrementalState(kline: empty, params: [])
+        let firstVol = Decimal(flat[0].volume)
+        for bar in flat {
+            let row = OBV.stepIncremental(state: &state, newBar: bar)
+            #expect(row[0] == firstVol, "close 全平时 OBV 应保持首根 volume = \(firstVol)")
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

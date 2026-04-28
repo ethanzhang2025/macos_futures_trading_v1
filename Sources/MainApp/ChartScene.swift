@@ -224,6 +224,9 @@ struct ChartContentView: View {
         self._viewport = State(initialValue: initialViewport)
     }
 
+    /// 副图高度（spike 阶段固定 · 后续 WP 加可拖分割条）
+    static let subChartHeight: CGFloat = 160
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
@@ -232,6 +235,15 @@ struct ChartContentView: View {
                 KLineAxisView(bars: bars, viewport: viewport, priceRange: currentPriceRange, orientation: .price)
                     .frame(width: 60)
             }
+            Divider()
+            // 副图区（指数平滑异同移动平均线 MACD · 共享主图 viewport · 拖拽缩放主图时副图同步）
+            HStack(spacing: 0) {
+                SubChartView(bars: bars, viewport: viewport)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Color(red: 0.07, green: 0.08, blue: 0.10)
+                    .frame(width: 60)  // 占位 · 与主图右侧价格轴对齐
+            }
+            .frame(height: Self.subChartHeight)
             KLineAxisView(bars: bars, viewport: viewport, priceRange: currentPriceRange, orientation: .time)
                 .frame(height: 28)
         }

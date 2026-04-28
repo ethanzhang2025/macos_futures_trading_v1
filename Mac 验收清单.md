@@ -321,8 +321,43 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
   - [ ] 通用表头（instrument/direction/offset/price/volume/commission/timestamp/trade_id）成功
 - [ ] footer 文案更新为"Mock + 导入数据 · 待 commit 3 日志编辑器 · commit 4 月度统计 · M5 接 SQLiteJournalStore"
 
-### commit 3（日志编辑器 Sheet + JournalGenerator 自动生成 · 待）
-（commit 3 完成后追加 checklist · 情绪/偏差 Picker · 标签输入 · batch 自动生成预览）
+### commit 3（日志编辑器 + JournalGenerator 自动生成 · contextMenu + confirmationDialog）
+- [ ] 进度标签更新为"commit 3/4 · 日志编辑器"
+- [ ] 交易日志 Tab 切换后顶部新增 toolbar 行：
+  - [ ] "+ 新建日志"按钮（plus.bubble icon · ⌘⇧J）
+  - [ ] "✨ 自动生成"按钮（wand.and.stars icon · ⌘⇧A · trades 空时 disabled）
+  - [ ] 选中 N 行时右侧显示"已选 N 篇"
+- [ ] 点"+ 新建日志"→ JournalEditorSheet 弹出（620×720 · 标题"新建日志"）：
+  - [ ] Form .grouped 6 Section：基本 / 交易理由 / 情绪+偏差 / 教训 / 标签 / 关联成交
+  - [ ] 标题 TextField roundedBorder（必填）→ 空时"保存"按钮 disabled
+  - [ ] 交易理由 TextEditor（最小 60px）
+  - [ ] 情绪 Picker × 5：自信 / 犹豫 / 恐惧 / 贪婪 / 平静（默认 平静）
+  - [ ] 偏差 Picker × 8：按计划 / 破止损 / 抢反弹 / 追高 / 抄底 / 过早离场 / 超额交易 / 其他（默认 按计划）
+  - [ ] 教训 TextEditor（最小 60px）
+  - [ ] 标签 TextField（"如：日内 趋势跟随 RB"占位 · 空格分隔解析为 Set）
+  - [ ] 关联成交 DisclosureGroup（"已选 K 笔 / 共 N 可选"）：
+    - [ ] new 模式默认收起 / edit 模式（已关联）→ 默认展开
+    - [ ] 每行 Toggle：合约 monospaced + 方向涨红跌绿 + 开平 + "K 手 @ 价" + 时间
+- [ ] 行右键菜单（contextMenu(forSelectionType: TradeJournal.ID.self)）：
+  - [ ] 单选 → "编辑" + Divider + "删除"（destructive 红）
+  - [ ] 多选 ≥2 → 菜单不显示（避免批量误操作）
+  - [ ] 编辑 → JournalEditorSheet（标题"编辑日志"· 主按钮"更新"· 字段全预填）
+  - [ ] 编辑保留 journal.id + createdAt 不变 · updatedAt 自动刷新
+- [ ] 删除日志 confirmationDialog：
+  - [ ] 标题"删除日志？"· 主按钮"删除「标题」"红色
+  - [ ] message："日志将永久移除（关联的 N 笔成交不受影响 · A09 单向引用）。"
+  - [ ] 删除后 selectedJournalIDs.remove(journal.id)
+- [ ] 点"✨ 自动生成"→ JournalGenerator.generateDrafts(from: trades)：
+  - [ ] 弹 GeneratorPreviewSheet（580×540 · 标题"自动生成日志草稿"）
+  - [ ] 顶部统计"共 N 篇 · 已选 K"
+  - [ ] "全选"按钮 / "反选"按钮（subtracting 模式 · 简化反选语义）
+  - [ ] 提示"聚合规则：同合约 + 8h 时间窗口"
+  - [ ] 每篇草稿 Toggle + 标题（monospaced）+ "K 笔 · reason 前 60 字…"（lineLimit 2）
+  - [ ] 默认全选所有草稿
+  - [ ] "添加 K 篇"按钮 → batchAddJournals · 合并按 updatedAt 倒序 · sheet 关闭
+  - [ ] 选中 0 篇 → "添加"按钮 disabled
+- [ ] footer 文案更新为"⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 待 commit 4 月度统计 · M5 接 SQLiteJournalStore"
+- [ ] ⌘⇧J / ⌘⇧A 在 ⌘J 窗口为前台时生效 · 不与全局 ⌘N/⌘L/⌘R/⌘B/⌘J/⌘, 冲突
 
 ### commit 4（标签搜索 + 月度/季度统计 · 待）
 （commit 4 完成后追加 checklist · 实时 filter · 月度聚合卡片）

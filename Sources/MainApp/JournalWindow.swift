@@ -1,18 +1,17 @@
-// MainApp · 交易日志面板（WP-53 UI · commit 2/4 · CSV 导入面板 NSOpenPanel + DealCSVParser）
+// MainApp · 交易日志面板（WP-53 UI · commit 3/4 · 日志编辑器 + JournalGenerator 自动生成）
 //
 // commit 1 已交付：⌘J 双 Tab + Mock 13 trades + 5 journals
-// commit 2 本次新增：
-// - 顶部"导入"按钮（⌘⇧M · iMport）→ NSOpenPanel 选 .csv 文件
-// - ImportSheet 弹出（格式 Picker 文华/通用 · onChange 重解析 · 实时切换格式）
-// - 解析结果两态：
-//   · .success(trades: [Trade], rowErrors: [String])：N 笔成功 + 行级错误前 10 项 + 前 5 笔预览
-//   · .fileError(DealCSVError)：文件级解析失败（编码/表头缺列/不支持格式）
-// - 确认导入 → 合并到 trades 按时间倒序 + 自动切到"成交记录"Tab
-// - 接 JournalCore 真转换链路：String → DealCSVParser.parse → [RawDeal] → toTrade → [Trade]
+// commit 2 已交付：CSV 导入面板（NSOpenPanel + DealCSVParser + 格式 Picker + 错误展示）
+// commit 3 本次新增：
+// - 交易日志 Tab 顶部 toolbar："+ 新建日志"（⌘⇧J）/ "✨ 自动生成"（⌘⇧A）
+// - JournalEditorSheet（add / edit 共用 · 620×720）：
+//   · 标题（必填）/ 关联成交（DisclosureGroup 多选 Toggle）/ 原因 TextEditor / 情绪 Picker × 5 / 偏差 Picker × 8 / 教训 / 标签（空格分隔）
+//   · 编辑模式预填字段 · 保留原 id + createdAt · 仅刷新 updatedAt
+// - 行右键菜单：编辑 / 删除（destructive）· 删除前 confirmationDialog
+// - GeneratorPreviewSheet：JournalGenerator.generateDrafts → 草稿预览（多选 Toggle · batch 添加 / 取消）
+// - fileprivate extension JournalEmotion / JournalDeviation displayName + color（替代 free function · sheet 共享）
 //
-// 留给后续 commit：
-// - commit 3/4：日志编辑器 Sheet（情绪/偏差 Picker + tags + JournalGenerator 自动生成 batch）
-// - commit 4/4：标签搜索 + 月度/季度统计聚合
+// 留给 commit 4/4：标签搜索 + 月度/季度统计聚合
 //
 // 留待 M5：StoreManager 注入 SQLiteJournalStore（已就绪 · trades + journals CRUD）替换 Mock
 
@@ -31,6 +30,22 @@ private enum JournalTab: String, CaseIterable, Identifiable {
     case trades   = "成交记录"
     case journals = "交易日志"
     var id: String { rawValue }
+}
+
+// MARK: - 日志 Sheet 状态（commit 3/4）
+
+private enum JournalSheetState: Identifiable {
+    case createJournal
+    case editJournal(TradeJournal)
+    case generatorPreview([TradeJournal])
+
+    var id: String {
+        switch self {
+        case .createJournal:           return "create"
+        case .editJournal(let j):      return "edit-\(j.id)"
+        case .generatorPreview:        return "gen-preview"
+        }
+    }
 }
 
 // MARK: - CSV 导入解析结果
@@ -59,6 +74,11 @@ struct JournalWindow: View {
     @State private var importURL: URL?
     @State private var importFormat: DealCSVFormat = .wenhua
     @State private var importOutcome: ImportParseOutcome?
+
+    // 日志编辑 + 自动生成状态（commit 3/4）
+    @State private var journalSheetState: JournalSheetState?
+    @State private var pendingDeleteJournal: TradeJournal?
+    @State private var selectedJournalIDs: Set<TradeJournal.ID> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,12 +110,44 @@ struct JournalWindow: View {
                 )
             }
         }
+        .sheet(item: $journalSheetState) { state in
+            switch state {
+            case .createJournal:
+                JournalEditorSheet(editing: nil, trades: trades) { saveJournal($0) }
+            case .editJournal(let journal):
+                JournalEditorSheet(editing: journal, trades: trades) { updateJournal($0) }
+            case .generatorPreview(let drafts):
+                GeneratorPreviewSheet(drafts: drafts) { batchAddJournals($0) }
+            }
+        }
+        .confirmationDialog(
+            "删除日志？",
+            isPresented: deleteJournalConfirmBinding,
+            titleVisibility: .visible,
+            presenting: pendingDeleteJournal
+        ) { journal in
+            Button("删除「\(journal.title)」", role: .destructive) {
+                deleteJournal(journal)
+            }
+            Button("取消", role: .cancel) {
+                pendingDeleteJournal = nil
+            }
+        } message: { journal in
+            Text("日志将永久移除（关联的 \(journal.tradeIDs.count) 笔成交不受影响 · A09 单向引用）。")
+        }
     }
 
     private var importSheetBinding: Binding<Bool> {
         Binding(
             get: { importURL != nil },
             set: { if !$0 { cancelImport() } }
+        )
+    }
+
+    private var deleteJournalConfirmBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteJournal != nil },
+            set: { if !$0 { pendingDeleteJournal = nil } }
         )
     }
 
@@ -116,7 +168,7 @@ struct JournalWindow: View {
             .keyboardShortcut("m", modifiers: [.command, .shift])
             .help("导入交割单 CSV（⌘⇧M · 文华 / 通用格式）")
 
-            Text("commit 2/4 · CSV 导入")
+            Text("commit 3/4 · 日志编辑器")
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
@@ -153,8 +205,49 @@ struct JournalWindow: View {
     private var content: some View {
         switch selectedTab {
         case .trades:   tradesTable
-        case .journals: journalsTable
+        case .journals: journalsContent
         }
+    }
+
+    // MARK: - 交易日志 Tab 容器（toolbar + Table）
+
+    private var journalsContent: some View {
+        VStack(spacing: 0) {
+            journalsToolbar
+            Divider()
+            journalsTable
+        }
+    }
+
+    private var journalsToolbar: some View {
+        HStack(spacing: 12) {
+            Button {
+                journalSheetState = .createJournal
+            } label: {
+                Label("新建日志", systemImage: "plus.bubble")
+            }
+            .keyboardShortcut("j", modifiers: [.command, .shift])
+            .help("新建日志（⌘⇧J）")
+
+            Button {
+                presentAutoGenerate()
+            } label: {
+                Label("自动生成", systemImage: "wand.and.stars")
+            }
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .help("从成交记录自动生成日志草稿（⌘⇧A · 按合约 + 8h 时间窗口聚合）")
+            .disabled(trades.isEmpty)
+
+            Spacer()
+
+            if !selectedJournalIDs.isEmpty {
+                Text("已选 \(selectedJournalIDs.count) 篇")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 
     // MARK: - 成交记录 Tab
@@ -219,7 +312,7 @@ struct JournalWindow: View {
     // MARK: - 交易日志 Tab
 
     private var journalsTable: some View {
-        Table(journals) {
+        Table(journals, selection: $selectedJournalIDs) {
             TableColumn("标题") { j in
                 Text(j.title).fontWeight(.medium)
             }
@@ -233,18 +326,18 @@ struct JournalWindow: View {
             .width(min: 60, ideal: 70)
 
             TableColumn("情绪") { j in
-                Text(emotionLabel(j.emotion))
+                Text(j.emotion.displayName)
                     .font(.caption)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(emotionColor(j.emotion).opacity(0.18))
-                    .foregroundColor(emotionColor(j.emotion))
+                    .background(j.emotion.color.opacity(0.18))
+                    .foregroundColor(j.emotion.color)
                     .clipShape(Capsule())
             }
             .width(min: 70, ideal: 80)
 
             TableColumn("偏差") { j in
-                Text(deviationLabel(j.deviation))
+                Text(j.deviation.displayName)
                     .font(.caption)
                     .foregroundColor(j.deviation == .asPlanned ? .green : .orange)
             }
@@ -265,13 +358,26 @@ struct JournalWindow: View {
             }
             .width(min: 130, ideal: 150)
         }
+        .contextMenu(forSelectionType: TradeJournal.ID.self) { ids in
+            if ids.count == 1,
+               let id = ids.first,
+               let journal = journals.first(where: { $0.id == id }) {
+                Button("编辑") {
+                    journalSheetState = .editJournal(journal)
+                }
+                Divider()
+                Button("删除", role: .destructive) {
+                    pendingDeleteJournal = journal
+                }
+            }
+        }
     }
 
     // MARK: - Footer
 
     private var footer: some View {
         HStack {
-            Text("Mock + 导入数据 · 待 commit 3 日志编辑器 · commit 4 月度统计 · M5 接 SQLiteJournalStore")
+            Text("⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 待 commit 4 月度统计 · M5 接 SQLiteJournalStore")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()
@@ -337,6 +443,34 @@ struct JournalWindow: View {
         }
     }
 
+    // MARK: - 日志 Mutations（commit 3/4）
+
+    private func saveJournal(_ journal: TradeJournal) {
+        journals.insert(journal, at: 0)
+    }
+
+    private func updateJournal(_ journal: TradeJournal) {
+        if let idx = journals.firstIndex(where: { $0.id == journal.id }) {
+            journals[idx] = journal
+        }
+    }
+
+    private func deleteJournal(_ journal: TradeJournal) {
+        journals.removeAll { $0.id == journal.id }
+        selectedJournalIDs.remove(journal.id)
+        pendingDeleteJournal = nil
+    }
+
+    private func presentAutoGenerate() {
+        let drafts = JournalGenerator.generateDrafts(from: trades)
+        guard !drafts.isEmpty else { return }
+        journalSheetState = .generatorPreview(drafts)
+    }
+
+    private func batchAddJournals(_ batch: [TradeJournal]) {
+        journals = (batch + journals).sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     // MARK: - 标签格式化
 
     private func sourceLabel(_ s: TradeSource) -> String {
@@ -344,39 +478,6 @@ struct JournalWindow: View {
         case .wenhua:  return "文华"
         case .generic: return "通用"
         case .manual:  return "手填"
-        }
-    }
-
-    private func emotionLabel(_ e: JournalEmotion) -> String {
-        switch e {
-        case .confident: return "自信"
-        case .hesitant:  return "犹豫"
-        case .fearful:   return "恐惧"
-        case .greedy:    return "贪婪"
-        case .calm:      return "平静"
-        }
-    }
-
-    private func emotionColor(_ e: JournalEmotion) -> Color {
-        switch e {
-        case .confident: return .green
-        case .hesitant:  return .orange
-        case .fearful:   return .red
-        case .greedy:    return .purple
-        case .calm:      return .blue
-        }
-    }
-
-    private func deviationLabel(_ d: JournalDeviation) -> String {
-        switch d {
-        case .asPlanned:     return "按计划"
-        case .breakStopLoss: return "破止损"
-        case .chaseRebound:  return "抢反弹"
-        case .chaseHigh:     return "追高"
-        case .catchFalling:  return "抄底"
-        case .earlyExit:     return "过早离场"
-        case .overTrade:     return "超额交易"
-        case .other:         return "其他"
         }
     }
 
@@ -403,6 +504,45 @@ struct JournalWindow: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         return f
     }()
+}
+
+// MARK: - JournalEmotion / JournalDeviation 显示扩展（commit 3/4 · sheet 共享）
+
+fileprivate extension JournalEmotion {
+    var displayName: String {
+        switch self {
+        case .confident: return "自信"
+        case .hesitant:  return "犹豫"
+        case .fearful:   return "恐惧"
+        case .greedy:    return "贪婪"
+        case .calm:      return "平静"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .confident: return .green
+        case .hesitant:  return .orange
+        case .fearful:   return .red
+        case .greedy:    return .purple
+        case .calm:      return .blue
+        }
+    }
+}
+
+fileprivate extension JournalDeviation {
+    var displayName: String {
+        switch self {
+        case .asPlanned:     return "按计划"
+        case .breakStopLoss: return "破止损"
+        case .chaseRebound:  return "抢反弹"
+        case .chaseHigh:     return "追高"
+        case .catchFalling:  return "抄底"
+        case .earlyExit:     return "过早离场"
+        case .overTrade:     return "超额交易"
+        case .other:         return "其他"
+        }
+    }
 }
 
 // MARK: - ImportSheet（commit 2/4）
@@ -532,6 +672,275 @@ private struct ImportSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - JournalEditorSheet（commit 3/4 · add / edit 共用）
+
+private struct JournalEditorSheet: View {
+
+    let editing: TradeJournal?
+    let trades: [Trade]
+    let onSave: (TradeJournal) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: JournalDraft
+    @State private var tradesExpanded: Bool
+
+    init(editing: TradeJournal?, trades: [Trade], onSave: @escaping (TradeJournal) -> Void) {
+        self.editing = editing
+        self.trades = trades
+        self.onSave = onSave
+        self._draft = State(initialValue: JournalDraft(from: editing))
+        self._tradesExpanded = State(initialValue: editing?.tradeIDs.isEmpty == false)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(editing == nil ? "新建日志" : "编辑日志")
+                .font(.title2)
+                .bold()
+
+            Form {
+                Section("基本") {
+                    TextField("标题（必填）", text: $draft.title)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                Section("交易理由 / 决策依据") {
+                    TextEditor(text: $draft.reason)
+                        .frame(minHeight: 60)
+                        .font(.body)
+                }
+
+                Section("情绪 + 偏差") {
+                    Picker("情绪", selection: $draft.emotion) {
+                        ForEach(JournalEmotion.allCases, id: \.self) { e in
+                            Text(e.displayName).tag(e)
+                        }
+                    }
+                    Picker("偏差", selection: $draft.deviation) {
+                        ForEach(JournalDeviation.allCases, id: \.self) { d in
+                            Text(d.displayName).tag(d)
+                        }
+                    }
+                }
+
+                Section("教训 / 复盘结论") {
+                    TextEditor(text: $draft.lesson)
+                        .frame(minHeight: 60)
+                        .font(.body)
+                }
+
+                Section("标签（用空格分隔）") {
+                    TextField("如：日内 趋势跟随 RB", text: $draft.tagsString)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                Section("关联成交（已选 \(draft.tradeIDs.count) 笔 / 共 \(trades.count) 可选）") {
+                    DisclosureGroup("展开 / 收起", isExpanded: $tradesExpanded) {
+                        ForEach(trades, id: \.id) { trade in
+                            Toggle(isOn: bindingForTrade(trade.id)) {
+                                tradeRow(trade)
+                            }
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(editing == nil ? "保存" : "更新") {
+                    onSave(draft.toJournal(existing: editing))
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 620, height: 720)
+    }
+
+    private func bindingForTrade(_ id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { draft.tradeIDs.contains(id) },
+            set: { isOn in
+                if isOn { draft.tradeIDs.insert(id) } else { draft.tradeIDs.remove(id) }
+            }
+        )
+    }
+
+    private func tradeRow(_ trade: Trade) -> some View {
+        HStack(spacing: 8) {
+            Text(trade.instrumentID)
+                .font(.system(.caption, design: .monospaced))
+                .frame(width: 72, alignment: .leading)
+            Text(trade.direction.displayName)
+                .font(.caption)
+                .foregroundColor(trade.direction == .buy ? .red : .green)
+                .frame(width: 24)
+            Text(trade.offsetFlag.displayName)
+                .font(.caption)
+                .frame(width: 40)
+            Text("\(trade.volume)手 @ \(trade.price)")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(JournalWindow.timestampFormatter.string(from: trade.timestamp))
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+private struct JournalDraft {
+    var title: String
+    var reason: String
+    var emotion: JournalEmotion
+    var deviation: JournalDeviation
+    var lesson: String
+    var tagsString: String
+    var tradeIDs: Set<UUID>
+
+    init(from editing: TradeJournal?) {
+        if let j = editing {
+            self.title = j.title
+            self.reason = j.reason
+            self.emotion = j.emotion
+            self.deviation = j.deviation
+            self.lesson = j.lesson
+            self.tagsString = j.tags.sorted().joined(separator: " ")
+            self.tradeIDs = Set(j.tradeIDs)
+        } else {
+            self.title = ""
+            self.reason = ""
+            self.emotion = .calm
+            self.deviation = .asPlanned
+            self.lesson = ""
+            self.tagsString = ""
+            self.tradeIDs = []
+        }
+    }
+
+    func toJournal(existing: TradeJournal?) -> TradeJournal {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tags = Set(tagsString.split(whereSeparator: \.isWhitespace).map(String.init))
+        let now = Date()
+        if let j = existing {
+            return TradeJournal(
+                id: j.id,
+                tradeIDs: Array(tradeIDs),
+                title: trimmedTitle,
+                reason: reason,
+                emotion: emotion,
+                deviation: deviation,
+                lesson: lesson,
+                tags: tags,
+                createdAt: j.createdAt,
+                updatedAt: now
+            )
+        }
+        return TradeJournal(
+            tradeIDs: Array(tradeIDs),
+            title: trimmedTitle,
+            reason: reason,
+            emotion: emotion,
+            deviation: deviation,
+            lesson: lesson,
+            tags: tags,
+            createdAt: now,
+            updatedAt: now
+        )
+    }
+}
+
+// MARK: - GeneratorPreviewSheet（commit 3/4 · 自动生成草稿预览 + batch 添加）
+
+private struct GeneratorPreviewSheet: View {
+
+    let drafts: [TradeJournal]
+    let onConfirm: ([TradeJournal]) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedDraftIDs: Set<TradeJournal.ID>
+
+    init(drafts: [TradeJournal], onConfirm: @escaping ([TradeJournal]) -> Void) {
+        self.drafts = drafts
+        self.onConfirm = onConfirm
+        self._selectedDraftIDs = State(initialValue: Set(drafts.map(\.id)))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("自动生成日志草稿")
+                    .font(.title2)
+                    .bold()
+                Spacer()
+                Text("共 \(drafts.count) 篇 · 已选 \(selectedDraftIDs.count)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            HStack {
+                Button("全选") { selectedDraftIDs = Set(drafts.map(\.id)) }
+                Button("反选") {
+                    selectedDraftIDs = Set(drafts.map(\.id)).subtracting(selectedDraftIDs)
+                }
+                Spacer()
+                Text("聚合规则：同合约 + 8h 时间窗口")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(drafts, id: \.id) { draft in
+                        Toggle(isOn: bindingForDraft(draft.id)) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(draft.title)
+                                    .font(.system(.body, design: .monospaced))
+                                Text("\(draft.tradeIDs.count) 笔 · \(draft.reason.prefix(60))…")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(2)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity)
+
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("添加 \(selectedDraftIDs.count) 篇") {
+                    let chosen = drafts.filter { selectedDraftIDs.contains($0.id) }
+                    onConfirm(chosen)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(selectedDraftIDs.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 580, height: 540)
+    }
+
+    private func bindingForDraft(_ id: TradeJournal.ID) -> Binding<Bool> {
+        Binding(
+            get: { selectedDraftIDs.contains(id) },
+            set: { isOn in
+                if isOn { selectedDraftIDs.insert(id) } else { selectedDraftIDs.remove(id) }
+            }
+        )
     }
 }
 

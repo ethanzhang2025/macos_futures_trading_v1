@@ -1,17 +1,11 @@
-// MainApp · 副图区（指数平滑异同移动平均线 MACD · 默认 12/26/9）
+// MainApp · 副图区（MACD / KDJ · 枚举驱动 · SwiftUI Canvas）
 //
-// 视觉布局：
-//   - 零轴：水平虚线居中
-//   - MACD 直方：> 0 红柱 / < 0 绿柱（中国期货约定 · 与主图涨跌色一致）
-//   - DIF 双线之一：黄色折线（与主图 MA(5) 同色调 · 短期）
-//   - DEA 双线之二：紫色折线（与主图 MA(20) 同色调 · 中期）
-//   - 迷你信息浮层（HUD）左上：visible 末位的 DIF / DEA / MACD-柱
+// 共用：drawLine（yMap 闭包参数）+ drawDashLine（零轴 / 参考线）
+// 分发：y 范围（MACD 上下对称 / KDJ 固定视野）· 直方图（仅 MACD）· 配色 · HUD 文字
 //
-// 性能取舍（Karpathy 1 避免过度复杂）：
-//   - 用 SwiftUI Canvas（不上 Metal）· 200 根 × 双线 + 直方 ≈ 600 path op / 帧 · M4 Pro 余量充足
-//   - 后续 WP 若要 10w 根级副图再升 Metal pipeline
-//
-// viewport 共享：副图只读父视图传入的 viewport · 父变即自动重渲染（SwiftUI 标准）
+// viewport 共享：父视图传 viewport · 父变即重渲染（SwiftUI 标准）
+// 性能取舍：[Double?] 缓存（compute() 一次性 Decimal → Double 桥接）· 拖拽 60Hz drawChart 不再走 NSDecimalNumber bridge
+// 扩展：加 RSI/DMA/VOL = SubIndicatorKind 加 case + compute()/draw 加分支即可
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -20,64 +14,95 @@ import Shared
 import ChartCore
 import IndicatorCore
 
+// MARK: - 副图类型枚举（外部用）
+
+enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
+    case macd
+    case kdj
+
+    var id: String { rawValue }
+
+    /// 中文 + 参数（HUD 完整标题）
+    var displayName: String {
+        switch self {
+        case .macd: return "MACD 12/26/9"
+        case .kdj:  return "KDJ 9/3/3"
+        }
+    }
+
+    /// 短名（Picker 紧凑显示）
+    var shortName: String {
+        switch self {
+        case .macd: return "MACD"
+        case .kdj:  return "KDJ"
+        }
+    }
+}
+
+// MARK: - 副图视图
+
 struct SubChartView: View {
 
-    // 视觉配色（与主图协调 · 涨红跌绿与中国期货约定一致）
-    static let bgColor = Color(red: 0.07, green: 0.08, blue: 0.10)        // #11141A 同 K 线 clearColor
+    // MARK: 配色（基色单源 · MACD/KDJ 别名指向相同基色，让维护时不漏改）
+
+    static let bgColor       = Color(red: 0.07, green: 0.08, blue: 0.10)   // #11141A 同 K 线 clearColor
     static let zeroLineColor = Color.white.opacity(0.25)
-    static let difColor = Color(red: 1.00, green: 0.78, blue: 0.18)       // #FFC72E 黄
-    static let deaColor = Color(red: 0.63, green: 0.42, blue: 0.83)       // #A06CD5 紫
-    static let bullColor = Color(red: 0.96, green: 0.27, blue: 0.27)      // #F54545 涨红
-    static let bearColor = Color(red: 0.18, green: 0.74, blue: 0.42)      // #2DBC6B 跌绿
+    static let kdjGuideColor = Color.white.opacity(0.15)
+
+    static let yellowColor   = Color(red: 1.00, green: 0.78, blue: 0.18)   // 短期/快线（DIF · K）
+    static let purpleColor   = Color(red: 0.63, green: 0.42, blue: 0.83)   // 中期/慢线（DEA · D）
+    static let blueColor     = Color(red: 0.30, green: 0.78, blue: 1.00)   // J 专用
+    static let bullColor     = Color(red: 0.96, green: 0.27, blue: 0.27)   // 涨红
+    static let bearColor     = Color(red: 0.18, green: 0.74, blue: 0.42)   // 跌绿
+
+    // MACD 别名
+    static let macdDifColor  = yellowColor
+    static let macdDeaColor  = purpleColor
+    static let macdBullColor = bullColor
+    static let macdBearColor = bearColor
+
+    // KDJ 别名
+    static let kdjKColor = yellowColor
+    static let kdjDColor = purpleColor
+    static let kdjJColor = blueColor
+
+    // KDJ 视野（J 极端到 ±50 不裁断 · 仅副图内部用）
+    private static let kdjViewMin: CGFloat = -20
+    private static let kdjViewMax: CGFloat = 120
 
     let bars: [KLine]
     let viewport: RenderViewport
+    let kind: SubIndicatorKind
 
-    @State private var dif: [Decimal?] = []
-    @State private var dea: [Decimal?] = []
-    @State private var hist: [Decimal?] = []
+    /// 三槽位（MACD: DIF/DEA/HIST · KDJ: K/D/J）
+    /// compute() 末尾一次性 Decimal → Double 桥接 · 拖拽热路径直接读 Double，不再走 NSDecimalNumber
+    @State private var seriesA: [Double?] = []
+    @State private var seriesB: [Double?] = []
+    @State private var seriesC: [Double?] = []
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             Self.bgColor
-            Canvas { context, size in
-                drawChart(context: context, size: size)
-            }
+            Canvas { ctx, size in drawChart(ctx, size: size) }
             hud
         }
-        .task(id: bars.count) {
-            await computeMACD()
+        .task(id: ComputeKey(barCount: bars.count, kind: kind)) {
+            await compute()
         }
     }
 
-    // MARK: - 迷你信息浮层（HUD）
-
-    private var hud: some View {
-        let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count) - 1
-        let difLast = lastValue(dif, at: visibleEnd)
-        let deaLast = lastValue(dea, at: visibleEnd)
-        let histLast = lastValue(hist, at: visibleEnd)
-        let histColor = histLast.map { $0 >= 0 ? Self.bullColor : Self.bearColor } ?? .secondary
-
-        return HStack(spacing: 10) {
-            Text("MACD 12/26/9").foregroundColor(.secondary)
-            Text("DIF \(fmt(difLast))").foregroundColor(Self.difColor)
-            Text("DEA \(fmt(deaLast))").foregroundColor(Self.deaColor)
-            Text("柱 \(fmt(histLast))").foregroundColor(histColor)
-        }
-        .font(.system(size: 11, design: .monospaced))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color.black.opacity(0.6))
-        .cornerRadius(4)
-        .padding(8)
+    /// 触发重算的复合 key（bars 增量 + 切副图都要重算）
+    private struct ComputeKey: Equatable {
+        let barCount: Int
+        let kind: SubIndicatorKind
     }
 
-    // MARK: - MACD 计算（异步 · bars 变化触发）
+    // MARK: - 计算（按 kind 分发 · 后台 detached 跑 · 末尾一次性桥接 Decimal → Double）
 
     @MainActor
-    private func computeMACD() async {
+    private func compute() async {
         let snap = bars
+        let kindCopy = kind
         let result = await Task.detached(priority: .userInitiated) {
             let series = KLineSeries(
                 opens: snap.map(\.open),
@@ -87,62 +112,110 @@ struct SubChartView: View {
                 volumes: snap.map(\.volume),
                 openInterests: snap.map { _ in 0 }
             )
-            return (try? MACD.calculate(kline: series, params: [12, 26, 9])) ?? []
+            switch kindCopy {
+            case .macd:
+                return (try? MACD.calculate(kline: series, params: [12, 26, 9])) ?? []
+            case .kdj:
+                return (try? KDJ.calculate(kline: series, params: [9, 3, 3])) ?? []
+            }
         }.value
-        dif = result.first { $0.name == "DIF" }?.values ?? []
-        dea = result.first { $0.name == "DEA" }?.values ?? []
-        hist = result.first { $0.name == "MACD" }?.values ?? []
+
+        switch kind {
+        case .macd:
+            seriesA = doublesOf(result, name: "DIF")
+            seriesB = doublesOf(result, name: "DEA")
+            seriesC = doublesOf(result, name: "MACD")
+        case .kdj:
+            seriesA = doublesOf(result, name: "K")
+            seriesB = doublesOf(result, name: "D")
+            seriesC = doublesOf(result, name: "J")
+        }
     }
 
-    // MARK: - Canvas 绘制
+    private func doublesOf(_ result: [IndicatorSeries], name: String) -> [Double?] {
+        let raw = result.first { $0.name == name }?.values ?? []
+        return raw.map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
+    }
 
-    private func drawChart(context: GraphicsContext, size: CGSize) {
+    // MARK: - HUD（按 kind 分发文字）
+
+    private var hud: some View {
+        let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count) - 1
+        let aLast = lastValue(seriesA, at: visibleEnd)
+        let bLast = lastValue(seriesB, at: visibleEnd)
+        let cLast = lastValue(seriesC, at: visibleEnd)
+
+        return HStack(spacing: 10) {
+            Text(kind.displayName).foregroundColor(.secondary)
+            switch kind {
+            case .macd:
+                Text("DIF \(fmt(aLast))").foregroundColor(Self.macdDifColor)
+                Text("DEA \(fmt(bLast))").foregroundColor(Self.macdDeaColor)
+                Text("柱 \(fmt(cLast))").foregroundColor(
+                    cLast.map { $0 >= 0 ? Self.macdBullColor : Self.macdBearColor } ?? .secondary
+                )
+            case .kdj:
+                Text("K \(fmt(aLast))").foregroundColor(Self.kdjKColor)
+                Text("D \(fmt(bLast))").foregroundColor(Self.kdjDColor)
+                Text("J \(fmt(cLast))").foregroundColor(Self.kdjJColor)
+            }
+        }
+        .font(.system(size: 11, design: .monospaced))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.black.opacity(0.6))
+        .cornerRadius(4)
+        .padding(8)
+    }
+
+    // MARK: - Canvas 绘制（按 kind 分发）
+
+    private func drawChart(_ ctx: GraphicsContext, size: CGSize) {
         let visibleStart = viewport.startIndex
         let visibleCount = viewport.visibleCount
         let visibleEnd = min(visibleStart + visibleCount, bars.count)
         guard visibleEnd > visibleStart else { return }
 
-        // y 范围：visible 内 |DIF / DEA / 柱| 最大值 · 上下对称（零轴居中）· 留 10% 边距
+        let barWidth = size.width / CGFloat(visibleCount)
+        let xOffset = CGFloat(viewport.startOffset)
+
+        switch kind {
+        case .macd:
+            drawMACD(ctx, size: size,
+                     visibleStart: visibleStart, visibleEnd: visibleEnd,
+                     barWidth: barWidth, xOffset: xOffset)
+        case .kdj:
+            drawKDJ(ctx, size: size,
+                    visibleStart: visibleStart, visibleEnd: visibleEnd,
+                    barWidth: barWidth, xOffset: xOffset)
+        }
+    }
+
+    /// MACD：上下对称 · 零轴居中 · 直方图（涨红跌绿）+ DIF/DEA 双线
+    private func drawMACD(
+        _ ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        // y 范围：visible 内 |DIF/DEA/柱| 最大值 · 上下对称 · 留 10% 边距
         var maxAbs: Double = 0.01
         for i in visibleStart..<visibleEnd {
-            for arr in [dif, dea, hist] {
-                if i < arr.count, let v = arr[i] {
-                    let d = abs(NSDecimalNumber(decimal: v).doubleValue)
-                    if d > maxAbs { maxAbs = d }
+            for arr in [seriesA, seriesB, seriesC] {
+                if i < arr.count, let v = arr[i], abs(v) > maxAbs {
+                    maxAbs = abs(v)
                 }
             }
         }
         let yScale = (size.height / 2) * 0.9 / CGFloat(maxAbs)
         let yCenter = size.height / 2
-        let barWidth = size.width / CGFloat(visibleCount)
-        let xOffset = CGFloat(viewport.startOffset)
+        let yMap: (CGFloat) -> CGFloat = { yCenter - $0 * yScale }
 
-        drawZeroLine(context: context, size: size, yCenter: yCenter)
-        drawHistogram(context: context, visibleStart: visibleStart, visibleEnd: visibleEnd,
-                      barWidth: barWidth, xOffset: xOffset, yCenter: yCenter, yScale: yScale)
-        drawLine(values: dif, color: Self.difColor, context: context,
-                 visibleStart: visibleStart, visibleEnd: visibleEnd,
-                 barWidth: barWidth, xOffset: xOffset, yCenter: yCenter, yScale: yScale)
-        drawLine(values: dea, color: Self.deaColor, context: context,
-                 visibleStart: visibleStart, visibleEnd: visibleEnd,
-                 barWidth: barWidth, xOffset: xOffset, yCenter: yCenter, yScale: yScale)
-    }
+        drawDashLine(at: yCenter, ctx: ctx, width: size.width, color: Self.zeroLineColor)
 
-    private func drawZeroLine(context: GraphicsContext, size: CGSize, yCenter: CGFloat) {
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: yCenter))
-        path.addLine(to: CGPoint(x: size.width, y: yCenter))
-        context.stroke(path, with: .color(Self.zeroLineColor),
-                       style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-    }
-
-    private func drawHistogram(
-        context: GraphicsContext, visibleStart: Int, visibleEnd: Int,
-        barWidth: CGFloat, xOffset: CGFloat, yCenter: CGFloat, yScale: CGFloat
-    ) {
+        // 直方图（涨红跌绿）
         for i in visibleStart..<visibleEnd {
-            guard i < hist.count, let v = hist[i] else { continue }
-            let value = CGFloat(NSDecimalNumber(decimal: v).doubleValue)
+            guard i < seriesC.count, let v = seriesC[i] else { continue }
+            let value = CGFloat(v)
             let xCenter = (CGFloat(i - visibleStart) + 0.5 - xOffset) * barWidth
             let yTop = yCenter - value * yScale
             let rect = CGRect(
@@ -151,22 +224,68 @@ struct SubChartView: View {
                 width: barWidth * 0.6,
                 height: abs(yTop - yCenter)
             )
-            context.fill(Path(rect), with: .color(value >= 0 ? Self.bullColor : Self.bearColor))
+            ctx.fill(Path(rect),
+                     with: .color(value >= 0 ? Self.macdBullColor : Self.macdBearColor))
         }
+
+        drawLine(seriesA, color: Self.macdDifColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+        drawLine(seriesB, color: Self.macdDeaColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
     }
 
-    private func drawLine(
-        values: [Decimal?], color: Color, context: GraphicsContext,
+    /// KDJ：固定 -20~120 视野（80/50/20 参考线 · 超买/中位/超卖）· K/D/J 三线
+    private func drawKDJ(
+        _ ctx: GraphicsContext, size: CGSize,
         visibleStart: Int, visibleEnd: Int,
-        barWidth: CGFloat, xOffset: CGFloat, yCenter: CGFloat, yScale: CGFloat
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        let viewMin = Self.kdjViewMin
+        let viewMax = Self.kdjViewMax
+        let span = viewMax - viewMin
+        let h = size.height
+        let yMap: (CGFloat) -> CGFloat = { v in h * (viewMax - v) / span }
+
+        for guide in [CGFloat(80), 50, 20] {
+            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: Self.kdjGuideColor)
+        }
+
+        drawLine(seriesA, color: Self.kdjKColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+        drawLine(seriesB, color: Self.kdjDColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+        drawLine(seriesC, color: Self.kdjJColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+    }
+
+    /// 通用虚线（零轴 / 参考线 共用）
+    private func drawDashLine(at y: CGFloat, ctx: GraphicsContext, width: CGFloat, color: Color) {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: y))
+        path.addLine(to: CGPoint(x: width, y: y))
+        ctx.stroke(path, with: .color(color),
+                   style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+    }
+
+    /// 通用折线（MACD/KDJ 共用）· yMap 把指标值映射到屏幕 y 坐标
+    private func drawLine(
+        _ values: [Double?], color: Color, ctx: GraphicsContext,
+        yMap: (CGFloat) -> CGFloat,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
     ) {
         var path = Path()
         var moved = false
         for i in visibleStart..<visibleEnd {
             guard i < values.count, let v = values[i] else { continue }
-            let value = CGFloat(NSDecimalNumber(decimal: v).doubleValue)
+            let value = CGFloat(v)
             let x = (CGFloat(i - visibleStart) + 0.5 - xOffset) * barWidth
-            let y = yCenter - value * yScale
+            let y = yMap(value)
             if !moved {
                 path.move(to: CGPoint(x: x, y: y))
                 moved = true
@@ -174,20 +293,24 @@ struct SubChartView: View {
                 path.addLine(to: CGPoint(x: x, y: y))
             }
         }
-        context.stroke(path, with: .color(color), lineWidth: 1.5)
+        ctx.stroke(path, with: .color(color), lineWidth: 1.5)
     }
 
     // MARK: - 工具
 
-    private func lastValue(_ values: [Decimal?], at end: Int) -> Decimal? {
+    /// visible window 末位最近一个非 nil 值（反向 stride · 不分配中间数组）
+    private func lastValue(_ values: [Double?], at end: Int) -> Double? {
         guard end >= 0, !values.isEmpty else { return nil }
         let safeEnd = min(end, values.count - 1)
-        return values.prefix(safeEnd + 1).reversed().compactMap { $0 }.first
+        for i in stride(from: safeEnd, through: 0, by: -1) {
+            if let v = values[i] { return v }
+        }
+        return nil
     }
 
-    private func fmt(_ v: Decimal?) -> String {
+    private func fmt(_ v: Double?) -> String {
         guard let v else { return "—" }
-        return String(format: "%.2f", NSDecimalNumber(decimal: v).doubleValue)
+        return String(format: "%.2f", v)
     }
 }
 

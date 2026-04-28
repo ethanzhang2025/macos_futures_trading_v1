@@ -28,6 +28,7 @@ struct ChartScene: View {
     @State private var dataSourceLabel: String = "加载中…"
     @State private var pipeline: MarketDataPipeline?
     @State private var currentInstrumentID: String = MarketDataPipeline.defaultInstrumentID
+    @State private var selectedSubIndicator: SubIndicatorKind = .macd
 
     var body: some View {
         VStack(spacing: 0) {
@@ -67,6 +68,17 @@ struct ChartScene: View {
             .pickerStyle(.menu)
             .frame(width: 90)
             .labelsHidden()
+
+            Text("副图：").foregroundColor(.secondary)
+            Picker("", selection: $selectedSubIndicator) {
+                ForEach(SubIndicatorKind.allCases) { k in
+                    Text(k.shortName).tag(k)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 90)
+            .labelsHidden()
+
             Spacer()
             Text("⌘N 新窗口 · ⌘L 自选 · ⌘, 设置")
                 .foregroundColor(.secondary)
@@ -90,6 +102,7 @@ struct ChartScene: View {
                 instrumentLabel: instrumentLabel,
                 periodLabel: periodLabel,
                 dataSourceLabel: dataSourceLabel,
+                subIndicatorKind: selectedSubIndicator,
                 initialViewport: RenderViewport(
                     startIndex: max(0, bars.count - 200),
                     visibleCount: 200
@@ -200,6 +213,7 @@ struct ChartContentView: View {
     let instrumentLabel: String
     let periodLabel: String
     let dataSourceLabel: String
+    let subIndicatorKind: SubIndicatorKind
     @State var viewport: RenderViewport
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
@@ -213,6 +227,7 @@ struct ChartContentView: View {
         instrumentLabel: String,
         periodLabel: String,
         dataSourceLabel: String,
+        subIndicatorKind: SubIndicatorKind,
         initialViewport: RenderViewport
     ) {
         self.renderer = renderer
@@ -221,6 +236,7 @@ struct ChartContentView: View {
         self.instrumentLabel = instrumentLabel
         self.periodLabel = periodLabel
         self.dataSourceLabel = dataSourceLabel
+        self.subIndicatorKind = subIndicatorKind
         self._viewport = State(initialValue: initialViewport)
     }
 
@@ -238,7 +254,7 @@ struct ChartContentView: View {
             Divider()
             // 副图区（指数平滑异同移动平均线 MACD · 共享主图 viewport · 拖拽缩放主图时副图同步）
             HStack(spacing: 0) {
-                SubChartView(bars: bars, viewport: viewport)
+                SubChartView(bars: bars, viewport: viewport, kind: subIndicatorKind)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Color(red: 0.07, green: 0.08, blue: 0.10)
                     .frame(width: 60)  // 占位 · 与主图右侧价格轴对齐

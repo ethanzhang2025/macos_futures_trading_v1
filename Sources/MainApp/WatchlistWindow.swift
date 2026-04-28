@@ -1,19 +1,16 @@
-// MainApp · 自选合约面板（WP-43 UI · commit 3/4 · 拖拽排序：分组重排 / 同组重排 / 跨组移动）
+// MainApp · 自选合约面板（WP-43 UI · commit 4/4 · 主图联动 · 5 大 P1 工作流模块 UI 全部完成）
 //
 // commit 1 已交付：NavigationSplitView 双栏 · WatchlistBook 真模型 · Mock 3 组 9 合约
 // commit 2 已交付：添加/删除/重命名 + GroupNameSheet/InstrumentIDSheet + contextMenu + confirmationDialog
-// commit 3 本次新增：
-// - macOS 13+ SwiftUI .draggable / .dropDestination 拖拽 API
-// - 2 个 Transferable：WatchlistGroupRef（拖分组）· WatchlistInstrumentRef（拖合约 · 含 sourceGroupID）
-// - sidebar 分组行：拖起重排（同 group ref）· 接收合约拖入（移到目标组末尾 · 跨组）
-// - detail List + ForEach + custom Row（替换 commit 1/2 的 Table · Table 不支持 row-level dropDestination）
-//   - 行拖起：.draggable WatchlistInstrumentRef
-//   - 行接收：同源 group → 同组重排 · 跨源 group → 跨组移动到目标 index
-//   - 行尾 trailing drop zone：拖到末尾插入
-// - HoverTarget enum 跟踪 hover 位置 · 蓝色高亮反馈（分组行整行 · 合约行上方 2px insertion line）
-// - 落点动画：.animation(.easeInOut(duration: 0.22), value: book) · 视觉顺滑
+// commit 3 已交付：拖拽排序（.draggable / .dropDestination · 分组重排 + 同组重排 + 跨组移动）
+// commit 4 本次新增：
+// - 双击合约行 → openWindow(id: "chart") + post .watchlistInstrumentSelected
+// - supportedContracts 守卫：不支持的合约本地弹 .alert（不污染 ChartScene 的容错路径）
+// - Notification.Name 跨窗口联动定义在文件末尾 internal extension（同 module 共享）
+// - footerHint 提示语更新为"双击合约打开主图"
 //
-// 留给 commit 4/4：主图联动（双击合约 → openWindow(id: "chart") + NotificationCenter 切合约）
+// ChartScene.swift commit 4 配套改动：body 加 .onReceive(.watchlistInstrumentSelected)
+//   → 命中 supportedContracts → currentInstrumentID = id（task(id:) 自动重启 pipeline）
 //
 // 留待 M5：StoreManager 注入 SQLiteWatchlistBookStore · 替换 Mock 真持久化数据
 
@@ -59,6 +56,9 @@ struct WatchlistWindow: View {
     @State private var pendingDeleteGroup: Watchlist?
     @State private var selectedInstruments: Set<String> = []
     @State private var hoverTarget: HoverTarget?
+    @State private var unsupportedInstrumentAlert: String?
+
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         NavigationSplitView {
@@ -108,12 +108,28 @@ struct WatchlistWindow: View {
         } message: { group in
             Text("分组「\(group.name)」内的 \(group.instrumentIDs.count) 个合约将一并移除。该操作无法撤销。")
         }
+        .alert(
+            "暂不支持的合约",
+            isPresented: unsupportedAlertBinding,
+            presenting: unsupportedInstrumentAlert
+        ) { _ in
+            Button("好") { unsupportedInstrumentAlert = nil }
+        } message: { id in
+            Text("\(id) 暂不支持主图查看 · 当前主图仅支持 \(MarketDataPipeline.supportedContracts.joined(separator: " / "))")
+        }
     }
 
     private var deleteConfirmBinding: Binding<Bool> {
         Binding(
             get: { pendingDeleteGroup != nil },
             set: { if !$0 { pendingDeleteGroup = nil } }
+        )
+    }
+
+    private var unsupportedAlertBinding: Binding<Bool> {
+        Binding(
+            get: { unsupportedInstrumentAlert != nil },
+            set: { if !$0 { unsupportedInstrumentAlert = nil } }
         )
     }
 
@@ -302,6 +318,9 @@ struct WatchlistWindow: View {
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            openInstrumentInChart(id)
+        }
         .overlay(alignment: .top) { insertionIndicator(at: groupID, index: index) }
         .draggable(WatchlistInstrumentRef(sourceGroupID: groupID, instrumentID: id)) {
             dragPreview(systemImage: "doc.text.fill", text: id)
@@ -359,7 +378,7 @@ struct WatchlistWindow: View {
 
     private var footerHint: some View {
         HStack {
-            Text("Mock 数据 · 待 M5 接真实行情 + commit 4 主图联动")
+            Text("双击合约打开主图 · 仅 \(MarketDataPipeline.supportedContracts.joined(separator: "/")) 支持 · Mock 数据待 M5 接真实行情")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()
@@ -469,6 +488,19 @@ struct WatchlistWindow: View {
         )
     }
 
+    // MARK: - 主图联动（commit 4）
+
+    /// 双击合约 → 打开/激活主图窗口 · 通过 NotificationCenter 推送给 ChartScene 切换合约
+    /// 不支持的合约本地拦截（主图仅支持 supportedContracts · 不污染 ChartScene 容错路径）
+    private func openInstrumentInChart(_ id: String) {
+        guard MarketDataPipeline.supportedContracts.contains(id) else {
+            unsupportedInstrumentAlert = id
+            return
+        }
+        openWindow(id: "chart")
+        NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: id)
+    }
+
     // MARK: - Hover 反馈
 
     private func updateHover(_ target: HoverTarget, active: Bool) {
@@ -499,6 +531,13 @@ private struct WatchlistInstrumentRef: Codable, Hashable, Transferable {
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .data)
     }
+}
+
+// MARK: - Notification.Name · 跨窗口联动
+
+extension Notification.Name {
+    /// WP-43 commit 4 · WatchlistWindow 双击合约 → ChartScene 切换合约（object: instrumentID String）
+    static let watchlistInstrumentSelected = Notification.Name("watchlistInstrumentSelected")
 }
 
 // MARK: - String 私有扩展

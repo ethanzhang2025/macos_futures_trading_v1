@@ -225,8 +225,30 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
   - [ ] 空组（commit 2 创建无合约）拖入合约 → 该合约成为该组首个
   - [ ] Transferable 类型识别正确：拖分组只能落在 sidebar 组行上 / 拖合约可落在 sidebar 组行 + detail 行 + trailing zone
 
-### commit 4（主图联动 · 待）
-（commit 4 完成后追加 checklist · 双击合约 → ⌘N 主图打开/切换合约）
+### commit 4（主图联动 · 双击合约 → ChartScene 切合约）
+- [ ] 在自选窗口任一组双击主力合约（RB0 / IF0 / AU0）：
+  - [ ] 主图窗口（⌘N）打开（若未开 · openWindow(id: "chart") 创建）/ 激活前台（若已开）
+  - [ ] 主图工具条"合约："Picker 立即切到双击的合约（如 RB0 → IF0）
+  - [ ] 主图自动重新加载新合约真行情（看到 ProgressView "加载 IF0 真行情…"）
+  - [ ] 加载完成后 K 线 + MA20/MA60 + 副图（MACD/KDJ）全部刷新到新合约数据
+- [ ] 在自选窗口双击不支持合约（HC0 / I0 / AG0）：
+  - [ ] 弹本地 .alert "暂不支持的合约"
+  - [ ] 提示文案"X 暂不支持主图查看 · 当前主图仅支持 RB0 / IF0 / AU0 / CU0"
+  - [ ] 点"好"关闭 · 主图窗口不打开 · 不发通知（即不会意外切已开主图）
+- [ ] 多窗口场景（按 ⌘N 开 2 个主图）：
+  - [ ] 双击合约 → 两个主图窗口都切到该合约（NotificationCenter 全局 broadcast · 是预期行为）
+- [ ] 主图工具条 Picker 手动切合约（commit 4 之前已能用）：
+  - [ ] 仍正常切换 · 不被 NotificationCenter 干扰
+  - [ ] 双击 currentInstrumentID 已等于的合约 → no-op（不重启 pipeline · id != currentInstrumentID 守卫）
+- [ ] 双击 + commit 1-3 功能不冲突：
+  - [ ] 单击行 → List 选中（commit 2 selectedInstruments 正常）
+  - [ ] 双击行 → 打开主图（不触发拖拽 · 不触发右键）
+  - [ ] 长按 + 拖动 → 拖拽（commit 3 · 不触发双击）
+- [ ] footerHint 提示语显示"双击合约打开主图 · 仅 RB0/IF0/AU0/CU0 支持 · Mock 数据待 M5 接真实行情"
+- [ ] 关闭主图窗口（⌘W）后再双击合约 → openWindow 重新打开主图 + 切到该合约
+- [ ] 跨 mode 联动：
+  - [ ] 主图在 .replay 模式时双击自选合约 → currentInstrumentID 变更 · pipeline 仍走 .replay 路径（用新合约拉历史回放）
+  - [ ] 主图在 .live 模式时双击 → 实盘路径用新合约
 
 ---
 

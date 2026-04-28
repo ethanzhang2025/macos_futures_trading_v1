@@ -83,6 +83,15 @@ struct ChartScene: View {
             case .replay: await loadReplay(instrumentID: currentInstrumentID, period: selectedPeriod)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { notification in
+            // WP-43 commit 4 · WatchlistWindow 双击合约 → 同步切到当前主图（task(id:) 自动重启 pipeline）
+            // 双重防护：WatchlistWindow 已本地 alert 拦截不支持的合约，这里再校验一次防外部直接 post
+            guard let id = notification.object as? String,
+                  MarketDataPipeline.supportedContracts.contains(id),
+                  id != currentInstrumentID
+            else { return }
+            currentInstrumentID = id
+        }
         .onDisappear {
             Task {
                 await pipeline?.stop()

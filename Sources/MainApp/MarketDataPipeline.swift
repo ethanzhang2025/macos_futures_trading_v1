@@ -29,6 +29,12 @@ final class MarketDataPipeline {
     /// 复用 EndToEndDemo 验证过的 4 个 Sina 主力合约
     static let supportedContracts: [String] = ["RB0", "IF0", "AU0", "CU0"]
 
+    /// 主图可切换的周期清单（spike 保守 6 个 · 秒级/周月 spike 阶段不暴露）
+    /// Sina API 拉 tick · KLineBuilder 客户端合成任意周期 · UI 仅放主流分钟+日
+    static let supportedPeriods: [KLinePeriod] = [
+        .minute1, .minute5, .minute15, .minute30, .hour1, .daily
+    ]
+
     let instrumentID: String
     let period: KLinePeriod
 
@@ -72,16 +78,8 @@ final class MarketDataPipeline {
         await provider.disconnect()
     }
 
-    /// 周期对外可读字符串（信息浮层显示用）
-    /// rawValue 本身是中国习惯写法（1m/15m/1h 等），仅日/周/月转中文
-    var periodLabel: String {
-        switch period {
-        case .daily:   return "日"
-        case .weekly:  return "周"
-        case .monthly: return "月"
-        default:       return period.rawValue
-        }
-    }
+    /// 周期对外可读字符串（信息浮层显示 · 与 toolbar Picker 中文一致）
+    var periodLabel: String { period.displayName }
 }
 
 #endif

@@ -28,7 +28,14 @@ struct ChartScene: View {
     @State private var dataSourceLabel: String = "加载中…"
     @State private var pipeline: MarketDataPipeline?
     @State private var currentInstrumentID: String = MarketDataPipeline.defaultInstrumentID
+    @State private var selectedPeriod: KLinePeriod = MarketDataPipeline.defaultPeriod
     @State private var selectedSubIndicator: SubIndicatorKind = .macd
+
+    /// 触发 pipeline 重启的复合 key（合约或周期变化都触发）
+    private struct PipelineKey: Equatable {
+        let instrumentID: String
+        let period: KLinePeriod
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,17 +44,18 @@ struct ChartScene: View {
         }
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         // .task(id:) 在 id 变化时自动取消旧 task + 启动新 task · pipeline 资源由 closure 入口手动 stop
-        .task(id: currentInstrumentID) {
-            await resetForNewContract()
-            await loadAndStream(instrumentID: currentInstrumentID)
+        // 复合 key：合约或周期变化都触发重启
+        .task(id: PipelineKey(instrumentID: currentInstrumentID, period: selectedPeriod)) {
+            await resetForNewPipeline()
+            await loadAndStream(instrumentID: currentInstrumentID, period: selectedPeriod)
         }
         .onDisappear {
             Task { await pipeline?.stop() }
         }
     }
 
-    /// 切换合约前重置：停旧管线 + 清空数据 + 重置 HUD label（renderer 不动 · 跨合约复用）
-    private func resetForNewContract() async {
+    /// 切换合约或周期前重置：停旧管线 + 清空数据 + 重置 HUD label（renderer 不动 · 跨合约/周期复用）
+    private func resetForNewPipeline() async {
         await pipeline?.stop()
         pipeline = nil
         bars = []
@@ -67,6 +75,16 @@ struct ChartScene: View {
             }
             .pickerStyle(.menu)
             .frame(width: 90)
+            .labelsHidden()
+
+            Text("周期：").foregroundColor(.secondary)
+            Picker("", selection: $selectedPeriod) {
+                ForEach(MarketDataPipeline.supportedPeriods, id: \.self) { p in
+                    Text(p.displayName).tag(p)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 70)
             .labelsHidden()
 
             Text("副图：").foregroundColor(.secondary)
@@ -118,8 +136,8 @@ struct ChartScene: View {
 
     /// 主流程：renderer init（首次）→ pipeline 启动 → 监听 stream 增量更新
     /// 失败兜底：renderer init 抛错 → loadError；首次 snapshot 拉空 → Mock 兜底
-    private func loadAndStream(instrumentID: String) async {
-        // 1. renderer 仅首次 init（切换合约时复用 · MetalKLineRenderer 与合约无关）
+    private func loadAndStream(instrumentID: String, period: KLinePeriod) async {
+        // 1. renderer 仅首次 init（切换合约/周期时复用 · MetalKLineRenderer 与合约/周期无关）
         if renderer == nil {
             do {
                 renderer = try await Task.detached(priority: .userInitiated) {
@@ -131,8 +149,8 @@ struct ChartScene: View {
             }
         }
 
-        // 2. 启新 pipeline 拉指定合约真行情
-        let pipe = MarketDataPipeline(instrumentID: instrumentID)
+        // 2. 启新 pipeline 拉指定合约 + 周期真行情
+        let pipe = MarketDataPipeline(instrumentID: instrumentID, period: period)
         pipeline = pipe
         instrumentLabel = pipe.instrumentID
         periodLabel = pipe.periodLabel

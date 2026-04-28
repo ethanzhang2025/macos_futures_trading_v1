@@ -194,8 +194,36 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] footerHint 选中数提示："已选 N 个 · 右键移除"（仅当有选中时显示）
 - [ ] ⌘⇧G/⌘⇧I 快捷键在 ⌘L 自选窗口为前台时生效 · 不与全局 ⌘N/⌘L/⌘R/⌘B 冲突
 
-### commit 3（拖拽排序 · 待 · macOS 13+ .draggable / .dropDestination）
-（commit 3 完成后追加 checklist · Mac 切机时重点验证拖拽视觉反馈 + 落点指示 + 列表动画）
+### commit 3（拖拽排序：分组重排 + 同组重排 + 跨组移动）
+- [ ] 拖拽视觉反馈：
+  - [ ] 长按任一行（分组或合约）拖起 → 半透明 preview 跟随光标（folder/doc.text.fill icon + 名 · regularMaterial 圆角背景）
+  - [ ] hover 在分组行上 → 该行整行淡蓝高亮（0.18 accent opacity）
+  - [ ] hover 在合约行上 → 行上方 2px 蓝色 insertion line
+  - [ ] hover 在合约表末尾空白区（trailing drop zone）→ 末尾 2px 蓝色 insertion line
+  - [ ] 松开后高亮消失（hoverTarget 清空）
+  - [ ] 列表 .easeInOut(0.22s) 落点动画顺滑（无跳变）
+- [ ] 分组重排序（sidebar 拖分组 → 分组之间）：
+  - [ ] 拖"贵金属"到"主力合约"上方 → 贵金属移到第一位
+  - [ ] 拖到自己原位 / 紧邻自己之后 → no-op（数据无变化）
+- [ ] 合约同组重排序（detail 拖合约 → 同组其他位置）：
+  - [ ] 主力合约组内拖 AU0 到 RB0 上方 → AU0 移到 RB0 之前
+  - [ ] 拖到 trailing drop zone（合约表末尾 60px 空白区）→ 移到本组末尾
+  - [ ] 落在自己原位 / 紧邻自己之后 → no-op
+- [ ] 合约跨组移动（detail 拖合约 → sidebar 另一组）：
+  - [ ] 在主力合约组内拖 IF0 → drop 到 sidebar "贵金属"分组 → IF0 从主力合约移除 + 加到贵金属末尾
+  - [ ] 若目标组已有同 ID（如 AU0 已在贵金属，再拖 AU0 入贵金属）→ 仅从源组删除（WatchlistBook 内置去重 · 不会出现重复行）
+  - [ ] 拖到 sidebar 当前源组自己 → no-op
+- [ ] 选中态联动：
+  - [ ] 跨组移动单个合约后，selectedInstruments 自动 subtract 该 ID
+  - [ ] 切换分组 onChange → selectedInstruments.removeAll
+- [ ] 拖拽 ↔ commit 2 功能共存：
+  - [ ] 拖拽过程中右键菜单不弹出
+  - [ ] 拖拽落定后右键菜单仍可触发（重命名 / 删除 / 移除）
+  - [ ] 拖拽过程中 ⌘⇧G / ⌘⇧I sheet 不弹出
+- [ ] 边界 & 容错：
+  - [ ] 仅 1 个分组时拖该分组 → 落点无变化
+  - [ ] 空组（commit 2 创建无合约）拖入合约 → 该合约成为该组首个
+  - [ ] Transferable 类型识别正确：拖分组只能落在 sidebar 组行上 / 拖合约可落在 sidebar 组行 + detail 行 + trailing zone
 
 ### commit 4（主图联动 · 待）
 （commit 4 完成后追加 checklist · 双击合约 → ⌘N 主图打开/切换合约）

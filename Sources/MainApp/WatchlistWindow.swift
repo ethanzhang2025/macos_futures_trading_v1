@@ -1,16 +1,19 @@
-// MainApp · 自选合约面板（WP-43 UI · commit 2/4 · 添加/删除/重命名分组与合约）
+// MainApp · 自选合约面板（WP-43 UI · commit 3/4 · 拖拽排序：分组重排 / 同组重排 / 跨组移动）
 //
 // commit 1 已交付：NavigationSplitView 双栏 · WatchlistBook 真模型 · Mock 3 组 9 合约
-// commit 2 本次新增：
-// - 左 sidebar 顶部 "+" 添加分组（⌘⇧G）· 行右键菜单（重命名 / 删除）
-// - 右 detail header "+" 添加合约（⌘⇧I）· Table 多选右键菜单（从分组移除）
-// - GroupNameSheet（add / rename 共用）· InstrumentIDSheet
-// - 删除分组前 confirmationDialog 提示（含级联清空合约的警示）
-// - 切换分组时清空 Table 选中
+// commit 2 已交付：添加/删除/重命名 + GroupNameSheet/InstrumentIDSheet + contextMenu + confirmationDialog
+// commit 3 本次新增：
+// - macOS 13+ SwiftUI .draggable / .dropDestination 拖拽 API
+// - 2 个 Transferable：WatchlistGroupRef（拖分组）· WatchlistInstrumentRef（拖合约 · 含 sourceGroupID）
+// - sidebar 分组行：拖起重排（同 group ref）· 接收合约拖入（移到目标组末尾 · 跨组）
+// - detail List + ForEach + custom Row（替换 commit 1/2 的 Table · Table 不支持 row-level dropDestination）
+//   - 行拖起：.draggable WatchlistInstrumentRef
+//   - 行接收：同源 group → 同组重排 · 跨源 group → 跨组移动到目标 index
+//   - 行尾 trailing drop zone：拖到末尾插入
+// - HoverTarget enum 跟踪 hover 位置 · 蓝色高亮反馈（分组行整行 · 合约行上方 2px insertion line）
+// - 落点动画：.animation(.easeInOut(duration: 0.22), value: book) · 视觉顺滑
 //
-// 留给后续 commit：
-// - commit 3/4：拖拽排序（macOS 13+ .draggable / .dropDestination · 同组重排 + 跨组移动）
-// - commit 4/4：主图联动（双击合约 → openWindow(id: "chart") + NotificationCenter 切合约）
+// 留给 commit 4/4：主图联动（双击合约 → openWindow(id: "chart") + NotificationCenter 切合约）
 //
 // 留待 M5：StoreManager 注入 SQLiteWatchlistBookStore · 替换 Mock 真持久化数据
 
@@ -18,6 +21,7 @@
 
 import SwiftUI
 import Foundation
+import UniformTypeIdentifiers
 import Shared
 
 // MARK: - Sheet 状态
@@ -36,6 +40,15 @@ private enum WatchlistSheetState: Identifiable {
     }
 }
 
+// MARK: - 拖拽 Hover 反馈位置
+//
+// instrumentSlot.beforeIndex == group.instrumentIDs.count 表示"插入末尾"（即 trailing drop zone）
+
+private enum HoverTarget: Equatable, Hashable {
+    case group(UUID)
+    case instrumentSlot(groupID: UUID, beforeIndex: Int)
+}
+
 // MARK: - 主窗口
 
 struct WatchlistWindow: View {
@@ -45,6 +58,7 @@ struct WatchlistWindow: View {
     @State private var sheetState: WatchlistSheetState?
     @State private var pendingDeleteGroup: Watchlist?
     @State private var selectedInstruments: Set<String> = []
+    @State private var hoverTarget: HoverTarget?
 
     var body: some View {
         NavigationSplitView {
@@ -54,6 +68,7 @@ struct WatchlistWindow: View {
             detail
         }
         .frame(minWidth: 720, idealWidth: 880, minHeight: 480, idealHeight: 600)
+        .animation(.easeInOut(duration: 0.22), value: book)
         .onAppear {
             if selectedGroupID == nil {
                 selectedGroupID = book.groups.first?.id
@@ -65,19 +80,11 @@ struct WatchlistWindow: View {
         .sheet(item: $sheetState) { state in
             switch state {
             case .addGroup:
-                GroupNameSheet(
-                    title: "添加分组",
-                    initialName: "",
-                    actionLabel: "保存"
-                ) { name in
+                GroupNameSheet(title: "添加分组", initialName: "", actionLabel: "保存") { name in
                     addGroup(name: name)
                 }
             case .renameGroup(let group):
-                GroupNameSheet(
-                    title: "重命名分组",
-                    initialName: group.name,
-                    actionLabel: "更新"
-                ) { name in
+                GroupNameSheet(title: "重命名分组", initialName: group.name, actionLabel: "更新") { name in
                     renameGroup(group, to: name)
                 }
             case .addInstrument(let groupID, let groupName):
@@ -115,8 +122,7 @@ struct WatchlistWindow: View {
     private var sidebar: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("自选分组")
-                    .font(.headline)
+                Text("自选分组").font(.headline)
                 Spacer()
                 Button {
                     sheetState = .addGroup
@@ -133,30 +139,52 @@ struct WatchlistWindow: View {
             Divider()
 
             List(selection: $selectedGroupID) {
-                ForEach(book.groups) { group in
-                    HStack(spacing: 8) {
-                        Image(systemName: "folder")
-                            .foregroundColor(.accentColor)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(group.name)
-                            Text("\(group.instrumentIDs.count) 个合约")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .tag(group.id as UUID?)
-                    .contextMenu {
-                        Button("重命名") {
-                            sheetState = .renameGroup(group)
-                        }
-                        Divider()
-                        Button("删除分组", role: .destructive) {
-                            pendingDeleteGroup = group
-                        }
-                    }
+                ForEach(Array(book.groups.enumerated()), id: \.element.id) { index, group in
+                    groupRow(group, index: index)
                 }
             }
             .listStyle(.sidebar)
+        }
+    }
+
+    private func groupRow(_ group: Watchlist, index: Int) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "folder")
+                .foregroundColor(.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.name)
+                Text("\(group.instrumentIDs.count) 个合约")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .background(hoverTarget == .group(group.id) ? Color.accentColor.opacity(0.18) : Color.clear)
+        .tag(group.id as UUID?)
+        .contextMenu {
+            Button("重命名") {
+                sheetState = .renameGroup(group)
+            }
+            Divider()
+            Button("删除分组", role: .destructive) {
+                pendingDeleteGroup = group
+            }
+        }
+        .draggable(WatchlistGroupRef(id: group.id)) {
+            dragPreview(systemImage: "folder", text: group.name)
+        }
+        .dropDestination(for: WatchlistGroupRef.self) { refs, _ in
+            guard let ref = refs.first else { return false }
+            return moveGroup(ref.id, before: index)
+        } isTargeted: { isOver in
+            updateHover(.group(group.id), active: isOver)
+        }
+        .dropDestination(for: WatchlistInstrumentRef.self) { refs, _ in
+            guard let ref = refs.first else { return false }
+            return moveInstrumentToGroupTail(ref, target: group.id)
+        } isTargeted: { isOver in
+            updateHover(.group(group.id), active: isOver)
         }
     }
 
@@ -196,60 +224,129 @@ struct WatchlistWindow: View {
             .padding(16)
 
             Divider()
+            instrumentColumnsHeader
+            Divider()
 
             if group.instrumentIDs.isEmpty {
                 emptyState(
                     icon: "tray",
                     title: "分组为空",
-                    hint: "点击右上「添加合约」开始"
+                    hint: "点击右上「添加合约」开始 · 或从左侧拖入"
                 )
             } else {
-                instrumentTable(for: group)
+                List(selection: $selectedInstruments) {
+                    ForEach(Array(group.instrumentIDs.enumerated()), id: \.element) { index, id in
+                        instrumentRow(id: id, index: index, groupID: group.id)
+                            .tag(id)
+                    }
+                    trailingDropZone(groupID: group.id, count: group.instrumentIDs.count)
+                }
+                .listStyle(.inset)
+                .contextMenu(forSelectionType: String.self) { ids in
+                    if let label = removeMenuLabel(for: ids) {
+                        Button(label, role: .destructive) {
+                            removeInstruments(ids, from: group.id)
+                        }
+                    }
+                }
             }
 
             Divider()
-
             footerHint
         }
     }
 
-    private func instrumentTable(for group: Watchlist) -> some View {
-        Table(group.instrumentIDs, id: \.self, selection: $selectedInstruments) {
-            TableColumn("合约") { id in
-                Text(id)
-                    .font(.system(.body, design: .monospaced))
-                    .fontWeight(.medium)
-            }
-            .width(min: 90, ideal: 110)
-
-            TableColumn("最新价") { id in
-                Text(MockQuote.price(for: id))
-                    .font(.system(.body, design: .monospaced))
-            }
-            .width(min: 80, ideal: 100)
-
-            TableColumn("涨跌幅") { id in
-                let change = MockQuote.changePct(for: id)
-                Text(change)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(change.hasPrefix("-") ? .green : .red)
-            }
-            .width(min: 80, ideal: 100)
-
-            TableColumn("持仓量") { id in
-                Text(MockQuote.openInterest(for: id))
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.secondary)
-            }
-            .width(min: 80, ideal: 100)
+    private var instrumentColumnsHeader: some View {
+        HStack(spacing: 0) {
+            Spacer().frame(width: 24)
+            Text("合约").frame(width: 100, alignment: .leading)
+            Text("最新价").frame(width: 90, alignment: .trailing)
+            Spacer().frame(width: 16)
+            Text("涨跌幅").frame(width: 80, alignment: .trailing)
+            Spacer().frame(width: 16)
+            Text("持仓量").frame(width: 80, alignment: .trailing)
+            Spacer()
         }
-        .contextMenu(forSelectionType: String.self) { ids in
-            if let label = removeMenuLabel(for: ids) {
-                Button(label, role: .destructive) {
-                    removeInstruments(ids, from: group.id)
-                }
-            }
+        .font(.system(size: 11, design: .monospaced))
+        .foregroundColor(.secondary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.06))
+    }
+
+    private func instrumentRow(id: String, index: Int, groupID: UUID) -> some View {
+        let change = MockQuote.changePct(for: id)
+        return HStack(spacing: 0) {
+            Image(systemName: "line.3.horizontal")
+                .foregroundColor(.secondary.opacity(0.5))
+                .frame(width: 24)
+            Text(id)
+                .font(.system(.body, design: .monospaced))
+                .fontWeight(.medium)
+                .frame(width: 100, alignment: .leading)
+            Text(MockQuote.price(for: id))
+                .font(.system(.body, design: .monospaced))
+                .frame(width: 90, alignment: .trailing)
+            Spacer().frame(width: 16)
+            Text(change)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(change.hasPrefix("-") ? .green : .red)
+                .frame(width: 80, alignment: .trailing)
+            Spacer().frame(width: 16)
+            Text(MockQuote.openInterest(for: id))
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .trailing)
+            Spacer()
         }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .overlay(alignment: .top) { insertionIndicator(at: groupID, index: index) }
+        .draggable(WatchlistInstrumentRef(sourceGroupID: groupID, instrumentID: id)) {
+            dragPreview(systemImage: "doc.text.fill", text: id)
+        }
+        .dropDestination(for: WatchlistInstrumentRef.self) { refs, _ in
+            guard let ref = refs.first else { return false }
+            return moveInstrumentToSlot(ref, targetGroupID: groupID, targetIndex: index)
+        } isTargeted: { isOver in
+            updateHover(.instrumentSlot(groupID: groupID, beforeIndex: index), active: isOver)
+        }
+    }
+
+    private func trailingDropZone(groupID: UUID, count: Int) -> some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(height: 56)
+            .contentShape(Rectangle())
+            .overlay(alignment: .top) { insertionIndicator(at: groupID, index: count) }
+            .dropDestination(for: WatchlistInstrumentRef.self) { refs, _ in
+                guard let ref = refs.first else { return false }
+                return moveInstrumentToSlot(ref, targetGroupID: groupID, targetIndex: count)
+            } isTargeted: { isOver in
+                updateHover(.instrumentSlot(groupID: groupID, beforeIndex: count), active: isOver)
+            }
+            .listRowSeparator(.hidden)
+    }
+
+    /// 行/末尾共用的 2px 蓝色横线提示（hover 命中目标 slot 时显现）
+    private func insertionIndicator(at groupID: UUID, index: Int) -> some View {
+        let isActive = hoverTarget == .instrumentSlot(groupID: groupID, beforeIndex: index)
+        return Rectangle()
+            .fill(Color.accentColor)
+            .frame(height: isActive ? 2 : 0)
+    }
+
+    private func dragPreview(systemImage: String, text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .foregroundColor(.accentColor)
+            Text(text)
+                .font(.system(.body, design: .monospaced))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
     }
 
     private func removeMenuLabel(for ids: Set<String>) -> String? {
@@ -281,18 +378,14 @@ struct WatchlistWindow: View {
             Image(systemName: icon)
                 .font(.system(size: 42))
                 .foregroundColor(.secondary.opacity(0.5))
-            Text(title)
-                .font(.title3)
-                .foregroundColor(.secondary)
-            Text(hint)
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Text(title).font(.title3).foregroundColor(.secondary)
+            Text(hint).font(.caption).foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
     }
 
-    // MARK: - Mutations
+    // MARK: - Mutations · CRUD
 
     private func addGroup(name: String) {
         guard let trimmed = name.trimmedOrNil else { return }
@@ -322,6 +415,89 @@ struct WatchlistWindow: View {
     private func removeInstruments(_ ids: Set<String>, from groupID: UUID) {
         ids.forEach { book.removeInstrument($0, from: groupID) }
         selectedInstruments.subtract(ids)
+    }
+
+    // MARK: - Mutations · 拖拽
+
+    /// "落在 targetIndex 前"语义 → Array.move 风格的 (from, to) 转换
+    /// - 落在自己 / 紧邻自己之后 → no-op（返回 nil）
+    /// - 落点在源之后 → -1 修正（删除源元素后下游索引前移）
+    private static func resolveDropIndex(from: Int, target: Int) -> Int? {
+        if target == from || target == from + 1 { return nil }
+        return target > from ? target - 1 : target
+    }
+
+    /// 拖分组到目标位置（before: 落在目标行的"前面"）
+    @discardableResult
+    private func moveGroup(_ draggedID: UUID, before targetIndex: Int) -> Bool {
+        defer { clearHover() }
+        guard let from = book.groups.firstIndex(where: { $0.id == draggedID }),
+              let to = Self.resolveDropIndex(from: from, target: targetIndex)
+        else { return false }
+        return book.moveGroup(from: from, to: to)
+    }
+
+    /// 同源同组（重排序）或跨源（移动）合约 · targetIndex 表示插入到该位置（落在该 row 前）
+    @discardableResult
+    private func moveInstrumentToSlot(_ ref: WatchlistInstrumentRef, targetGroupID: UUID, targetIndex: Int) -> Bool {
+        defer { clearHover() }
+        if ref.sourceGroupID == targetGroupID {
+            guard let group = book.group(id: targetGroupID),
+                  let from = group.instrumentIDs.firstIndex(of: ref.instrumentID),
+                  let to = Self.resolveDropIndex(from: from, target: targetIndex)
+            else { return false }
+            return book.moveInstrument(in: targetGroupID, from: from, to: to)
+        }
+        return book.moveInstrument(
+            ref.instrumentID,
+            from: ref.sourceGroupID,
+            to: targetGroupID,
+            targetIndex: targetIndex
+        )
+    }
+
+    /// 拖合约到分组行（sidebar）→ 移到目标组末尾（同组源 → no-op · 已在目标组同 ID → 仅删源）
+    @discardableResult
+    private func moveInstrumentToGroupTail(_ ref: WatchlistInstrumentRef, target targetGroupID: UUID) -> Bool {
+        defer { clearHover() }
+        if ref.sourceGroupID == targetGroupID { return false }
+        return book.moveInstrument(
+            ref.instrumentID,
+            from: ref.sourceGroupID,
+            to: targetGroupID,
+            targetIndex: nil
+        )
+    }
+
+    // MARK: - Hover 反馈
+
+    private func updateHover(_ target: HoverTarget, active: Bool) {
+        if active {
+            hoverTarget = target
+        } else if hoverTarget == target {
+            hoverTarget = nil
+        }
+    }
+
+    private func clearHover() {
+        hoverTarget = nil
+    }
+}
+
+// MARK: - Transferable 拖拽载荷
+
+private struct WatchlistGroupRef: Codable, Hashable, Transferable {
+    let id: UUID
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
+    }
+}
+
+private struct WatchlistInstrumentRef: Codable, Hashable, Transferable {
+    let sourceGroupID: UUID
+    let instrumentID: String
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
     }
 }
 
@@ -357,9 +533,7 @@ private struct GroupNameSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.title2)
-                .bold()
+            Text(title).font(.title2).bold()
 
             Form {
                 TextField("分组名", text: $name)
@@ -402,9 +576,7 @@ private struct InstrumentIDSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("添加合约到「\(groupName)」")
-                .font(.title2)
-                .bold()
+            Text("添加合约到「\(groupName)」").font(.title2).bold()
 
             Form {
                 TextField("合约代码（如 RB0 / IF2509）", text: $instrumentID)

@@ -100,8 +100,21 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] 保存后 alerts 增 1 项 · 列表立即更新
 - [ ] horizontalLineTouched 类型未在 Picker 显示（留 v2 · 需 drawingID 选择）
 
-### commit 3-4（待累积）
-后续 commit 追加：编辑/删除/启停 / 触发历史 / 通知通道 / 系统通知验收
+### commit 3（编辑/删除/启停 + 触发历史 Tab）
+- [ ] TabView segmented 切换：预警列表 / 触发历史
+- [ ] 列表行末"操作"列 3 button：
+  - [ ] ⏯ 启停（active ↔ paused · 已 cancelled 的 disabled）· tooltip "暂停/恢复"
+  - [ ] ✏️ 编辑（蓝色 · sheet 弹出 "编辑预警"模式 · 字段加载现有 alert）
+  - [ ] 🗑 删除（红色 · 直接 remove · 无 confirm v1）
+- [ ] 编辑模式 Sheet 标题"编辑预警" · 主按钮"更新"
+- [ ] 编辑加载：6 类 condition 反向映射（horizontalLineTouched 显示为 priceAbove 占位 · 留 v2）
+- [ ] 编辑保留：alert.id / createdAt / lastTriggeredAt（不重置）
+- [ ] 触发历史列表表头 5 列（时间/预警/合约/触发价/条件 · 时间格式 MM-dd HH:mm:ss · Asia/Shanghai）
+- [ ] 12 条 Mock 历史按时间倒序（-300s ~ -86400s）· 触发价红色高亮
+- [ ] 历史空态视图（clock.arrow.circlepath icon + "暂无触发历史"）
+
+### commit 4（待）
+通知通道（系统通知 / 声音）+ 系统通知集成验收
 
 ---
 

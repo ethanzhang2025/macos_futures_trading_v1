@@ -3,6 +3,7 @@
 //
 // WP-41 v3 commit 1/4：KDJ 实现 IncrementalIndicator · O(n) per step（n=9 微秒级）
 // WP-41 v3 commit 2/4：CCI 实现 IncrementalIndicator · ring buffer + sum + O(n) MD 重算
+// WP-41 v3 第 2 批 commit 2/4：WilliamsR 实现 IncrementalIndicator · KDJ ring 简化版（无 SMA 平滑）
 
 import Foundation
 import Shared
@@ -450,5 +451,61 @@ extension CCI: IncrementalIndicator {
         let md = mdSum / state.nDec
         guard md > 0 else { return nil }
         return Kernels.round8((tp - ma) / (state.factor * md))
+    }
+}
+
+// MARK: - WP-41 v3 第 2 批 commit 2/4 · WilliamsR 增量 API（KDJ ring 简化版 · 无平滑）
+
+extension WilliamsR: IncrementalIndicator {
+
+    /// state：period + (high/low) ring buffer · 无平滑（与 KDJ 共用 ring 模式 · 但少 prevK/prevD 流式状态）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var highRing: [Decimal]
+        public var lowRing: [Decimal]
+        public var head: Int
+        public var count: Int
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "WR period")
+        var state = IncrementalState(
+            period: n,
+            highRing: [Decimal](repeating: 0, count: n),
+            lowRing: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0
+        )
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, high: kline.highs[i], low: kline.lows[i], close: kline.closes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, high: newBar.high, low: newBar.low, close: newBar.close)]
+    }
+
+    /// makeIncrementalState 与 stepIncremental 共享：
+    /// - ring 写入 O(1) · count < period → nil（warm-up）
+    /// - count == period：扫 ring 求 hhv/llv（O(n)）· hhv > llv 时 WR = (hhv - close)/(hhv - llv) * -100
+    /// - hhv == llv 时返回 nil（与 calculate 中 h > l 守卫一致 · 全平 high/low 时无意义）
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal) -> Decimal? {
+        state.highRing[state.head] = high
+        state.lowRing[state.head] = low
+        state.head = (state.head + 1) % state.period
+        state.count = min(state.count + 1, state.period)
+
+        guard state.count == state.period else { return nil }
+
+        var hhv = state.highRing[0]
+        var llv = state.lowRing[0]
+        for i in 1..<state.period {
+            if state.highRing[i] > hhv { hhv = state.highRing[i] }
+            if state.lowRing[i] < llv { llv = state.lowRing[i] }
+        }
+
+        guard hhv > llv else { return nil }
+        return Kernels.round8((hhv - close) / (hhv - llv) * Decimal(-100))
     }
 }

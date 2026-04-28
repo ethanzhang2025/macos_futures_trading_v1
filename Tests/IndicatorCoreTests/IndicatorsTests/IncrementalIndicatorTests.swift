@@ -719,6 +719,82 @@ struct OBVIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 2 批 commit 2/4 · WilliamsR 增量 API
+
+@Suite("WP-41 v3 第 2 批 commit 2/4 · WilliamsR 增量 API")
+struct WilliamsRIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=14）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try WilliamsR.calculate(kline: series, params: [14])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try WilliamsR.makeIncrementalState(kline: history, params: [14])
+
+        for i in historyCount..<bars.count {
+            let row = WilliamsR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "WR[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try WilliamsR.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = WilliamsR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let row10 = WilliamsR.stepIncremental(state: &state, newBar: bars[9])
+        #expect(row10[0] != nil)
+
+        let series = makeSeries(from: bars)
+        let full = try WilliamsR.calculate(kline: series, params: [10])
+        #expect(row10[0] == full[0].values[9])
+        for i in 10..<bars.count {
+            let row = WilliamsR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i])
+        }
+    }
+
+    @Test("全平 high/low（hhv == llv）→ 输出始终 nil（与 calculate h > l 守卫一致）")
+    func incrementalAllSame() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let flat = (0..<15).map { i in
+            KLine(
+                instrumentID: "TEST", period: .minute1,
+                openTime: baseDate.addingTimeInterval(TimeInterval(i * 60)),
+                open: 100, high: 100, low: 100, close: 100,
+                volume: 100, openInterest: 0, turnover: 0
+            )
+        }
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try WilliamsR.makeIncrementalState(kline: empty, params: [10])
+        for bar in flat {
+            let row = WilliamsR.stepIncremental(state: &state, newBar: bar)
+            #expect(row[0] == nil, "h == l 时 WR 应 nil")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try WilliamsR.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try WilliamsR.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

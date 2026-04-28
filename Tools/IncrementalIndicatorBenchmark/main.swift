@@ -1,8 +1,8 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（21 指标 · v3 第 7 批扩展 ROC + BIAS）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（23 指标 · v3 第 8 批扩展 WMA + HMA）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 21 个指标：
+// 测试 23 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
@@ -11,6 +11,7 @@
 //   v3 第 5 批（2）：DEMA 20 / TEMA 20（复合 EMA 线性组合 · 同 TRIX 模式但无差分）
 //   v3 第 6 批（3）：VWAP（累积式无周期）/ PSY 12（单 ring sliding sum）/ CMO 14（双 ring · 同 RSI 思路无 Wilder）
 //   v3 第 7 批（2）：ROC 12（ring 取 n 步前 close）/ BIAS 6（ring SMA · round8 snapshot 精度对齐）
+//   v3 第 8 批（2）：WMA 10（O(1) Pascal triangle sliding）/ HMA 16（内嵌 3 WMA · halfN/n/sqrtN）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -277,6 +278,26 @@ benchmark("BIAS(6)") {
     guard var state = try? BIAS.makeIncrementalState(kline: emptyHistory, params: [6]) else { return }
     for bar in bars {
         _ = BIAS.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 8 批 · WMA / HMA（线性加权 + Hull）
+
+benchmark("WMA(10)") {
+    _ = try? WMA.calculate(kline: series, params: [10])
+} incremental: {
+    guard var state = try? WMA.makeIncrementalState(kline: emptyHistory, params: [10]) else { return }
+    for bar in bars {
+        _ = WMA.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("HMA(16)") {
+    _ = try? HMA.calculate(kline: series, params: [16])
+} incremental: {
+    guard var state = try? HMA.makeIncrementalState(kline: emptyHistory, params: [16]) else { return }
+    for bar in bars {
+        _ = HMA.stepIncremental(state: &state, newBar: bar)
     }
 }
 

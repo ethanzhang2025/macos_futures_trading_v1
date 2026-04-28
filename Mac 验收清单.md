@@ -585,6 +585,28 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 8 批（WMA + HMA · 23 指标）
+
+### WMA 增量（O(1) Pascal triangle sliding · 第 8 批最高加速）
+- [ ] WMA 与全量精确一致（period=10 · 80 K · history 30）
+- [ ] history 空 · 前 period-1 步 nil · 第 period 步起匹配全量（验证 seed numerator/runningSum 正确）
+- [ ] period=1 边界 · 每步 WMA == round8(close)（权重和为 1）
+- [ ] 参数缺失 / period<1 抛错
+- [ ] benchmark WMA(10) 满批 2.3× 加速（O(1) Pascal sliding 替代每步 O(n) 重新加权累加）
+- [ ] WMA.IncrementalState.advance(close:) public mutating method（与 EMA.advance 同模式 · 给 HMA 等内嵌用）
+
+### HMA 增量（内嵌 3 WMA · halfN/n/sqrtN · 同 TRIX 复合模式）
+- [ ] HMA 与全量精确一致（period=16 · halfN=8 · sqrtN=4 · 100 K · history 50）
+- [ ] history 空 · 60 根 K 全程匹配全量（3 WMA 同步推进）
+- [ ] 参数缺失 / period<4 抛错（HMA 数据层 minValue=4）
+- [ ] benchmark HMA(16) 满批 1.7× 加速（受益于 3 路 WMA O(1) Pascal sliding）
+
+### 23 指标增量基础
+- [ ] benchmark 完整输出 23 行
+- [ ] 增量 API 覆盖率：23/56 = 41.1%（IndicatorCore 超过 2/5 已增量化）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

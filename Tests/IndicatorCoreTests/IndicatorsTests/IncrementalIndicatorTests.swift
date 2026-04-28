@@ -1365,6 +1365,124 @@ struct BIASIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 8 批 · WMA 增量 API（O(1) Pascal triangle sliding）
+
+@Suite("WP-41 v3 第 8 批 · WMA 增量 API")
+struct WMAIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=10）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try WMA.calculate(kline: series, params: [10])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try WMA.makeIncrementalState(kline: history, params: [10])
+
+        for i in historyCount..<bars.count {
+            let row = WMA.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "WMA[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步 nil · 第 period 步起匹配全量（验证 seed numerator/runningSum 正确）")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try WMA.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = WMA.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let row10 = WMA.stepIncremental(state: &state, newBar: bars[9])
+        #expect(row10[0] != nil)
+
+        let series = makeSeries(from: bars)
+        let full = try WMA.calculate(kline: series, params: [10])
+        #expect(row10[0] == full[0].values[9], "WMA seed @ count==period")
+        for i in 10..<bars.count {
+            let row = WMA.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "WMA sliding @ \(i)")
+        }
+    }
+
+    @Test("period=1 边界：每步 WMA == round8(close)（权重和为 1）")
+    func incrementalPeriod1() throws {
+        let bars = makeBars(count: 5)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try WMA.makeIncrementalState(kline: empty, params: [1])
+        for bar in bars {
+            let row = WMA.stepIncremental(state: &state, newBar: bar)
+            #expect(row[0] == Kernels.round8(bar.close))
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try WMA.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try WMA.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 8 批 · HMA 增量 API（内嵌 3 WMA）
+
+@Suite("WP-41 v3 第 8 批 · HMA 增量 API")
+struct HMAIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=16 · halfN=8 · sqrtN=4）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try HMA.calculate(kline: series, params: [16])
+        let fullValues = full[0].values
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try HMA.makeIncrementalState(kline: history, params: [16])
+
+        for i in historyCount..<bars.count {
+            let row = HMA.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "HMA[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 60 根 K 全程匹配全量（3 WMA 同步推进）")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 60)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try HMA.makeIncrementalState(kline: empty, params: [16])
+
+        let series = makeSeries(from: bars)
+        let full = try HMA.calculate(kline: series, params: [16])
+
+        for i in 0..<bars.count {
+            let row = HMA.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "HMA[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<4 抛错（HMA 数据层 minValue=4）")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try HMA.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try HMA.makeIncrementalState(kline: empty, params: [3])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

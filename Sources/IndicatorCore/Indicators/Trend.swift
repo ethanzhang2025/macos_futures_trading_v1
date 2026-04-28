@@ -4,6 +4,7 @@
 // WP-41 v3 第 2 批 commit 3/4：ADX 实现 IncrementalIndicator · 4 路 Wilder 平滑 · DMI 复用 ADX state
 // WP-41 v3 第 5 批：DEMA + TEMA 实现 IncrementalIndicator · 复合 EMA 线性组合（TRIX 模式简化 · 无差分）
 // WP-41 v3 第 6 批：VWAP 实现 IncrementalIndicator · 累积 typical*volume / 累积 volume（同 OBV 模式无周期）
+// WP-41 v3 第 8 批：WMA + HMA 实现 IncrementalIndicator · WMA O(1) Pascal triangle sliding · HMA 内嵌 3 WMA
 
 import Foundation
 import Shared
@@ -20,6 +21,126 @@ public enum WMA: Indicator {
     public static func calculate(kline: KLineSeries, params: [Decimal]) throws -> [IndicatorSeries] {
         let n = try requireIntParam(params, index: 0, min: 1, label: "WMA period")
         return [IndicatorSeries(name: "WMA(\(n))", values: Kernels.wma(kline.closes, period: n))]
+    }
+}
+
+// MARK: - WP-41 v3 第 8 批 · WMA 增量 API（O(1) Pascal triangle sliding · HMA 内嵌复用）
+
+extension WMA: IncrementalIndicator {
+
+    /// state：ring[n] + numerator + runningSum
+    /// Pascal 公式：num[i+1] = num[i] + n*close[i+1] - runningSum[i]
+    ///             runningSum[i+1] = runningSum[i] + close[i+1] - close[i-n+1]
+    /// O(1) per step（warm-up 期 count==n 时一次性 seed 是 O(n) · 仅一次）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public let nDec: Decimal
+        public let weightSum: Decimal
+        public var ring: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var numerator: Decimal
+        public var runningSum: Decimal
+
+        /// 推进一个 close · 返回该步 WMA round8 值（warm-up 期返回 nil）
+        /// 对外暴露给 HMA 等复合指标内嵌（与 EMA.advance 同模式）
+        public mutating func advance(close: Decimal) -> Decimal? {
+            if count < period {
+                ring[head] = close
+                head = (head + 1) % period
+                count += 1
+                guard count == period else { return nil }
+                // count 刚达到 period · 一次性 seed numerator + runningSum
+                // ring 当前布局：head == 0（第 n 步写完后 head 回环到起点）· ring[0..n-1] = close[0..n-1]
+                // numerator = Σ k*close[k-1] for k=1..n（最旧 close[0] 权重 1 · 最新 close[n-1] 权重 n）
+                numerator = 0
+                runningSum = 0
+                for k in 1...period {
+                    let idx = (head + k - 1) % period
+                    numerator += Decimal(k) * ring[idx]
+                    runningSum += ring[idx]
+                }
+                return Kernels.round8(numerator / weightSum)
+            }
+            // Sliding 期 · ring[head] 是即将被覆盖 = close[i-n+1]（最旧）
+            let oldClose = ring[head]
+            // 注意顺序：先用 runningSum 算 numerator（关键 · runningSum 此时是覆盖前的）
+            numerator = numerator + nDec * close - runningSum
+            runningSum = runningSum + close - oldClose
+            ring[head] = close
+            head = (head + 1) % period
+            count += 1
+            return Kernels.round8(numerator / weightSum)
+        }
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, index: 0, min: 1, label: "WMA period")
+        let weightSum = Decimal(n * (n + 1) / 2)
+        var state = IncrementalState(
+            period: n, nDec: Decimal(n), weightSum: weightSum,
+            ring: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0,
+            numerator: 0, runningSum: 0
+        )
+        for close in kline.closes {
+            _ = state.advance(close: close)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [state.advance(close: newBar.close)]
+    }
+}
+
+// MARK: - WP-41 v3 第 8 批 · HMA 增量 API（内嵌 3 WMA · halfN/n/sqrtN · 同 TRIX 复合模式）
+
+extension HMA: IncrementalIndicator {
+
+    /// state：3 个 WMA.IncrementalState · raw = 2*wHalf - wFull · final = wma(raw, sqrtN)
+    /// 与 calculate 一致：raw 在 wHalf/wFull 都有值时 = 2h-f；否则 raw = 0（数组默认初值）
+    /// 中间层 hmaWma 每步都 advance（用 raw=0 替换 nil · 与 calculate raw 数组每位都赋值一致）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var wHalf: WMA.IncrementalState
+        public var wFull: WMA.IncrementalState
+        public var hmaWma: WMA.IncrementalState
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, index: 0, min: 4, label: "HMA period")
+        let halfN = max(1, n / 2)
+        let sqrtN = max(1, Int(Double(n).squareRoot()))
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = IncrementalState(
+            period: n,
+            wHalf: try WMA.makeIncrementalState(kline: empty, params: [Decimal(halfN)]),
+            wFull: try WMA.makeIncrementalState(kline: empty, params: [Decimal(n)]),
+            hmaWma: try WMA.makeIncrementalState(kline: empty, params: [Decimal(sqrtN)])
+        )
+        for close in kline.closes {
+            _ = processStep(state: &state, close: close)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close)]
+    }
+
+    /// raw = 2*h - f（用 advance round8 值 · 与 calculate raw[i] 用 wHalf[i]/wFull[i] round8 值一致）
+    /// hmaWma 每步无条件 advance（用 raw 即可 · h/f nil 时 raw=0）
+    private static func processStep(state: inout IncrementalState, close: Decimal) -> Decimal? {
+        let h = state.wHalf.advance(close: close)
+        let f = state.wFull.advance(close: close)
+        let raw: Decimal
+        if let hh = h, let ff = f {
+            raw = Decimal(2) * hh - ff
+        } else {
+            raw = 0
+        }
+        return state.hmaWma.advance(close: raw)
     }
 }
 

@@ -3,6 +3,7 @@
 //
 // WP-41 v3 第 2 批 commit 3/4：ADX 实现 IncrementalIndicator · 4 路 Wilder 平滑 · DMI 复用 ADX state
 // WP-41 v3 第 5 批：DEMA + TEMA 实现 IncrementalIndicator · 复合 EMA 线性组合（TRIX 模式简化 · 无差分）
+// WP-41 v3 第 6 批：VWAP 实现 IncrementalIndicator · 累积 typical*volume / 累积 volume（同 OBV 模式无周期）
 
 import Foundation
 import Shared
@@ -195,6 +196,43 @@ public enum VWAP: Indicator {
             out[i] = cumV == 0 ? nil : Kernels.round8(cumPV / cumV)
         }
         return [IndicatorSeries(name: "VWAP", values: out)]
+    }
+}
+
+// MARK: - WP-41 v3 第 6 批 · VWAP 增量 API（累积式 · 同 OBV 模式 · 无周期 · 无 warm-up）
+
+extension VWAP: IncrementalIndicator {
+
+    /// state：cumPV + cumV · 流式累加 · cumV == 0 时输出 nil（与 calculate 一致）
+    public struct IncrementalState: Sendable {
+        public var cumPV: Decimal
+        public var cumV: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        var state = IncrementalState(cumPV: 0, cumV: 0)
+        let count = kline.highs.count
+        for i in 0..<count {
+            _ = processStep(state: &state,
+                            high: kline.highs[i], low: kline.lows[i],
+                            close: kline.closes[i], volume: kline.volumes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, high: newBar.high, low: newBar.low, close: newBar.close, volume: newBar.volume)]
+    }
+
+    /// typical = (H+L+C)/3 · cumPV += typical*volume · cumV += volume
+    /// 输出 round8(cumPV/cumV) · cumV==0 → nil（极端：开盘前所有 volume=0 等）
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal, volume: Int) -> Decimal? {
+        let typical = (high + low + close) / Decimal(3)
+        let volDec = Decimal(volume)
+        state.cumPV += typical * volDec
+        state.cumV += volDec
+        guard state.cumV != 0 else { return nil }
+        return Kernels.round8(state.cumPV / state.cumV)
     }
 }
 

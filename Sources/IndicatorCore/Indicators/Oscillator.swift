@@ -6,6 +6,7 @@
 // WP-41 v3 第 2 批 commit 2/4：WilliamsR 实现 IncrementalIndicator · KDJ ring 简化版（无 SMA 平滑）
 // WP-41 v3 第 3 批：Stochastic 实现 IncrementalIndicator · ring HHV/LLV + %K_raw 滑动 sum %D
 // WP-41 v3 第 4 批：TRIX 实现 IncrementalIndicator · 内嵌 3 EMA + prevE3 差分（同 MACD 复合 EMA 模式）
+// WP-41 v3 第 6 批：PSY + CMO 实现 IncrementalIndicator · ring sliding sum（PSY 单 ring · CMO 双 ring）
 
 import Foundation
 import Shared
@@ -664,5 +665,132 @@ extension TRIX: IncrementalIndicator {
         // 含 nil（warm-up 期 prevE3 保持 nil · 与 calculate e3[i-1] == nil 时不输出语义一致）
         state.prevE3 = e3Out
         return trix
+    }
+}
+
+// MARK: - WP-41 v3 第 6 批 · PSY 增量 API（ring sliding sum · 单 ring）
+
+extension PSY: IncrementalIndicator {
+
+    /// state：prevClose（diff 判定用）+ ring（n 根 ups 0/1 标志）+ sum + count + head
+    /// 输出 PSY = sum/n * 100 当 count >= period（与 calculate Kernels.slidingSum 一致）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public let nDec: Decimal
+        public var prevClose: Decimal?
+        public var ring: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var sum: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "PSY period")
+        var state = IncrementalState(
+            period: n, nDec: Decimal(n),
+            prevClose: nil,
+            ring: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0, sum: 0
+        )
+        for close in kline.closes {
+            _ = processStep(state: &state, close: close)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close)]
+    }
+
+    /// ups[i] = 1 if close > prevClose else 0（i=0 prevClose=nil → 0）
+    /// ring 滑动 sum（同 MA 模式）· count >= period 起输出 sum/n*100
+    private static func processStep(state: inout IncrementalState, close: Decimal) -> Decimal? {
+        let ups: Decimal
+        if let pc = state.prevClose, close > pc {
+            ups = 1
+        } else {
+            ups = 0
+        }
+        state.prevClose = close
+
+        // ring 滑动 sum（每步无条件扣 ring[head] · 未满时 ring[head]=0 等同不动）
+        state.sum -= state.ring[state.head]
+        state.ring[state.head] = ups
+        state.head = (state.head + 1) % state.period
+        state.sum += ups
+        state.count = min(state.count + 1, state.period)
+
+        guard state.count == state.period else { return nil }
+        return Kernels.round8(state.sum / state.nDec * Decimal(100))
+    }
+}
+
+// MARK: - WP-41 v3 第 6 批 · CMO 增量 API（ring sliding sum 双 ring · 同 RSI 思路无 Wilder）
+
+extension CMO: IncrementalIndicator {
+
+    /// state：prevClose + 双 ring（up/dn n 根）+ 双 sum + count + head
+    /// 关键：CMO 第一个输出在 count == period+1（等价 calculate `for i in n..<count` 第一根 i=n）
+    /// 即跳过 slidingSum 第一个非 nil（i=n-1）· 因 CMO 原始要求"第 1 条差分不计入起始窗口"
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var prevClose: Decimal?
+        public var upRing: [Decimal]
+        public var dnRing: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var sumUp: Decimal
+        public var sumDn: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "CMO period")
+        var state = IncrementalState(
+            period: n,
+            prevClose: nil,
+            upRing: [Decimal](repeating: 0, count: n),
+            dnRing: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0,
+            sumUp: 0, sumDn: 0
+        )
+        for close in kline.closes {
+            _ = processStep(state: &state, close: close)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close)]
+    }
+
+    /// 双 ring 同步滑动 sum：每步无条件扣 ring[head] · 写入 up/dn · 推进
+    /// 输出 (sumUp - sumDn) / (sumUp + sumDn) * 100 当 count > period 且 total > 0
+    /// count > period 等价 calculate `for i in n..<count`（i=n 即 count=n+1）
+    private static func processStep(state: inout IncrementalState, close: Decimal) -> Decimal? {
+        let upVal: Decimal
+        let dnVal: Decimal
+        if let pc = state.prevClose {
+            let diff = close - pc
+            upVal = diff > 0 ? diff : 0
+            dnVal = diff < 0 ? -diff : 0
+        } else {
+            upVal = 0
+            dnVal = 0
+        }
+        state.prevClose = close
+
+        state.sumUp -= state.upRing[state.head]
+        state.sumDn -= state.dnRing[state.head]
+        state.upRing[state.head] = upVal
+        state.dnRing[state.head] = dnVal
+        state.head = (state.head + 1) % state.period
+        state.sumUp += upVal
+        state.sumDn += dnVal
+        state.count += 1
+
+        guard state.count > state.period else { return nil }
+        let total = state.sumUp + state.sumDn
+        guard total > 0 else { return nil }
+        return Kernels.round8((state.sumUp - state.sumDn) / total * Decimal(100))
     }
 }

@@ -539,6 +539,32 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 6 批（VWAP + PSY + CMO · 19 指标）
+
+### VWAP 增量（累积式 · 同 OBV 模式 · 无周期 · 无 warm-up）
+- [ ] VWAP 与全量精确一致（80 K · history 30）
+- [ ] history 空 · 第 1 根即有值（无 warm-up · cumV>0 时）· 全程匹配全量
+- [ ] benchmark VWAP 满批 ~1.0× 加速（累积式简单 · 全量本身极快）
+
+### PSY 增量（单 ring sliding sum · 上涨标志 0/1）
+- [ ] PSY 与全量精确一致（period=12 · 80 K · history 30）
+- [ ] history 空 · 前 9 步 nil · 第 10 步起匹配全量（period=10）
+- [ ] 参数缺失 / period<1 抛错
+- [ ] benchmark PSY(12) 满批 1.6× 加速（消除 calculate slidingSum 数组分配开销）
+
+### CMO 增量（双 ring up/dn sliding sum · 同 RSI 思路无 Wilder）
+- [ ] CMO 与全量精确一致（period=14 · 80 K · history 30）
+- [ ] history 空 · 前 period 步 nil（10 步）· 第 period+1 步起匹配全量（边界：跳过 i=n-1）
+- [ ] close 全平 → up=dn=0 → total=0 → 始终 nil
+- [ ] 参数缺失 / period<1 抛错
+- [ ] benchmark CMO(14) 满批 1.8× 加速（最高加速 · 双 ring sliding sum 替代两个数组分配）
+
+### 19 指标增量基础
+- [ ] benchmark 完整输出 19 行
+- [ ] 增量 API 覆盖率：19/56 = 33.9%（IndicatorCore 1/3 已增量化）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

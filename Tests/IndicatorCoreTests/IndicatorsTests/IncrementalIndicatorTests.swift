@@ -1097,6 +1097,167 @@ struct TEMAIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 6 批 · VWAP / PSY / CMO 增量 API
+
+@Suite("WP-41 v3 第 6 批 · VWAP 增量 API（累积式无周期）")
+struct VWAPIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（无周期）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try VWAP.calculate(kline: series, params: [])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try VWAP.makeIncrementalState(kline: history, params: [])
+
+        for i in historyCount..<bars.count {
+            let row = VWAP.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "VWAP[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 第 1 根即有值（无 warm-up · 同 OBV）· 全程匹配全量")
+    func incrementalNoWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try VWAP.makeIncrementalState(kline: empty, params: [])
+
+        let series = makeSeries(from: bars)
+        let full = try VWAP.calculate(kline: series, params: [])
+
+        for i in 0..<bars.count {
+            let row = VWAP.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "VWAP[\(i)]")
+        }
+    }
+}
+
+@Suite("WP-41 v3 第 6 批 · PSY 增量 API（ring sliding sum 单 ring）")
+struct PSYIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=12）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try PSY.calculate(kline: series, params: [12])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try PSY.makeIncrementalState(kline: history, params: [12])
+
+        for i in historyCount..<bars.count {
+            let row = PSY.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "PSY[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try PSY.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = PSY.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let series = makeSeries(from: bars)
+        let full = try PSY.calculate(kline: series, params: [10])
+        for i in 9..<bars.count {
+            let row = PSY.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "PSY[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try PSY.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try PSY.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
+@Suite("WP-41 v3 第 6 批 · CMO 增量 API（双 ring up/dn sliding sum · 同 RSI 思路无 Wilder）")
+struct CMOIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=14）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try CMO.calculate(kline: series, params: [14])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try CMO.makeIncrementalState(kline: history, params: [14])
+
+        for i in historyCount..<bars.count {
+            let row = CMO.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "CMO[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period 步 nil · 第 period+1 步起匹配全量（CMO 跳过 i=n-1）")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 40)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try CMO.makeIncrementalState(kline: empty, params: [10])
+
+        // i=0..9 共 10 步 nil（与 calculate `for i in n..<count` i=n=10 起输出一致）
+        for i in 0..<10 {
+            let row = CMO.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil, "CMO i=\(i): warm-up + skip i=n-1")
+        }
+        let series = makeSeries(from: bars)
+        let full = try CMO.calculate(kline: series, params: [10])
+        for i in 10..<bars.count {
+            let row = CMO.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "CMO[\(i)]")
+        }
+    }
+
+    @Test("close 全平 → up=dn=0 → total=0 → 始终 nil")
+    func incrementalAllSame() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let flat = (0..<20).map { i in
+            KLine(
+                instrumentID: "TEST", period: .minute1,
+                openTime: baseDate.addingTimeInterval(TimeInterval(i * 60)),
+                open: 100, high: 100, low: 100, close: 100,
+                volume: 100, openInterest: 0, turnover: 0
+            )
+        }
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try CMO.makeIncrementalState(kline: empty, params: [10])
+        for bar in flat {
+            let row = CMO.stepIncremental(state: &state, newBar: bar)
+            #expect(row[0] == nil)
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try CMO.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try CMO.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

@@ -1,14 +1,15 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（16 指标 · v3 第 5 批扩展 DEMA + TEMA）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（19 指标 · v3 第 6 批扩展 VWAP + PSY + CMO）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 16 个指标：
+// 测试 19 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
 //   v3 第 3 批（1）：Stochastic 14-3
 //   v3 第 4 批（1）：TRIX 12（内嵌 3 层 EMA · 同 MACD 模式）
 //   v3 第 5 批（2）：DEMA 20 / TEMA 20（复合 EMA 线性组合 · 同 TRIX 模式但无差分）
+//   v3 第 6 批（3）：VWAP（累积式无周期）/ PSY 12（单 ring sliding sum）/ CMO 14（双 ring · 同 RSI 思路无 Wilder）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -226,6 +227,35 @@ benchmark("TEMA(20)") {
     guard var state = try? TEMA.makeIncrementalState(kline: emptyHistory, params: [20]) else { return }
     for bar in bars {
         _ = TEMA.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 6 批 · VWAP / PSY / CMO
+
+benchmark("VWAP") {
+    _ = try? VWAP.calculate(kline: series, params: [])
+} incremental: {
+    guard var state = try? VWAP.makeIncrementalState(kline: emptyHistory, params: []) else { return }
+    for bar in bars {
+        _ = VWAP.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("PSY(12)") {
+    _ = try? PSY.calculate(kline: series, params: [12])
+} incremental: {
+    guard var state = try? PSY.makeIncrementalState(kline: emptyHistory, params: [12]) else { return }
+    for bar in bars {
+        _ = PSY.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("CMO(14)") {
+    _ = try? CMO.calculate(kline: series, params: [14])
+} incremental: {
+    guard var state = try? CMO.makeIncrementalState(kline: emptyHistory, params: [14]) else { return }
+    for bar in bars {
+        _ = CMO.stepIncremental(state: &state, newBar: bar)
     }
 }
 

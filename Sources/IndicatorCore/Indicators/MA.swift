@@ -13,7 +13,7 @@ public enum MA: Indicator {
     ]
 
     public static func calculate(kline: KLineSeries, params: [Decimal]) throws -> [IndicatorSeries] {
-        let n = try periodInt(params)
+        let n = try requireIntParam(params, label: "MA period")
         let values = Kernels.ma(kline.closes, period: n)
         return [IndicatorSeries(name: "MA(\(n))", values: values)]
     }
@@ -34,7 +34,7 @@ extension MA: IncrementalIndicator {
     }
 
     public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
-        let n = try periodInt(params)
+        let n = try requireIntParam(params, label: "MA period")
         let closes = kline.closes
         // 取 history 末尾 ≤ n 个 close 装入 ring · 重建 sum 与 calculate() 末值一致
         let startIdx = max(0, closes.count - n)
@@ -76,21 +76,63 @@ public enum EMA: Indicator {
     ]
 
     public static func calculate(kline: KLineSeries, params: [Decimal]) throws -> [IndicatorSeries] {
-        let n = try periodInt(params)
+        let n = try requireIntParam(params, label: "EMA period")
         let values = Kernels.ema(kline.closes, period: n)
         return [IndicatorSeries(name: "EMA(\(n))", values: values)]
     }
 }
 
-// MARK: - 参数校验
+// MARK: - WP-41 v2 commit 2/4 · EMA 增量 API
 
-fileprivate func periodInt(_ params: [Decimal]) throws -> Int {
-    guard let first = params.first else {
-        throw IndicatorError.invalidParameter("缺少 period 参数")
+extension EMA: IncrementalIndicator {
+
+    /// state：α=2/(n+1) 平滑系数 + warmUpSum（warm-up 期累加 · 第 n 步用作 SMA 种子）+ prevEMA（不 round 状态 · 输出 round8）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public let alpha: Decimal
+        public let oneMinusAlpha: Decimal
+        public var warmUpSum: Decimal
+        public var count: Int
+        public var prevEMA: Decimal
     }
-    let n = intValue(first)
-    guard n > 0 else {
-        throw IndicatorError.invalidParameter("period 必须大于 0，实际 \(n)")
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "EMA period")
+        let alpha = Decimal(2) / Decimal(n + 1)
+        let oneMinusAlpha = Decimal(1) - alpha
+        let closes = kline.closes
+        let count = closes.count
+        if count >= n {
+            // 已过 warm-up · 重建 prevEMA（与 calculate 内部状态一致 · 不 round8）
+            let seedSum = closes.prefix(n).reduce(Decimal(0), +)
+            var prev = seedSum / Decimal(n)
+            for i in n..<count {
+                prev = alpha * closes[i] + oneMinusAlpha * prev
+            }
+            return IncrementalState(period: n, alpha: alpha, oneMinusAlpha: oneMinusAlpha,
+                                    warmUpSum: 0, count: count, prevEMA: prev)
+        }
+        // warm-up 期 · 累加 sum
+        let warmUpSum = closes.reduce(Decimal(0), +)
+        return IncrementalState(period: n, alpha: alpha, oneMinusAlpha: oneMinusAlpha,
+                                warmUpSum: warmUpSum, count: count, prevEMA: Decimal(0))
     }
-    return n
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        state.count += 1
+        if state.count < state.period {
+            state.warmUpSum += newBar.close
+            return [nil]
+        }
+        if state.count == state.period {
+            // 这一根恰好达 period · 用 SMA 种子
+            state.warmUpSum += newBar.close
+            state.prevEMA = state.warmUpSum / Decimal(state.period)
+        } else {
+            state.prevEMA = state.alpha * newBar.close + state.oneMinusAlpha * state.prevEMA
+        }
+        return [Kernels.round8(state.prevEMA)]
+    }
 }
+
+// 共用 requireIntParam 已在 Indicator.swift 定义

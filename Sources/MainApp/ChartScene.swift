@@ -74,7 +74,9 @@ struct ChartScene: View {
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 12)
         .frame(height: 32)
-        .background(Color(white: 0.12))
+        // K 线区域 clear color 是 #11141A（≈ white 0.07）· 工具条用 white 0.22 留出明显对比
+        .background(Color(white: 0.22))
+        .overlay(alignment: .bottom) { Divider() }
     }
 
     @ViewBuilder

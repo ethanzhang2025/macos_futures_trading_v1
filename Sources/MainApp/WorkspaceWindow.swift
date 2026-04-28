@@ -1,9 +1,10 @@
-// MainApp · 工作区模板面板（WP-55 收官 + v1.5 · 双栏模板管理 + 网格预设 + 快捷键编辑器 + 拖拽排序）
+// MainApp · 工作区模板面板（WP-55 收官 + v1.5 拖拽 + v1.7 JSON 导入导出）
 //
 // 能力：NavigationSplitView 双栏 · 模板 CRUD + setActive · windows 增删改 + 6 网格预设
 //      · 快捷键设置/修改/清除（A-Z + 0-9 字符 × ⌘⇧⌥⌃ modifier · 全局唯一 · 抢占提示）
 //      · activate 时 NotificationCenter post .workspaceTemplateActivated（跨窗口联动）
 //      · 同 Kind 内拖拽排序（跨 Kind 拒绝 · 通过 contextMenu「修改类型」改 kind · 同 WP-43 模式）
+//      · JSON 导入/导出（NSSavePanel + NSOpenPanel · 整本 WorkspaceBook Codable · sortedKeys 稳定）
 //
 // 留待 M5：StoreManager 注入 SQLiteWorkspaceBookStore · 替换 Mock 真持久化
 // 留待 M5：多窗口同时渲染（WP-44 + WP-40）+ CGRect 桥接 + 接收 .workspaceTemplateActivated
@@ -12,6 +13,7 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import AppKit
 import Foundation
 import UniformTypeIdentifiers
 import Shared
@@ -47,6 +49,8 @@ struct WorkspaceWindow: View {
     @State private var sheetState: WorkspaceSheetState?
     @State private var pendingDeleteTemplate: WorkspaceTemplate?
     @State private var hoverTemplateID: UUID?
+    @State private var pendingImportedBook: WorkspaceBook?
+    @State private var importErrorMessage: String?
 
     var body: some View {
         NavigationSplitView {
@@ -110,6 +114,30 @@ struct WorkspaceWindow: View {
         } message: { template in
             Text("模板「\(template.name)」内的 \(template.windows.count) 个窗口布局将一并清空。该操作无法撤销。")
         }
+        .confirmationDialog(
+            "导入工作区模板？",
+            isPresented: importConfirmBinding,
+            titleVisibility: .visible,
+            presenting: pendingImportedBook
+        ) { imported in
+            Button("替换当前 \(book.templates.count) 个模板", role: .destructive) {
+                applyImport(imported)
+            }
+            Button("取消", role: .cancel) {
+                pendingImportedBook = nil
+            }
+        } message: { imported in
+            Text("将用导入的 \(imported.templates.count) 个模板替换当前 \(book.templates.count) 个模板。该操作无法撤销。")
+        }
+        .alert(
+            "操作失败",
+            isPresented: importErrorBinding,
+            presenting: importErrorMessage
+        ) { _ in
+            Button("好") { importErrorMessage = nil }
+        } message: { msg in
+            Text(msg)
+        }
     }
 
     private var deleteConfirmBinding: Binding<Bool> {
@@ -119,16 +147,45 @@ struct WorkspaceWindow: View {
         )
     }
 
+    private var importConfirmBinding: Binding<Bool> {
+        Binding(
+            get: { pendingImportedBook != nil },
+            set: { if !$0 { pendingImportedBook = nil } }
+        )
+    }
+
+    private var importErrorBinding: Binding<Bool> {
+        Binding(
+            get: { importErrorMessage != nil },
+            set: { if !$0 { importErrorMessage = nil } }
+        )
+    }
+
     // MARK: - 左栏 · 按 Kind 分组的模板列表
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 8) {
                 Text("工作区模板").font(.headline)
                 Spacer()
                 Text("\(book.templates.count) 个")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                Button {
+                    presentImportPanel()
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderless)
+                .help("导入 JSON · 整本替换当前模板")
+                Button {
+                    presentExportPanel()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .buttonStyle(.borderless)
+                .help("导出 JSON · 当前 \(book.templates.count) 个模板")
+                .disabled(book.templates.isEmpty)
                 Button {
                     sheetState = .addTemplate
                 } label: {
@@ -541,6 +598,70 @@ struct WorkspaceWindow: View {
         } else if hoverTemplateID == id {
             hoverTemplateID = nil
         }
+    }
+
+    // MARK: - JSON 导入 / 导出（v1.7 · NSSavePanel + NSOpenPanel · 与 WP-53 CSV 风格对称）
+
+    /// 自定义 encoder：iso8601 日期 + sortedKeys（diff 友好）+ prettyPrinted（人读）
+    /// 之所以不用 Workspaces module 内 JSONEncoder.cloudKit：那是 internal 不跨模块 · 这里独立配置
+    private static let exportEncoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        e.outputFormatting = [.sortedKeys, .prettyPrinted]
+        return e
+    }()
+
+    private static let importDecoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return d
+    }()
+
+    private func presentExportPanel() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "工作区模板-\(Self.filenameDate(Date())).json"
+        panel.title = "导出工作区模板"
+        panel.prompt = "导出"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try Self.exportEncoder.encode(book)
+            try data.write(to: url)
+        } catch {
+            importErrorMessage = "导出失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func presentImportPanel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = "选择工作区模板 JSON 文件"
+        panel.prompt = "导入"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            let imported = try Self.importDecoder.decode(WorkspaceBook.self, from: data)
+            pendingImportedBook = imported
+        } catch {
+            importErrorMessage = "导入失败：JSON 格式不识别 · \(error.localizedDescription)"
+        }
+    }
+
+    /// 用户在 confirmationDialog 确认后整本替换 · 选中切到导入的激活模板（或第一个）
+    private func applyImport(_ imported: WorkspaceBook) {
+        book = imported
+        selectedTemplateID = imported.activeTemplateID ?? imported.templates.first?.id
+        pendingImportedBook = nil
+    }
+
+    private static func filenameDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN_POSIX")
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
     }
 
     /// 设置/清除快捷键（数据层 setShortcut 强制全局唯一 · 抢占自动清空旧绑定）

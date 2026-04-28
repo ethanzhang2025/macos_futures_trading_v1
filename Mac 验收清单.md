@@ -598,6 +598,21 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] 拖拽过程不影响其他交互（双击激活 / contextMenu 仍可用）
 - [ ] 拖拽完成后 hoverTemplateID 自动清空（defer 守卫）
 
+### v1.7（JSON 导入 / 导出 · 与 WP-53 CSV 风格对称）
+- [ ] sidebar 顶部 3 按钮顺序：导入（square.and.arrow.down）/ 导出（square.and.arrow.up · 模板空时 disabled）/ 添加（+）
+- [ ] 导出：
+  - [ ] NSSavePanel · 标题"导出工作区模板" · 默认文件名 "工作区模板-yyyy-MM-dd.json"（Asia/Shanghai POSIX）
+  - [ ] 内容：JSONEncoder iso8601 + sortedKeys + prettyPrinted（diff 友好 + 人读）
+  - [ ] 包含完整 WorkspaceBook（templates + activeTemplateID · 含 windows / shortcut / sortIndex / timestamps）
+  - [ ] 写入失败 → "操作失败"alert（含 error.localizedDescription）
+- [ ] 导入：
+  - [ ] NSOpenPanel · 标题"选择工作区模板 JSON 文件" · allowedContentTypes [.json]
+  - [ ] 解析失败（非 JSON / Schema 不匹配）→ "操作失败"alert "导入失败：JSON 格式不识别 · ..."
+  - [ ] 解析成功 → confirmationDialog "替换当前 N 个模板还是取消"（含两边数量对比）
+  - [ ] 确认替换 → book = imported · 选中切到 imported.activeTemplateID 或 first
+- [ ] 边界：导入空 book（templates 数 0）confirmationDialog 仍显示 · 替换后变成空状态（detail 显示"未选择模板"）
+- [ ] 往返一致性：导出 → 导入同文件 → 数据完全一致（包括 shortcut / windows.frame / indicator IDs / sortIndex 顺序）
+
 ### Mac 切机替换（M5 · 多窗口实际渲染）
 - [ ] StoreManager 注入 SQLiteWorkspaceBookStore · 替换 MockWorkspaceBook（持久化）
 - [ ] 多窗口同时渲染（WP-44 + WP-40 联合 · CGRect 桥接 LayoutFrame）

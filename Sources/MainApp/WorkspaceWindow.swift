@@ -1,8 +1,9 @@
-// MainApp · 工作区模板面板（WP-55 收官 · 双栏模板管理 + 网格预设 + 快捷键编辑器）
+// MainApp · 工作区模板面板（WP-55 收官 + v1.5 · 双栏模板管理 + 网格预设 + 快捷键编辑器 + 拖拽排序）
 //
 // 能力：NavigationSplitView 双栏 · 模板 CRUD + setActive · windows 增删改 + 6 网格预设
 //      · 快捷键设置/修改/清除（A-Z + 0-9 字符 × ⌘⇧⌥⌃ modifier · 全局唯一 · 抢占提示）
 //      · activate 时 NotificationCenter post .workspaceTemplateActivated（跨窗口联动）
+//      · 同 Kind 内拖拽排序（跨 Kind 拒绝 · 通过 contextMenu「修改类型」改 kind · 同 WP-43 模式）
 //
 // 留待 M5：StoreManager 注入 SQLiteWorkspaceBookStore · 替换 Mock 真持久化
 // 留待 M5：多窗口同时渲染（WP-44 + WP-40）+ CGRect 桥接 + 接收 .workspaceTemplateActivated
@@ -12,6 +13,7 @@
 
 import SwiftUI
 import Foundation
+import UniformTypeIdentifiers
 import Shared
 
 // MARK: - Sheet 状态
@@ -44,6 +46,7 @@ struct WorkspaceWindow: View {
     @State private var selectedTemplateID: UUID?
     @State private var sheetState: WorkspaceSheetState?
     @State private var pendingDeleteTemplate: WorkspaceTemplate?
+    @State private var hoverTemplateID: UUID?
 
     var body: some View {
         NavigationSplitView {
@@ -177,6 +180,7 @@ struct WorkspaceWindow: View {
             }
         }
         .contentShape(Rectangle())
+        .overlay(alignment: .top) { insertionIndicator(for: template.id) }
         .onTapGesture(count: 2) {
             activate(template)
         }
@@ -198,6 +202,34 @@ struct WorkspaceWindow: View {
                 pendingDeleteTemplate = template
             }
         }
+        .draggable(WorkspaceTemplateRef(id: template.id, kind: template.kind)) {
+            templateDragPreview(template)
+        }
+        .dropDestination(for: WorkspaceTemplateRef.self) { refs, _ in
+            guard let ref = refs.first else { return false }
+            return moveTemplate(ref, before: template)
+        } isTargeted: { isOver in
+            updateHover(template.id, active: isOver)
+        }
+    }
+
+    /// 拖拽 hover 到行顶部时显示 2px 蓝色横线（同 WP-43 insertionIndicator 模式）
+    private func insertionIndicator(for templateID: UUID) -> some View {
+        let isActive = hoverTemplateID == templateID
+        return Rectangle()
+            .fill(Color.accentColor)
+            .frame(height: isActive ? 2 : 0)
+    }
+
+    private func templateDragPreview(_ template: WorkspaceTemplate) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "rectangle.stack")
+                .foregroundColor(.accentColor)
+            Text(template.name)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
     }
 
     // MARK: - 右栏 · 模板详情
@@ -480,6 +512,35 @@ struct WorkspaceWindow: View {
             name: .workspaceTemplateActivated,
             object: template.id.uuidString
         )
+    }
+
+    // MARK: - Mutations · 拖拽排序（v1.5 · 同 WP-43 模式）
+
+    /// 拖拽模板到目标行前（同 Kind 内）· 跨 Kind 拒绝（用 contextMenu「修改类型」改 kind）
+    /// 数据层 moveTemplate 是全局 templates 数组的 indices · normalizeSortIndices 保持连续
+    @discardableResult
+    private func moveTemplate(_ ref: WorkspaceTemplateRef, before target: WorkspaceTemplate) -> Bool {
+        defer { hoverTemplateID = nil }
+        guard ref.kind == target.kind else { return false }
+        guard let from = book.templates.firstIndex(where: { $0.id == ref.id }),
+              let targetIdx = book.templates.firstIndex(where: { $0.id == target.id }),
+              let to = Self.resolveDropIndex(from: from, target: targetIdx)
+        else { return false }
+        return book.moveTemplate(from: from, to: to)
+    }
+
+    /// "落在 targetIndex 前"语义 → Array.move 风格的 (from, to) 转换（同 WP-43 resolveDropIndex）
+    private static func resolveDropIndex(from: Int, target: Int) -> Int? {
+        if target == from || target == from + 1 { return nil }
+        return target > from ? target - 1 : target
+    }
+
+    private func updateHover(_ id: UUID, active: Bool) {
+        if active {
+            hoverTemplateID = id
+        } else if hoverTemplateID == id {
+            hoverTemplateID = nil
+        }
     }
 
     /// 设置/清除快捷键（数据层 setShortcut 强制全局唯一 · 抢占自动清空旧绑定）
@@ -1054,6 +1115,16 @@ extension Notification.Name {
     /// WP-55 commit 4 · WorkspaceWindow 切换激活 → 主图/多窗口接收切换布局（object: templateID String）
     /// M5 多窗口实际渲染时接收 + frame 桥接 CGRect · v1 仅 stub
     static let workspaceTemplateActivated = Notification.Name("workspaceTemplateActivated")
+}
+
+// MARK: - Transferable 拖拽载荷（WP-55 v1.5）
+
+private struct WorkspaceTemplateRef: Codable, Hashable, Transferable {
+    let id: UUID
+    let kind: WorkspaceTemplate.Kind   // 跨 Kind 拒绝判定用
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
+    }
 }
 
 // MARK: - Mock 数据（commit 1 静态 · M5 替换 SQLiteWorkspaceBookStore）

@@ -551,6 +551,19 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] footer 右侧绿色 capsule "WP-55 收官 🎉"（与 WP-53 收官风格一致）
 - [ ] 整体回归：commit 1-3 所有功能仍正常（CRUD / 网格 / windows 编辑 / 切换激活）
 
+### v1.5（拖拽排序模板 · 同 WP-43 commit 3 模式）
+- [ ] sidebar 模板长按拖动 → 拖拽预览（rectangle.stack icon + 模板名 · regularMaterial 背景 · 圆角 6）
+- [ ] 同 Kind 内拖到目标行前：
+  - [ ] 落点上方 2px 蓝色 accentColor 横线（hover 命中提示）
+  - [ ] 松手 → book.moveTemplate(from:to:) · sortIndex normalizeSortIndices 重整为 0..<N
+  - [ ] 落到自己 / 自己之后相邻位置 → no-op（resolveDropIndex 返回 nil）
+- [ ] 跨 Kind 拒绝：
+  - [ ] 例：拖盘前模板到盘中 Section · dropDestination 返回 false
+  - [ ] hoverTemplateID 不更新（无蓝条提示）
+  - [ ] 想改 kind → 走 contextMenu「重命名 / 修改类型」（commit 2 已有）
+- [ ] 拖拽过程不影响其他交互（双击激活 / contextMenu 仍可用）
+- [ ] 拖拽完成后 hoverTemplateID 自动清空（defer 守卫）
+
 ### Mac 切机替换（M5 · 多窗口实际渲染）
 - [ ] StoreManager 注入 SQLiteWorkspaceBookStore · 替换 MockWorkspaceBook（持久化）
 - [ ] 多窗口同时渲染（WP-44 + WP-40 联合 · CGRect 桥接 LayoutFrame）

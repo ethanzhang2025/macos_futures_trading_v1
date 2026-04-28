@@ -1,18 +1,15 @@
-// MainApp · 复盘工作台 Scene（WP-50 UI 层 v1 起步 · commit 1/4）
+// MainApp · 复盘工作台 Scene（WP-50 UI · 共 4 commit）
 //
-// commit 1 范围：开窗 + 数据流连通 + 8 图占位
-//   - WindowGroup("复盘", id: "review") · ⌘R 独立窗口
-//   - 内部 mock trades · PositionMatcher → ReviewAnalytics 算齐 8 个数据 struct
-//   - LazyVGrid 占位 8 卡片 + 顶部 stats（trades/闭合/PnL/胜率）
-//
-// 后续 commit 计划：
-//   - 2/4：折线类 2 图（胜率曲线 / 最大回撤）· SwiftUI Charts LineMark
-//   - 3/4：柱状类 4 图（月度盈亏 / 分布直方 / 持仓时间 / 时段分析）· BarMark
-//   - 4/4：其他 2 图（品种矩阵 / 盈亏比）+ JournalCore 真数据接入（替换 Mock）
+// 进度：
+//   ✅ 1/4：开窗 + Mock 数据流 + 8 卡片占位
+//   ✅ 2/4：折线类 2 图（胜率曲线 / 最大回撤）· SwiftUI Charts LineMark
+//   ⏳ 3/4：柱状类 4 图（月度盈亏 / 分布直方 / 持仓时间 / 时段分析）· BarMark
+//   ⏳ 4/4：其他 2 图（品种矩阵 / 盈亏比）+ JournalCore 真数据接入
 
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import Charts
 import Shared
 import JournalCore
 
@@ -36,7 +33,7 @@ struct ReviewWindow: View {
         .task { await loadMockReview() }
     }
 
-    /// v1 用 mock trades · commit 4 替换为 JournalStore 真数据
+    /// v1 用 mock trades · commit 4/4 替换为 JournalStore 真数据
     private func loadMockReview() async {
         let result = await Task.detached(priority: .userInitiated) {
             let trades = MockReviewTrades.generate(pairCount: 50)
@@ -66,29 +63,37 @@ struct ReviewWindow: View {
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: 16) {
                     chartCard("月度盈亏",
-                              subtitle: "MonthlyPnL · \(s.monthlyPnL.buckets.count) 月跨度",
-                              icon: "calendar")
+                              subtitle: "MonthlyPnL · \(s.monthlyPnL.buckets.count) 月跨度") {
+                        placeholderArt("calendar")
+                    }
                     chartCard("分布直方",
-                              subtitle: "PnLDistribution · \(s.pnlDistribution.bins.count) 桶 · 盈\(s.pnlDistribution.positiveCount)/亏\(s.pnlDistribution.negativeCount)",
-                              icon: "chart.bar.fill")
+                              subtitle: "PnLDistribution · \(s.pnlDistribution.bins.count) 桶 · 盈\(s.pnlDistribution.positiveCount)/亏\(s.pnlDistribution.negativeCount)") {
+                        placeholderArt("chart.bar.fill")
+                    }
                     chartCard("胜率曲线",
-                              subtitle: "WinRateCurve · 终值 \(pct(s.winRateCurve.finalWinRate))",
-                              icon: "chart.line.uptrend.xyaxis")
+                              subtitle: "WinRateCurve · 终值 \(pct(s.winRateCurve.finalWinRate))") {
+                        winRateChart(s.winRateCurve)
+                    }
                     chartCard("品种矩阵",
-                              subtitle: "InstrumentMatrix · \(s.instrumentMatrix.cells.count) 合约",
-                              icon: "tablecells")
+                              subtitle: "InstrumentMatrix · \(s.instrumentMatrix.cells.count) 合约") {
+                        placeholderArt("tablecells")
+                    }
                     chartCard("持仓时间",
-                              subtitle: "中位 \(durationLabel(s.holdingDuration.medianSeconds)) · 平均 \(durationLabel(s.holdingDuration.averageSeconds))",
-                              icon: "clock")
+                              subtitle: "中位 \(durationLabel(s.holdingDuration.medianSeconds)) · 平均 \(durationLabel(s.holdingDuration.averageSeconds))") {
+                        placeholderArt("clock")
+                    }
                     chartCard("最大回撤",
-                              subtitle: "MaxDrawdown · ¥-\(decimal(s.maxDrawdown.maxDrawdown))",
-                              icon: "arrow.down.right.circle")
+                              subtitle: "MaxDrawdown · ¥-\(decimal(s.maxDrawdown.maxDrawdown))") {
+                        maxDrawdownChart(s.maxDrawdown)
+                    }
                     chartCard("盈亏比",
-                              subtitle: "ProfitLossRatio · \(decimal(s.profitLossRatio.ratio)) · 胜 \(s.profitLossRatio.winCount) / 亏 \(s.profitLossRatio.lossCount)",
-                              icon: "scale.3d")
+                              subtitle: "ProfitLossRatio · \(decimal(s.profitLossRatio.ratio)) · 胜 \(s.profitLossRatio.winCount) / 亏 \(s.profitLossRatio.lossCount)") {
+                        placeholderArt("scale.3d")
+                    }
                     chartCard("时段分析",
-                              subtitle: "SessionPnL · \(s.sessionPnL.buckets.count) 段",
-                              icon: "moon.stars")
+                              subtitle: "SessionPnL · \(s.sessionPnL.buckets.count) 段") {
+                        placeholderArt("moon.stars")
+                    }
                 }
                 .padding(16)
             }
@@ -104,7 +109,7 @@ struct ReviewWindow: View {
             stat("总 PnL", "¥\(signedDecimal(s.monthlyPnL.totalPnL))")
             stat("胜率", pct(s.winRateCurve.finalWinRate))
             Spacer()
-            Text("v1 mock · 后续 commit 接 SwiftUI Charts + JournalStore 真数据")
+            Text("v1 mock · commit 4/4 接 JournalStore 真数据")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
         }
@@ -119,28 +124,38 @@ struct ReviewWindow: View {
         }
     }
 
-    private func chartCard(_ title: String, subtitle: String, icon: String) -> some View {
+    /// 8 图统一卡片容器（标题 + subtitle + 内容区）
+    @ViewBuilder
+    private func chartCard<Content: View>(
+        _ title: String,
+        subtitle: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.headline)
             Text(subtitle)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
                 .lineLimit(2)
-            Spacer()
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 32))
-                    .foregroundColor(.secondary.opacity(0.4))
-                Text("⏳ 待 SwiftUI Charts 绘制")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.7))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(12)
         .frame(height: 220)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(8)
+    }
+
+    /// 占位（待 commit 3/4 替换为真实 SwiftUI Charts）
+    private func placeholderArt(_ icon: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 32))
+                .foregroundColor(.secondary.opacity(0.4))
+            Text("⏳ 待 SwiftUI Charts 绘制")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.7))
+        }
     }
 
     private var gridColumns: [GridItem] {
@@ -156,15 +171,110 @@ struct ReviewWindow: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - 格式化
+    // MARK: - 折线类图（commit 2/4）
 
-    private func decimal(_ v: Decimal) -> String {
-        let n = NSDecimalNumber(decimal: v).doubleValue
+    /// 胜率曲线 · y 固定 0~100% · 50% 虚线参考（盈亏分水岭）
+    private func winRateChart(_ curve: WinRateCurve) -> some View {
+        Chart {
+            ForEach(curve.points, id: \.self) { p in
+                LineMark(
+                    x: .value("时间", p.timestamp),
+                    y: .value("胜率", p.cumulativeWinRate)
+                )
+                .foregroundStyle(Color.green)
+            }
+            RuleMark(y: .value("基准", 0.5))
+                .foregroundStyle(Color.secondary.opacity(0.3))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        }
+        .chartYScale(domain: 0...1)
+        .chartYAxis {
+            AxisMarks(values: [0, 0.25, 0.5, 0.75, 1.0]) { v in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let r = v.as(Double.self) {
+                        Text(String(format: "%.0f%%", r * 100))
+                            .font(.system(size: 9, design: .monospaced))
+                    }
+                }
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    .font(.system(size: 9))
+            }
+        }
+    }
+
+    /// 最大回撤 · 双线（累计 PnL 蓝实 + 高水位绿虚）+ 最大回撤区间红阴影
+    private func maxDrawdownChart(_ curve: MaxDrawdownCurve) -> some View {
+        Chart {
+            if let start = curve.maxDrawdownStart, let end = curve.maxDrawdownEnd {
+                RectangleMark(
+                    xStart: .value("回撤起", start),
+                    xEnd: .value("回撤止", end)
+                )
+                .foregroundStyle(Color.red.opacity(0.15))
+            }
+            ForEach(curve.points, id: \.self) { p in
+                LineMark(
+                    x: .value("时间", p.timestamp),
+                    y: .value("水位", Self.toDouble(p.highWaterMark)),
+                    series: .value("series", "高水位")
+                )
+                .foregroundStyle(Color.green.opacity(0.6))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            }
+            ForEach(curve.points, id: \.self) { p in
+                LineMark(
+                    x: .value("时间", p.timestamp),
+                    y: .value("累计PnL", Self.toDouble(p.cumulativePnL)),
+                    series: .value("series", "累计 PnL")
+                )
+                .foregroundStyle(Color.blue)
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    .font(.system(size: 9))
+            }
+        }
+        .chartYAxis {
+            AxisMarks { v in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let n = v.as(Double.self) {
+                        Text(formatYuan(n))
+                            .font(.system(size: 9, design: .monospaced))
+                    }
+                }
+            }
+        }
+    }
+
+    /// 万元单位简写（避免 y 轴标签过长 · 例如 12500 → "1.25w"）
+    private func formatYuan(_ n: Double) -> String {
+        let abs = Swift.abs(n)
+        if abs >= 10_000 { return String(format: "%.1fw", n / 10_000) }
         return String(format: "%.0f", n)
     }
 
+    // MARK: - 格式化
+
+    private static func toDouble(_ v: Decimal) -> Double {
+        NSDecimalNumber(decimal: v).doubleValue
+    }
+
+    private func decimal(_ v: Decimal) -> String {
+        String(format: "%.0f", Self.toDouble(v))
+    }
+
     private func signedDecimal(_ v: Decimal) -> String {
-        let n = NSDecimalNumber(decimal: v).doubleValue
+        let n = Self.toDouble(v)
         return n >= 0 ? "+\(String(format: "%.0f", n))" : String(format: "%.0f", n)
     }
 
@@ -195,12 +305,12 @@ private struct ReviewSummary {
     let sessionPnL: SessionPnL
 }
 
-// MARK: - Mock Trades 生成器（v1 演示 · commit 4 替换为 JournalStore 真数据）
+// MARK: - Mock Trades 生成器（v1 演示 · commit 4/4 替换为 JournalStore 真数据）
 
 enum MockReviewTrades {
 
     /// 4 合约 × pairCount 对开-平 trades · 60% 盈利率 · 6 月跨度 · 4 时段轮播
-    /// 使用 SeededRNG 让同一个 seed 跑多次结果一致（演示稳定）
+    /// SeededRNG 让同一 seed 跑多次结果一致（演示稳定）
     static func generate(pairCount: Int, seed: UInt64 = 42) -> [Trade] {
         let symbols: [(id: String, base: Decimal, swing: Decimal)] = [
             ("RB0", Decimal(3850),  Decimal(20)),
@@ -225,7 +335,7 @@ enum MockReviewTrades {
 
             let isLong = Bool.random(using: &rng)
             let willWin = Double.random(in: 0...1, using: &rng) < 0.6
-            // 多头赚价格涨 / 空头赚价格跌 · willWin == isLong-得利方向
+            // 多头赚价格涨 / 空头赚价格跌
             let priceShift: Double = willWin
                 ? (isLong ? Double.random(in: 0.5...3.0, using: &rng) : -Double.random(in: 0.5...3.0, using: &rng))
                 : (isLong ? -Double.random(in: 0.5...2.5, using: &rng) : Double.random(in: 0.5...2.5, using: &rng))
@@ -262,7 +372,7 @@ enum MockReviewTrades {
     }
 }
 
-/// 简单种子 RNG（splitmix64）· 让 mock 数据每次跑结果一致
+/// splitmix64 种子 RNG · 确保 mock 数据每次跑结果一致（演示稳定 + 测试可重现）
 private struct SeededRNG: RandomNumberGenerator {
     var state: UInt64
     init(seed: UInt64) { self.state = seed }

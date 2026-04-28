@@ -1258,6 +1258,113 @@ struct CMOIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 7 批 · ROC 增量 API（最简 ring 取 n 步前 close）
+
+@Suite("WP-41 v3 第 7 批 · ROC 增量 API")
+struct ROCIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=12）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try ROC.calculate(kline: series, params: [12])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try ROC.makeIncrementalState(kline: history, params: [12])
+
+        for i in historyCount..<bars.count {
+            let row = ROC.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "ROC[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period 步 nil · 第 period+1 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try ROC.makeIncrementalState(kline: empty, params: [10])
+
+        // ROC i=0..9 共 10 步 nil（calculate `for i in n..<count` i=10 起输出）
+        for i in 0..<10 {
+            let row = ROC.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let series = makeSeries(from: bars)
+        let full = try ROC.calculate(kline: series, params: [10])
+        for i in 10..<bars.count {
+            let row = ROC.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "ROC[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try ROC.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try ROC.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 7 批 · BIAS 增量 API（ring SMA · 与当前 close 比）
+
+@Suite("WP-41 v3 第 7 批 · BIAS 增量 API")
+struct BIASIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=6）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try BIAS.calculate(kline: series, params: [6])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try BIAS.makeIncrementalState(kline: history, params: [6])
+
+        for i in historyCount..<bars.count {
+            let row = BIAS.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "BIAS[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try BIAS.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = BIAS.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let series = makeSeries(from: bars)
+        let full = try BIAS.calculate(kline: series, params: [10])
+        for i in 9..<bars.count {
+            let row = BIAS.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "BIAS[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try BIAS.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try BIAS.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

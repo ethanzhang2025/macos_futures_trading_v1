@@ -7,6 +7,7 @@
 // WP-41 v3 第 3 批：Stochastic 实现 IncrementalIndicator · ring HHV/LLV + %K_raw 滑动 sum %D
 // WP-41 v3 第 4 批：TRIX 实现 IncrementalIndicator · 内嵌 3 EMA + prevE3 差分（同 MACD 复合 EMA 模式）
 // WP-41 v3 第 6 批：PSY + CMO 实现 IncrementalIndicator · ring sliding sum（PSY 单 ring · CMO 双 ring）
+// WP-41 v3 第 7 批：ROC + BIAS 实现 IncrementalIndicator · ring 存 close 与 SMA（最简 sliding 模式）
 
 import Foundation
 import Shared
@@ -792,5 +793,102 @@ extension CMO: IncrementalIndicator {
         let total = state.sumUp + state.sumDn
         guard total > 0 else { return nil }
         return Kernels.round8((state.sumUp - state.sumDn) / total * Decimal(100))
+    }
+}
+
+// MARK: - WP-41 v3 第 7 批 · ROC 增量 API（最简 ring 取 n 步前 close）
+
+extension ROC: IncrementalIndicator {
+
+    /// state：ring[n] 存 close · 每步取 ring[head]（即将被覆盖的位置 = close[i-n]）作 ROC 输入
+    /// ROC = (close - close[i-n]) / close[i-n] * 100 当 i >= n 且 close[i-n] != 0
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var ring: [Decimal]
+        public var head: Int
+        public var count: Int
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "ROC period")
+        var state = IncrementalState(
+            period: n,
+            ring: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0
+        )
+        for close in kline.closes {
+            _ = processStep(state: &state, close: close)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close)]
+    }
+
+    /// 关键：先取 ring[head] 再覆盖 · 取的是 n 步前的值（ring 满后 head 位置即最旧）
+    /// countBefore == period 表示 ring 已满（再写入会覆盖）· 与 calculate `for i in n..<count` 第一根 i=n 一致
+    private static func processStep(state: inout IncrementalState, close: Decimal) -> Decimal? {
+        let pastClose = state.ring[state.head]
+        state.ring[state.head] = close
+        state.head = (state.head + 1) % state.period
+        let countBefore = state.count
+        state.count = min(state.count + 1, state.period)
+
+        guard countBefore == state.period else { return nil }
+        guard pastClose != 0 else { return nil }
+        return Kernels.round8((close - pastClose) / pastClose * Decimal(100))
+    }
+}
+
+// MARK: - WP-41 v3 第 7 批 · BIAS 增量 API（ring sliding sum SMA · 与当前 close 比）
+
+extension BIAS: IncrementalIndicator {
+
+    /// state：ring[n] 存 close + sum 滑动 SMA · 输出 BIAS = (close - ma) / ma * 100 当 ma != 0
+    /// 同 MA 增量 ring buffer 模式
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public let nDec: Decimal
+        public var ring: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var sum: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "BIAS period")
+        var state = IncrementalState(
+            period: n, nDec: Decimal(n),
+            ring: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0, sum: 0
+        )
+        for close in kline.closes {
+            _ = processStep(state: &state, close: close)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close)]
+    }
+
+    /// 同 MA 增量 ring 滑动 sum · 输出 (close - ma) / ma * 100 当 count == period 且 ma != 0
+    /// 关键精度对齐：calculate 用 Kernels.ma(closes, n)[i]（= round8(sum/n)）作下游计算输入
+    /// 增量 ma 是 raw（未 round）· 必须 round8 snapshot 才与全量末位一致（同 RSI commit 2/4 / BIAS 实测差 1 末位）
+    private static func processStep(state: inout IncrementalState, close: Decimal) -> Decimal? {
+        if state.count == state.period {
+            state.sum -= state.ring[state.head]
+        } else {
+            state.count += 1
+        }
+        state.ring[state.head] = close
+        state.head = (state.head + 1) % state.period
+        state.sum += close
+
+        guard state.count == state.period else { return nil }
+        let maSnap = Kernels.round8(state.sum / state.nDec)
+        guard maSnap != 0 else { return nil }
+        return Kernels.round8((close - maSnap) / maSnap * Decimal(100))
     }
 }

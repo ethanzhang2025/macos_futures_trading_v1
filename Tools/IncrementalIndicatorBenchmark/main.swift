@@ -1,8 +1,8 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（19 指标 · v3 第 6 批扩展 VWAP + PSY + CMO）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（21 指标 · v3 第 7 批扩展 ROC + BIAS）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 19 个指标：
+// 测试 21 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
@@ -10,6 +10,7 @@
 //   v3 第 4 批（1）：TRIX 12（内嵌 3 层 EMA · 同 MACD 模式）
 //   v3 第 5 批（2）：DEMA 20 / TEMA 20（复合 EMA 线性组合 · 同 TRIX 模式但无差分）
 //   v3 第 6 批（3）：VWAP（累积式无周期）/ PSY 12（单 ring sliding sum）/ CMO 14（双 ring · 同 RSI 思路无 Wilder）
+//   v3 第 7 批（2）：ROC 12（ring 取 n 步前 close）/ BIAS 6（ring SMA · round8 snapshot 精度对齐）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -256,6 +257,26 @@ benchmark("CMO(14)") {
     guard var state = try? CMO.makeIncrementalState(kline: emptyHistory, params: [14]) else { return }
     for bar in bars {
         _ = CMO.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 7 批 · ROC / BIAS
+
+benchmark("ROC(12)") {
+    _ = try? ROC.calculate(kline: series, params: [12])
+} incremental: {
+    guard var state = try? ROC.makeIncrementalState(kline: emptyHistory, params: [12]) else { return }
+    for bar in bars {
+        _ = ROC.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("BIAS(6)") {
+    _ = try? BIAS.calculate(kline: series, params: [6])
+} incremental: {
+    guard var state = try? BIAS.makeIncrementalState(kline: emptyHistory, params: [6]) else { return }
+    for bar in bars {
+        _ = BIAS.stepIncremental(state: &state, newBar: bar)
     }
 }
 

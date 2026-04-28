@@ -565,6 +565,26 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 7 批（ROC + BIAS · 21 指标）
+
+### ROC 增量（最简 ring 取 n 步前 close · 无 sliding sum）
+- [ ] ROC 与全量精确一致（period=12 · 80 K · history 30）
+- [ ] history 空 · 前 period 步 nil（10 步）· 第 period+1 步起匹配全量
+- [ ] 关键：先取 ring[head] 再覆盖（=即将被覆盖的最旧值 = close[i-n]）
+- [ ] benchmark ROC(12) 满批 ~1.0×（极简单 · 无 sliding sum 优化空间）
+
+### BIAS 增量（ring SMA · 与当前 close 比 · 同 MA 增量模式）
+- [ ] BIAS 与全量精确一致（period=6 · 80 K · history 30）
+- [ ] history 空 · 前 period-1 步 nil · 第 period 步起匹配全量
+- [ ] 关键精度对齐：用 round8(ma) snapshot 作下游计算（与 calculate 用 Kernels.ma 数组中 round8 值一致）
+- [ ] benchmark BIAS(6) 满批 1.1×（ring sliding sum 节省 calculate ma 数组分配）
+
+### 21 指标增量基础
+- [ ] benchmark 完整输出 21 行
+- [ ] 增量 API 覆盖率：21/56 = 37.5%（IndicatorCore 接近 2/5 已增量化）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

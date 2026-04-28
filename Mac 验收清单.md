@@ -419,6 +419,111 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
+
+### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）
+- [ ] ⌘K 打开"工作区模板"窗口（主菜单 File 内"工作区模板"入口）
+- [ ] sidebar 220-300px 宽 · 顶部 "工作区模板" + "4 个" 计数
+- [ ] 4 模板按 Kind 分 4 Section：盘前 1 / 盘中 1 / 盘后 1 / 自定义 1
+- [ ] 当前激活模板（默认"盘中主交易"）★ 标记 + .semibold 字体加粗
+- [ ] 模板行下方 caption2："N 窗口" + 已绑快捷键的显示 ⌘ icon（commit 4 Mock 已默认绑）
+- [ ] 选模板后 detail 显示：
+  - [ ] 标题 + Kind capsule（4 色：橙=盘前/红=盘中/蓝=盘后/灰=自定义）
+  - [ ] 激活态显示 "当前激活" capsule（accentColor.opacity(0.15)）
+  - [ ] 窗口布局卡片：N 窗口 · 每行（窗口 N / 合约 / 周期 / 指标列表）
+  - [ ] 一键切换快捷键卡片
+- [ ] 未选模板 → 空 state（rectangle.stack icon）
+- [ ] footer 显示当前激活模板名 + 收官 capsule
+- [ ] Mock 4 模板 windows 数量正确：盘前 1 / 盘中 4 (grid2x2) / 盘后 2 (vertical2) / 自定义 0
+
+### commit 2（a09d8b8 · CRUD + 切换激活）
+- [ ] sidebar 顶部 "+" 按钮 ⌘⇧K → TemplateEditorSheet（add mode）
+- [ ] TemplateEditorSheet：
+  - [ ] 模板名 TextField（trim 后非空才能保存）
+  - [ ] Kind segmented Picker 4 类（盘前/盘中/盘后/自定义）
+  - [ ] add 模式默认 .custom · edit 模式预填原值
+  - [ ] edit 模式下任一字段未变 → "更新"按钮 disabled（canSubmit 守卫 no-op）
+- [ ] 添加后自动选中新模板（selectedTemplateID = 新 id）
+- [ ] 行 contextMenu 4 项依序展示：
+  - [ ] 重命名 / 修改类型（→ edit sheet · 改名 + 改 kind 都生效 · updateTemplate 整体覆盖保留 id/sortIndex/createdAt）
+  - [ ] 复制为副本（→ duplicateTemplate · 深拷贝 windows · 自动选中副本 · 副本不复制快捷键避免冲突）
+  - [ ] 设为当前激活（仅非激活时显示）
+  - [ ] 删除模板（destructive）
+- [ ] 删除前 confirmationDialog："模板「XXX」内的 N 个窗口布局将一并清空 · 该操作无法撤销"
+- [ ] 删除当前激活模板 → selectedTemplateID 自动切到 activeTemplateID 或 templates.first
+- [ ] 双击 sidebar 行 → 立即 activate（同 contextMenu "设为当前激活"效果）
+- [ ] detail header 非激活态显示 .borderedProminent "设为当前激活" 按钮
+- [ ] 切换激活 → sidebar ★ icon 立即移到新激活行 + footer 同步更新
+
+### commit 3（1a3e22b · 网格预设 + windows 编辑）
+- [ ] detail 窗口布局卡片顶部 toolbar：
+  - [ ] "+ 添加窗口" 按钮（任意时刻可点）
+  - [ ] "应用网格预设" 按钮（windows 为空时 disabled · 含 help 提示）
+- [ ] WindowEditorSheet（add / edit 共用）：
+  - [ ] 合约 ID TextField（trim + uppercase 提交）
+  - [ ] 周期 Picker（.menu 风格 · 9 周期 1分/5分/15分/30分/60分/4小时/日线/周线/月线）
+  - [ ] 指标 IDs TextField（"MA5, MA20, BOLL" 风格 · 提交时 split + trim + uppercase + 顺序去重）
+  - [ ] add 默认 5分 · edit 模式预填 instrumentID/period/indicatorIDs
+  - [ ] add → append 到 windows 末尾 / edit → 保留原 id + frame + zIndex
+- [ ] windowRow 双击 → editWindow / contextMenu 编辑窗口 / 删除窗口
+- [ ] 删除窗口立即生效（windowsCard 标题"N 窗口"实时更新 · sidebar 行也实时）
+- [ ] ApplyGridSheet：
+  - [ ] LazyVGrid 3 列 · 6 张预设卡片：
+    - [ ] 单窗口 (1×1)
+    - [ ] 1×2 横排
+    - [ ] 2×1 竖排
+    - [ ] 2×2 四宫
+    - [ ] 2×3 六宫
+    - [ ] 3×2 六宫
+  - [ ] 每卡 mini preview（accentColor.opacity(0.3) 填充 + accentColor 描边 · 用 dimensions 直出格子 · 间距 2px）
+  - [ ] 卡片下方"最多 N 窗口" caption2
+  - [ ] 选中卡片高亮（accentColor.opacity 0.15 背景 + 2px accentColor 描边）
+  - [ ] maxWindows < 当前 windows.count → 底部橙色 exclamationmark.triangle "应用后将截断 N 个窗口"
+  - [ ] 未选中时"应用"按钮 disabled
+- [ ] 应用网格 → 保留 instrumentID / period / indicatorIDs · 仅替换 frame（不破坏窗口语义）
+- [ ] 截断验证：盘中（4 windows）应用 single → 留 1 个 / 应用 grid2x3 → 不截断（max 6）
+
+### commit 4（e6d79c9 · 快捷键编辑器 + 主图联动 + 收官 🎉）
+- [ ] shortcutCard 双态：
+  - [ ] 已绑态：capsule 显示完整快捷键（⌘⇧K / ⌘1 / ⌘⇧⌥X 等格式 · monospaced）+ "修改"按钮 + "清除" destructive 按钮
+  - [ ] 未绑态：显示"未绑定" + "设置快捷键"按钮
+  - [ ] 全局唯一性提示 caption2："抢占其他模板的相同快捷键时会自动清空对方绑定"
+- [ ] ShortcutEditorSheet：
+  - [ ] 标题 "设置快捷键 · 「模板名」"
+  - [ ] 修饰键 4 个 Toggle.button 横排（⌘ ⇧ ⌥ ⌃ · 可多选）
+  - [ ] 按键 Picker.menu（A-Z + 0-9 = 36 项）
+  - [ ] 预览 capsule 实时更新（修饰符号 ⌃⌥⇧⌘ 顺序 + 字符 · 与 formatShortcut 一致）
+  - [ ] 至少 1 个修饰键开启时才能"应用"（裸字符快捷键劫持普通输入 → "应用"按钮 disabled）
+  - [ ] 占用警告（选中已被其他模板用的快捷键时显示）：橙色 exclamationmark.triangle + "该快捷键当前由「XXX」占用 · 应用后将自动从对方清除"
+  - [ ] 占用警告 不显示自己（template.id 命中跳过）
+  - [ ] 编辑模式预填当前快捷键 / 新建模式默认 ⌘K
+- [ ] 应用快捷键后立即效果：
+  - [ ] sidebar 行下方 ⌘ icon 出现
+  - [ ] detail capsule 立即更新（蓝色 accentColor 背景 · monospaced）
+  - [ ] 抢占其他模板的相同快捷键 → 对方 ⌘ icon 立即消失（数据层 setShortcut 强制全局唯一）
+- [ ] "清除"按钮立即清空 capsule + sidebar ⌘ icon 消失（status: 未绑定）
+- [ ] Mock 默认 2 模板已绑快捷键（启 App 立即可见）：
+  - [ ] 盘中主交易 ⌘⇧1
+  - [ ] 盘后复盘 ⌘⇧2
+- [ ] formatShortcut 完整格式：
+  - [ ] ⌘K（仅 ⌘）
+  - [ ] ⌘⇧K（⌘ + ⇧）
+  - [ ] ⌘⌥1（⌘ + ⌥）
+  - [ ] ⌘⇧⌥⌃Z（4 modifier 全开）
+  - [ ] keyCode 不在表中 → 回落 hex（如 0x33 · 测试边界）
+- [ ] 双击 sidebar 行 / contextMenu 设为激活 / detail "设为当前激活"按钮 → 都触发 activate
+- [ ] activate 时 NotificationCenter post .workspaceTemplateActivated（M5 stub · ChartScene 暂不接 · 不报错）
+- [ ] footer 右侧绿色 capsule "WP-55 收官 🎉"（与 WP-53 收官风格一致）
+- [ ] 整体回归：commit 1-3 所有功能仍正常（CRUD / 网格 / windows 编辑 / 切换激活）
+
+### Mac 切机替换（M5 · 多窗口实际渲染）
+- [ ] StoreManager 注入 SQLiteWorkspaceBookStore · 替换 MockWorkspaceBook（持久化）
+- [ ] 多窗口同时渲染（WP-44 + WP-40 联合 · CGRect 桥接 LayoutFrame）
+- [ ] ChartScene / 多窗口管理器接收 .workspaceTemplateActivated → 关闭旧窗口 + 按 template.windows 重新打开 + frame 应用到 NSWindow.frame
+- [ ] 全局键盘 NSEvent monitor → 解析 WorkspaceShortcut keyCode + modifierFlags → 切换激活模板（PeriodSwitcher 同样模式）
+
+---
+
 ## 待补（后续 commit 累积）
 
 后续每个 commit 完成功能后追加到对应章节 · 切机前在此清单逐项验收。

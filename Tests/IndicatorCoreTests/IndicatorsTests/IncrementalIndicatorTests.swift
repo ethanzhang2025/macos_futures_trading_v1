@@ -495,6 +495,80 @@ struct KDJIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 commit 2/4 · CCI 增量 API
+
+@Suite("WP-41 v3 commit 2/4 · CCI 增量 API")
+struct CCIIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=20）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try CCI.calculate(kline: series, params: [20])
+        let fullValues = full[0].values
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try CCI.makeIncrementalState(kline: history, params: [20])
+
+        for i in historyCount..<bars.count {
+            let row = CCI.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "CCI[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 40)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try CCI.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = CCI.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let row10 = CCI.stepIncremental(state: &state, newBar: bars[9])
+        let series = makeSeries(from: bars)
+        let full = try CCI.calculate(kline: series, params: [10])
+        #expect(row10[0] == full[0].values[9])
+        for i in 10..<bars.count {
+            let row = CCI.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i])
+        }
+    }
+
+    @Test("全平 close（h==l==c 不变）→ tp 全相等 → md=0 → 输出始终 nil")
+    func incrementalAllSame() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let flat = (0..<25).map { i in
+            KLine(
+                instrumentID: "TEST", period: .minute1,
+                openTime: baseDate.addingTimeInterval(TimeInterval(i * 60)),
+                open: 100, high: 100, low: 100, close: 100,
+                volume: 100, openInterest: 0, turnover: 0
+            )
+        }
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try CCI.makeIncrementalState(kline: empty, params: [10])
+        for i in 0..<flat.count {
+            let row = CCI.stepIncremental(state: &state, newBar: flat[i])
+            #expect(row[0] == nil, "i=\(i) all-same should yield nil（md=0）")
+        }
+    }
+
+    @Test("参数校验：缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try CCI.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try CCI.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

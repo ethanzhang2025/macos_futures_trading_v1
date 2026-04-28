@@ -2,6 +2,7 @@
 // KDJ / Stochastic / CCI / W%R / ROC / TRIX / BIAS / PSY / DMI / CMO
 //
 // WP-41 v3 commit 1/4：KDJ 实现 IncrementalIndicator · O(n) per step（n=9 微秒级）
+// WP-41 v3 commit 2/4：CCI 实现 IncrementalIndicator · ring buffer + sum + O(n) MD 重算
 
 import Foundation
 import Shared
@@ -386,5 +387,68 @@ extension KDJ: IncrementalIndicator {
             throw IndicatorError.invalidParameter("KDJ 参数非法 n=\(n) k=\(kN) d=\(dN)")
         }
         return (n, kN, dN)
+    }
+}
+
+// MARK: - WP-41 v3 commit 2/4 · CCI 增量 API
+
+extension CCI: IncrementalIndicator {
+
+    /// state：period + factor 0.015 + TP ring buffer + sum（滑窗均值用）
+    /// MD（mean absolute deviation）每步 O(n) 重算 · 因为 TP_MA 每步变 · |TP[j] - TP_MA| 项也变
+    /// 不预存 |TP - MA| 累加（增量更新代价 ≈ O(n) 不省）· 直接遍历 ring 算 mdSum 最直接
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public let nDec: Decimal
+        public let factor: Decimal   // 0.015 · 与 calculate 同
+        public var tpRing: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var sum: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "CCI period")
+        var state = IncrementalState(
+            period: n, nDec: Decimal(n),
+            factor: Decimal(string: "0.015")!,
+            tpRing: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0, sum: 0
+        )
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, high: kline.highs[i], low: kline.lows[i], close: kline.closes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, high: newBar.high, low: newBar.low, close: newBar.close)]
+    }
+
+    /// makeIncrementalState 与 stepIncremental 共享的核心：
+    /// - 计算 TP = (H+L+C)/3 · 写入 ring 滑窗（同 MA 模式 · 满则 sum -= 旧值）
+    /// - count < period：返回 nil（warm-up · 与 calculate 中 i < n-1 阶段一致）
+    /// - count >= period：ma = sum/n · mdSum = Σ|tp_ring - ma|（O(n)）· md = mdSum/n
+    /// - md == 0 时返回 nil（与 calculate 中 md > 0 才输出 一致 · 全平时 nil）
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal) -> Decimal? {
+        let tp = (high + low + close) / Decimal(3)
+        if state.count == state.period {
+            state.sum -= state.tpRing[state.head]
+        } else {
+            state.count += 1
+        }
+        state.tpRing[state.head] = tp
+        state.head = (state.head + 1) % state.period
+        state.sum += tp
+
+        guard state.count == state.period else { return nil }
+
+        let ma = state.sum / state.nDec
+        var mdSum: Decimal = 0
+        for v in state.tpRing { mdSum += abs(v - ma) }
+        let md = mdSum / state.nDec
+        guard md > 0 else { return nil }
+        return Kernels.round8((tp - ma) / (state.factor * md))
     }
 }

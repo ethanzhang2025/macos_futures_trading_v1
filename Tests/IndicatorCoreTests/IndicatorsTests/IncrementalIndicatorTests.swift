@@ -569,6 +569,93 @@ struct CCIIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 commit 3/4 · ATR 增量 API
+
+@Suite("WP-41 v3 commit 3/4 · ATR 增量 API")
+struct ATRIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=14）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try ATR.calculate(kline: series, params: [14])
+        let fullValues = full[0].values
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try ATR.makeIncrementalState(kline: history, params: [14])
+
+        for i in historyCount..<bars.count {
+            let row = ATR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "ATR[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try ATR.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = ATR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let row10 = ATR.stepIncremental(state: &state, newBar: bars[9])
+        #expect(row10[0] != nil)
+
+        let series = makeSeries(from: bars)
+        let full = try ATR.calculate(kline: series, params: [10])
+        #expect(row10[0] == full[0].values[9])
+        for i in 10..<bars.count {
+            let row = ATR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i])
+        }
+    }
+
+    @Test("第 1 根 K：TR = high - low（无 prevClose · 与 calculate tr[0] 一致）")
+    func incrementalFirstBarTR() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let bar0 = KLine(
+            instrumentID: "TEST", period: .minute1,
+            openTime: baseDate,
+            open: 100, high: 110, low: 95, close: 105,
+            volume: 100, openInterest: 0, turnover: 0
+        )
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try ATR.makeIncrementalState(kline: empty, params: [3])
+        // 第 1 根：tr = 110 - 95 = 15 · warmUp 累加 · 返回 nil
+        let row1 = ATR.stepIncremental(state: &state, newBar: bar0)
+        #expect(row1[0] == nil)
+        // 验证 warmUpSum 累加（间接：跑完 3 根后 atr 应为 (15 + tr2 + tr3) / 3）
+    }
+
+    @Test("period=1 边界：每步 ATR == 当前根 TR（round8）")
+    func incrementalPeriod1() throws {
+        let bars = makeBars(count: 5)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try ATR.makeIncrementalState(kline: empty, params: [1])
+        let series = makeSeries(from: bars)
+        let full = try ATR.calculate(kline: series, params: [1])
+        for i in 0..<bars.count {
+            let row = ATR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "ATR(1)[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try ATR.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try ATR.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

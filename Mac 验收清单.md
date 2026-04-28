@@ -285,8 +285,41 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] 窗口最小 880×520 · 默认 1100×720
 - [ ] ⌘J 在前台时生效 · 不与全局 ⌘N/⌘L/⌘R/⌘B/⌘, 冲突
 
-### commit 2（CSV 导入面板 · 待 · NSOpenPanel + DealCSVParser + 格式选择 + 错误展示）
-（commit 2 完成后追加 checklist）
+### commit 2（CSV 导入面板 · NSOpenPanel + DealCSVParser + 格式 Picker + 错误展示）
+- [ ] 顶部 header 加"导入"按钮（Label "导入" + square.and.arrow.down · ⌘⇧M iMport）
+  - [ ] .help() tooltip "导入交割单 CSV（⌘⇧M · 文华 / 通用格式）"
+  - [ ] 按钮位于 stats 与进度标签之间
+  - [ ] 进度标签更新为"commit 2/4 · CSV 导入"
+- [ ] 点击"导入"→ NSOpenPanel 弹出：
+  - [ ] 标题"选择交割单 CSV 文件"· 提示按钮"导入"
+  - [ ] allowedContentTypes = .commaSeparatedText（仅 .csv 可选）
+  - [ ] allowsMultipleSelection = false · canChooseDirectories = false
+  - [ ] 取消 → 不弹 ImportSheet · 状态不变
+- [ ] 选 CSV 后 ImportSheet 弹出（580×540）：
+  - [ ] 标题"导入交割单"（title2 + bold）
+  - [ ] Form .grouped 三 Section：文件 / CSV 格式 / 解析结果
+  - [ ] 文件 Section 显示 fileName（monospaced · lineLimit 1 · truncationMode middle）
+  - [ ] CSV 格式 segmented Picker：文华财经 / 通用 CSV
+  - [ ] 切换格式 → onChange 触发 parseImport 重解析（无延迟 · 解析结果立即更新）
+- [ ] 解析成功（.success）：
+  - [ ] checkmark.circle.fill 绿色 + "解析到 N 笔成交"
+  - [ ] 行级错误：exclamationmark.triangle.fill 橙色 + "K 行解析失败 · 已跳过"
+  - [ ] 行级错误列表 ScrollView（前 10 项 · 80px 高 · "· 第 N 行：错误描述" caption2 灰）
+  - [ ] 超 10 项显示"... 余 X 项"
+  - [ ] 预览前 5 笔（合约 monospaced + 方向涨红跌绿 + 开平 + "数量 @ 价格" monospaced）
+- [ ] 解析失败（.fileError）：
+  - [ ] xmark.octagon.fill 红色 + "解析失败：错误描述"
+  - [ ] invalidEncoding → "CSV 编码错误（非 UTF-8）"
+  - [ ] missingColumn → "第 N 行缺少字段 X"
+- [ ] 底部按钮：
+  - [ ] 取消（Esc / .cancelAction）→ 关闭 sheet · 不修改 trades
+  - [ ] "添加 N 笔"（Return / .defaultAction）→ trades 合并 + 时间倒序 + 切到"成交记录"Tab
+  - [ ] N == 0 时"添加"按钮 disabled
+- [ ] 测试用真样本 CSV：
+  - [ ] Tools/WenhuaCSVImportDemo 样本（如有 sample.csv）能成功解析
+  - [ ] 文华表头（合约/买卖/开平/成交价/成交量/手续费/成交时间/成交编号）成功
+  - [ ] 通用表头（instrument/direction/offset/price/volume/commission/timestamp/trade_id）成功
+- [ ] footer 文案更新为"Mock + 导入数据 · 待 commit 3 日志编辑器 · commit 4 月度统计 · M5 接 SQLiteJournalStore"
 
 ### commit 3（日志编辑器 Sheet + JournalGenerator 自动生成 · 待）
 （commit 3 完成后追加 checklist · 情绪/偏差 Picker · 标签输入 · batch 自动生成预览）

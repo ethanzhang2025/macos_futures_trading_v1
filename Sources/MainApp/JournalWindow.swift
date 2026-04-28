@@ -1,13 +1,16 @@
-// MainApp · 交易日志面板（WP-53 UI · commit 1/4 · ⌘J 起步 + 双 Tab + Mock 13 trades + 5 journals）
+// MainApp · 交易日志面板（WP-53 UI · commit 2/4 · CSV 导入面板 NSOpenPanel + DealCSVParser）
 //
-// commit 1 起步：
-// - ⌘J 独立窗口 · TabView segmented 切换：成交记录 / 交易日志
-// - 成交记录 Tab：13 笔 Mock trades（4 合约 RB/IF/AU/CU · 3 来源 wenhua/generic/manual · 跨 3 天）
-// - 交易日志 Tab：5 篇 Mock journals（关联 trade.id · 5 类情绪 + 5 类偏差 + 标签）
-// - 顶部 stats（总成交 / 总日志 / 触发 commit 进度标签）+ 底部提示
+// commit 1 已交付：⌘J 双 Tab + Mock 13 trades + 5 journals
+// commit 2 本次新增：
+// - 顶部"导入"按钮（⌘⇧M · iMport）→ NSOpenPanel 选 .csv 文件
+// - ImportSheet 弹出（格式 Picker 文华/通用 · onChange 重解析 · 实时切换格式）
+// - 解析结果两态：
+//   · .success(trades: [Trade], rowErrors: [String])：N 笔成功 + 行级错误前 10 项 + 前 5 笔预览
+//   · .fileError(DealCSVError)：文件级解析失败（编码/表头缺列/不支持格式）
+// - 确认导入 → 合并到 trades 按时间倒序 + 自动切到"成交记录"Tab
+// - 接 JournalCore 真转换链路：String → DealCSVParser.parse → [RawDeal] → toTrade → [Trade]
 //
 // 留给后续 commit：
-// - commit 2/4：CSV 导入面板（NSOpenPanel + DealCSVParser + 格式选择 + 错误展示）
 // - commit 3/4：日志编辑器 Sheet（情绪/偏差 Picker + tags + JournalGenerator 自动生成 batch）
 // - commit 4/4：标签搜索 + 月度/季度统计聚合
 //
@@ -17,6 +20,8 @@
 
 import SwiftUI
 import Foundation
+import AppKit
+import UniformTypeIdentifiers
 import JournalCore
 import Shared
 
@@ -28,6 +33,20 @@ private enum JournalTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// MARK: - CSV 导入解析结果
+
+private enum ImportParseOutcome {
+    /// 文件级 OK · trades 是成功转换的 · rowErrors 是 toTrade 失败的行级错误描述
+    case success(trades: [Trade], rowErrors: [String])
+    /// 文件级解析失败（编码 / 表头缺列 / 不支持格式）
+    case fileError(DealCSVError)
+
+    var addCount: Int {
+        if case .success(let trades, _) = self { return trades.count }
+        return 0
+    }
+}
+
 // MARK: - 主窗口
 
 struct JournalWindow: View {
@@ -35,6 +54,11 @@ struct JournalWindow: View {
     @State private var trades: [Trade] = []
     @State private var journals: [TradeJournal] = []
     @State private var selectedTab: JournalTab = .trades
+
+    // CSV 导入状态（commit 2/4）
+    @State private var importURL: URL?
+    @State private var importFormat: DealCSVFormat = .wenhua
+    @State private var importOutcome: ImportParseOutcome?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,6 +78,25 @@ struct JournalWindow: View {
                 journals = mock.journals
             }
         }
+        .sheet(isPresented: importSheetBinding) {
+            if let url = importURL, let outcome = importOutcome {
+                ImportSheet(
+                    fileName: url.lastPathComponent,
+                    format: $importFormat,
+                    outcome: outcome,
+                    onFormatChange: { _ in parseImport() },
+                    onCancel: cancelImport,
+                    onConfirm: confirmImport
+                )
+            }
+        }
+    }
+
+    private var importSheetBinding: Binding<Bool> {
+        Binding(
+            get: { importURL != nil },
+            set: { if !$0 { cancelImport() } }
+        )
     }
 
     // MARK: - Header
@@ -65,7 +108,15 @@ struct JournalWindow: View {
             stat("总成交", "\(trades.count) 笔")
             stat("总日志", "\(journals.count) 篇")
             Spacer()
-            Text("commit 1/4 · ⌘J 起步")
+            Button {
+                presentImportPanel()
+            } label: {
+                Label("导入", systemImage: "square.and.arrow.down")
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            .help("导入交割单 CSV（⌘⇧M · 文华 / 通用格式）")
+
+            Text("commit 2/4 · CSV 导入")
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
@@ -220,13 +271,70 @@ struct JournalWindow: View {
 
     private var footer: some View {
         HStack {
-            Text("Mock 数据 · 待 commit 2 CSV 导入 · commit 3 日志编辑器 · commit 4 月度统计 · M5 接 SQLiteJournalStore")
+            Text("Mock + 导入数据 · 待 commit 3 日志编辑器 · commit 4 月度统计 · M5 接 SQLiteJournalStore")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - CSV 导入流程（commit 2/4）
+
+    private func presentImportPanel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = "选择交割单 CSV 文件"
+        panel.prompt = "导入"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        importURL = url
+        importFormat = .wenhua
+        parseImport()
+    }
+
+    private func parseImport() {
+        guard let url = importURL else { return }
+        importOutcome = Self.parseCSV(url: url, format: importFormat)
+    }
+
+    private func cancelImport() {
+        importURL = nil
+        importOutcome = nil
+    }
+
+    private func confirmImport() {
+        if case .success(let newTrades, _) = importOutcome {
+            trades = (trades + newTrades).sorted { $0.timestamp > $1.timestamp }
+            selectedTab = .trades
+        }
+        cancelImport()
+    }
+
+    /// 文件级 + 行级解析 · 文件级失败抛 fileError · 行级失败累积到 rowErrors（不中止）
+    private static func parseCSV(url: URL, format: DealCSVFormat) -> ImportParseOutcome {
+        do {
+            let csvString = try String(contentsOf: url, encoding: .utf8)
+            let raws = try DealCSVParser.parse(csvString, format: format)
+            var trades: [Trade] = []
+            var rowErrors: [String] = []
+            for raw in raws {
+                do {
+                    trades.append(try raw.toTrade())
+                } catch let e as DealCSVError {
+                    rowErrors.append("第 \(raw.lineNumber) 行：\(e.description)")
+                } catch {
+                    rowErrors.append("第 \(raw.lineNumber) 行：未知错误")
+                }
+            }
+            return .success(trades: trades, rowErrors: rowErrors)
+        } catch let e as DealCSVError {
+            return .fileError(e)
+        } catch {
+            return .fileError(.invalidEncoding)
+        }
     }
 
     // MARK: - 标签格式化
@@ -295,6 +403,136 @@ struct JournalWindow: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         return f
     }()
+}
+
+// MARK: - ImportSheet（commit 2/4）
+
+private struct ImportSheet: View {
+
+    let fileName: String
+    @Binding var format: DealCSVFormat
+    let outcome: ImportParseOutcome
+    let onFormatChange: (DealCSVFormat) -> Void
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("导入交割单").font(.title2).bold()
+
+            Form {
+                Section("文件") {
+                    Text(fileName)
+                        .font(.system(.body, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Section("CSV 格式") {
+                    Picker("格式", selection: $format) {
+                        Text("文华财经").tag(DealCSVFormat.wenhua)
+                        Text("通用 CSV").tag(DealCSVFormat.generic)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .onChange(of: format) { newFormat in
+                        onFormatChange(newFormat)
+                    }
+                }
+
+                Section("解析结果") {
+                    outcomeView
+                }
+            }
+            .formStyle(.grouped)
+
+            HStack {
+                Spacer()
+                Button("取消") { onCancel() }
+                    .keyboardShortcut(.cancelAction)
+                Button("添加 \(outcome.addCount) 笔") { onConfirm() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(outcome.addCount == 0)
+            }
+        }
+        .padding(20)
+        .frame(width: 580, height: 540)
+    }
+
+    @ViewBuilder
+    private var outcomeView: some View {
+        switch outcome {
+        case .success(let trades, let rowErrors): successView(trades: trades, rowErrors: rowErrors)
+        case .fileError(let error):               fileErrorView(error)
+        }
+    }
+
+    private func successView(trades: [Trade], rowErrors: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("解析到 \(trades.count) 笔成交", systemImage: "checkmark.circle.fill")
+                .foregroundColor(.green)
+
+            if !rowErrors.isEmpty {
+                Label("\(rowErrors.count) 行解析失败 · 已跳过", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                rowErrorsList(rowErrors)
+            }
+
+            if !trades.isEmpty {
+                Divider()
+                Text("预览前 5 笔：")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                previewList(trades.prefix(5))
+            }
+        }
+    }
+
+    private func fileErrorView(_ error: DealCSVError) -> some View {
+        Label("解析失败：\(error.description)", systemImage: "xmark.octagon.fill")
+            .foregroundColor(.red)
+            .padding(.vertical, 8)
+    }
+
+    private func rowErrorsList(_ errors: [String]) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(errors.prefix(10), id: \.self) { msg in
+                    Text("· \(msg)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                if errors.count > 10 {
+                    Text("... 余 \(errors.count - 10) 项").font(.caption2).foregroundColor(.secondary)
+                }
+            }
+        }
+        .frame(maxHeight: 80)
+    }
+
+    private func previewList(_ trades: ArraySlice<Trade>) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(Array(trades), id: \.id) { trade in
+                HStack(spacing: 8) {
+                    Text(trade.instrumentID)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(width: 70, alignment: .leading)
+                    Text(trade.direction.displayName)
+                        .font(.caption)
+                        .foregroundColor(trade.direction == .buy ? .red : .green)
+                        .frame(width: 24)
+                    Text(trade.offsetFlag.displayName)
+                        .font(.caption)
+                        .frame(width: 40)
+                    Text("\(trade.volume) @ \(trade.price)")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Mock 数据（commit 1 静态 · commit 2 CSV 导入接管 · M5 替换为 SQLiteJournalStore）

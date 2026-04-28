@@ -2,6 +2,7 @@
 // WMA / DEMA / TEMA / HMA / VWAP / SAR / Supertrend / ADX
 //
 // WP-41 v3 第 2 批 commit 3/4：ADX 实现 IncrementalIndicator · 4 路 Wilder 平滑 · DMI 复用 ADX state
+// WP-41 v3 第 5 批：DEMA + TEMA 实现 IncrementalIndicator · 复合 EMA 线性组合（TRIX 模式简化 · 无差分）
 
 import Foundation
 import Shared
@@ -44,6 +45,45 @@ public enum DEMA: Indicator {
     }
 }
 
+// MARK: - WP-41 v3 第 5 批 · DEMA 增量 API（内嵌 2 EMA · 同 TRIX 复合模式 · 无差分）
+
+extension DEMA: IncrementalIndicator {
+
+    /// state：2 个 EMA.IncrementalState（e1 接 close · e2 接 e1 ?? 0 · 与 Kernels.nextEMA 一致）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var e1: EMA.IncrementalState
+        public var e2: EMA.IncrementalState
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, index: 0, min: 1, label: "DEMA period")
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = IncrementalState(
+            period: n,
+            e1: try EMA.makeIncrementalState(kline: empty, params: [Decimal(n)]),
+            e2: try EMA.makeIncrementalState(kline: empty, params: [Decimal(n)])
+        )
+        for close in kline.closes {
+            _ = processStep(state: &state, close: close)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close)]
+    }
+
+    /// DEMA = 2*e1 - e2 · 必须 e1 与 e2 都有值（与 calculate guard let x1, x2 一致）
+    /// e1/e2 都用 advance round8 返回值（与 calculate 用 e1[i]/e2[i] 数组中 round8 值一致 · 精度对齐）
+    private static func processStep(state: inout IncrementalState, close: Decimal) -> Decimal? {
+        let e1Out = state.e1.advance(close: close)
+        let e2Out = state.e2.advance(close: e1Out ?? 0)
+        guard let x1 = e1Out, let x2 = e2Out else { return nil }
+        return Kernels.round8(Decimal(2) * x1 - x2)
+    }
+}
+
 // MARK: - TEMA · 三重 EMA = 3*EMA - 3*EMA(EMA) + EMA(EMA(EMA))
 
 public enum TEMA: Indicator {
@@ -65,6 +105,47 @@ public enum TEMA: Indicator {
             }
         }
         return [IndicatorSeries(name: "TEMA(\(n))", values: out)]
+    }
+}
+
+// MARK: - WP-41 v3 第 5 批 · TEMA 增量 API（内嵌 3 EMA · 同 TRIX 复合模式 · 无差分）
+
+extension TEMA: IncrementalIndicator {
+
+    /// state：3 个 EMA.IncrementalState（同 TRIX 内嵌模式 · 但输出是 3*x1-3*x2+x3 而非差分）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var e1: EMA.IncrementalState
+        public var e2: EMA.IncrementalState
+        public var e3: EMA.IncrementalState
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, index: 0, min: 1, label: "TEMA period")
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = IncrementalState(
+            period: n,
+            e1: try EMA.makeIncrementalState(kline: empty, params: [Decimal(n)]),
+            e2: try EMA.makeIncrementalState(kline: empty, params: [Decimal(n)]),
+            e3: try EMA.makeIncrementalState(kline: empty, params: [Decimal(n)])
+        )
+        for close in kline.closes {
+            _ = processStep(state: &state, close: close)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close)]
+    }
+
+    /// TEMA = 3*e1 - 3*e2 + e3 · 必须 3 EMA 都有值
+    private static func processStep(state: inout IncrementalState, close: Decimal) -> Decimal? {
+        let e1Out = state.e1.advance(close: close)
+        let e2Out = state.e2.advance(close: e1Out ?? 0)
+        let e3Out = state.e3.advance(close: e2Out ?? 0)
+        guard let x1 = e1Out, let x2 = e2Out, let x3 = e3Out else { return nil }
+        return Kernels.round8(Decimal(3) * x1 - Decimal(3) * x2 + x3)
     }
 }
 

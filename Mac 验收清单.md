@@ -519,6 +519,26 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 5 批（DEMA + TEMA · 16 指标）
+
+### DEMA 增量（内嵌 2 EMA · 输出 2*e1 - e2）
+- [ ] DEMA 与全量精确一致（period=20 · 100 K · history 50）
+- [ ] history 空 · 60 根 K 全程匹配全量（period=10）
+- [ ] 参数缺失 / period<1 抛错
+- [ ] benchmark DEMA(20) 满批 ~1.0× 加速（2 层 EMA 同步推进 · 比 EMA 单层略多开销）
+
+### TEMA 增量（内嵌 3 EMA · 输出 3*e1 - 3*e2 + e3）
+- [ ] TEMA 与全量精确一致（period=20 · 100 K · history 60）
+- [ ] history 空 · 60 根 K 全程匹配全量（period=10）
+- [ ] 参数缺失 / period<1 抛错
+- [ ] benchmark TEMA(20) 满批 ~0.9× 加速（3 层 EMA 同步 · 与 TRIX 同等工作量级）
+
+### 16 指标增量基础
+- [ ] benchmark 完整输出 16 行（v2 五 + v3 五批共十一）
+- [ ] 增量 API 覆盖率：16/56 = 28.6%（IndicatorCore 接近 1/3 已增量化）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

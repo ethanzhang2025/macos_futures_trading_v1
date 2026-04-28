@@ -997,6 +997,106 @@ struct TRIXIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 5 批 · DEMA 增量 API
+
+@Suite("WP-41 v3 第 5 批 · DEMA 增量 API")
+struct DEMAIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=20）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try DEMA.calculate(kline: series, params: [20])
+        let fullValues = full[0].values
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try DEMA.makeIncrementalState(kline: history, params: [20])
+
+        for i in historyCount..<bars.count {
+            let row = DEMA.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "DEMA[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 60 根 K 全程匹配全量（2 层 EMA 同步）")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 60)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try DEMA.makeIncrementalState(kline: empty, params: [10])
+
+        let series = makeSeries(from: bars)
+        let full = try DEMA.calculate(kline: series, params: [10])
+
+        for i in 0..<bars.count {
+            let row = DEMA.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "DEMA[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try DEMA.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try DEMA.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 5 批 · TEMA 增量 API
+
+@Suite("WP-41 v3 第 5 批 · TEMA 增量 API")
+struct TEMAIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=20）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try TEMA.calculate(kline: series, params: [20])
+        let fullValues = full[0].values
+
+        let historyCount = 60
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try TEMA.makeIncrementalState(kline: history, params: [20])
+
+        for i in historyCount..<bars.count {
+            let row = TEMA.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "TEMA[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 60 根 K 全程匹配全量（3 层 EMA 同步）")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 60)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try TEMA.makeIncrementalState(kline: empty, params: [10])
+
+        let series = makeSeries(from: bars)
+        let full = try TEMA.calculate(kline: series, params: [10])
+
+        for i in 0..<bars.count {
+            let row = TEMA.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "TEMA[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try TEMA.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try TEMA.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

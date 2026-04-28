@@ -260,7 +260,150 @@ struct RSIIncrementalTests {
     }
 }
 
-// MARK: - 共享 helper（fileprivate · 三个 suite 复用）
+// MARK: - WP-41 v2 commit 3/4 · MACD 增量 API
+
+@Suite("WP-41 v2 commit 3/4 · MACD 增量 API")
+struct MACDIncrementalTests {
+
+    @Test("history 满 + 增量推进：DIF/DEA/MACD 3 列每步与全量精确一致（12/26/9）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try MACD.calculate(kline: series, params: [12, 26, 9])
+        // full[0] = DIF, full[1] = DEA, full[2] = MACD
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try MACD.makeIncrementalState(kline: history, params: [12, 26, 9])
+
+        for i in historyCount..<bars.count {
+            let row = MACD.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 3)
+            #expect(row[0] == full[0].values[i], "DIF[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: full[0].values[i]))")
+            #expect(row[1] == full[1].values[i], "DEA[\(i)]")
+            #expect(row[2] == full[2].values[i], "MACD[\(i)]")
+        }
+    }
+
+    @Test("history 空 · 各阶段 nil 模式与全量一致（DIF 在 slow 步起 / DEA 再延 signal-1 步）")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 60)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try MACD.makeIncrementalState(kline: empty, params: [12, 26, 9])
+
+        let series = makeSeries(from: bars)
+        let full = try MACD.calculate(kline: series, params: [12, 26, 9])
+
+        for i in 0..<bars.count {
+            let row = MACD.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "DIF[\(i)]")
+            #expect(row[1] == full[1].values[i], "DEA[\(i)]")
+            #expect(row[2] == full[2].values[i], "MACD[\(i)]")
+        }
+    }
+
+    @Test("参数校验：少于 3 个参数 / slow <= fast 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try MACD.makeIncrementalState(kline: empty, params: [12, 26])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try MACD.makeIncrementalState(kline: empty, params: [26, 12, 9])
+        }
+    }
+}
+
+// MARK: - WP-41 v2 commit 3/4 · BOLL 增量 API
+
+@Suite("WP-41 v2 commit 3/4 · BOLL 增量 API")
+struct BOLLIncrementalTests {
+
+    @Test("history 满 + 增量推进：MID/UPPER/LOWER 3 列每步与全量精确一致（period=20, k=2）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try BOLL.calculate(kline: series, params: [20, 2])
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try BOLL.makeIncrementalState(kline: history, params: [20, 2])
+
+        for i in historyCount..<bars.count {
+            let row = BOLL.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 3)
+            #expect(row[0] == full[0].values[i], "MID[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: full[0].values[i]))")
+            #expect(row[1] == full[1].values[i], "UPPER[\(i)]")
+            #expect(row[2] == full[2].values[i], "LOWER[\(i)]")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try BOLL.makeIncrementalState(kline: empty, params: [10, 2])
+
+        for i in 0..<9 {
+            let row = BOLL.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+            #expect(row[1] == nil)
+            #expect(row[2] == nil)
+        }
+        let row10 = BOLL.stepIncremental(state: &state, newBar: bars[9])
+        #expect(row10[0] != nil)
+
+        let series = makeSeries(from: bars)
+        let full = try BOLL.calculate(kline: series, params: [10, 2])
+        #expect(row10[0] == full[0].values[9])
+        #expect(row10[1] == full[1].values[9])
+        #expect(row10[2] == full[2].values[9])
+        for i in 10..<bars.count {
+            let row = BOLL.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i])
+            #expect(row[1] == full[1].values[i])
+            #expect(row[2] == full[2].values[i])
+        }
+    }
+
+    @Test("全 0 价差（close 不变）→ stddev = 0 · UPPER == LOWER == MID")
+    func incrementalAllSame() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let flat = (0..<25).map { i in
+            KLine(
+                instrumentID: "TEST", period: .minute1,
+                openTime: baseDate.addingTimeInterval(TimeInterval(i * 60)),
+                open: 100, high: 100, low: 100, close: 100,
+                volume: 100, openInterest: 0, turnover: 0
+            )
+        }
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try BOLL.makeIncrementalState(kline: empty, params: [10, 2])
+        for i in 0..<9 {
+            _ = BOLL.stepIncremental(state: &state, newBar: flat[i])
+        }
+        let row = BOLL.stepIncremental(state: &state, newBar: flat[9])
+        #expect(row[0] == Decimal(100))
+        #expect(row[1] == Decimal(100))   // UPPER = MID + k*0
+        #expect(row[2] == Decimal(100))   // LOWER = MID - k*0
+    }
+
+    @Test("参数校验：少于 2 参数 / period<2 / k<=0 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try BOLL.makeIncrementalState(kline: empty, params: [20])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try BOLL.makeIncrementalState(kline: empty, params: [1, 2])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try BOLL.makeIncrementalState(kline: empty, params: [20, 0])
+        }
+    }
+}
+
+// MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {
     let baseDate = Date(timeIntervalSinceReferenceDate: 0)

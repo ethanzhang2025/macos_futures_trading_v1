@@ -94,6 +94,23 @@ extension EMA: IncrementalIndicator {
         public var warmUpSum: Decimal
         public var count: Int
         public var prevEMA: Decimal
+
+        /// 推进一个 close 值 · 返回该步 EMA 末值（warm-up 期返回 nil）
+        /// 对外暴露给 MACD 等复合指标内嵌 EMA(DIF)（DIF 是 Decimal · 不是 KLine）
+        public mutating func advance(close: Decimal) -> Decimal? {
+            count += 1
+            if count < period {
+                warmUpSum += close
+                return nil
+            }
+            if count == period {
+                warmUpSum += close
+                prevEMA = warmUpSum / Decimal(period)
+            } else {
+                prevEMA = alpha * close + oneMinusAlpha * prevEMA
+            }
+            return Kernels.round8(prevEMA)
+        }
     }
 
     public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
@@ -119,19 +136,7 @@ extension EMA: IncrementalIndicator {
     }
 
     public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
-        state.count += 1
-        if state.count < state.period {
-            state.warmUpSum += newBar.close
-            return [nil]
-        }
-        if state.count == state.period {
-            // 这一根恰好达 period · 用 SMA 种子
-            state.warmUpSum += newBar.close
-            state.prevEMA = state.warmUpSum / Decimal(state.period)
-        } else {
-            state.prevEMA = state.alpha * newBar.close + state.oneMinusAlpha * state.prevEMA
-        }
-        return [Kernels.round8(state.prevEMA)]
+        [state.advance(close: newBar.close)]
     }
 }
 

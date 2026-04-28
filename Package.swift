@@ -238,6 +238,14 @@ let package = Package(
             name: "MetalKLineWindowDemo",
             dependencies: ["Shared", "ChartCore", "IndicatorCore"],
             path: "Tools/MetalKLineWindowDemo"
+        ),
+        // IncrementalIndicatorBenchmark · WP-41 v2 commit 3/4 性能基准
+        // 5 指标 × 1000 K × 100 次重复 · 全量 calculate vs 增量 step 对比 · DispatchTime 纳秒计时
+        // Linux 可跑（不依赖 SwiftUI/AppKit · 仅 Foundation + IndicatorCore + Shared）
+        .executableTarget(
+            name: "IncrementalIndicatorBenchmark",
+            dependencies: ["Shared", "IndicatorCore"],
+            path: "Tools/IncrementalIndicatorBenchmark"
         )
     ]
 )

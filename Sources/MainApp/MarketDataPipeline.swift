@@ -33,7 +33,10 @@ final class MarketDataPipeline {
     private let driver: SinaPollingDriver
     private let uds: UnifiedDataSource
 
-    init(instrumentID: String = Self.defaultInstrumentID, period: KLinePeriod = Self.defaultPeriod) {
+    init(
+        instrumentID: String = MarketDataPipeline.defaultInstrumentID,
+        period: KLinePeriod = MarketDataPipeline.defaultPeriod
+    ) {
         self.instrumentID = instrumentID
         self.period = period
         let sina = SinaMarketData()

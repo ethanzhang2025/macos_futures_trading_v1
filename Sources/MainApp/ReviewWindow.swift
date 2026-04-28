@@ -1,10 +1,6 @@
-// MainApp · 复盘工作台 Scene（WP-50 UI · 共 4 commit）
+// MainApp · 复盘工作台 Scene（WP-50 UI · 8 图就位）
 //
-// 进度：
-//   ✅ 1/4：开窗 + Mock 数据流 + 8 卡片占位
-//   ✅ 2/4：折线类 2 图（胜率曲线 / 最大回撤）· SwiftUI Charts LineMark
-//   ✅ 3/4：柱状类 4 图（月度盈亏 / 分布直方 / 持仓时间 / 时段分析）· BarMark
-//   ⏳ 4/4：其他 2 图（品种矩阵 / 盈亏比）+ JournalCore 真数据接入
+// 留待 M5：JournalStore 真数据替换 Mock（StoreManager 注入时一并接入）
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -33,7 +29,7 @@ struct ReviewWindow: View {
         .task { await loadMockReview() }
     }
 
-    /// v1 用 mock trades · commit 4/4 替换为 JournalStore 真数据
+    /// v1 mock trades · M5 替换为 JournalStore 真数据（StoreManager 注入时一并接入）
     private func loadMockReview() async {
         let result = await Task.detached(priority: .userInitiated) {
             let trades = MockReviewTrades.generate(pairCount: 50)
@@ -76,7 +72,7 @@ struct ReviewWindow: View {
                     }
                     chartCard("品种矩阵",
                               subtitle: "InstrumentMatrix · \(s.instrumentMatrix.cells.count) 合约") {
-                        placeholderArt("tablecells")
+                        instrumentMatrixView(s.instrumentMatrix)
                     }
                     chartCard("持仓时间",
                               subtitle: "中位 \(durationLabel(s.holdingDuration.medianSeconds)) · 平均 \(durationLabel(s.holdingDuration.averageSeconds))") {
@@ -88,7 +84,7 @@ struct ReviewWindow: View {
                     }
                     chartCard("盈亏比",
                               subtitle: "ProfitLossRatio · \(decimal(s.profitLossRatio.ratio)) · 胜 \(s.profitLossRatio.winCount) / 亏 \(s.profitLossRatio.lossCount)") {
-                        placeholderArt("scale.3d")
+                        profitLossRatioView(s.profitLossRatio)
                     }
                     chartCard("时段分析",
                               subtitle: "SessionPnL · \(s.sessionPnL.buckets.count) 段") {
@@ -109,7 +105,7 @@ struct ReviewWindow: View {
             stat("总 PnL", "¥\(signedDecimal(s.monthlyPnL.totalPnL))")
             stat("胜率", pct(s.winRateCurve.finalWinRate))
             Spacer()
-            Text("v1 mock · commit 4/4 接 JournalStore 真数据")
+            Text("v1 mock · 待 M5 接 JournalStore 真数据")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
         }
@@ -146,18 +142,6 @@ struct ReviewWindow: View {
         .cornerRadius(8)
     }
 
-    /// 占位（待 commit 3/4 替换为真实 SwiftUI Charts）
-    private func placeholderArt(_ icon: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 32))
-                .foregroundColor(.secondary.opacity(0.4))
-            Text("⏳ 待 SwiftUI Charts 绘制")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.7))
-        }
-    }
-
     private var gridColumns: [GridItem] {
         Array(repeating: GridItem(.flexible(minimum: 280, maximum: 600), spacing: 16), count: 4)
     }
@@ -171,7 +155,7 @@ struct ReviewWindow: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - 折线类图（commit 2/4）
+    // MARK: - 折线图
 
     /// 胜率曲线 · y 固定 0~100% · 50% 虚线参考（盈亏分水岭）
     private func winRateChart(_ curve: WinRateCurve) -> some View {
@@ -243,27 +227,10 @@ struct ReviewWindow: View {
                     .font(.system(size: 9))
             }
         }
-        .chartYAxis {
-            AxisMarks { v in
-                AxisGridLine()
-                AxisValueLabel {
-                    if let n = v.as(Double.self) {
-                        Text(formatYuan(n))
-                            .font(.system(size: 9, design: .monospaced))
-                    }
-                }
-            }
-        }
+        .chartYAxis { Self.axisYuan() }
     }
 
-    /// 万元单位简写（避免 y 轴标签过长 · 例如 12500 → "1.25w"）
-    private func formatYuan(_ n: Double) -> String {
-        let abs = Swift.abs(n)
-        if abs >= 10_000 { return String(format: "%.1fw", n / 10_000) }
-        return String(format: "%.0f", n)
-    }
-
-    // MARK: - 柱状类图（commit 3/4）
+    // MARK: - 柱状图
 
     /// 月度盈亏 · 涨红跌绿（中国期货约定）
     private func monthlyPnLChart(_ data: MonthlyPnL) -> some View {
@@ -273,11 +240,11 @@ struct ReviewWindow: View {
                     x: .value("月", String(format: "%02d/%02d", bucket.year % 100, bucket.month)),
                     y: .value("PnL", Self.toDouble(bucket.realizedPnL))
                 )
-                .foregroundStyle(bucket.realizedPnL >= 0 ? Color.red.opacity(0.75) : Color.green.opacity(0.75))
+                .foregroundStyle(Self.pnlColor(bucket.realizedPnL))
             }
         }
-        .chartXAxis { axisCategoryX() }
-        .chartYAxis { axisYuanY() }
+        .chartXAxis { Self.axisCategoryX() }
+        .chartYAxis { Self.axisYuan() }
     }
 
     /// 分布直方 · 按桶下界 · 负桶绿/正桶红
@@ -289,11 +256,11 @@ struct ReviewWindow: View {
                     y: .value("笔数", bin.count),
                     width: .ratio(0.9)
                 )
-                .foregroundStyle(bin.lowerBound >= 0 ? Color.red.opacity(0.75) : Color.green.opacity(0.75))
+                .foregroundStyle(Self.pnlColor(bin.lowerBound))
             }
         }
-        .chartXAxis { axisYuanX() }
-        .chartYAxis { axisIntegerY() }
+        .chartXAxis { Self.axisYuan() }
+        .chartYAxis { Self.axisIntegerY() }
     }
 
     /// 持仓时间 · 6 桶（label + count）· 中性蓝
@@ -307,8 +274,8 @@ struct ReviewWindow: View {
                 .foregroundStyle(Color.blue.opacity(0.75))
             }
         }
-        .chartXAxis { axisCategoryX() }
-        .chartYAxis { axisIntegerY() }
+        .chartXAxis { Self.axisCategoryX() }
+        .chartYAxis { Self.axisIntegerY() }
     }
 
     /// 时段分析 · 5 段 · 涨红跌绿
@@ -319,23 +286,93 @@ struct ReviewWindow: View {
                     x: .value("时段", Self.slotLabel(bucket.slot)),
                     y: .value("PnL", Self.toDouble(bucket.totalPnL))
                 )
-                .foregroundStyle(bucket.totalPnL >= 0 ? Color.red.opacity(0.75) : Color.green.opacity(0.75))
+                .foregroundStyle(Self.pnlColor(bucket.totalPnL))
             }
         }
-        .chartXAxis { axisCategoryX() }
-        .chartYAxis { axisYuanY() }
+        .chartXAxis { Self.axisCategoryX() }
+        .chartYAxis { Self.axisYuan() }
     }
 
-    // MARK: - 复用的 axis builder（commit 3/4 起 4 个柱图共用）
+    // MARK: - 表格 / 数值卡
 
-    private func axisCategoryX() -> some AxisContent {
+    /// 品种矩阵 · 简表（合约 / 笔数 / 胜率 / PnL）· prefix 8 行 · 220 卡片高度内不会溢出
+    private func instrumentMatrixView(_ data: InstrumentMatrix) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("合约").frame(maxWidth: .infinity, alignment: .leading)
+                Text("笔数").frame(width: 36, alignment: .trailing)
+                Text("胜率").frame(width: 44, alignment: .trailing)
+                Text("PnL").frame(width: 60, alignment: .trailing)
+            }
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundColor(.secondary)
+            .padding(.bottom, 4)
+            Divider()
+            VStack(spacing: 2) {
+                ForEach(data.cells.prefix(8), id: \.self) { cell in
+                    HStack(spacing: 8) {
+                        Text(cell.instrumentID)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("\(cell.tradeCount)")
+                            .frame(width: 36, alignment: .trailing)
+                        Text(String(format: "%.0f%%", cell.winRate * 100))
+                            .frame(width: 44, alignment: .trailing)
+                        Text(Self.formatYuan(Self.toDouble(cell.totalPnL)))
+                            .frame(width: 60, alignment: .trailing)
+                            .foregroundColor(Self.pnlColor(cell.totalPnL))
+                    }
+                    .font(.system(size: 11, design: .monospaced))
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    /// 盈亏比 · 左侧双柱（平均盈红 / 平均亏绿）+ 右侧 ratio 大字
+    /// ratio 红绿语义与 PnL 涨红跌绿反向：≥1 盈利占优红 · <1 亏损占优绿
+    private func profitLossRatioView(_ data: ProfitLossRatio) -> some View {
+        let bars: [(label: String, value: Decimal, color: Color)] = [
+            ("平均盈", data.averageWin,  Self.bullColor),
+            ("平均亏", data.averageLoss, Self.bearColor),
+        ]
+        return HStack(spacing: 12) {
+            Chart {
+                ForEach(bars, id: \.label) { bar in
+                    BarMark(
+                        x: .value("类型", bar.label),
+                        y: .value("¥", Self.toDouble(bar.value))
+                    )
+                    .foregroundStyle(bar.color)
+                }
+            }
+            .chartXAxis { Self.axisCategoryX() }
+            .chartYAxis { Self.axisYuan() }
+            .frame(maxWidth: .infinity)
+
+            VStack(spacing: 4) {
+                Text("盈亏比").font(.caption).foregroundColor(.secondary)
+                Text(decimal(data.ratio))
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+                    .foregroundColor(data.ratio >= 1 ? Self.bullColor : Self.bearColor)
+                Text("胜 \(data.winCount) · 亏 \(data.lossCount)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .frame(width: 90)
+        }
+    }
+
+    // MARK: - axis builder（4 柱图 + 双柱共用）
+
+    private static func axisCategoryX() -> some AxisContent {
         AxisMarks(values: .automatic) { _ in
             AxisGridLine()
             AxisValueLabel().font(.system(size: 9))
         }
     }
 
-    private func axisYuanX() -> some AxisContent {
+    /// 万元单位 axis 标签（X/Y 通用 · SwiftUI Charts 按 chartXAxis/chartYAxis 位置区分轴）
+    private static func axisYuan() -> some AxisContent {
         AxisMarks { v in
             AxisGridLine()
             AxisValueLabel {
@@ -346,22 +383,32 @@ struct ReviewWindow: View {
         }
     }
 
-    private func axisYuanY() -> some AxisContent {
-        AxisMarks { v in
-            AxisGridLine()
-            AxisValueLabel {
-                if let n = v.as(Double.self) {
-                    Text(formatYuan(n)).font(.system(size: 9, design: .monospaced))
-                }
-            }
-        }
-    }
-
-    private func axisIntegerY() -> some AxisContent {
+    private static func axisIntegerY() -> some AxisContent {
         AxisMarks { _ in
             AxisGridLine()
             AxisValueLabel().font(.system(size: 9, design: .monospaced))
         }
+    }
+
+    // MARK: - 配色 / 格式化（static · 4 chart + matrix + ratio 共用）
+
+    static let bullColor = Color.red.opacity(0.75)   // 涨红（中国期货约定）
+    static let bearColor = Color.green.opacity(0.75) // 跌绿
+
+    /// PnL 涨红跌绿（≥0 红 / <0 绿）· 4 chart + matrix + ratio 大字共用
+    private static func pnlColor(_ v: Decimal) -> Color {
+        v >= 0 ? bullColor : bearColor
+    }
+
+    /// 万元单位简写（避免 y 轴标签过长 · 例如 12500 → "1.25w"）
+    private static func formatYuan(_ n: Double) -> String {
+        let abs = Swift.abs(n)
+        if abs >= 10_000 { return String(format: "%.1fw", n / 10_000) }
+        return String(format: "%.0f", n)
+    }
+
+    private static func toDouble(_ v: Decimal) -> Double {
+        NSDecimalNumber(decimal: v).doubleValue
     }
 
     private static func slotLabel(_ s: TradingSlot) -> String {
@@ -374,11 +421,7 @@ struct ReviewWindow: View {
         }
     }
 
-    // MARK: - 格式化
-
-    private static func toDouble(_ v: Decimal) -> Double {
-        NSDecimalNumber(decimal: v).doubleValue
-    }
+    // MARK: - HUD 数值格式化（保留 instance · SwiftUI body 直接调）
 
     private func decimal(_ v: Decimal) -> String {
         String(format: "%.0f", Self.toDouble(v))
@@ -416,7 +459,7 @@ private struct ReviewSummary {
     let sessionPnL: SessionPnL
 }
 
-// MARK: - Mock Trades 生成器（v1 演示 · commit 4/4 替换为 JournalStore 真数据）
+// MARK: - Mock Trades 生成器（v1 演示 · M5 替换为 JournalStore 真数据）
 
 enum MockReviewTrades {
 

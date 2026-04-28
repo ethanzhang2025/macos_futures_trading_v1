@@ -1,7 +1,10 @@
 // WP-41 第二批 · 趋势类 8 指标（除 MA/EMA 已在 MA.swift）
 // WMA / DEMA / TEMA / HMA / VWAP / SAR / Supertrend / ADX
+//
+// WP-41 v3 第 2 批 commit 3/4：ADX 实现 IncrementalIndicator · 4 路 Wilder 平滑 · DMI 复用 ADX state
 
 import Foundation
+import Shared
 
 // MARK: - WMA · 加权移动平均
 
@@ -289,6 +292,166 @@ public enum ADX: Indicator {
             IndicatorSeries(name: "+DI", values: empty),
             IndicatorSeries(name: "-DI", values: empty)
         ]
+    }
+}
+
+// MARK: - WP-41 v3 第 2 批 commit 3/4 · ADX 增量 API（4 路 Wilder + DMI 复用）
+
+extension ADX: IncrementalIndicator {
+
+    /// state：4 路 Wilder 流式状态（atr / smPDM / smMDM / adx）+ prevHigh/Low/Close（DM/TR 计算用）
+    /// 一级 Wilder：tr / plusDM / minusDM 各自 Wilder 平滑
+    /// 二级 Wilder：dx 由 +DI/-DI 计算 → 再 Wilder 得 ADX
+    /// 首个 ADX/+DI/-DI 输出在 count == period（与 calculate 第 n 根 K 一致 · seed 等价于 wilder prefix(n).sum/n）
+    /// 之所以一级 + 二级合一：calculate 内部数据流也是先平滑 atr/smPDM/smMDM → 算 +DI/-DI/dx → 平滑 ADX
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public let nDec: Decimal
+        public let nMinus1: Decimal
+
+        public var prevHigh: Decimal?
+        public var prevLow: Decimal?
+        public var prevClose: Decimal?
+        public var count: Int
+
+        // 一级 Wilder（tr / plusDM / minusDM）
+        public var trWarmUp: Decimal
+        public var atr: Decimal
+        public var pdmWarmUp: Decimal
+        public var smPDM: Decimal
+        public var mdmWarmUp: Decimal
+        public var smMDM: Decimal
+
+        // 二级 Wilder（dx → ADX · 流式 · seed 在 count == period 时 = 当前 dx / n）
+        // 注：calculate 里 dx[0..n-2] 默认初始化 0 · wilder seed = prefix(n).sum / n 等价于 dx_current/n
+        public var adx: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, index: 0, min: 2, label: "ADX period")
+        var state = IncrementalState(
+            period: n, nDec: Decimal(n), nMinus1: Decimal(n - 1),
+            prevHigh: nil, prevLow: nil, prevClose: nil,
+            count: 0,
+            trWarmUp: 0, atr: 0,
+            pdmWarmUp: 0, smPDM: 0,
+            mdmWarmUp: 0, smMDM: 0,
+            adx: 0
+        )
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, high: kline.highs[i], low: kline.lows[i], close: kline.closes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        processStep(state: &state, high: newBar.high, low: newBar.low, close: newBar.close)
+    }
+
+    /// makeIncrementalState 与 stepIncremental 共享：
+    /// - 第 1 根：TR = high - low（无 prevClose）· plusDM/minusDM = 0（无 prevHigh/Low）
+    /// - 第 2..n-1 根：累加 warmUp · 返回全 nil
+    /// - 第 n 根：seed atr/smPDM/smMDM = warmUp/n · 第一次算 +DI/-DI/dx · adx = dx/n（wilder 二级 seed）
+    /// - 第 n+1 根起：一级 Wilder 平滑各自值 · 同步算 +DI/-DI/dx · 二级 Wilder 平滑 adx
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal) -> [Decimal?] {
+        state.count += 1
+
+        // TR / plusDM / minusDM
+        let tr: Decimal
+        if let pc = state.prevClose {
+            let hl = high - low
+            let hc = abs(high - pc)
+            let lc = abs(low - pc)
+            tr = max(hl, max(hc, lc))
+        } else {
+            tr = high - low
+        }
+
+        let plusDM: Decimal
+        let minusDM: Decimal
+        if let ph = state.prevHigh, let pl = state.prevLow {
+            let up = high - ph
+            let dn = pl - low
+            plusDM = (up > dn && up > 0) ? up : 0
+            minusDM = (dn > up && dn > 0) ? dn : 0
+        } else {
+            plusDM = 0
+            minusDM = 0
+        }
+
+        state.prevHigh = high
+        state.prevLow = low
+        state.prevClose = close
+
+        // 一级 Wilder（tr / plusDM / minusDM 同步）
+        if state.count < state.period {
+            state.trWarmUp += tr
+            state.pdmWarmUp += plusDM
+            state.mdmWarmUp += minusDM
+            return [nil, nil, nil]
+        }
+        if state.count == state.period {
+            state.trWarmUp += tr
+            state.pdmWarmUp += plusDM
+            state.mdmWarmUp += minusDM
+            state.atr = state.trWarmUp / state.nDec
+            state.smPDM = state.pdmWarmUp / state.nDec
+            state.smMDM = state.mdmWarmUp / state.nDec
+        } else {
+            state.atr = (state.atr * state.nMinus1 + tr) / state.nDec
+            state.smPDM = (state.smPDM * state.nMinus1 + plusDM) / state.nDec
+            state.smMDM = (state.smMDM * state.nMinus1 + minusDM) / state.nDec
+        }
+
+        // +DI / -DI / DX（atr <= 0 → 全 nil + dx=0）
+        // 关键精度对齐：calculate 用 wilder 输出（= round8(prev)）作 +DI 输入 · 增量也必须 round8 snapshot
+        // 否则与全量末位精度差 1-2 位（同 RSI commit 2/4 的发现）
+        let atrSnap = Kernels.round8(state.atr)
+        let plusDIOut: Decimal?
+        let minusDIOut: Decimal?
+        let dx: Decimal
+        if atrSnap > 0 {
+            let pdmSnap = Kernels.round8(state.smPDM)
+            let mdmSnap = Kernels.round8(state.smMDM)
+            let pdi = Decimal(100) * pdmSnap / atrSnap
+            let mdi = Decimal(100) * mdmSnap / atrSnap
+            plusDIOut = Kernels.round8(pdi)
+            minusDIOut = Kernels.round8(mdi)
+            let sum = pdi + mdi
+            dx = sum == 0 ? 0 : Decimal(100) * abs(pdi - mdi) / sum
+        } else {
+            plusDIOut = nil
+            minusDIOut = nil
+            dx = 0
+        }
+
+        // 二级 Wilder（dx → ADX · seed 用当前 dx · 等价 wilder prefix(n).sum/n where 前 n-1 个 dx 全 0）
+        if state.count == state.period {
+            state.adx = dx / state.nDec
+        } else {
+            state.adx = (state.adx * state.nMinus1 + dx) / state.nDec
+        }
+
+        return [Kernels.round8(state.adx), plusDIOut, minusDIOut]
+    }
+}
+
+// MARK: - DMI 增量 API · 直接复用 ADX state · 仅截取 +DI/-DI 两列
+
+extension DMI: IncrementalIndicator {
+
+    /// DMI 是 ADX 的 [+DI, -DI] 子集 · state 与算法完全复用 ADX
+    public typealias IncrementalState = ADX.IncrementalState
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        try ADX.makeIncrementalState(kline: kline, params: params)
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        let row = ADX.stepIncremental(state: &state, newBar: newBar)
+        // ADX 输出 [ADX, +DI, -DI] · DMI 取后两列（与 DMI.calculate 一致）
+        return [row[1], row[2]]
     }
 }
 

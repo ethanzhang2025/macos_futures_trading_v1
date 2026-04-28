@@ -795,6 +795,82 @@ struct WilliamsRIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 2 批 commit 3/4 · ADX 增量 API（4 路 Wilder）
+
+@Suite("WP-41 v3 第 2 批 commit 3/4 · ADX 增量 API")
+struct ADXIncrementalTests {
+
+    @Test("history 满 + 增量推进：ADX/+DI/-DI 3 列每步与全量精确一致（period=14）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try ADX.calculate(kline: series, params: [14])
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try ADX.makeIncrementalState(kline: history, params: [14])
+
+        for i in historyCount..<bars.count {
+            let row = ADX.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 3)
+            #expect(row[0] == full[0].values[i], "ADX[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: full[0].values[i]))")
+            #expect(row[1] == full[1].values[i], "+DI[\(i)]")
+            #expect(row[2] == full[2].values[i], "-DI[\(i)]")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 60)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try ADX.makeIncrementalState(kline: empty, params: [14])
+
+        let series = makeSeries(from: bars)
+        let full = try ADX.calculate(kline: series, params: [14])
+
+        for i in 0..<bars.count {
+            let row = ADX.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "ADX[\(i)]")
+            #expect(row[1] == full[1].values[i], "+DI[\(i)]")
+            #expect(row[2] == full[2].values[i], "-DI[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<2 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try ADX.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try ADX.makeIncrementalState(kline: empty, params: [1])
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 2 批 commit 3/4 · DMI 增量 API（复用 ADX state · 仅截 +DI/-DI）
+
+@Suite("WP-41 v3 第 2 批 commit 3/4 · DMI 增量 API")
+struct DMIIncrementalTests {
+
+    @Test("DMI 增量与全量精确一致（+DI/-DI 2 列 · 复用 ADX state）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try DMI.calculate(kline: series, params: [14])
+
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try DMI.makeIncrementalState(kline: empty, params: [14])
+
+        for i in 0..<bars.count {
+            let row = DMI.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 2)
+            #expect(row[0] == full[0].values[i], "+DI[\(i)]")
+            #expect(row[1] == full[1].values[i], "-DI[\(i)]")
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

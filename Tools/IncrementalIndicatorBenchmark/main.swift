@@ -1,11 +1,12 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（12 指标 · v3 第 2 批 commit 4/4 扩展 OBV/WR/ADX/DMI）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（13 指标 · v3 第 3 批扩展 Stochastic）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 12 个指标：
+// 测试 13 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
+//   v3 第 3 批（1）：Stochastic 14-3
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -181,6 +182,17 @@ benchmark("DMI(14)") {
     guard var state = try? DMI.makeIncrementalState(kline: emptyHistory, params: [14]) else { return }
     for bar in bars {
         _ = DMI.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 3 批 · Stochastic（双 ring HHV/LLV + %K_raw 滑动 sum 给 %D）
+
+benchmark("STOCH(14,3)") {
+    _ = try? Stochastic.calculate(kline: series, params: [14, 3])
+} incremental: {
+    guard var state = try? Stochastic.makeIncrementalState(kline: emptyHistory, params: [14, 3]) else { return }
+    for bar in bars {
+        _ = Stochastic.stepIncremental(state: &state, newBar: bar)
     }
 }
 

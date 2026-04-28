@@ -4,6 +4,7 @@
 // WP-41 v3 commit 1/4：KDJ 实现 IncrementalIndicator · O(n) per step（n=9 微秒级）
 // WP-41 v3 commit 2/4：CCI 实现 IncrementalIndicator · ring buffer + sum + O(n) MD 重算
 // WP-41 v3 第 2 批 commit 2/4：WilliamsR 实现 IncrementalIndicator · KDJ ring 简化版（无 SMA 平滑）
+// WP-41 v3 第 3 批：Stochastic 实现 IncrementalIndicator · ring HHV/LLV + %K_raw 滑动 sum %D
 
 import Foundation
 import Shared
@@ -507,5 +508,103 @@ extension WilliamsR: IncrementalIndicator {
 
         guard hhv > llv else { return nil }
         return Kernels.round8((hhv - close) / (hhv - llv) * Decimal(-100))
+    }
+}
+
+// MARK: - WP-41 v3 第 3 批 · Stochastic 增量 API（HHV/LLV ring + %K_raw 滑动 sum 给 %D）
+
+extension Stochastic: IncrementalIndicator {
+
+    /// state：双 ring buffer · n 根 high/low（求 HHV/LLV）+ s 根 %K_raw（求 %D 滑动均值）
+    /// %K_raw 在 hhv == llv 时 = 0（与 calculate kRaw 默认初值一致 · %D 对 0 求均值 = 0 也是文华标准）
+    /// %D 第一个非 nil 在 kCount == smooth · 不依赖 hCount（与 calculate Kernels.ma(kRaw, s) 一致）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public let smooth: Int
+        public var highRing: [Decimal]
+        public var lowRing: [Decimal]
+        public var hHead: Int
+        public var hCount: Int
+        public var kRawRing: [Decimal]
+        public var kHead: Int
+        public var kCount: Int
+        public var kSum: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        guard params.count >= 2 else {
+            throw IndicatorError.invalidParameter("Stochastic 需要 2 参数（period / smooth）")
+        }
+        let n = intValue(params[0])
+        let s = intValue(params[1])
+        guard n >= 1, s >= 1 else {
+            throw IndicatorError.invalidParameter("Stochastic 参数非法 n=\(n) s=\(s)")
+        }
+        var state = IncrementalState(
+            period: n, smooth: s,
+            highRing: [Decimal](repeating: 0, count: n),
+            lowRing: [Decimal](repeating: 0, count: n),
+            hHead: 0, hCount: 0,
+            kRawRing: [Decimal](repeating: 0, count: s),
+            kHead: 0, kCount: 0, kSum: 0
+        )
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, high: kline.highs[i], low: kline.lows[i], close: kline.closes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        processStep(state: &state, high: newBar.high, low: newBar.low, close: newBar.close)
+    }
+
+    /// makeIncrementalState 与 stepIncremental 共享 · 输出 [%K, %D]：
+    /// - 写 high/low ring（O(1)）· hCount < period → kRaw=0 + %K=nil（warm-up · 与 calculate 一致）
+    /// - hCount == period：扫 ring 求 hhv/llv O(n) · h>l 时 kRaw 真值 + %K=round8(kRaw) · 否则 kRaw=0 + %K=nil
+    /// - %K_raw 写 ring（无论是否 nil 都写 · 含 0 · 与 calculate kRaw 数组同语义）· kSum 滑动
+    /// - kCount == smooth → %D=round8(kSum/s) · 否则 nil
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal) -> [Decimal?] {
+        state.highRing[state.hHead] = high
+        state.lowRing[state.hHead] = low
+        state.hHead = (state.hHead + 1) % state.period
+        state.hCount = min(state.hCount + 1, state.period)
+
+        let kRaw: Decimal
+        let kValid: Decimal?
+        if state.hCount == state.period {
+            var hhv = state.highRing[0]
+            var llv = state.lowRing[0]
+            for i in 1..<state.period {
+                if state.highRing[i] > hhv { hhv = state.highRing[i] }
+                if state.lowRing[i] < llv { llv = state.lowRing[i] }
+            }
+            if hhv > llv {
+                kRaw = (close - llv) / (hhv - llv) * Decimal(100)
+                kValid = Kernels.round8(kRaw)
+            } else {
+                kRaw = 0
+                kValid = nil
+            }
+        } else {
+            kRaw = 0
+            kValid = nil
+        }
+
+        // kRaw 滑动 sum（每步必写入 ring · 与 calculate kRaw 数组每位都赋值一致）
+        if state.kCount == state.smooth {
+            state.kSum -= state.kRawRing[state.kHead]
+        } else {
+            state.kCount += 1
+        }
+        state.kRawRing[state.kHead] = kRaw
+        state.kHead = (state.kHead + 1) % state.smooth
+        state.kSum += kRaw
+
+        let dValue: Decimal? = state.kCount == state.smooth
+            ? Kernels.round8(state.kSum / Decimal(state.smooth))
+            : nil
+
+        return [kValid, dValue]
     }
 }

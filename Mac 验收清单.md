@@ -488,6 +488,21 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 3 批（Stochastic · 13 指标全覆盖）
+
+### Stochastic 增量（双 ring HHV/LLV + %K_raw 滑动 sum 给 %D）
+- [ ] Stochastic 与全量精确一致（period=14 · smooth=3 · 80 K · history 30）
+- [ ] history 空 · 60 根 K 全程匹配全量（双 ring · %K 在 period 起 · %D 在 smooth 起）
+- [ ] 全平 high/low → %K 始终 nil · %D 始终 0（与文华标准 Kernels.ma(kRaw, s) 一致）
+- [ ] 参数缺失 / period<1 / smooth<1 抛错
+- [ ] benchmark Stochastic(14,3) 满批增量 1.3× 加速（双 ring 同步推进 · 比 KDJ 单指标输出更紧）
+
+### 13 指标增量基础（Stochastic 加入后）
+- [ ] benchmark 完整输出 13 行（v2 五 + v3 第 1 批三 + 第 2 批四 + 第 3 批一）
+- [ ] 增量 API 协议生态：13/56 = 23.2% 覆盖率（K 线主图常用全部就位）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

@@ -871,6 +871,82 @@ struct DMIIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 3 批 · Stochastic 增量 API
+
+@Suite("WP-41 v3 第 3 批 · Stochastic 增量 API")
+struct StochasticIncrementalTests {
+
+    @Test("history 满 + 增量推进：%K/%D 2 列每步与全量精确一致（period=14 · smooth=3）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try Stochastic.calculate(kline: series, params: [14, 3])
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try Stochastic.makeIncrementalState(kline: history, params: [14, 3])
+
+        for i in historyCount..<bars.count {
+            let row = Stochastic.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 2)
+            #expect(row[0] == full[0].values[i], "%K[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: full[0].values[i]))")
+            #expect(row[1] == full[1].values[i], "%D[\(i)]")
+        }
+    }
+
+    @Test("history 空 · 60 根 K 全程匹配全量（双 ring · %K 在 period 起 · %D 在 smooth 起）")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 60)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try Stochastic.makeIncrementalState(kline: empty, params: [14, 3])
+
+        let series = makeSeries(from: bars)
+        let full = try Stochastic.calculate(kline: series, params: [14, 3])
+
+        for i in 0..<bars.count {
+            let row = Stochastic.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "%K[\(i)]")
+            #expect(row[1] == full[1].values[i], "%D[\(i)]")
+        }
+    }
+
+    @Test("全平 high/low → %K 始终 nil · %D 始终 0（kRaw 全 0 · sum/s = 0 · 与文华标准一致）")
+    func incrementalAllSame() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let flat = (0..<10).map { i in
+            KLine(
+                instrumentID: "TEST", period: .minute1,
+                openTime: baseDate.addingTimeInterval(TimeInterval(i * 60)),
+                open: 100, high: 100, low: 100, close: 100,
+                volume: 100, openInterest: 0, turnover: 0
+            )
+        }
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try Stochastic.makeIncrementalState(kline: empty, params: [5, 3])
+        for (i, bar) in flat.enumerated() {
+            let row = Stochastic.stepIncremental(state: &state, newBar: bar)
+            #expect(row[0] == nil, "i=\(i): h==l → %K nil")
+            if i >= 2 {  // smooth - 1 = 2 起 %D 有值
+                #expect(row[1] == Decimal(0), "i=\(i): kRaw 全 0 → %D 应 0")
+            }
+        }
+    }
+
+    @Test("参数缺失 / period<1 / smooth<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try Stochastic.makeIncrementalState(kline: empty, params: [14])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Stochastic.makeIncrementalState(kline: empty, params: [0, 3])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Stochastic.makeIncrementalState(kline: empty, params: [14, 0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

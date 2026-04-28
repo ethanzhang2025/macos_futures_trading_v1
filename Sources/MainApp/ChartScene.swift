@@ -46,6 +46,9 @@ struct ChartScene: View {
     // 实盘 state
     @State private var pipeline: MarketDataPipeline?
 
+    // 增量指标推进器（WP-41 v2 commit 4/4 · 解决回放 8× 重算瓶颈）
+    @State private var indicatorRunner: ChartIndicatorRunner?
+
     // 回放 state（mode = .replay 时活跃）
     @State private var replayPlayer: ReplayPlayer?
     @State private var replayDriver: ReplayDriver?
@@ -118,8 +121,27 @@ struct ChartScene: View {
 
         bars = []
         indicators = []
+        indicatorRunner = nil
         dataSourceLabel = "加载中…"
         instrumentLabel = currentInstrumentID
+    }
+
+    /// 全量计算 indicators + 重建 indicatorRunner（commit 4/4 · snapshot / seek / Mock fallback 路径）
+    /// 增量推进路径走 stepIndicators(newBar:)
+    private func updateIndicatorsFull(_ snap: [KLine]) async {
+        indicators = await computeIndicatorsAsync(snap)
+        indicatorRunner = ChartIndicatorRunner.prime(bars: snap)
+    }
+
+    /// 增量推进 indicators · 仅在新 K 单调追加时调（barEmitted / completedBar 两条路径）
+    /// runner 不可用时 fallback 全量
+    private func stepIndicators(newBar: KLine) async {
+        if var runner = indicatorRunner {
+            indicators = runner.step(newBar: newBar)
+            indicatorRunner = runner
+        } else {
+            await updateIndicatorsFull(bars)
+        }
     }
 
     // MARK: - 工具条
@@ -227,11 +249,11 @@ struct ChartScene: View {
                 }
                 snapshotReceived = true
                 bars = snapBars
-                indicators = await computeIndicatorsAsync(snapBars)
+                await updateIndicatorsFull(snapBars)
                 dataSourceLabel = "Sina 真行情"
             case .completedBar(let k):
                 bars.append(k)
-                indicators = await computeIndicatorsAsync(bars)
+                await stepIndicators(newBar: k)
             }
         }
     }
@@ -270,7 +292,7 @@ struct ChartScene: View {
         )
 
         bars = Array(history.prefix(replay.cursor.currentIndex + 1))
-        indicators = await computeIndicatorsAsync(bars)
+        await updateIndicatorsFull(bars)
         instrumentLabel = instrumentID
         periodLabel = period.displayName
         dataSourceLabel = "回放 \(history.count) 根 · 按 ▶ 启动"
@@ -336,7 +358,7 @@ struct ChartScene: View {
             // 单调递增（stepForward / 正常播放）走增量 append；倒退/异常走全量重建
             if cursor.currentIndex == bars.count {
                 bars.append(bar)
-                indicators = await computeIndicatorsAsync(bars)
+                await stepIndicators(newBar: bar)
             } else {
                 await rebuildBarsToCursor(cursor)
             }
@@ -355,7 +377,7 @@ struct ChartScene: View {
     private func rebuildBarsToCursor(_ cursor: ReplayCursor) async {
         guard cursor.currentIndex >= 0, cursor.currentIndex < replayAllBars.count else { return }
         bars = Array(replayAllBars.prefix(cursor.currentIndex + 1))
-        indicators = await computeIndicatorsAsync(bars)
+        await updateIndicatorsFull(bars)
     }
 
     // MARK: - 回放控制条（仅 .replay 模式）
@@ -497,6 +519,7 @@ struct ChartScene: View {
         }.value
         bars = result.0
         indicators = result.1
+        indicatorRunner = ChartIndicatorRunner.prime(bars: result.0)
         dataSourceLabel = "Sina 不可达 · 已退回 Mock"
     }
 
@@ -713,6 +736,60 @@ struct ChartContentView: View {
 }
 
 // MARK: - Mock 数据（spike 阶段占位 · 后续 WP 接 MarketDataProvider）
+
+// MARK: - 增量指标推进器（WP-41 v2 commit 4/4 · 解决回放每帧全量重算瓶颈）
+
+/// 4 个 IncrementalState（MA5 / MA20 / MA60 / BOLL）· 与 MockKLineData.computeIndicators 一致
+/// - prime(bars:) 用 history 全量初始化（一次 O(N)）
+/// - step(newBar:) 推进所有 state · 返回 series 末尾追加新值（每步 O(N) 主要来自 BOLL stddev）
+/// - 单调递增 append（barEmitted / completedBar）调 step · seek/重建走全量 prime
+fileprivate struct ChartIndicatorRunner {
+    var ma5: MA.IncrementalState
+    var ma20: MA.IncrementalState
+    var ma60: MA.IncrementalState
+    var boll: BOLL.IncrementalState
+    private(set) var series: [IndicatorSeries]   // 与 ChartScene.indicators 同步快照
+
+    /// 用 history 初始化全部 state 与 series（与 MockKLineData.computeIndicators 完全一致）
+    static func prime(bars: [KLine]) -> ChartIndicatorRunner? {
+        let kline = makeKLineSeries(from: bars)
+        guard
+            let ma5State  = try? MA.makeIncrementalState(kline: kline, params: [5]),
+            let ma20State = try? MA.makeIncrementalState(kline: kline, params: [20]),
+            let ma60State = try? MA.makeIncrementalState(kline: kline, params: [60]),
+            let bollState = try? BOLL.makeIncrementalState(kline: kline, params: [20, 2])
+        else { return nil }
+        let series = MockKLineData.computeIndicators(bars: bars)
+        return ChartIndicatorRunner(ma5: ma5State, ma20: ma20State, ma60: ma60State, boll: bollState, series: series)
+    }
+
+    /// 推进 1 根新 K · 返回更新后的 series（顺序：MA5 / MA20 / MA60 / BOLL-UPPER / BOLL-LOWER · 与 computeIndicators 输出一致）
+    mutating func step(newBar: KLine) -> [IndicatorSeries] {
+        let ma5Val  = MA.stepIncremental(state: &ma5,  newBar: newBar)[0]
+        let ma20Val = MA.stepIncremental(state: &ma20, newBar: newBar)[0]
+        let ma60Val = MA.stepIncremental(state: &ma60, newBar: newBar)[0]
+        let bollVals = BOLL.stepIncremental(state: &boll, newBar: newBar)   // [MID, UPPER, LOWER]
+        let appended: [Decimal?] = [ma5Val, ma20Val, ma60Val, bollVals[1], bollVals[2]]
+        precondition(series.count == appended.count, "series count must match appended count")
+        for i in series.indices {
+            series[i] = IndicatorSeries(name: series[i].name, values: series[i].values + [appended[i]])
+        }
+        return series
+    }
+
+    private static func makeKLineSeries(from bars: [KLine]) -> KLineSeries {
+        KLineSeries(
+            opens: bars.map(\.open),
+            highs: bars.map(\.high),
+            lows: bars.map(\.low),
+            closes: bars.map(\.close),
+            volumes: bars.map(\.volume),
+            openInterests: bars.map { _ in 0 }
+        )
+    }
+}
+
+// MARK: - Mock 数据生成（spike 占位 · 后续 WP 接 MarketDataProvider）
 
 enum MockKLineData {
 

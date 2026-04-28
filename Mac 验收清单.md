@@ -396,6 +396,29 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API（WP-41 v2 · 4 commit · 已交付 · ChartScene 接入）
+
+### 回放性能验收（Mac · ChartScene 接入增量后）
+- [ ] 进入 .replay 模式 · 拉 1000 根历史 K · 按 ▶ 启动
+- [ ] 回放速度 1× / 2× / 4× / 8× / 16× 切换：
+  - [ ] 8× 速度下 K 线推进流畅（无明显卡顿 / 帧率掉到 < 30fps）
+  - [ ] 16× 极速下也不卡（增量 step 应 < 100µs · 远低于全量 50ms）
+  - [ ] MA5 / MA20 / MA60 / BOLL 折线随回放增量延伸 · 无重绘抖动
+- [ ] 回放 ⏸ 暂停 / ⏪ 倒退（seek 走全量 rebuild）：
+  - [ ] 倒退后再播放 · 增量 runner 在 rebuildBarsToCursor 中正确重置（无残留旧 state）
+  - [ ] 倒退后 indicators 与正向播放至同位置一致（无差异）
+- [ ] 实盘 .live 模式 completedBar 也走增量：
+  - [ ] 5s 轮询新 K 加入时 indicators append 1 个新值 · 不全量重算
+  - [ ] 切合约 / 切周期 / 切模式 → indicatorRunner = nil · 重新 prime
+- [ ] Mock fallback（Sina 不可达）：
+  - [ ] 5000 根 random walk 加载后 · indicatorRunner 也 prime
+  - [ ] 后续如有新 K 加入（无）· 不报错
+
+### 与全量算法等价性（用全量 calculate 对比）
+- [ ] MA5 / MA20 / MA60 / BOLL-UPPER / BOLL-LOWER 末值与 MockKLineData.computeIndicators(bars: 全部) 完全一致（增量与全量算法等价 · IncrementalIndicatorTests 已断言）
+
+---
+
 ## 待补（后续 commit 累积）
 
 后续每个 commit 完成功能后追加到对应章节 · 切机前在此清单逐项验收。

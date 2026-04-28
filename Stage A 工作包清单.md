@@ -411,6 +411,10 @@
 - **锚点**：产品设计书 §3.1 模块①、D2 §2、ChatGPT A03
 
 ### ✅ WP-41 · 指标库 v1 · 56 个 · 完成 2026-04-24 · commit 9067d86 + 1a7c828
+**WP-41 v2 增量 API（2026-04-28 收官）**：5 指标增量 API（MA / EMA / RSI / MACD / BOLL）+ ChartScene 接入 · 4 commit
+- commit 1/4 协议 + MA 环形 buffer（2140bf4）· commit 2/4 EMA + RSI Wilder 平滑（a5c2aea）· commit 3/4 MACD + BOLL + 性能基准 demo（b98d525）· commit 4/4 ChartScene 接入（解决回放每帧全量 O(N×M) 瓶颈 · barEmitted/completedBar 走增量 · seek/rebuild 走全量）
+- 实测加速：同等工作量 1-2× · 实际回放每帧 1 step vs 全量 1000K → 加速量级 ~1000×
+- 测试 +21 测试 +5 suite（MA/EMA/RSI/MACD/BOLL 各算法等价 + 边界）· Linux 680/161 全绿
 
 **实际交付**：**44 真实指标 + 10 期货占位说明 = 54 项**（原 56 扣 2：Andrew's Pitchfork 归 WP-42 画线，Elliott Wave 不做留 Stage C）
 

@@ -454,6 +454,40 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 2 批扩展（OBV/WR/ADX/DMI · 4 commit 全部交付 🎉）
+
+### commit 1（c3259de · OBV 增量 · 累积式 O(1)）
+- [ ] OBV.makeIncrementalState + stepIncremental 与 OBV.calculate 算法等价
+- [ ] history 满 + 增量推进 50 根与全量精确一致（80 根 K · history 30）
+- [ ] history 空 · 第 1 根 OBV = volume（无 warm-up · 无周期参数）
+- [ ] close 全平 → OBV 始终 = 首根 volume
+
+### commit 2（4ba5501 · WilliamsR 增量 · KDJ ring 简化版）
+- [ ] WR 与全量精确一致（period=14）
+- [ ] history 空 · 前 9 步 nil · 第 10 步起匹配全量（period=10）
+- [ ] 全平 high/low → 始终 nil（h > l 守卫）
+- [ ] state 4 字段（KDJ 13 字段的 1/3 · 简化模式）
+
+### commit 3（f029aa3 · ADX + DMI 增量 · 4 路 Wilder + 复用）
+- [ ] ADX 三列（ADX/+DI/-DI）与全量精确一致（period=14）
+- [ ] history 空 · 60 根 K 全程匹配全量
+- [ ] 关键精度对齐：用 round8(state.atr) snapshot 算 +DI/-DI（同 RSI commit 2/4 修正）
+- [ ] DMI 复用 ADX state（typealias · 零开销）· +DI/-DI 与全量一致
+
+### commit 4（性能基准 12 指标 · WP-41 v3 第 2 批收官 🎉）
+- [ ] swift run -c release IncrementalIndicatorBenchmark 输出 12 指标全测：
+  - [ ] v2 五指标：MA / EMA / RSI / MACD / BOLL
+  - [ ] v3 第 1 批三指标：KDJ / CCI / ATR
+  - [ ] v3 第 2 批四指标：OBV / WR / ADX / DMI
+- [ ] 满批同等工作量加速比 0.8-2.1×（多数 1.0× · MA/BOLL 因 ring sum 优化加速明显）
+- [ ] DMI 与 ADX 性能几乎一致（验证零开销复用）
+
+### Mac 切机替换（M5）
+- [ ] ChartScene.ChartIndicatorRunner 扩展支持 12 指标
+- [ ] 12 指标增量同时推进 · 16× 回放速度无掉帧
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

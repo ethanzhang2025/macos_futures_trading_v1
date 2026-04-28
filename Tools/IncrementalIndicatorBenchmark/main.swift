@@ -1,10 +1,11 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（8 指标 · v3 commit 4/4 扩展 KDJ/CCI/ATR）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（12 指标 · v3 第 2 批 commit 4/4 扩展 OBV/WR/ADX/DMI）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 8 个指标：
-//   v2 commit 1-3：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
-//   v3 commit 1-3：KDJ 9-3-3 / CCI 20 / ATR 14
+// 测试 12 个指标：
+//   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
+//   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
+//   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -142,6 +143,44 @@ benchmark("ATR(14)") {
     guard var state = try? ATR.makeIncrementalState(kline: emptyHistory, params: [14]) else { return }
     for bar in bars {
         _ = ATR.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 2 批 commit 4/4 · 扩展 4 指标（OBV / WR / ADX / DMI）
+
+benchmark("OBV") {
+    _ = try? OBV.calculate(kline: series, params: [])
+} incremental: {
+    guard var state = try? OBV.makeIncrementalState(kline: emptyHistory, params: []) else { return }
+    for bar in bars {
+        _ = OBV.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("WR(14)") {
+    _ = try? WilliamsR.calculate(kline: series, params: [14])
+} incremental: {
+    guard var state = try? WilliamsR.makeIncrementalState(kline: emptyHistory, params: [14]) else { return }
+    for bar in bars {
+        _ = WilliamsR.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("ADX(14)") {
+    _ = try? ADX.calculate(kline: series, params: [14])
+} incremental: {
+    guard var state = try? ADX.makeIncrementalState(kline: emptyHistory, params: [14]) else { return }
+    for bar in bars {
+        _ = ADX.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("DMI(14)") {
+    _ = try? DMI.calculate(kline: series, params: [14])
+} incremental: {
+    guard var state = try? DMI.makeIncrementalState(kline: emptyHistory, params: [14]) else { return }
+    for bar in bars {
+        _ = DMI.stepIncremental(state: &state, newBar: bar)
     }
 }
 

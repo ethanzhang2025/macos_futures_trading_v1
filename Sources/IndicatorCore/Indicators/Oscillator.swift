@@ -1,7 +1,10 @@
 // WP-41 第二批 · 震荡类 10 指标（除 RSI/MACD 已在独立文件）
 // KDJ / Stochastic / CCI / W%R / ROC / TRIX / BIAS / PSY / DMI / CMO
+//
+// WP-41 v3 commit 1/4：KDJ 实现 IncrementalIndicator · O(n) per step（n=9 微秒级）
 
 import Foundation
+import Shared
 
 // MARK: - KDJ · 9/3/3 经典参数
 
@@ -15,16 +18,7 @@ public enum KDJ: Indicator {
     ]
 
     public static func calculate(kline: KLineSeries, params: [Decimal]) throws -> [IndicatorSeries] {
-        guard params.count >= 3 else {
-            throw IndicatorError.invalidParameter("KDJ 需要 3 参数（period / k / d）")
-        }
-        let n = intValue(params[0])
-        let kN = intValue(params[1])
-        let dN = intValue(params[2])
-        guard n >= 1, kN >= 1, dN >= 1 else {
-            throw IndicatorError.invalidParameter("KDJ 参数非法 n=\(n) k=\(kN) d=\(dN)")
-        }
-
+        let (n, kN, dN) = try Self.requireParams(params)
         let count = kline.count
         let hhv = Kernels.hhv(kline.highs, period: n)
         let llv = Kernels.llv(kline.lows, period: n)
@@ -298,5 +292,99 @@ public enum CMO: Indicator {
             }
         }
         return [IndicatorSeries(name: "CMO(\(n))", values: out)]
+    }
+}
+
+// MARK: - WP-41 v3 commit 1/4 · KDJ 增量 API
+
+extension KDJ: IncrementalIndicator {
+
+    /// state：n/k/d 三参数 + (high/low) ring buffer · prevK/prevD 流式 SMA 平滑（不 round8 状态 · 输出 round8）
+    /// HHV/LLV 用环形 buffer + 每步 O(n) 重新扫描 max/min（n=9 实际 < 1µs · 远低于全量 O(N×n)）
+    /// 之所以不用 monotonic deque：n 太小（典型 9）· 实测 ring 扫描比 deque 簿记开销低 · 简单优于复杂
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public let kN: Int
+        public let dN: Int
+        public let kNDec: Decimal
+        public let dNDec: Decimal
+        public let kNMinus1: Decimal
+        public let dNMinus1: Decimal
+        public var highRing: [Decimal]
+        public var lowRing: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var prevK: Decimal
+        public var prevD: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let (n, kN, dN) = try Self.requireParams(params)
+        var state = IncrementalState(
+            period: n, kN: kN, dN: dN,
+            kNDec: Decimal(kN), dNDec: Decimal(dN),
+            kNMinus1: Decimal(kN - 1), dNMinus1: Decimal(dN - 1),
+            highRing: [Decimal](repeating: 0, count: n),
+            lowRing: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0,
+            prevK: 50, prevD: 50
+        )
+        // 模拟 step 扫描 history（包括 ring 写入与平滑 · 与 calculate 算法一致）
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, high: kline.highs[i], low: kline.lows[i], close: kline.closes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        processStep(state: &state, high: newBar.high, low: newBar.low, close: newBar.close)
+    }
+
+    /// makeIncrementalState 与 stepIncremental 共享的核心：
+    /// - ring 写入（满则覆盖最旧 · O(1)）
+    /// - count < period：返回全 nil（warm-up · 与 calculate 中 hhv/llv == nil 阶段一致 · prev*K/D 保持 50）
+    /// - count >= period：扫描 ring 求 hhv/llv（O(n)）→ RSV → SMA 平滑 prevK/prevD → J = 3K - 2D
+    /// - hhv == llv 时 rsv = 0（与 calculate 中 rsv[i] 默认初值 0 语义一致）
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal) -> [Decimal?] {
+        state.highRing[state.head] = high
+        state.lowRing[state.head] = low
+        state.head = (state.head + 1) % state.period
+        state.count = min(state.count + 1, state.period)
+
+        guard state.count == state.period else { return [nil, nil, nil] }
+
+        var hhv = state.highRing[0]
+        var llv = state.lowRing[0]
+        for i in 1..<state.period {
+            if state.highRing[i] > hhv { hhv = state.highRing[i] }
+            if state.lowRing[i] < llv { llv = state.lowRing[i] }
+        }
+
+        let rsv: Decimal = hhv > llv
+            ? (close - llv) / (hhv - llv) * Decimal(100)
+            : 0
+        state.prevK = (state.prevK * state.kNMinus1 + rsv) / state.kNDec
+        state.prevD = (state.prevD * state.dNMinus1 + state.prevK) / state.dNDec
+        let jv = Decimal(3) * state.prevK - Decimal(2) * state.prevD
+        return [
+            Kernels.round8(state.prevK),
+            Kernels.round8(state.prevD),
+            Kernels.round8(jv)
+        ]
+    }
+
+    /// 共享参数校验（calculate / makeIncrementalState 都用）
+    fileprivate static func requireParams(_ params: [Decimal]) throws -> (n: Int, kN: Int, dN: Int) {
+        guard params.count >= 3 else {
+            throw IndicatorError.invalidParameter("KDJ 需要 3 参数（period / k / d）")
+        }
+        let n = intValue(params[0])
+        let kN = intValue(params[1])
+        let dN = intValue(params[2])
+        guard n >= 1, kN >= 1, dN >= 1 else {
+            throw IndicatorError.invalidParameter("KDJ 参数非法 n=\(n) k=\(kN) d=\(dN)")
+        }
+        return (n, kN, dN)
     }
 }

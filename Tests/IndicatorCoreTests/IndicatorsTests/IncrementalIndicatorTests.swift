@@ -403,6 +403,98 @@ struct BOLLIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 commit 1/4 · KDJ 增量 API
+
+@Suite("WP-41 v3 commit 1/4 · KDJ 增量 API")
+struct KDJIncrementalTests {
+
+    @Test("history 满 + 增量推进：K/D/J 3 列每步与全量精确一致（9/3/3）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try KDJ.calculate(kline: series, params: [9, 3, 3])
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try KDJ.makeIncrementalState(kline: history, params: [9, 3, 3])
+
+        for i in historyCount..<bars.count {
+            let row = KDJ.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 3)
+            #expect(row[0] == full[0].values[i], "K[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: full[0].values[i]))")
+            #expect(row[1] == full[1].values[i], "D[\(i)]")
+            #expect(row[2] == full[2].values[i], "J[\(i)]")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 50)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try KDJ.makeIncrementalState(kline: empty, params: [9, 3, 3])
+
+        for i in 0..<8 {
+            let row = KDJ.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+            #expect(row[1] == nil)
+            #expect(row[2] == nil)
+        }
+        let row9 = KDJ.stepIncremental(state: &state, newBar: bars[8])
+        #expect(row9[0] != nil)
+
+        let series = makeSeries(from: bars)
+        let full = try KDJ.calculate(kline: series, params: [9, 3, 3])
+        #expect(row9[0] == full[0].values[8])
+        #expect(row9[1] == full[1].values[8])
+        #expect(row9[2] == full[2].values[8])
+        for i in 9..<bars.count {
+            let row = KDJ.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i])
+            #expect(row[1] == full[1].values[i])
+            #expect(row[2] == full[2].values[i])
+        }
+    }
+
+    @Test("全平 close（high == low == close 不变）→ rsv = 0 · K/D 趋稳到 0")
+    func incrementalAllSame() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let flat = (0..<30).map { i in
+            KLine(
+                instrumentID: "TEST", period: .minute1,
+                openTime: baseDate.addingTimeInterval(TimeInterval(i * 60)),
+                open: 100, high: 100, low: 100, close: 100,
+                volume: 100, openInterest: 0, turnover: 0
+            )
+        }
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try KDJ.makeIncrementalState(kline: empty, params: [9, 3, 3])
+        var lastK: Decimal = 50
+        for i in 0..<flat.count {
+            let row = KDJ.stepIncremental(state: &state, newBar: flat[i])
+            if let k = row[0] { lastK = k }
+        }
+        // 平价 22 步后 K 收敛：K = K * 2/3 每步 · K_22 ≈ 50 * (2/3)^22 ≈ 0.029（< 0.1）
+        #expect(lastK < Decimal(string: "0.1")!)
+    }
+
+    @Test("参数校验：少于 3 参数 / period<1 / k<1 / d<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try KDJ.makeIncrementalState(kline: empty, params: [9, 3])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try KDJ.makeIncrementalState(kline: empty, params: [0, 3, 3])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try KDJ.makeIncrementalState(kline: empty, params: [9, 0, 3])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try KDJ.makeIncrementalState(kline: empty, params: [9, 3, 0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

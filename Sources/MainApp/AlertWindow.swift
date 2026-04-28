@@ -1,12 +1,7 @@
-// MainApp · 预警面板 Scene（WP-52 UI · 共 4 commit）
+// MainApp · 预警面板 Scene（WP-52 UI · 8 alerts × 4 status × 6 condition × 5 channel）
 //
-// 进度：
-//   ✅ 1/4：开窗 + Mock alerts + 列表占位
-//   ✅ 2/4：添加预警 Sheet（6 类 condition 表单）
-//   ✅ 3/4：编辑/删除/启停 + 触发历史 Tab（AddOrEditAlertSheet 双模式 · MockAlertHistory）
-//   ⏳ 4/4：通知通道（系统通知 / 声音 留 Mac 验收）
-//
-// 留待 M5：StoreManager 注入 AlertEvaluator + 持久化 alerts + 真实历史
+// 留待 Mac 切机：UserNotifications channel · NSSound channel（替换对应 LoggingChannel）
+// 留待 M5：StoreManager 注入 AlertEvaluator · onTick 实接 · 持久化 alerts + 真实历史
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -19,6 +14,7 @@ import AlertCore
 private enum AlertTab: String, CaseIterable, Identifiable {
     case list    = "预警列表"
     case history = "触发历史"
+    case console = "通知日志"
     var id: String { rawValue }
 }
 
@@ -43,6 +39,8 @@ struct AlertWindow: View {
     @State private var historyEntries: [AlertHistoryEntry] = []
     @State private var selectedTab: AlertTab = .list
     @State private var sheetState: SheetState?
+    @State private var consoleLog: [String] = []
+    @State private var dispatcher: NotificationDispatcher = NotificationDispatcher()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,6 +56,7 @@ struct AlertWindow: View {
         .task {
             alerts = MockAlerts.generate()
             historyEntries = MockAlertHistory.generate()
+            await registerChannels()
         }
         .sheet(item: $sheetState) { state in
             switch state {
@@ -78,17 +77,21 @@ struct AlertWindow: View {
     // MARK: - 顶部 stats
 
     private var header: some View {
-        let active = alerts.filter { $0.status == .active }.count
-        let triggered = alerts.filter { $0.status == .triggered }.count
-        let paused = alerts.filter { $0.status == .paused }.count
-
+        let counts = alerts.reduce(into: (active: 0, triggered: 0, paused: 0)) { acc, a in
+            switch a.status {
+            case .active:    acc.active += 1
+            case .triggered: acc.triggered += 1
+            case .paused:    acc.paused += 1
+            case .cancelled: break
+            }
+        }
         return HStack(spacing: 24) {
             Text("🔔 预警面板").font(.title2).bold()
             Divider().frame(height: 24)
             stat("总数", "\(alerts.count)")
-            stat("活跃", "\(active)", color: .green)
-            stat("已触发", "\(triggered)", color: .red)
-            stat("已暂停", "\(paused)", color: .secondary)
+            stat("活跃", "\(counts.active)", color: .green)
+            stat("已触发", "\(counts.triggered)", color: .red)
+            stat("已暂停", "\(counts.paused)", color: .secondary)
             Spacer()
             Button {
                 sheetState = .add
@@ -135,6 +138,29 @@ struct AlertWindow: View {
             }
         case .history:
             historyList
+        case .console:
+            consoleLogList
+        }
+    }
+
+    /// 注册 5 个 LoggingNotificationChannel · Mac 切机时把 .systemNotice / .sound 替换为真实 channel
+    private func registerChannels() async {
+        for kind in NotificationChannelKind.allCases {
+            let channel = LoggingNotificationChannel(kind: kind) { msg in
+                Task { @MainActor in
+                    appendConsoleLog("[\(kind.rawValue)] \(msg)")
+                }
+            }
+            await dispatcher.register(channel)
+        }
+    }
+
+    @MainActor
+    private func appendConsoleLog(_ line: String) {
+        let ts = Self.timeFormatter.string(from: Date())
+        consoleLog.append("\(ts) | \(line)")
+        if consoleLog.count > 100 {
+            consoleLog.removeFirst(consoleLog.count - 100)
         }
     }
 
@@ -149,7 +175,7 @@ struct AlertWindow: View {
                 Text("状态").frame(width: 70, alignment: .center)
                 Text("通道").frame(width: 80, alignment: .leading)
                 Text("冷却").frame(width: 50, alignment: .trailing)
-                Text("操作").frame(width: 90, alignment: .trailing)
+                Text("操作").frame(width: 110, alignment: .trailing)
             }
             .font(.system(size: 11, design: .monospaced))
             .foregroundColor(.secondary)
@@ -159,7 +185,7 @@ struct AlertWindow: View {
 
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(alerts) { alert in
+                    ForEach(alerts, id: \.id) { alert in
                         alertRow(alert)
                         Divider()
                     }
@@ -174,14 +200,14 @@ struct AlertWindow: View {
             Text(a.instrumentID).frame(width: 60, alignment: .leading)
             Text(a.condition.displayDescription).frame(width: 200, alignment: .leading)
                 .foregroundColor(.secondary)
-            Self.statusBadge(a.status).frame(width: 70, alignment: .center)
-            Text(a.channels.map { Self.channelLabel($0) }.sorted().joined(separator: "·"))
+            statusBadge(a.status).frame(width: 70, alignment: .center)
+            Text(a.channels.map(\.shortLabel).sorted().joined(separator: "·"))
                 .frame(width: 80, alignment: .leading)
                 .foregroundColor(.secondary)
             Text("\(Int(a.cooldownSeconds))s")
                 .frame(width: 50, alignment: .trailing)
                 .foregroundColor(.secondary)
-            rowActions(a).frame(width: 90, alignment: .trailing)
+            rowActions(a).frame(width: 110, alignment: .trailing)
         }
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 16)
@@ -191,6 +217,14 @@ struct AlertWindow: View {
     @ViewBuilder
     private func rowActions(_ a: Alert) -> some View {
         HStack(spacing: 8) {
+            Button {
+                Task { await testTrigger(a) }
+            } label: {
+                Image(systemName: "paperplane.circle").foregroundColor(.purple)
+            }
+            .buttonStyle(.borderless)
+            .help("测试触发（走 channel 通知 + 加历史）")
+
             Button {
                 toggleStatus(a)
             } label: {
@@ -204,8 +238,7 @@ struct AlertWindow: View {
             Button {
                 sheetState = .edit(a)
             } label: {
-                Image(systemName: "square.and.pencil")
-                    .foregroundColor(.blue)
+                Image(systemName: "square.and.pencil").foregroundColor(.blue)
             }
             .buttonStyle(.borderless)
             .help("编辑")
@@ -213,8 +246,7 @@ struct AlertWindow: View {
             Button {
                 deleteAlert(a)
             } label: {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
+                Image(systemName: "trash").foregroundColor(.red)
             }
             .buttonStyle(.borderless)
             .help("删除")
@@ -233,34 +265,63 @@ struct AlertWindow: View {
         alerts.removeAll { $0.id == a.id }
     }
 
-    @ViewBuilder
-    private static func statusBadge(_ s: AlertStatus) -> some View {
-        switch s {
-        case .active:    badge("活跃", color: .green)
-        case .triggered: badge("已触发", color: .red)
-        case .paused:    badge("暂停", color: .orange)
-        case .cancelled: badge("已取消", color: .secondary)
+    /// 模拟触发一次预警 · dispatch 走已注册的 channels + 标记 status + 写入 historyEntries
+    private func testTrigger(_ a: Alert) async {
+        let event = NotificationEvent(
+            alertID: a.id,
+            alertName: a.name,
+            instrumentID: a.instrumentID,
+            triggerPrice: Self.testTriggerPrice(a.condition),
+            triggeredAt: Date(),
+            message: "测试触发 · \(a.condition.displayDescription)"
+        )
+        await dispatcher.dispatch(event, to: a.channels)
+        markAlertTriggered(a, at: event.triggeredAt)
+        appendHistoryEntry(from: a, event: event)
+    }
+
+    private func markAlertTriggered(_ a: Alert, at: Date) {
+        guard let idx = alerts.firstIndex(where: { $0.id == a.id }) else { return }
+        var copy = alerts[idx]
+        copy.status = .triggered
+        copy.lastTriggeredAt = at
+        alerts[idx] = copy
+    }
+
+    private func appendHistoryEntry(from a: Alert, event: NotificationEvent) {
+        let entry = AlertHistoryEntry(
+            alertID: a.id,
+            alertName: a.name,
+            instrumentID: a.instrumentID,
+            triggerPrice: event.triggerPrice,
+            triggeredAt: event.triggeredAt,
+            conditionSnapshot: a.condition,
+            message: event.message
+        )
+        historyEntries.insert(entry, at: 0)
+    }
+
+    /// 按 condition 生成测试触发价（让 displayDescription 显示有意义的数字）
+    private static func testTriggerPrice(_ c: AlertCondition) -> Decimal {
+        switch c {
+        case .priceAbove(let p):                return p + 1
+        case .priceBelow(let p):                return p - 1
+        case .priceCrossAbove(let p):           return p
+        case .priceCrossBelow(let p):           return p
+        case .horizontalLineTouched(_, let p):  return p
+        case .volumeSpike, .priceMoveSpike:     return 0
         }
     }
 
-    private static func badge(_ text: String, color: Color) -> some View {
-        Text(text)
+    /// 状态徽章（圆角 + 白字 + 颜色背景）
+    private func statusBadge(_ s: AlertStatus) -> some View {
+        Text(s.displayLabel)
             .font(.system(size: 10, design: .monospaced))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(color.opacity(0.8))
+            .background(s.badgeColor.opacity(0.8))
             .cornerRadius(3)
-    }
-
-    private static func channelLabel(_ k: NotificationChannelKind) -> String {
-        switch k {
-        case .inApp:        return "内"
-        case .systemNotice: return "通"
-        case .sound:        return "声"
-        case .console:      return "控"
-        case .file:         return "文"
-        }
     }
 
     // MARK: - 触发历史列表
@@ -281,17 +342,11 @@ struct AlertWindow: View {
             .background(Color.secondary.opacity(0.06))
 
             if historyEntries.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 32))
-                        .foregroundColor(.secondary.opacity(0.4))
-                    Text("暂无触发历史").foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyState(icon: "clock.arrow.circlepath", text: "暂无触发历史")
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(historyEntries) { entry in
+                        ForEach(historyEntries, id: \.id) { entry in
                             historyRow(entry)
                             Divider()
                         }
@@ -303,12 +358,12 @@ struct AlertWindow: View {
 
     private func historyRow(_ e: AlertHistoryEntry) -> some View {
         HStack(spacing: 8) {
-            Text(Self.formatTime(e.triggeredAt))
+            Text(Self.timeFormatter.string(from: e.triggeredAt))
                 .frame(width: 150, alignment: .leading)
                 .foregroundColor(.secondary)
             Text(e.alertName).frame(maxWidth: .infinity, alignment: .leading)
             Text(e.instrumentID).frame(width: 60, alignment: .leading)
-            Text(Self.formatPrice(e.triggerPrice))
+            Text(fmtDecimal(e.triggerPrice))
                 .frame(width: 80, alignment: .trailing)
                 .foregroundColor(.red.opacity(0.8))
             Text(e.conditionSnapshot.displayDescription)
@@ -328,21 +383,58 @@ struct AlertWindow: View {
         return f
     }()
 
-    private static func formatTime(_ d: Date) -> String { timeFormatter.string(from: d) }
+    // MARK: - 通知日志 Tab
 
-    private static func formatPrice(_ v: Decimal) -> String {
-        let n = NSDecimalNumber(decimal: v).doubleValue
-        if abs(n - n.rounded()) < 0.01 { return String(format: "%.0f", n) }
-        return String(format: "%.2f", n)
+    private var consoleLogList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("LoggingNotificationChannel 输出（最近 100 条 · UserNotifications/NSSound 留 Mac 切机）")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("清空") { consoleLog.removeAll() }
+                    .disabled(consoleLog.isEmpty)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.secondary.opacity(0.06))
+
+            if consoleLog.isEmpty {
+                emptyState(icon: "terminal", text: "暂无通知输出 · 点击预警行 📤 测试触发")
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(consoleLog.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 2)
+                            Divider()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func emptyState(icon: String, text: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 32))
+                .foregroundColor(.secondary.opacity(0.4))
+            Text(text).foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - 底部提示
 
     private var footerHint: some View {
         HStack(spacing: 16) {
-            Label("通知通道（系统通知/声音）· 待 commit 4", systemImage: "bell.badge")
+            Label("已注册 5 channel（内/通/声/控/文 · LoggingChannel）", systemImage: "bell.badge")
             Spacer()
-            Text("v1 mock · 待 M5 接 AlertEvaluator + 持久化")
+            Text("v1 mock · UserNotifications/NSSound 待 Mac · M5 接 AlertEvaluator + 持久化")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
         }
@@ -353,9 +445,9 @@ struct AlertWindow: View {
     }
 }
 
-// MARK: - 添加 / 编辑 预警 Sheet（commit 2/4 + 3/4 双模式）
+// MARK: - 添加 / 编辑 预警 Sheet
 
-/// 6 类可编辑 condition（horizontalLineTouched 需要 drawingID 选择 · 留 v2）
+/// 6 类可编辑 condition（horizontalLineTouched 需 drawingID 选择 · 留 v2）
 private enum ConditionKind: String, CaseIterable, Identifiable {
     case priceAbove       = "价格 >"
     case priceBelow       = "价格 <"
@@ -378,71 +470,73 @@ private enum ConditionKind: String, CaseIterable, Identifiable {
     }
 }
 
+/// Sheet 表单草稿（聚合 14 字段 · 替代 14 个零散 @State · v2 加新 condition kind 单点扩展）
+private struct AlertFormDraft {
+    var name: String = ""
+    var instrumentID: String = "RB0"
+    var status: AlertStatus = .active
+    var cooldownSeconds: Int = 60
+
+    var conditionKind: ConditionKind = .priceAbove
+    var priceThreshold: Double = 3900
+    var volumeMultiple: Double = 3
+    var volumeWindowBars: Int = 20
+    var movePercent: Double = 1
+    var moveSeconds: Int = 60
+
+    var channels: Set<NotificationChannelKind> = [.inApp, .systemNotice]
+
+    init(from alert: Alert? = nil) {
+        guard let a = alert else { return }
+        name = a.name
+        instrumentID = a.instrumentID
+        status = a.status
+        cooldownSeconds = Int(a.cooldownSeconds)
+        conditionKind = ConditionKind.of(a.condition)
+        loadConditionParams(from: a.condition)
+        channels = a.channels
+    }
+
+    private mutating func loadConditionParams(from c: AlertCondition) {
+        switch c {
+        case .priceAbove(let p), .priceBelow(let p),
+             .priceCrossAbove(let p), .priceCrossBelow(let p):
+            priceThreshold = NSDecimalNumber(decimal: p).doubleValue
+        case .horizontalLineTouched(_, let p):
+            priceThreshold = NSDecimalNumber(decimal: p).doubleValue
+        case .volumeSpike(let m, let n):
+            volumeMultiple = NSDecimalNumber(decimal: m).doubleValue
+            volumeWindowBars = n
+        case .priceMoveSpike(let p, let s):
+            movePercent = NSDecimalNumber(decimal: p).doubleValue
+            moveSeconds = s
+        }
+    }
+
+    func toCondition() -> AlertCondition {
+        switch conditionKind {
+        case .priceAbove:      return .priceAbove(Decimal(priceThreshold))
+        case .priceBelow:      return .priceBelow(Decimal(priceThreshold))
+        case .priceCrossAbove: return .priceCrossAbove(Decimal(priceThreshold))
+        case .priceCrossBelow: return .priceCrossBelow(Decimal(priceThreshold))
+        case .volumeSpike:
+            return .volumeSpike(multiple: Decimal(volumeMultiple), windowBars: volumeWindowBars)
+        case .priceMoveSpike:
+            return .priceMoveSpike(percentThreshold: Decimal(movePercent), windowSeconds: moveSeconds)
+        }
+    }
+}
+
 struct AddOrEditAlertSheet: View {
     let editing: Alert?
     let onSave: (Alert) -> Void
     @Environment(\.dismiss) private var dismiss
-
-    // 基本字段
-    @State private var name: String
-    @State private var instrumentID: String
-    @State private var status: AlertStatus
-    @State private var cooldownSeconds: Int
-
-    // 条件类型 + 6 套参数
-    @State private var conditionKind: ConditionKind
-    @State private var priceThreshold: Double
-    @State private var volumeMultiple: Double
-    @State private var volumeWindowBars: Int
-    @State private var movePercent: Double
-    @State private var moveSeconds: Int
-
-    // 通知渠道
-    @State private var enableInApp: Bool
-    @State private var enableSystemNotice: Bool
-    @State private var enableSound: Bool
-    @State private var enableConsole: Bool
-    @State private var enableFile: Bool
+    @State private var draft: AlertFormDraft
 
     init(editing: Alert?, onSave: @escaping (Alert) -> Void) {
         self.editing = editing
         self.onSave = onSave
-        let a = editing
-        self._name = State(initialValue: a?.name ?? "")
-        self._instrumentID = State(initialValue: a?.instrumentID ?? "RB0")
-        self._status = State(initialValue: a?.status ?? .active)
-        self._cooldownSeconds = State(initialValue: Int(a?.cooldownSeconds ?? 60))
-        self._conditionKind = State(initialValue: a.map { ConditionKind.of($0.condition) } ?? .priceAbove)
-
-        var price = 3900.0, volMul = 3.0, mvPct = 1.0
-        var volWin = 20, mvSec = 60
-        if let cond = a?.condition {
-            switch cond {
-            case .priceAbove(let p), .priceBelow(let p),
-                 .priceCrossAbove(let p), .priceCrossBelow(let p):
-                price = NSDecimalNumber(decimal: p).doubleValue
-            case .horizontalLineTouched(_, let p):
-                price = NSDecimalNumber(decimal: p).doubleValue
-            case .volumeSpike(let m, let n):
-                volMul = NSDecimalNumber(decimal: m).doubleValue
-                volWin = n
-            case .priceMoveSpike(let p, let s):
-                mvPct = NSDecimalNumber(decimal: p).doubleValue
-                mvSec = s
-            }
-        }
-        self._priceThreshold = State(initialValue: price)
-        self._volumeMultiple = State(initialValue: volMul)
-        self._volumeWindowBars = State(initialValue: volWin)
-        self._movePercent = State(initialValue: mvPct)
-        self._moveSeconds = State(initialValue: mvSec)
-
-        let chs = a?.channels ?? [.inApp, .systemNotice]
-        self._enableInApp = State(initialValue: chs.contains(.inApp))
-        self._enableSystemNotice = State(initialValue: chs.contains(.systemNotice))
-        self._enableSound = State(initialValue: chs.contains(.sound))
-        self._enableConsole = State(initialValue: chs.contains(.console))
-        self._enableFile = State(initialValue: chs.contains(.file))
+        self._draft = State(initialValue: AlertFormDraft(from: editing))
     }
 
     var body: some View {
@@ -452,17 +546,17 @@ struct AddOrEditAlertSheet: View {
 
             Form {
                 Section("基本") {
-                    TextField("名称（必填）", text: $name)
-                    TextField("合约", text: $instrumentID)
-                    Picker("状态", selection: $status) {
+                    TextField("名称（必填）", text: $draft.name)
+                    TextField("合约", text: $draft.instrumentID)
+                    Picker("状态", selection: $draft.status) {
                         ForEach(AlertStatus.allCases, id: \.self) { s in
-                            Text(Self.statusLabel(s)).tag(s)
+                            Text(s.displayLabel).tag(s)
                         }
                     }
                 }
 
                 Section("条件") {
-                    Picker("类型", selection: $conditionKind) {
+                    Picker("类型", selection: $draft.conditionKind) {
                         ForEach(ConditionKind.allCases) { k in
                             Text(k.rawValue).tag(k)
                         }
@@ -471,14 +565,12 @@ struct AddOrEditAlertSheet: View {
                 }
 
                 Section("通知通道") {
-                    Toggle("App 内浮窗", isOn: $enableInApp)
-                    Toggle("系统通知中心", isOn: $enableSystemNotice)
-                    Toggle("声音", isOn: $enableSound)
-                    Toggle("控制台日志", isOn: $enableConsole)
-                    Toggle("文件日志", isOn: $enableFile)
+                    ForEach(NotificationChannelKind.allCases, id: \.self) { kind in
+                        Toggle(kind.displayLabel, isOn: bindingForChannel(kind))
+                    }
                     HStack {
                         Text("冷却（秒）")
-                        TextField("", value: $cooldownSeconds, format: .number)
+                        TextField("", value: $draft.cooldownSeconds, format: .number)
                             .frame(width: 80)
                     }
                 }
@@ -491,7 +583,7 @@ struct AddOrEditAlertSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button(editing == nil ? "保存" : "更新") { save() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(name.isEmpty)
+                    .disabled(draft.name.isEmpty)
             }
             .padding(.top, 12)
         }
@@ -501,105 +593,129 @@ struct AddOrEditAlertSheet: View {
 
     @ViewBuilder
     private var conditionParams: some View {
-        switch conditionKind {
+        switch draft.conditionKind {
         case .priceAbove, .priceBelow, .priceCrossAbove, .priceCrossBelow:
             HStack {
                 Text("阈值价格")
-                TextField("", value: $priceThreshold, format: .number)
+                TextField("", value: $draft.priceThreshold, format: .number)
                     .frame(width: 120)
             }
         case .volumeSpike:
             HStack {
                 Text("倍数 ≥")
-                TextField("", value: $volumeMultiple, format: .number)
+                TextField("", value: $draft.volumeMultiple, format: .number)
                     .frame(width: 80)
                 Text("近")
-                TextField("", value: $volumeWindowBars, format: .number)
+                TextField("", value: $draft.volumeWindowBars, format: .number)
                     .frame(width: 60)
                 Text("期均值")
             }
         case .priceMoveSpike:
             HStack {
                 Text("变化 ≥")
-                TextField("", value: $movePercent, format: .number)
+                TextField("", value: $draft.movePercent, format: .number)
                     .frame(width: 80)
                 Text("% / 窗口")
-                TextField("", value: $moveSeconds, format: .number)
+                TextField("", value: $draft.moveSeconds, format: .number)
                     .frame(width: 60)
                 Text("秒")
             }
         }
     }
 
-    private func save() {
-        let condition: AlertCondition = {
-            switch conditionKind {
-            case .priceAbove:      return .priceAbove(Decimal(priceThreshold))
-            case .priceBelow:      return .priceBelow(Decimal(priceThreshold))
-            case .priceCrossAbove: return .priceCrossAbove(Decimal(priceThreshold))
-            case .priceCrossBelow: return .priceCrossBelow(Decimal(priceThreshold))
-            case .volumeSpike:
-                return .volumeSpike(multiple: Decimal(volumeMultiple), windowBars: volumeWindowBars)
-            case .priceMoveSpike:
-                return .priceMoveSpike(percentThreshold: Decimal(movePercent), windowSeconds: moveSeconds)
+    private func bindingForChannel(_ kind: NotificationChannelKind) -> Binding<Bool> {
+        Binding(
+            get: { draft.channels.contains(kind) },
+            set: { isOn in
+                if isOn { draft.channels.insert(kind) } else { draft.channels.remove(kind) }
             }
-        }()
+        )
+    }
 
-        var channels: Set<NotificationChannelKind> = []
-        if enableInApp { channels.insert(.inApp) }
-        if enableSystemNotice { channels.insert(.systemNotice) }
-        if enableSound { channels.insert(.sound) }
-        if enableConsole { channels.insert(.console) }
-        if enableFile { channels.insert(.file) }
-
+    private func save() {
         let alert = Alert(
             id: editing?.id ?? UUID(),
-            name: name,
-            instrumentID: instrumentID.isEmpty ? "RB0" : instrumentID,
-            condition: condition,
-            status: status,
-            channels: channels,
-            cooldownSeconds: TimeInterval(cooldownSeconds),
+            name: draft.name,
+            instrumentID: draft.instrumentID.isEmpty ? "RB0" : draft.instrumentID,
+            condition: draft.toCondition(),
+            status: draft.status,
+            channels: draft.channels,
+            cooldownSeconds: TimeInterval(draft.cooldownSeconds),
             createdAt: editing?.createdAt ?? Date(),
             lastTriggeredAt: editing?.lastTriggeredAt
         )
         onSave(alert)
         dismiss()
     }
+}
 
-    private static func statusLabel(_ s: AlertStatus) -> String {
-        switch s {
+// MARK: - Enum 扩展（仅 MainApp UI 用 · 不污染 AlertCore）
+
+extension AlertStatus {
+    /// 中文标签（badge + Picker 共用）
+    var displayLabel: String {
+        switch self {
         case .active:    return "活跃"
         case .triggered: return "已触发"
         case .paused:    return "暂停"
         case .cancelled: return "已取消"
         }
     }
+
+    var badgeColor: Color {
+        switch self {
+        case .active:    return .green
+        case .triggered: return .red
+        case .paused:    return .orange
+        case .cancelled: return .secondary
+        }
+    }
 }
 
-// MARK: - AlertCondition UI 描述（仅 MainApp 用 · 不污染 AlertCore）
+extension NotificationChannelKind {
+    /// 单字简写（列表通道列展示）
+    var shortLabel: String {
+        switch self {
+        case .inApp:        return "内"
+        case .systemNotice: return "通"
+        case .sound:        return "声"
+        case .console:      return "控"
+        case .file:         return "文"
+        }
+    }
+
+    /// 完整中文名（Form Toggle 标题用）
+    var displayLabel: String {
+        switch self {
+        case .inApp:        return "App 内浮窗"
+        case .systemNotice: return "系统通知中心"
+        case .sound:        return "声音"
+        case .console:      return "控制台日志"
+        case .file:         return "文件日志"
+        }
+    }
+}
 
 extension AlertCondition {
     /// 简短中文描述（列表 / 历史展示用）
     var displayDescription: String {
         switch self {
-        case .priceAbove(let p):           return "价格 > \(formatDecimal(p))"
-        case .priceBelow(let p):           return "价格 < \(formatDecimal(p))"
-        case .priceCrossAbove(let p):      return "上穿 \(formatDecimal(p))"
-        case .priceCrossBelow(let p):      return "下穿 \(formatDecimal(p))"
-        case .horizontalLineTouched(_, let p): return "触线 \(formatDecimal(p))"
-        case .volumeSpike(let m, let n):
-            return "成交量 ≥ \(formatDecimal(m))× / \(n)期"
-        case .priceMoveSpike(let p, let s):
-            return "急动 ≥ \(formatDecimal(p))% / \(s)秒"
+        case .priceAbove(let p):                return "价格 > \(fmtDecimal(p))"
+        case .priceBelow(let p):                return "价格 < \(fmtDecimal(p))"
+        case .priceCrossAbove(let p):           return "上穿 \(fmtDecimal(p))"
+        case .priceCrossBelow(let p):           return "下穿 \(fmtDecimal(p))"
+        case .horizontalLineTouched(_, let p):  return "触线 \(fmtDecimal(p))"
+        case .volumeSpike(let m, let n):        return "成交量 ≥ \(fmtDecimal(m))× / \(n)期"
+        case .priceMoveSpike(let p, let s):     return "急动 ≥ \(fmtDecimal(p))% / \(s)秒"
         }
     }
+}
 
-    private func formatDecimal(_ v: Decimal) -> String {
-        let n = NSDecimalNumber(decimal: v).doubleValue
-        if abs(n - n.rounded()) < 0.01 { return String(format: "%.0f", n) }
-        return String(format: "%.2f", n)
-    }
+/// file-private · 整数无小数 · 非整数 2 位 · displayDescription / row 列共用
+private func fmtDecimal(_ v: Decimal) -> String {
+    let n = NSDecimalNumber(decimal: v).doubleValue
+    if abs(n - n.rounded()) < 0.01 { return String(format: "%.0f", n) }
+    return String(format: "%.2f", n)
 }
 
 // MARK: - Mock alerts（v1 演示 · M5 替换为 AlertEvaluator + 持久化）
@@ -648,33 +764,68 @@ enum MockAlerts {
 // MARK: - Mock 触发历史（v1 演示 · M5 替换为 AlertHistoryStore.allHistory）
 
 enum MockAlertHistory {
+
+    /// 历史模板（替代 6-tuple · 字段自描述 · 不易写错）
+    private struct HistoryTemplate {
+        let name: String
+        let instrumentID: String
+        let triggerPrice: Decimal
+        let condition: AlertCondition
+        let message: String
+        let secondsAgo: Double
+    }
+
     /// 12 条 mock 触发记录 · 时间倒序近 24 小时
     static func generate() -> [AlertHistoryEntry] {
         let now = Date()
         let mockIDs = (0..<6).map { _ in UUID() }
-        let template: [(String, String, Decimal, AlertCondition, String, Double)] = [
-            ("螺纹突破 3900",        "RB0", 3905,  .priceAbove(3900),                                "RB0 价格 3905 > 3900",                  -300),
-            ("黄金上穿 460",         "AU0", 460.5, .priceCrossAbove(460),                            "AU0 上穿 460",                          -1200),
-            ("铜下穿 72000",         "CU0", 71850, .priceCrossBelow(72000),                          "CU0 下穿 72000",                        -3600),
-            ("螺纹成交量异常",       "RB0", 3920,  .volumeSpike(multiple: 3, windowBars: 20),         "RB0 成交量 3.2× 近 20 期均值",          -7200),
-            ("黄金 60 秒急动 1%",    "AU0", 462,   .priceMoveSpike(percentThreshold: 1, windowSeconds: 60), "AU0 60 秒涨 1.2%",                 -10800),
-            ("沪深 300 跌破 3450",   "IF0", 3445,  .priceBelow(3450),                                "IF0 价格 3445 < 3450",                  -14400),
-            ("螺纹突破 3900",        "RB0", 3902,  .priceAbove(3900),                                "RB0 价格 3902 > 3900（重复）",          -18000),
-            ("RB0 触水平线 3850",    "RB0", 3850.5,.horizontalLineTouched(drawingID: UUID(), price: 3850), "RB0 触水平线 3850",                -25200),
-            ("黄金上穿 460",         "AU0", 460.3, .priceCrossAbove(460),                            "AU0 再次上穿 460",                      -32400),
-            ("螺纹成交量异常",       "RB0", 3895,  .volumeSpike(multiple: 3, windowBars: 20),         "RB0 成交量 4.1× 异常",                  -50400),
-            ("沪深 300 跌破 3450",   "IF0", 3448,  .priceBelow(3450),                                "IF0 跌破触发",                          -68400),
-            ("铜下穿 72000",         "CU0", 71990, .priceCrossBelow(72000),                          "CU0 边界下穿",                          -86400),
+        let templates: [HistoryTemplate] = [
+            .init(name: "螺纹突破 3900",       instrumentID: "RB0", triggerPrice: 3905,
+                  condition: .priceAbove(3900),
+                  message: "RB0 价格 3905 > 3900",                  secondsAgo: -300),
+            .init(name: "黄金上穿 460",        instrumentID: "AU0", triggerPrice: 460.5,
+                  condition: .priceCrossAbove(460),
+                  message: "AU0 上穿 460",                          secondsAgo: -1200),
+            .init(name: "铜下穿 72000",        instrumentID: "CU0", triggerPrice: 71850,
+                  condition: .priceCrossBelow(72000),
+                  message: "CU0 下穿 72000",                        secondsAgo: -3600),
+            .init(name: "螺纹成交量异常",      instrumentID: "RB0", triggerPrice: 3920,
+                  condition: .volumeSpike(multiple: 3, windowBars: 20),
+                  message: "RB0 成交量 3.2× 近 20 期均值",          secondsAgo: -7200),
+            .init(name: "黄金 60 秒急动 1%",   instrumentID: "AU0", triggerPrice: 462,
+                  condition: .priceMoveSpike(percentThreshold: 1, windowSeconds: 60),
+                  message: "AU0 60 秒涨 1.2%",                      secondsAgo: -10800),
+            .init(name: "沪深 300 跌破 3450",  instrumentID: "IF0", triggerPrice: 3445,
+                  condition: .priceBelow(3450),
+                  message: "IF0 价格 3445 < 3450",                  secondsAgo: -14400),
+            .init(name: "螺纹突破 3900",       instrumentID: "RB0", triggerPrice: 3902,
+                  condition: .priceAbove(3900),
+                  message: "RB0 价格 3902 > 3900（重复）",          secondsAgo: -18000),
+            .init(name: "RB0 触水平线 3850",   instrumentID: "RB0", triggerPrice: 3850.5,
+                  condition: .horizontalLineTouched(drawingID: UUID(), price: 3850),
+                  message: "RB0 触水平线 3850",                     secondsAgo: -25200),
+            .init(name: "黄金上穿 460",        instrumentID: "AU0", triggerPrice: 460.3,
+                  condition: .priceCrossAbove(460),
+                  message: "AU0 再次上穿 460",                      secondsAgo: -32400),
+            .init(name: "螺纹成交量异常",      instrumentID: "RB0", triggerPrice: 3895,
+                  condition: .volumeSpike(multiple: 3, windowBars: 20),
+                  message: "RB0 成交量 4.1× 异常",                  secondsAgo: -50400),
+            .init(name: "沪深 300 跌破 3450",  instrumentID: "IF0", triggerPrice: 3448,
+                  condition: .priceBelow(3450),
+                  message: "IF0 跌破触发",                          secondsAgo: -68400),
+            .init(name: "铜下穿 72000",        instrumentID: "CU0", triggerPrice: 71990,
+                  condition: .priceCrossBelow(72000),
+                  message: "CU0 边界下穿",                          secondsAgo: -86400),
         ]
-        return template.enumerated().map { (i, t) in
+        return templates.enumerated().map { (i, t) in
             AlertHistoryEntry(
                 alertID: mockIDs[i % mockIDs.count],
-                alertName: t.0,
-                instrumentID: t.1,
-                triggerPrice: t.2,
-                triggeredAt: now.addingTimeInterval(t.5),
-                conditionSnapshot: t.3,
-                message: t.4
+                alertName: t.name,
+                instrumentID: t.instrumentID,
+                triggerPrice: t.triggerPrice,
+                triggeredAt: now.addingTimeInterval(t.secondsAgo),
+                conditionSnapshot: t.condition,
+                message: t.message
             )
         }
     }

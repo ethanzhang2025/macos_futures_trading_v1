@@ -113,8 +113,21 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] 12 条 Mock 历史按时间倒序（-300s ~ -86400s）· 触发价红色高亮
 - [ ] 历史空态视图（clock.arrow.circlepath icon + "暂无触发历史"）
 
-### commit 4（待）
-通知通道（系统通知 / 声音）+ 系统通知集成验收
+### commit 4（通知通道 + 测试触发 + 通知日志 Tab）
+- [ ] AlertWindow 启动时 register 5 个 LoggingNotificationChannel（5 kinds）
+- [ ] 行操作加 4th button 📤 测试触发（紫色 · 紫 paperplane.circle）
+- [ ] 测试触发：dispatch 走 alert.channels · 写入 consoleLog · 加历史 · status → triggered
+- [ ] AlertTab 加 .console "通知日志"第 3 个 segmented
+- [ ] consoleLog 显示最近 100 条（time · channel kind · alertName · message）
+- [ ] 顶部"清空"按钮（log 空时 disabled）
+- [ ] 空态视图（terminal icon + "点击行 📤 测试触发"提示）
+- [ ] 测试触发后切到"通知日志" Tab 看到对应的 5 条 log（一行 per channel）
+- [ ] 测试触发后切到"触发历史" Tab 看到新增 entry（最上方）
+
+### Mac 切机替换（保留 LoggingChannel · 单独添加真实 channel）
+- [ ] UserNotifications channel：替换 .systemNotice 的 LoggingChannel · 真实系统通知中心提示
+- [ ] NSSound channel：替换 .sound 的 LoggingChannel · 系统提示音
+- [ ] 首次系统通知触发权限请求（用户允许后才能 dispatch）
 
 ---
 

@@ -831,6 +831,51 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 16 批（Ichimoku 部分增量 · 41 指标 · v3 系列收官 🎉 · 41/44 = 93.2%）
+
+### Ichimoku 部分增量（4/5 列 · 内嵌 3 Donchian midBand + 2 延迟 ring · CHIKOU 永远 nil）
+- [ ] Ichimoku 4/5 列与全量精确一致（tenkan=9 kijun=26 senkou=52 · 120 K · history 60）
+- [ ] state = kN + 3 Donchian.IncrementalState + 2 Decimal? 延迟 ring + 各 head（9 字段 · 都必要）
+- [ ] TENKAN/KIJUN：复用 Donchian.stepIncremental row[1] mid（已 round8 · 与 calculate midBand 等价）
+- [ ] SENKOU-A：先读 senkouADelayRing[head]（旧值 = senkouARaw[i-kN]）· 再写入新 round8((tenkan+kijun)/2) · head++
+- [ ] SENKOU-B：复用同款延迟 ring 模式 · 写 senkouBState mid · 读 kN 步前的 mid
+- [ ] CHIKOU：增量永远输出 nil（calculate 中 chikou[i] = closes[i+kN] 用未来 close · 增量协议不支持）
+- [ ] history 空 · 各 midBand warm-up + senkouA/B 延迟 kN 根 · 全程 4 列匹配全量
+- [ ] makeIncrementalState 内手动构造 KLine 中转 · 共享 history 循环（同 Supertrend 模式）
+- [ ] 参数错误 / 缺参 / 周期≤0 抛错
+- [ ] benchmark Ichimoku(9,26,52) 满批 ~1.0× 加速（内嵌 3 Donchian + 延迟 ring · 全量也 O(N) 多趟 · 加速比有限）
+
+### 41 指标增量基础（v3 系列收官 🎉 · 协议允许范围内全部增量化）
+- [ ] benchmark 完整输出 41 行
+- [ ] 增量 API 覆盖率：**41/44 = 93.2%**（IndicatorCore 协议允许范围全覆盖）
+- [ ] **v3 系列收官里程碑**：剩 3 个不可严格增量化的指标已明确文档
+  - SAR：calculate out[0] 依赖 close[1] 决定方向 · 用未来信息 · 不可严格增量
+  - Fractal：需要 i+2 才能判定 i 中心点 · 用未来信息 · 不可严格增量
+  - ZigZag：非线性 · 标记 pivot 时回写历史 · 不可增量
+- [ ] 趋势类增量 10：MA / EMA / WMA / DEMA / TEMA / HMA / ADX / DMI / VWAP / Supertrend
+- [ ] 震荡类增量 11：RSI / KDJ / CCI / MACD / WR / Stochastic / TRIX / PSY / CMO / ROC / BIAS
+- [ ] 量价类增量 8：OBV / PVT / MFI / ADL / VOSC / CMF / VR / Volume
+- [ ] 波动率类增量 8：BOLL / ATR / Donchian / KC / StdDev / Envelopes / PriceChannel / HV
+- [ ] 持仓类增量 2：OpenInterest / OIDelta
+- [ ] 结构类增量 2：PivotPoints / **Ichimoku（4/5 列）**
+
+### v3 系列模式沉淀总结（16 批积累的可复用模式）
+- 滑动 sum 类（O(1)）：MA / BIAS / CMF（双 sliding sum）/ VR（三桶 sliding sum）
+- HHV/LLV ring 类：Donchian / KDJ / WR / Stochastic / PriceChannel
+- prev EMA Wilder 类：EMA / RSI / ATR / ADX / TRIX
+- 复合 EMA 类：MACD / TRIX / DEMA / TEMA / HMA（内嵌 WMA）/ KC / VOSC / Supertrend
+- 累积式无周期：OBV / PVT / VWAP / ADL
+- 双 ring up/dn / TP+volume：CMO / MFI
+- O(1) Pascal sliding：WMA · v3 第 8 批新引入最高效模式
+- 直通极简：Volume / OpenInterest
+- diff 模式：OIDelta · 同 PVT 第 1 根=0
+- 状态机：Supertrend · 趋势翻转
+- 复合内嵌（同模型 · 不同 period）：HMA 3 WMA / Ichimoku 3 Donchian
+- 延迟 ring（前移 N 根）：Ichimoku senkouA/B
+- 关键模式：count 单调递增 vs 封顶（calculate 是否跳首窗口）· round8 snapshot 精度对齐 · advance(close:) 内嵌接口 · processStep helper 共享 makeIncrementalState/stepIncremental
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

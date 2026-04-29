@@ -1,8 +1,8 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（40 指标 · v3 第 15 批扩展 Supertrend · 趋势状态机首发增量化）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（41 指标 · v3 第 16 批扩展 Ichimoku 部分增量 · v3 系列收官 · 41/44 = 93.2%）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 40 个指标：
+// 测试 41 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
@@ -19,6 +19,7 @@
 //   v3 第 13 批（3）：CMF 20（双 sliding sum mfv/vol · 不跳首窗口）/ VR 26（三桶 sliding sum · 同 MFI 跳首窗口）/ Volume（直通极简 · 无内部状态）
 //   v3 第 14 批（3）：OpenInterest（直通同 Volume）/ OIDelta（diff 同 PVT 第 1 根=0）/ PivotPoints（基于前一根 H/L/C · 7 列输出）
 //   v3 第 15 批（1）：Supertrend 10-3（内嵌 ATR + 状态机 finalUpper/finalLower/isUp/prevClose · 趋势状态机首发）
+//   v3 第 16 批（1）：Ichimoku 9-26-52（4/5 列部分增量 · 内嵌 3 Donchian midBand + 2 senkou 延迟 ring · CHIKOU 永远 nil · v3 系列收官）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -473,6 +474,17 @@ benchmark("Supertrend(10,3)") {
     guard var state = try? Supertrend.makeIncrementalState(kline: emptyHistory, params: [10, 3]) else { return }
     for bar in bars {
         _ = Supertrend.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 16 批 · Ichimoku 部分增量（4/5 列 · CHIKOU 永远 nil · v3 系列收官）
+
+benchmark("Ichimoku(9,26,52)") {
+    _ = try? Ichimoku.calculate(kline: series, params: [9, 26, 52])
+} incremental: {
+    guard var state = try? Ichimoku.makeIncrementalState(kline: emptyHistory, params: [9, 26, 52]) else { return }
+    for bar in bars {
+        _ = Ichimoku.stepIncremental(state: &state, newBar: bar)
     }
 }
 

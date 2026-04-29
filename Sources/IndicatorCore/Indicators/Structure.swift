@@ -5,6 +5,7 @@
 //   · Elliott Wave → 不做（完整波浪识别是机器学习级别任务，TradingView 也仅提供画线辅助。Stage C 视用户呼声再评）
 //
 // WP-41 v3 第 14 批：PivotPoints 实现 IncrementalIndicator · 基于前一根 H/L/C 计算（无周期 · 7 列输出）
+// WP-41 v3 第 16 批：Ichimoku 4/5 列部分增量 · 内嵌 3 Donchian + 2 延迟 ring · CHIKOU 永远 nil（用未来 close）· 41 指标 v3 系列收官
 
 import Foundation
 import Shared
@@ -259,5 +260,105 @@ extension PivotPoints: IncrementalIndicator {
             Kernels.round8(h + Decimal(2) * (pivot - l)),
             Kernels.round8(l - Decimal(2) * (h - pivot))
         ]
+    }
+}
+
+// MARK: - WP-41 v3 第 16 批 · Ichimoku 部分增量 API（内嵌 3 Donchian midBand + 2 延迟 ring · CHIKOU 永远 nil）
+
+extension Ichimoku: IncrementalIndicator {
+
+    /// state：内嵌 3 个 Donchian.IncrementalState（period tN/kN/sN · 取 row[1] mid 即 (HHV+LLV)/2 · 与 calculate midBand 等价）
+    /// + 2 个延迟 ring（容量 kN · senkouARaw/senkouBRaw 前移 kN 根）+ kN 常量
+    /// 输出 5 列 [TENKAN, KIJUN, SENKOU-A, SENKOU-B, CHIKOU]：
+    ///   TENKAN = tenkanState 的 mid（同 Donchian mid）
+    ///   KIJUN  = kijunState 的 mid
+    ///   SENKOU-A = 延迟读取 ring · 写入 round8((tenkan+kijun)/2)（与 calculate senkouARaw[i] 一致）
+    ///   SENKOU-B = 延迟读取 ring · 写入 senkouBState 的 mid
+    ///   CHIKOU = 永远 nil（calculate chikou[i] = closes[i+kN] 用未来 close · 增量协议不支持）
+    /// 验收说明：4/5 列与 calculate 精确一致 · CHIKOU 列在增量调用方需用其他途径补（或接受 nil）
+    public struct IncrementalState: Sendable {
+        public let kN: Int
+        public var tenkanState: Donchian.IncrementalState
+        public var kijunState: Donchian.IncrementalState
+        public var senkouBState: Donchian.IncrementalState
+        // 延迟 ring 容量 kN · Decimal? 因 senkouRaw 在 midBand warm-up 期可能 nil（与 calculate senkouARaw[i]=nil 一致）
+        public var senkouADelayRing: [Decimal?]
+        public var senkouADelayHead: Int
+        public var senkouBDelayRing: [Decimal?]
+        public var senkouBDelayHead: Int
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        guard params.count >= 3 else {
+            throw IndicatorError.invalidParameter("Ichimoku 需要 3 参数（tenkan / kijun / senkou）")
+        }
+        let tN = intValue(params[0])
+        let kN = intValue(params[1])
+        let sN = intValue(params[2])
+        guard tN >= 1, kN >= 1, sN >= 1 else {
+            throw IndicatorError.invalidParameter("Ichimoku 参数非法 t=\(tN) k=\(kN) s=\(sN)")
+        }
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = IncrementalState(
+            kN: kN,
+            tenkanState: try Donchian.makeIncrementalState(kline: empty, params: [Decimal(tN)]),
+            kijunState: try Donchian.makeIncrementalState(kline: empty, params: [Decimal(kN)]),
+            senkouBState: try Donchian.makeIncrementalState(kline: empty, params: [Decimal(sN)]),
+            senkouADelayRing: [Decimal?](repeating: nil, count: kN),
+            senkouADelayHead: 0,
+            senkouBDelayRing: [Decimal?](repeating: nil, count: kN),
+            senkouBDelayHead: 0
+        )
+        // history 循环：构造中转 KLine 调 processStep（Donchian.stepIncremental 接口要求 KLine · 仅 history 消化路径需构造 · stepIncremental 路径直接透传 newBar 零成本 · 同 Supertrend 模式）
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            let bar = KLine(
+                instrumentID: "", period: .minute1,
+                openTime: Date(timeIntervalSinceReferenceDate: 0),
+                open: kline.opens[i], high: kline.highs[i], low: kline.lows[i], close: kline.closes[i],
+                volume: kline.volumes[i], openInterest: 0, turnover: 0
+            )
+            _ = processStep(state: &state, bar: bar)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        processStep(state: &state, bar: newBar)
+    }
+
+    /// 单步推进（makeIncrementalState 与 stepIncremental 共享）：
+    /// 1. 推进 3 个 Donchian midBand · 取 row[1] mid 作 tenkan/kijun/senkouBRaw
+    /// 2. senkouARaw = round8((tenkan+kijun)/2) · 仅 tenkan 和 kijun 都有值时有效（与 calculate 一致）
+    /// 3. 延迟读取：先读 senkouADelayRing[head]（旧值 = senkouARaw[i-kN] · 即 senkouA[i]）· 再写入新 senkouARaw · head++
+    ///    ring 满 kN 步前 ring[head] 是初始 nil（与 calculate `for i in 0..<kN: senkouA[i]=nil` 一致）
+    /// 4. senkouB 同款延迟
+    /// 5. CHIKOU 永远 nil（用未来 close · 增量协议不支持）
+    private static func processStep(state: inout IncrementalState, bar: KLine) -> [Decimal?] {
+        let tenkanRow = Donchian.stepIncremental(state: &state.tenkanState, newBar: bar)
+        let kijunRow = Donchian.stepIncremental(state: &state.kijunState, newBar: bar)
+        let senkouBRow = Donchian.stepIncremental(state: &state.senkouBState, newBar: bar)
+
+        let tenkan = tenkanRow[1]   // mid（HHV+LLV)/2 · 已 round8）
+        let kijun = kijunRow[1]
+        let senkouBRaw = senkouBRow[1]
+
+        let senkouARaw: Decimal?
+        if let t = tenkan, let k = kijun {
+            senkouARaw = Kernels.round8((t + k) / Decimal(2))
+        } else {
+            senkouARaw = nil
+        }
+
+        // 延迟 ring 读旧写新：先读 ring[head]（即将覆盖 = kN 步前的 raw）· 然后写入新 raw · head++
+        let senkouA = state.senkouADelayRing[state.senkouADelayHead]
+        state.senkouADelayRing[state.senkouADelayHead] = senkouARaw
+        state.senkouADelayHead = (state.senkouADelayHead + 1) % state.kN
+
+        let senkouB = state.senkouBDelayRing[state.senkouBDelayHead]
+        state.senkouBDelayRing[state.senkouBDelayHead] = senkouBRaw
+        state.senkouBDelayHead = (state.senkouBDelayHead + 1) % state.kN
+
+        return [tenkan, kijun, senkouA, senkouB, nil]
     }
 }

@@ -2466,6 +2466,73 @@ struct SupertrendIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 16 批 · Ichimoku 部分增量 API（4/5 列 · CHIKOU 永远 nil · v3 系列收官）
+
+@Suite("WP-41 v3 第 16 批 · Ichimoku 部分增量 API")
+struct IchimokuIncrementalTests {
+
+    @Test("history 满 + 增量推进：TENKAN/KIJUN/SENKOU-A/SENKOU-B 4 列与全量精确一致 · CHIKOU 永远 nil（tenkan=9 kijun=26 senkou=52）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 120)
+        let series = makeSeries(from: bars)
+        let full = try Ichimoku.calculate(kline: series, params: [9, 26, 52])
+
+        let historyCount = 60
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try Ichimoku.makeIncrementalState(kline: history, params: [9, 26, 52])
+
+        for i in historyCount..<bars.count {
+            let row = Ichimoku.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 5)
+            #expect(row[0] == full[0].values[i], "TENKAN[\(i)]")
+            #expect(row[1] == full[1].values[i], "KIJUN[\(i)]")
+            #expect(row[2] == full[2].values[i], "SENKOU-A[\(i)]")
+            #expect(row[3] == full[3].values[i], "SENKOU-B[\(i)]")
+            // CHIKOU 增量永远 nil（用未来 close · 不支持）· calculate 中 i + kN < count 时有值
+            #expect(row[4] == nil, "CHIKOU[\(i)] 增量永远 nil")
+        }
+    }
+
+    @Test("history 空 · 各 midBand warm-up + senkouA/B 延迟 kN 根 · 全程 4 列匹配全量 + CHIKOU nil")
+    func incrementalWarmupAndDelays() throws {
+        let bars = makeBars(count: 100)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try Ichimoku.makeIncrementalState(kline: empty, params: [9, 26, 52])
+
+        let series = makeSeries(from: bars)
+        let full = try Ichimoku.calculate(kline: series, params: [9, 26, 52])
+        for i in 0..<bars.count {
+            let row = Ichimoku.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "TENKAN[\(i)]")
+            #expect(row[1] == full[1].values[i], "KIJUN[\(i)]")
+            #expect(row[2] == full[2].values[i], "SENKOU-A[\(i)]")
+            #expect(row[3] == full[3].values[i], "SENKOU-B[\(i)]")
+            #expect(row[4] == nil, "CHIKOU[\(i)]")
+        }
+        // TENKAN 第 9 步起非 nil（i=8）
+        #expect(full[0].values[7] == nil)
+        #expect(full[0].values[8] != nil)
+        // SENKOU-A 第 kN+? 步起非 nil（i >= kN=26 + tenkan/kijun warm-up · 由 calculate shiftForward 决定）
+        #expect(full[2].values[25] == nil)   // i < kN
+        // SENKOU-B 第 kN+? 步起非 nil（senkou=52 + kN=26 = 78 起 · i >= 78 才有值）
+        // 这里只验证 i=25 nil（i < kN）· 不验证具体首次有值步数（依赖 calculate）
+    }
+
+    @Test("参数错误 / 缺参 / 周期≤0 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try Ichimoku.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Ichimoku.makeIncrementalState(kline: empty, params: [9, 26])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Ichimoku.makeIncrementalState(kline: empty, params: [9, 0, 52])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

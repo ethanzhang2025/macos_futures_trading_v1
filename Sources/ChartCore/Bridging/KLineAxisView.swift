@@ -52,8 +52,33 @@ public struct KLineAxisView: View {
                         .foregroundColor(.white.opacity(0.78))
                         .position(position(at: i, in: geom.size))
                 }
+                // 视觉迭代第 7 项：价格轴最新 close 黄色高亮标签（仅 .price 模式）
+                if orientation == .price, let tag = latestCloseTag(in: geom.size) {
+                    tag
+                }
             }
         }
+    }
+
+    /// 价格轴最新 close 高亮标签（黄底黑字 · 文华标准）
+    private func latestCloseTag(in size: CGSize) -> AnyView? {
+        guard let close = bars.last?.close else { return nil }
+        let lo = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
+        let hi = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
+        let closeD = NSDecimalNumber(decimal: close).doubleValue
+        guard hi > lo, closeD >= lo, closeD <= hi else { return nil }
+        let yRatio = (hi - closeD) / (hi - lo)
+        let y = CGFloat(yRatio) * size.height
+        return AnyView(
+            Text(String(format: "%.2f", closeD))
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(.black)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color.yellow)
+                .cornerRadius(2)
+                .position(x: size.width / 2, y: y)
+        )
     }
 
     private func label(at i: Int) -> String {

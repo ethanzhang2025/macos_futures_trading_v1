@@ -49,6 +49,9 @@ public struct KLineCrosshairView: View {
 
                 if let pt = hoverPoint, let info = computeBarInfo(at: pt, in: geom.size) {
                     crosshairLines(at: pt, in: geom.size)
+                    // 视觉迭代第 5 项：右边价格浮标 + 底边时间浮标（贴主图右下边 · 文华标准）
+                    rightPriceTag(price: info.cursorPrice, at: pt, in: geom.size)
+                    bottomTimeTag(time: info.bar.openTime, at: pt, in: geom.size)
                     OHLCTooltip(
                         time: Self.timeFormatter.string(from: info.bar.openTime),
                         bar: info.bar,
@@ -90,6 +93,32 @@ public struct KLineCrosshairView: View {
         }
         .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
         .allowsHitTesting(false)
+    }
+
+    /// 右边价格浮标（贴主图右沿 · 黄底黑字 · 文华标准）
+    private func rightPriceTag(price: Decimal, at pt: CGPoint, in size: CGSize) -> some View {
+        Text(String(format: "%.2f", NSDecimalNumber(decimal: price).doubleValue))
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .foregroundColor(.black)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(Color.yellow)
+            .cornerRadius(2)
+            .position(x: size.width - 28, y: pt.y)
+            .allowsHitTesting(false)
+    }
+
+    /// 底边时间浮标（贴主图下沿 · 黄底黑字 · 文华标准）
+    private func bottomTimeTag(time: Date, at pt: CGPoint, in size: CGSize) -> some View {
+        Text(Self.timeFormatter.string(from: time))
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .foregroundColor(.black)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(Color.yellow)
+            .cornerRadius(2)
+            .position(x: pt.x, y: size.height - 10)
+            .allowsHitTesting(false)
     }
 
     /// 浮窗位置：默认鼠标右下偏移 · 接边翻转

@@ -740,12 +740,48 @@ struct ChartContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // 视觉迭代第 1 项：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐
             KLineGridView()
-            // 视觉迭代第 2 项：十字光标 + OHLC 浮窗（hover 跟随）
+            // 视觉迭代第 2 项：十字光标 + OHLC 浮窗 + 轴边价格/时间浮标（hover 跟随）
             KLineCrosshairView(bars: bars, viewport: viewport, priceRange: currentPriceRange)
             hud
         }
+        .overlay(alignment: .topTrailing) {
+            // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs 周期首根 · 真 preClose 待 Sina API 扩展）
+            priceTopBar
+        }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
+    }
+
+    /// 顶部当前价大字号 + 涨跌幅 · 红涨绿跌 · baseline 用 visible 周期首根（v1 · 待真 preClose）
+    private var priceTopBar: some View {
+        HStack(spacing: 10) {
+            if let last = bars.last, let first = bars.first {
+                let close = NSDecimalNumber(decimal: last.close).doubleValue
+                let baseline = NSDecimalNumber(decimal: first.close).doubleValue
+                let diff = close - baseline
+                let pct = baseline > 0 ? diff / baseline * 100 : 0
+                let isUp = diff >= 0
+                let color: Color = isUp
+                    ? Color(red: 0.96, green: 0.27, blue: 0.27)
+                    : Color(red: 0.18, green: 0.74, blue: 0.42)
+                Text(String(format: "%.2f", close))
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .foregroundColor(color)
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("\(isUp ? "▲" : "▼") \(String(format: "%+.2f", diff))")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(color)
+                    Text(String(format: "%+.2f%%", pct))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(color)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.black.opacity(0.6))
+        .cornerRadius(6)
+        .padding(12)
     }
 
     /// 拖拽平移 + 松手惯性滑行

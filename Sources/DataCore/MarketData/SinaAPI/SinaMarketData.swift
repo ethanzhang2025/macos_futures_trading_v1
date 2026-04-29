@@ -17,8 +17,10 @@ public final class SinaMarketData: @unchecked Sendable {
     // MARK: - 实时报价
 
     /// 获取多个合约的实时报价（新浪 `nf_` 前缀端点，返回最新行情；旧端点数据老化 2 年）
+    /// W1 workaround（SinaQuoteWorkaroundDemo 3b2cb7e 验证）：URL 自动 uppercase
+    /// 小写月份合约（rb2609 / i2609 / au2606）Sina 实时报价端点要求大写 · 解析后 SinaQuote.symbol 保留原大小写
     public func fetchQuotes(symbols: [String]) async throws -> [SinaQuote] {
-        let prefixed = symbols.map { "nf_\($0)" }.joined(separator: ",")
+        let prefixed = symbols.map { "nf_\($0.uppercased())" }.joined(separator: ",")
         let urlString = "https://hq.sinajs.cn/list=\(prefixed)"
         guard let url = URL(string: urlString) else {
             throw SinaAPIError.invalidURL

@@ -1084,7 +1084,7 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
-## v11.0 → v12.2 累积验收（2026-04-28 ~ 04-29 · 共 100 commit · L1-1/2/3/4 已通过）
+## v11.0 → v12.3 累积验收（2026-04-28 ~ 04-29 · 共 102 commit · L1-1/2/3/4 已通过）
 
 ### M5 持久化 7/7 全闭环（v11.0 5/7 → v12.0 7/7）
 
@@ -1169,7 +1169,23 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] **footerHint 文案更新**：底栏显示"双击合约打开主图 · 含主连续 + 活跃月份合约 · 实时报价对小写/I 字母合约部分降级（K 线正常）"
 - [ ] **Mac 验收用例**：用户切 rb2609 → 主图加载今日 60min K 线 + 真实成交量 + 持仓量（K 线端点）→ priceTopBar fallback first.close（preSettle 失败）→ 视觉无明显异常
 
-### Mac 验收 L1 进度表（v12.2 末）
+### v12.3 增量（2026-04-29 · 3b2cb7e / 待修复 commit · v12.2 月份合约实时报价完整解锁）
+
+- [ ] **第 22 个真数据 demo SinaQuoteWorkaroundDemo**（3b2cb7e）：`swift run SinaQuoteWorkaroundDemo` 验证 W1 大小写转换 + W4 K 线伪实时 workaround
+- [ ] **关键修正**：v12.2 demo 段 4 总结的"i 字母不支持"结论实为"小写需 uppercase"（demo 输出文字未改 · 通过 v12.3 修正叙事）
+- [ ] **SinaMarketData.fetchQuotes URL 自动 uppercase**（W1 单行修复）：fetchQuote("rb2609") 内部 URL 用 "nf_RB2609" · 返回 SinaQuote.symbol="rb2609" 保留原大小写（调用方无感）
+- [ ] **ChartScene fetchPreSettle 自动受益**：
+  - [ ] 主图切 rb2609 → preSettle 拉到真昨结算 ~3162（v12.2 拉失败 fallback first.close · v12.3 真值）
+  - [ ] 主图切 i2609 → preSettle 真值 ~783.50
+  - [ ] 主图切 au2606 → preSettle 真值 ~1012.10
+  - [ ] 主图切 IF2605 → preSettle 真值（金融期货昨收近似）
+  - [ ] 顶部当前价大字号涨跌色按真昨结算（不再 fallback 周期首根）
+- [ ] **Watchlist 行情列表对小写合约也拿到真行情**：⌘L 自选合约面板 → 主力月份组（rb2609/i2609/au2606/IF2605）
+  - [ ] 行情列表"最新价"显示真 last（v12.2 显示"—" · v12.3 显示真值）
+  - [ ] "涨跌幅"显示真涨跌幅（preSettle 真值的话 changePercent 准确）
+- [ ] **已交割合约 I2509 仍 fallback first.close**（Sina 实时报价端点已下架 · K 线历史保留 · W4 兜底待 v12.4 实施）
+
+### Mac 验收 L1 进度表（v12.3 末）
 
 - [x] L1-1 启 App + 默认窗口 1280×800 + 深色（含回放未启动大绿块 bug 修验证）
 - [x] L1-2 鼠标 hover 主图 → 虚线十字 + OHLC 浮窗 + 右价格 + 底时间浮标

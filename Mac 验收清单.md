@@ -1084,7 +1084,7 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
-## v11.0 → v12.1 累积验收（2026-04-28 ~ 04-29 · 共 ~95 commit · L1-1/2/3/4 已通过）
+## v11.0 → v12.2 累积验收（2026-04-28 ~ 04-29 · 共 100 commit · L1-1/2/3/4 已通过）
 
 ### M5 持久化 7/7 全闭环（v11.0 5/7 → v12.0 7/7）
 
@@ -1153,7 +1153,23 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] **真 preSettle 接入**（aa34fe5）：顶部当前价大字号涨跌色按 Sina 实时昨结算（preSettle 而非 visible 周期首根）· 与文华行情显示口径一致 · Sina API 失败 fallback first.close
 - [ ] 切回放模式 → preSettle 也清 nil（priceTopBar baseline 退回 first.close · 回放无前结算概念）
 
-### Mac 验收 L1 进度表（v12.1 末）
+### v12.2 增量（2026-04-29 · e386a53 / 2dc8d6d · 月份合约盯盘解锁）
+
+- [ ] **第 21 个真数据 demo SinaMonthlyContractDemo**（e386a53）：`swift run SinaMonthlyContractDemo` 验证 30 真网络请求结果（Mac 同 Linux · K 线端点全支持月份合约 · 实时报价仅大写 + 非 I 字母支持）
+- [ ] **扩 supportedContracts 4→8**（2dc8d6d）：MarketDataPipeline.supportedContracts 加 4 active 月份合约（rb2609 / i2609 / au2606 / IF2605）
+  - [ ] ChartScene 工具条合约 Picker 显示 8 选项（4 主连续 + 4 月份合约）
+  - [ ] 主图切 rb2609（小写）→ K 线正常加载（Sina K 线端点支持小写）· 末根 date = 当日实时
+  - [ ] 主图切 i2609（I 字母小写）→ K 线正常 · preSettle 拉失败 → priceTopBar 涨跌色 baseline fallback first.close（v12.1 实现）
+  - [ ] 主图切 au2606（小写）→ K 线正常 · preSettle 失败 fallback OK
+  - [ ] 主图切 IF2605（大写股指）→ K 线 + preSettle 全 OK · 涨跌色按真昨结算
+- [ ] **WatchlistWindow Mock 改 2 组 8 合约**（2dc8d6d）：⌘L 自选合约面板
+  - [ ] 显示 2 组：「主力月份」（rb2609/i2609/au2606/IF2605）+「主连续」（RB0/IF0/AU0/CU0）
+  - [ ] 双击任意月份合约 → 主图自动切（K 线加载 · 不被 alert 拦截）
+  - [ ] 双击 i2609 → 行情列表"最新价/涨跌幅"显示"—"（实时报价失败 fallback 文案 · 主图 K 线正常）
+- [ ] **footerHint 文案更新**：底栏显示"双击合约打开主图 · 含主连续 + 活跃月份合约 · 实时报价对小写/I 字母合约部分降级（K 线正常）"
+- [ ] **Mac 验收用例**：用户切 rb2609 → 主图加载今日 60min K 线 + 真实成交量 + 持仓量（K 线端点）→ priceTopBar fallback first.close（preSettle 失败）→ 视觉无明显异常
+
+### Mac 验收 L1 进度表（v12.2 末）
 
 - [x] L1-1 启 App + 默认窗口 1280×800 + 深色（含回放未启动大绿块 bug 修验证）
 - [x] L1-2 鼠标 hover 主图 → 虚线十字 + OHLC 浮窗 + 右价格 + 底时间浮标

@@ -805,6 +805,32 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 15 批（Supertrend · 40 指标 · 趋势状态机首发增量化）
+
+### Supertrend 增量（内嵌 ATR + 状态机 upperBand/lowerBand/isUp/prevClose）
+- [ ] Supertrend 与全量精确一致（period=10 multiplier=3 · 100 K · history 40）
+- [ ] history 空 · ATR warm-up 期前 period-1 步全 nil（i=0..8）· 第 period 步起匹配全量（i=9）
+- [ ] 含趋势翻转场景验证（isUp && close < newLower → 转空 · !isUp && close > newUpper → 转多）
+- [ ] state 6 字段必要：multiplier / atrState / upperBand? / lowerBand? / isUp / prevClose?
+- [ ] warm-up 期 atr nil → 不更新 band/isUp · 仅由 defer 推进 prevClose（替代 calculate 中 closes[i-1] 的隐式索引）
+- [ ] 带状收紧公式：prev != nil 时 (rawUp < prev || prevClose > prev) ? rawUp : prev · prev nil 时直接 rawUp
+- [ ] makeIncrementalState 内手动构造 KLine 中转 · 共享 history 循环推进 atrState + 状态机（设计取舍 · stepIncremental 路径透传零成本）
+- [ ] 参数错误 / multiplier≤0 / period<1 / 缺参 抛错
+- [ ] benchmark Supertrend(10,3) 满批 ~1.1× 加速（内嵌 ATR + 状态机 O(1) per step · 全量也 O(N) · 加速比有限同 KC）
+
+### 40 指标增量基础（趋势状态机首发增量化）
+- [ ] benchmark 完整输出 40 行
+- [ ] 增量 API 覆盖率：**40/56 = 71.4%**（IndicatorCore 接近 5/7）
+- [ ] **趋势状态机增量首发**：Supertrend（剩 SAR · 用未来信息 closes[1] 决定方向 · 不能严格增量化）
+- [ ] 趋势类增量 10：MA / EMA / WMA / DEMA / TEMA / HMA / ADX / DMI / VWAP / **Supertrend**（剩 SAR）
+- [ ] 震荡类增量 11：RSI / KDJ / CCI / MACD / WR / Stochastic / TRIX / PSY / CMO / ROC / BIAS（已 100%）
+- [ ] 量价类增量 8：OBV / PVT / MFI / ADL / VOSC / CMF / VR / Volume（已 100%）
+- [ ] 波动率类增量 8：BOLL / ATR / Donchian / KC / StdDev / Envelopes / PriceChannel / HV（已 100%）
+- [ ] 持仓类增量 2：OpenInterest / OIDelta（已 100%）
+- [ ] 结构类增量 1：PivotPoints（剩 ZigZag/Fractal/Ichimoku · 涉及未来信息 / 非线性 / 延迟列）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

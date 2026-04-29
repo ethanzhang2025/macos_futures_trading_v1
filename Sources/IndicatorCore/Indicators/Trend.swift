@@ -695,4 +695,101 @@ extension DMI: IncrementalIndicator {
     }
 }
 
+// MARK: - WP-41 v3 第 15 批 · Supertrend 增量 API（内嵌 ATR + 状态机 upperBand/lowerBand/isUp/prevClose）
+
+extension Supertrend: IncrementalIndicator {
+
+    /// state：multiplier + 内嵌 ATR.IncrementalState + upperBand/lowerBand/isUp + prevClose
+    /// 与 calculate 关键对齐：
+    /// - warm-up（atr nil）→ 输出 nil · 不更新 band/isUp · 仅由 defer 推进 prevClose（替代 calculate 中 closes[i-1] 的隐式索引）
+    /// - 带状收紧：prev 存在时用 prevClose 决定保持/重置（calculate 用 closes[i-1]，等价）· prev nil 时直接采用 raw（种子根）
+    /// - isUp 默认 true（与 calculate `var isUp = true` 一致）· 翻转条件：isUp && close < newLower → 转空 · !isUp && close > newUpper → 转多
+    /// - 输出 round8(isUp ? newLower : newUpper)
+    public struct IncrementalState: Sendable {
+        public let multiplier: Decimal
+        public var atrState: ATR.IncrementalState
+        public var upperBand: Decimal?
+        public var lowerBand: Decimal?
+        public var isUp: Bool
+        public var prevClose: Decimal?
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        guard params.count >= 2 else {
+            throw IndicatorError.invalidParameter("Supertrend 需要 2 参数（period / multiplier）")
+        }
+        let n = intValue(params[0])
+        let mult = params[1]
+        guard n >= 1, mult > 0 else {
+            throw IndicatorError.invalidParameter("Supertrend 参数非法 period=\(n) mult=\(mult)")
+        }
+        // ATR 用空 series 起 seed（不在此处一次性消化 history）· 因为 Supertrend 自身 band/isUp/prevClose 也要逐步推进 · 必须与 ATR 共享同一个 history 循环
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = IncrementalState(
+            multiplier: mult,
+            atrState: try ATR.makeIncrementalState(kline: empty, params: [Decimal(n)]),
+            upperBand: nil, lowerBand: nil,
+            isUp: true,
+            prevClose: nil
+        )
+        // history 循环：构造中转 KLine 调 processStep（ATR.stepIncremental 接口要求 KLine · 仅 history 消化路径需构造 · stepIncremental 路径直接透传 newBar 零成本）
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            let bar = KLine(
+                instrumentID: "", period: .minute1,
+                openTime: Date(timeIntervalSinceReferenceDate: 0),
+                open: kline.opens[i], high: kline.highs[i], low: kline.lows[i], close: kline.closes[i],
+                volume: kline.volumes[i], openInterest: 0, turnover: 0
+            )
+            _ = processStep(state: &state, bar: bar)
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, bar: newBar)]
+    }
+
+    /// 单步推进（makeIncrementalState 与 stepIncremental 共享）：
+    /// - 先 ATR.stepIncremental 推进 atrState · 用 defer 把 prevClose 更新挪到出口（warm-up 早 return 也覆盖 · 与 calculate 中 closes 数组每步可读语义对齐）
+    /// - atr 有值时按 calculate 同款公式：mid = (h+l)/2 · rawUp/rawLow = mid ± mult * atr
+    /// - 带状收紧：prev 存在 → 用 prevClose 决定保持/重置 · prev nil（种子根）→ 直接采用 raw
+    /// - 翻转后输出 round8(isUp ? newLower : newUpper)
+    private static func processStep(state: inout IncrementalState, bar: KLine) -> Decimal? {
+        let atrRow = ATR.stepIncremental(state: &state.atrState, newBar: bar)
+        let close = bar.close
+        defer { state.prevClose = close }
+
+        guard let a = atrRow[0] else {
+            // warm-up：atr nil → 不更新 band/isUp · 输出 nil（与 calculate `guard let a = atr[i] else { continue }` 一致）
+            return nil
+        }
+        let mid = (bar.high + bar.low) / Decimal(2)
+        let rawUp = mid + state.multiplier * a
+        let rawLow = mid - state.multiplier * a
+
+        // 带状收紧（与 calculate 同公式）：prev != nil 蕴含 prevClose != nil（前一步 defer 设过）· 双 unwrap 仅是 Swift 类型保险
+        let newUpper: Decimal
+        if let prev = state.upperBand, let pc = state.prevClose {
+            newUpper = (rawUp < prev || pc > prev) ? rawUp : prev
+        } else {
+            newUpper = rawUp
+        }
+        let newLower: Decimal
+        if let prev = state.lowerBand, let pc = state.prevClose {
+            newLower = (rawLow > prev || pc < prev) ? rawLow : prev
+        } else {
+            newLower = rawLow
+        }
+        state.upperBand = newUpper
+        state.lowerBand = newLower
+        if state.isUp, close < newLower {
+            state.isUp = false
+        } else if !state.isUp, close > newUpper {
+            state.isUp = true
+        }
+        return Kernels.round8(state.isUp ? newLower : newUpper)
+    }
+}
+
 // 共用 requireIntParam 已在 Indicator.swift 定义

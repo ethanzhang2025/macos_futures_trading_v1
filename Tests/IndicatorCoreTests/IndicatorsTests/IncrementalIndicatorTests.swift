@@ -2405,6 +2405,67 @@ fileprivate func makeSeriesWithOI(from bars: [KLine]) -> KLineSeries {
     )
 }
 
+// MARK: - WP-41 v3 第 15 批 · Supertrend 增量 API（内嵌 ATR + 状态机 · 趋势收尾）
+
+@Suite("WP-41 v3 第 15 批 · Supertrend 增量 API")
+struct SupertrendIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=10 multiplier=3）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try Supertrend.calculate(kline: series, params: [10, 3])
+        let fullValues = full[0].values
+
+        let historyCount = 40
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try Supertrend.makeIncrementalState(kline: history, params: [10, 3])
+
+        for i in historyCount..<bars.count {
+            let row = Supertrend.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "Supertrend[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · ATR warm-up 期前 period-1 步全 nil · 第 period 步起匹配全量（含趋势翻转）")
+    func incrementalWarmupAndFlip() throws {
+        let bars = makeBars(count: 60)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try Supertrend.makeIncrementalState(kline: empty, params: [10, 3])
+
+        // 前 9 步（i=0..8）ATR warm-up · 全 nil（ATR period=10 第 10 步才有值）
+        for i in 0..<9 {
+            let row = Supertrend.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil, "Supertrend[\(i)] warm-up nil")
+        }
+        let series = makeSeries(from: bars)
+        let full = try Supertrend.calculate(kline: series, params: [10, 3])
+        // 第 10 步起（i=9）匹配全量 · 含趋势翻转场景
+        for i in 9..<bars.count {
+            let row = Supertrend.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "Supertrend[\(i)]")
+        }
+    }
+
+    @Test("参数错误 / multiplier≤0 / period<1 / 缺参 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try Supertrend.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Supertrend.makeIncrementalState(kline: empty, params: [10])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Supertrend.makeIncrementalState(kline: empty, params: [10, 0])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Supertrend.makeIncrementalState(kline: empty, params: [0, 3])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

@@ -21,6 +21,7 @@ import Foundation
 import UniformTypeIdentifiers
 import Shared
 import StoreCore
+import DataCore
 
 // MARK: - Sheet 状态
 
@@ -62,6 +63,10 @@ struct WatchlistWindow: View {
     /// M5 持久化：load 完成前 isLoaded=false · 期间 book mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
+    /// v12.4 真行情：合约 ID → SinaQuote 映射 · 周期 fetch 更新 · 空时 fallback MockQuote
+    @State private var quotes: [String: SinaQuote] = [:]
+    @State private var quoteFetchTask: Task<Void, Never>?
+
     @Environment(\.openWindow) private var openWindow
     @Environment(\.storeManager) private var storeManager
 
@@ -85,6 +90,11 @@ struct WatchlistWindow: View {
             if selectedGroupID == nil {
                 selectedGroupID = book.groups.first?.id
             }
+            startQuoteFetch()
+        }
+        .onDisappear {
+            quoteFetchTask?.cancel()
+            quoteFetchTask = nil
         }
         .onChange(of: book) { newValue in
             // M5 自动持久化：每次 book 变化异步 save · isLoaded 守卫避免初始 Mock 误写覆盖真数据
@@ -308,7 +318,7 @@ struct WatchlistWindow: View {
     }
 
     private func instrumentRow(id: String, index: Int, groupID: UUID) -> some View {
-        let change = MockQuote.changePct(for: id)
+        let change = changePctText(for: id)
         return HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.5))
@@ -317,7 +327,7 @@ struct WatchlistWindow: View {
                 .font(.system(.body, design: .monospaced))
                 .fontWeight(.medium)
                 .frame(width: 100, alignment: .leading)
-            Text(MockQuote.price(for: id))
+            Text(priceText(for: id))
                 .font(.system(.body, design: .monospaced))
                 .frame(width: 90, alignment: .trailing)
             Spacer().frame(width: 16)
@@ -326,7 +336,7 @@ struct WatchlistWindow: View {
                 .foregroundColor(change.hasPrefix("-") ? .green : .red)
                 .frame(width: 80, alignment: .trailing)
             Spacer().frame(width: 16)
-            Text(MockQuote.openInterest(for: id))
+            Text(openInterestText(for: id))
                 .font(.system(.body, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .trailing)
@@ -534,6 +544,54 @@ struct WatchlistWindow: View {
 
     private func clearHover() {
         hoverTarget = nil
+    }
+
+    // MARK: - 真行情拉取（v12.4 · 5s 周期 · 失败保留旧值 / 首次失败 fallback Mock）
+
+    /// 启动周期 fetch · 自动包含 book 内全部去重合约 ID · 失败 silent · 5s 间隔
+    private func startQuoteFetch() {
+        quoteFetchTask?.cancel()
+        quoteFetchTask = Task { @MainActor in
+            let sina = SinaMarketData()
+            while !Task.isCancelled {
+                let allIDs = Array(Set(book.groups.flatMap { $0.instrumentIDs }))
+                if !allIDs.isEmpty,
+                   let fetched = try? await sina.fetchQuotes(symbols: allIDs) {
+                    var next = quotes
+                    for q in fetched { next[q.symbol] = q }
+                    quotes = next
+                }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
+    }
+
+    /// 最新价文本 · 真值 fallback Mock
+    private func priceText(for id: String) -> String {
+        if let q = quotes[id] {
+            return String(format: "%.2f", NSDecimalNumber(decimal: q.lastPrice).doubleValue)
+        }
+        return MockQuote.price(for: id)
+    }
+
+    /// 涨跌幅文本 · 前缀 "+"/"-" 兼容现有涨跌色判断（hasPrefix("-") → green）
+    private func changePctText(for id: String) -> String {
+        if let q = quotes[id], q.preSettlement > 0 {
+            let pct = NSDecimalNumber(decimal: q.changePercent).doubleValue
+            return String(format: "%+.2f%%", pct)
+        }
+        return MockQuote.changePct(for: id)
+    }
+
+    /// 持仓量文本 · ≥1M 用 M / ≥1K 用 K · 真值 fallback Mock
+    private func openInterestText(for id: String) -> String {
+        if let q = quotes[id] {
+            let oi = q.openInterest
+            if oi >= 1_000_000 { return String(format: "%.2fM", Double(oi) / 1_000_000) }
+            if oi >= 1_000 { return String(format: "%.0fK", Double(oi) / 1_000) }
+            return String(oi)
+        }
+        return MockQuote.openInterest(for: id)
     }
 }
 

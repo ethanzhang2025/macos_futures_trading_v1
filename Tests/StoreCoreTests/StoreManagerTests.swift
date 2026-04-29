@@ -1,5 +1,5 @@
-// WP-19a-7 · StoreManager 单元测试
-// 验证：路径自动创建 / 6 store 文件创建 / 加密 vs 明文 / close 后不可用 / 加密往返 / 错密钥拒绝
+// WP-19a-7 · StoreManager 单元测试（WP-19a-8 起 7 store）
+// 验证：路径自动创建 / 7 store 文件创建 / 加密 vs 明文 / close 后不可用 / 加密往返 / 错密钥拒绝
 
 import Testing
 import Foundation
@@ -33,10 +33,10 @@ private let sqliteMagic = Data([
     0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x20, 0x33
 ])
 
-@Suite("WP-19a-7 · StoreManager · 6 store 统一管理器")
+@Suite("WP-19a-7 · StoreManager · 7 store 统一管理器")
 struct StoreManagerTests {
 
-    @Test("init 自动创建根目录 · 6 个 .sqlite 文件全部就位")
+    @Test("init 自动创建根目录 · 7 个 .sqlite 文件全部就位")
     func initCreatesDirectoryAndAllFiles() async throws {
         let dir = tempRoot()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -173,15 +173,16 @@ struct StoreManagerTests {
         await m.close()
     }
 
-    @Test("allFileNames 与 6 个公开常量一致 · 无遗漏无重复")
+    @Test("allFileNames 与 7 个公开常量一致 · 无遗漏无重复")
     func allFileNamesMatchConstants() {
         let names = StoreManager.allFileNames
-        #expect(names.count == 6)
-        #expect(Set(names).count == 6)
+        #expect(names.count == 7)
+        #expect(Set(names).count == 7)
         #expect(names.contains(StoreManager.analyticsFileName))
         #expect(names.contains(StoreManager.klineFileName))
         #expect(names.contains(StoreManager.journalFileName))
         #expect(names.contains(StoreManager.alertHistoryFileName))
+        #expect(names.contains(StoreManager.alertConfigFileName))
         #expect(names.contains(StoreManager.watchlistFileName))
         #expect(names.contains(StoreManager.workspaceFileName))
     }

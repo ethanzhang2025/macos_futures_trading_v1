@@ -107,6 +107,7 @@ struct JournalWindow: View {
     @State private var isLoaded: Bool = false
 
     @Environment(\.storeManager) private var storeManager
+    @Environment(\.analytics) private var analytics
 
     var body: some View {
         VStack(spacing: 0) {
@@ -576,6 +577,16 @@ struct JournalWindow: View {
         if case .success(let newTrades, _) = importOutcome {
             trades = (trades + newTrades).sorted { $0.timestamp > $1.timestamp }
             selectedTab = .trades
+            // 埋点：CSV 导入是 Stage A 唯一新增 trade 入口（trades 数组的真实 mutation 信号）
+            if let service = analytics {
+                Task {
+                    try? await service.record(
+                        .journalEntrySave,
+                        userID: FuturesTerminalApp.anonymousUserID,
+                        properties: ["import_count": "\(newTrades.count)"]
+                    )
+                }
+            }
         }
         cancelImport()
     }

@@ -59,6 +59,7 @@ struct ChartScene: View {
 
     /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
     @Environment(\.storeManager) private var storeManager
+    @Environment(\.analytics) private var analytics
 
     /// 回放 player 的 UI 镜像（cursor + state + speed 派生于 player · 通过 observe() 同步）
     private struct ReplaySnapshot: Equatable {
@@ -88,6 +89,18 @@ struct ChartScene: View {
             switch chartMode {
             case .live:   await loadAndStream(instrumentID: currentInstrumentID, period: selectedPeriod)
             case .replay: await loadReplay(instrumentID: currentInstrumentID, period: selectedPeriod)
+            }
+            // 埋点：每次 task(id:) 重启都记 chart_open（mode/instrument/period 切换均算"打开新图"）
+            if let service = analytics {
+                try? await service.record(
+                    .chartOpen,
+                    userID: FuturesTerminalApp.anonymousUserID,
+                    properties: [
+                        "mode": chartMode.rawValue,
+                        "instrument": currentInstrumentID,
+                        "period": selectedPeriod.displayName
+                    ]
+                )
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { notification in

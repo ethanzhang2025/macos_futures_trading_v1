@@ -16,6 +16,7 @@
 
 import SwiftUI
 import AppKit
+import Shared
 import StoreCore
 
 // MARK: - StoreManager 环境注入（M5 集中接入持久化）
@@ -33,14 +34,33 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - AnalyticsService 环境注入（M5 持久化第 5 批 c · StoreManager 7/7 收官）
+
+private struct AnalyticsServiceKey: EnvironmentKey {
+    static let defaultValue: AnalyticsService? = nil
+}
+
+extension EnvironmentValues {
+    /// 埋点服务：App.init 一次性创建 · 注入 storeManager.analytics + 稳定 deviceID + appVersion
+    /// nil = storeManager 未启动 · 调用方走 fire-and-forget 模式（Task + try?）安全降级
+    var analytics: AnalyticsService? {
+        get { self[AnalyticsServiceKey.self] }
+        set { self[AnalyticsServiceKey.self] = newValue }
+    }
+}
+
 @main
 struct FuturesTerminalApp: App {
 
-    /// M5 集中接入：启动时一次性 init 6 store · 通过 .environment 注入到所有 Scene
+    /// M5 集中接入：启动时一次性 init 7 store · 通过 .environment 注入到所有 Scene
     /// 失败（路径写入失败 / SQLite 错误 / 加密参数错）→ storeManager = nil · Window fallback 到 Mock
     /// 路径：~/Library/Application Support/FuturesTerminal/db/（macOS 沙盒友好 · M6 .app bundle 后路径不变）
     /// passphrase = nil（明文）· M5 上线前评估是否启用 SQLCipher（视用户设置 / 合规要求）
     private let storeManager: StoreManager?
+
+    /// 埋点服务（M5 持久化第 5 批 c · StoreManager 7/7 收官 · WP-133a/G2）
+    /// storeManager nil 时 analytics nil · 调用方走 fire-and-forget 模式安全降级
+    private let analytics: AnalyticsService?
 
     init() {
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
@@ -49,7 +69,19 @@ struct FuturesTerminalApp: App {
         // M6 打包 .app bundle 后此调用变成 no-op（Bundle Info.plist 已声明）。
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
-        self.storeManager = Self.bootStoreManager()
+        let manager = Self.bootStoreManager()
+        self.storeManager = manager
+        self.analytics = manager.map {
+            AnalyticsService(
+                store: $0.analytics,
+                deviceID: Self.loadOrCreateDeviceID(),
+                appVersion: Self.bundleAppVersion
+            )
+        }
+        // app_launch 异步发 · 失败静默（埋点不阻塞 App 启动）
+        if let service = self.analytics {
+            Task { try? await service.record(.appLaunch, userID: Self.anonymousUserID) }
+        }
     }
 
     /// 启动 StoreManager · 失败保留 nil · UI 走 Mock fallback（不影响 App 启动）
@@ -60,10 +92,29 @@ struct FuturesTerminalApp: App {
         return try? StoreManager(rootDirectory: root, passphrase: nil)
     }
 
+    /// 跨启动稳定 deviceID（v1 用 UserDefaults · 首启生成 UUID 写入 · 后续 readback）
+    /// IAP 上线后可加 Keychain 备份；当前 v1 接受"用户清 UserDefaults 时 deviceID 重置"
+    private static func loadOrCreateDeviceID() -> String {
+        let key = "com.futures-terminal.analytics.deviceID"
+        let defaults = UserDefaults.standard
+        if let existing = defaults.string(forKey: key) { return existing }
+        let newID = UUID().uuidString
+        defaults.set(newID, forKey: key)
+        return newID
+    }
+
+    /// v1 占位 · 无登录态 · 接 Apple ID / 用户系统后替换
+    static let anonymousUserID = "anonymous"
+
+    /// v1 硬编码 · M6 打包后改为读 Bundle Info.plist CFBundleShortVersionString
+    static let bundleAppVersion = "0.0.1"
+
     var body: some Scene {
         // 主图表窗口（默认启动 + Cmd+N 新建多个 · 每窗口独立 renderer / viewport）
         WindowGroup("K 线图表", id: "chart") {
-            ChartScene().environment(\.storeManager, storeManager)
+            ChartScene()
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -83,27 +134,37 @@ struct FuturesTerminalApp: App {
 
         // 自选合约窗口（菜单触发打开 · 单实例 · WP-43 UI · M5 接 SQLiteWatchlistBookStore）
         WindowGroup("自选合约", id: "watchlist") {
-            WatchlistWindow().environment(\.storeManager, storeManager)
+            WatchlistWindow()
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
         }
 
         // 复盘工作台（⌘R · 8 图独立窗口 · 与 K 线主图区分离）
         WindowGroup("复盘", id: "review") {
-            ReviewWindow().environment(\.storeManager, storeManager)
+            ReviewWindow()
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
         }
 
         // 预警面板（⌘B · Bell · 独立窗口）
         WindowGroup("预警", id: "alert") {
-            AlertWindow().environment(\.storeManager, storeManager)
+            AlertWindow()
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
         }
 
         // 交易日志（⌘J · Journal · 独立窗口 · WP-53 UI · M5 接 SQLiteJournalStore）
         WindowGroup("交易日志", id: "journal") {
-            JournalWindow().environment(\.storeManager, storeManager)
+            JournalWindow()
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
         }
 
         // 工作区模板（⌘K · workspace · 独立窗口 · WP-55 UI · M5 接 SQLiteWorkspaceBookStore）
         WindowGroup("工作区模板", id: "workspace") {
-            WorkspaceWindow().environment(\.storeManager, storeManager)
+            WorkspaceWindow()
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
         }
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）

@@ -2047,6 +2047,169 @@ struct VOSCIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 13 批 · CMF 增量 API（双 sliding sum mfv/vol · 同 BOLL/StdDev ring 模式 · 不跳首窗口）
+
+@Suite("WP-41 v3 第 13 批 · CMF 增量 API")
+struct CMFIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=20）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try CMF.calculate(kline: series, params: [20])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try CMF.makeIncrementalState(kline: history, params: [20])
+
+        for i in historyCount..<bars.count {
+            let row = CMF.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "CMF[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量（不跳首窗口 · 同 BOLL/StdDev）")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try CMF.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = CMF.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let series = makeSeries(from: bars)
+        let full = try CMF.calculate(kline: series, params: [10])
+        for i in 9..<bars.count {
+            let row = CMF.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "CMF[\(i)]")
+        }
+    }
+
+    @Test("hl == 0（一字板）→ mfv = 0 · vol 仍入 ring 参与 volSum（与 calculate if hl > 0 守卫一致）")
+    func incrementalFlatBarMfvZeroButVolCounted() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        // 构造 11 根（period=10）：前 5 根正常 · 第 6 根一字板 · 后 5 根正常
+        var bars: [KLine] = []
+        for i in 0..<5 {
+            let close = Decimal(100 + i)
+            bars.append(KLine(instrumentID: "T", period: .minute1, openTime: baseDate.addingTimeInterval(TimeInterval(i*60)),
+                              open: close, high: close + 2, low: close - 2, close: close, volume: 100 + i, openInterest: 0, turnover: 0))
+        }
+        bars.append(KLine(instrumentID: "T", period: .minute1, openTime: baseDate.addingTimeInterval(TimeInterval(5*60)),
+                          open: 105, high: 105, low: 105, close: 105, volume: 200, openInterest: 0, turnover: 0))
+        for i in 6..<11 {
+            let close = Decimal(105 + i - 6)
+            bars.append(KLine(instrumentID: "T", period: .minute1, openTime: baseDate.addingTimeInterval(TimeInterval(i*60)),
+                              open: close, high: close + 2, low: close - 2, close: close, volume: 100 + i, openInterest: 0, turnover: 0))
+        }
+        let series = makeSeries(from: bars)
+        let full = try CMF.calculate(kline: series, params: [10])
+
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try CMF.makeIncrementalState(kline: empty, params: [10])
+        for i in 0..<bars.count {
+            let row = CMF.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "CMF[\(i)] 一字板")
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 13 批 · VR 增量 API（三桶 sliding sum up/down/flat · 同 MFI 跳首窗口模式）
+
+@Suite("WP-41 v3 第 13 批 · VR 增量 API")
+struct VRIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=10）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try VR.calculate(kline: series, params: [10])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try VR.makeIncrementalState(kline: history, params: [10])
+
+        for i in historyCount..<bars.count {
+            let row = VR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "VR[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 第 1 根 prevClose=nil → 三桶都 0（与 calculate index 0 一致）· count > period 守卫跳首窗口")
+    func incrementalNoHistory() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try VR.makeIncrementalState(kline: empty, params: [10])
+
+        // 前 period（i=0..9）全 nil（count > period 守卫 · count <= 10 不输出 · 跳首窗口）
+        for i in 0..<10 {
+            let row = VR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil, "VR[\(i)] warm-up nil")
+        }
+        let series = makeSeries(from: bars)
+        let full = try VR.calculate(kline: series, params: [10])
+        // 第 period+1 步起（i=10）匹配全量
+        for i in 10..<bars.count {
+            let row = VR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "VR[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try VR.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try VR.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 13 批 · Volume 增量 API（直通 · 极简 · 无周期 · 无 warm-up）
+
+@Suite("WP-41 v3 第 13 批 · Volume 增量 API")
+struct VolumeIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（无周期 · 直通 Decimal）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 50)
+        let series = makeSeries(from: bars)
+        let full = try Volume.calculate(kline: series, params: [])
+        let fullValues = full[0].values
+
+        let historyCount = 20
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try Volume.makeIncrementalState(kline: history, params: [])
+
+        for i in historyCount..<bars.count {
+            let row = Volume.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i], "VOL[\(i)]")
+            #expect(row[0] == Decimal(bars[i].volume), "VOL[\(i)] 直通")
+        }
+    }
+
+    @Test("history 空 · 第 1 根直接输出 Decimal(volume) · 全程匹配全量")
+    func incrementalNoHistory() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try Volume.makeIncrementalState(kline: empty, params: [])
+
+        let series = makeSeries(from: bars)
+        let full = try Volume.calculate(kline: series, params: [])
+        for i in 0..<bars.count {
+            let row = Volume.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "VOL[\(i)]")
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

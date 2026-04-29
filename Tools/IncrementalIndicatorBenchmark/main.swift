@@ -1,8 +1,8 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（33 指标 · v3 第 12 批扩展 MFI + ADL + VOSC · 量价类 5/5 100% 收官）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（36 指标 · v3 第 13 批扩展 CMF + VR + Volume · Volume.swift 7/7 100% 收官）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 33 个指标：
+// 测试 36 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
@@ -16,6 +16,7 @@
 //   v3 第 10 批（3）：KC 20-10-2（内嵌 EMA + ATR）/ StdDev 20（BOLL 简化）/ Envelopes 20-2.5（MA 复合 + 百分比偏移）
 //   v3 第 11 批（2）：PriceChannel 20（Donchian 单 ring · close 版）/ HV 20-252（log 收益 + ring StdDev + annual scaling）
 //   v3 第 12 批（3）：MFI 14（TP + 双 ring up/dn · 同 CMO 思路）/ ADL（累积式同 OBV/PVT · 无周期）/ VOSC 12-26（内嵌 2 EMA · 处理 volume）
+//   v3 第 13 批（3）：CMF 20（双 sliding sum mfv/vol · 不跳首窗口）/ VR 26（三桶 sliding sum · 同 MFI 跳首窗口）/ Volume（直通极简 · 无内部状态）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -401,6 +402,35 @@ benchmark("VOSC(12,26)") {
     guard var state = try? VOSC.makeIncrementalState(kline: emptyHistory, params: [12, 26]) else { return }
     for bar in bars {
         _ = VOSC.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 13 批 · CMF / VR / Volume（Volume.swift 7/7 100% 收官 · 量价类 7 个全增量）
+
+benchmark("CMF(20)") {
+    _ = try? CMF.calculate(kline: series, params: [20])
+} incremental: {
+    guard var state = try? CMF.makeIncrementalState(kline: emptyHistory, params: [20]) else { return }
+    for bar in bars {
+        _ = CMF.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("VR(26)") {
+    _ = try? VR.calculate(kline: series, params: [26])
+} incremental: {
+    guard var state = try? VR.makeIncrementalState(kline: emptyHistory, params: [26]) else { return }
+    for bar in bars {
+        _ = VR.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("VOL") {
+    _ = try? Volume.calculate(kline: series, params: [])
+} incremental: {
+    guard var state = try? Volume.makeIncrementalState(kline: emptyHistory, params: []) else { return }
+    for bar in bars {
+        _ = Volume.stepIncremental(state: &state, newBar: bar)
     }
 }
 

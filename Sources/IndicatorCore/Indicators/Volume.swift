@@ -3,6 +3,7 @@
 //
 // WP-41 v3 第 9 批：PVT 实现 IncrementalIndicator · 累积式（同 OBV 模式 · 无周期）
 // WP-41 v3 第 12 批：MFI + ADL + VOSC 增量 API（双 ring up/dn / 累积式 / 内嵌 2 EMA · 33 指标 58.9% 覆盖）
+// WP-41 v3 第 13 批：CMF + VR + Volume 增量 API（双 sliding sum / 三桶 sliding sum / 直通 · Volume.swift 7/7 100% 收官 · 36 指标 64.3%）
 
 import Foundation
 import Shared
@@ -409,5 +410,175 @@ extension VOSC: IncrementalIndicator {
         let l = state.longEMA.advance(close: vol)
         guard let sv = s, let lv = l, lv > 0 else { return nil }
         return Kernels.round8((sv - lv) / lv * Decimal(100))
+    }
+}
+
+// MARK: - WP-41 v3 第 13 批 · CMF 增量 API（双 sliding sum mfv/vol · 同 BOLL/StdDev ring 模式 · 不跳首窗口）
+
+extension CMF: IncrementalIndicator {
+
+    /// state：period + mfvRing/volRing + head + count + mfvSum/volSum
+    /// 与 calculate 关键对齐：hl == 0（一字板）→ mfv = 0（与 calculate if hl > 0 守卫一致 · vol 仍入 ring）
+    /// 不跳首窗口（calculate `for i in 0..<count`）· 用 count == period 守卫（同 BOLL/StdDev · count 封顶 period）
+    /// volSum > 0 守卫输出（与 calculate sumV > 0 一致）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var mfvRing: [Decimal]
+        public var volRing: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var mfvSum: Decimal
+        public var volSum: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "CMF period")
+        var state = IncrementalState(
+            period: n,
+            mfvRing: [Decimal](repeating: 0, count: n),
+            volRing: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0,
+            mfvSum: 0, volSum: 0
+        )
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, high: kline.highs[i], low: kline.lows[i],
+                            close: kline.closes[i], volume: kline.volumes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, high: newBar.high, low: newBar.low,
+                     close: newBar.close, volume: newBar.volume)]
+    }
+
+    /// 每步：volDec = Decimal(volume)；hl > 0 时 mfv = mfm * volDec · 否则 mfv = 0（与 calculate 一致 · vol 始终入 ring）
+    /// ring 满 → 减旧值；未满 → count++（同 BOLL/StdDev · count 封顶 period）
+    /// count == period 起算（不跳首窗口 · 与 calculate `for i in 0..<count` 同步）· volSum > 0 守卫输出
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal, volume: Int) -> Decimal? {
+        let volDec = Decimal(volume)
+        var mfv: Decimal = 0
+        let hl = high - low
+        if hl > 0 {
+            let mfm = ((close - low) - (high - close)) / hl
+            mfv = mfm * volDec
+        }
+
+        // ring 满 → 减旧值；未满 → count++（count 封顶 period · 同 BOLL/StdDev · 与 MFI/VR 单调递增不同）
+        if state.count == state.period {
+            state.mfvSum -= state.mfvRing[state.head]
+            state.volSum -= state.volRing[state.head]
+        } else {
+            state.count += 1
+        }
+        state.mfvRing[state.head] = mfv
+        state.volRing[state.head] = volDec
+        state.head = (state.head + 1) % state.period
+        state.mfvSum += mfv
+        state.volSum += volDec
+
+        guard state.count == state.period, state.volSum > 0 else { return nil }
+        return Kernels.round8(state.mfvSum / state.volSum)
+    }
+}
+
+// MARK: - WP-41 v3 第 13 批 · VR 增量 API（三桶 sliding sum up/down/flat · 同 MFI count 单调递增 + 三桶分组）
+
+extension VR: IncrementalIndicator {
+
+    /// state：period + prevClose（分桶用 · 第 1 根 nil → 三桶都 0）+ upRing/downRing/flatRing + head + count + upSum/downSum/flatSum
+    /// 与 calculate 关键对齐：第 1 根三桶都 0（与 calculate index 0 不分桶一致 · "index 0 无前值参考，保持 0 即可"）
+    /// count 单调递增（不封顶 · 同 MFI 模式）· count > period 守卫等价 calculate `for i in n..<count` 跳首窗口
+    /// 输出公式：halfFlat = flatSum/2 · denom = downSum + halfFlat · denom > 0 时 (upSum + halfFlat) / denom * 100
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var prevClose: Decimal?
+        public var upRing: [Decimal]
+        public var downRing: [Decimal]
+        public var flatRing: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var upSum: Decimal
+        public var downSum: Decimal
+        public var flatSum: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "VR period")
+        var state = IncrementalState(
+            period: n,
+            prevClose: nil,
+            upRing: [Decimal](repeating: 0, count: n),
+            downRing: [Decimal](repeating: 0, count: n),
+            flatRing: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0,
+            upSum: 0, downSum: 0, flatSum: 0
+        )
+        let countH = kline.closes.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, close: kline.closes[i], volume: kline.volumes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close, volume: newBar.volume)]
+    }
+
+    /// 第 1 根：prevClose=nil → 三桶都 0（与 calculate index 0 一致）
+    /// 第 2 根起：close > prev → upVol = vol；close < prev → downVol = vol；close == prev → flatVol = vol
+    /// ring 已满（覆盖前先减旧）· 未满时旧位置初值 0 · 不需扣
+    /// count 单调递增（不封顶 · 与 MFI 同模式）· count > period 守卫跳首窗口
+    private static func processStep(state: inout IncrementalState, close: Decimal, volume: Int) -> Decimal? {
+        let volDec = Decimal(volume)
+        var upVol: Decimal = 0
+        var downVol: Decimal = 0
+        var flatVol: Decimal = 0
+        if let prev = state.prevClose {
+            if close > prev { upVol = volDec }
+            else if close < prev { downVol = volDec }
+            else { flatVol = volDec }
+        }
+        state.prevClose = close
+
+        // ring 已满（覆盖前先减旧）· 未满时旧位置初值 0 · 不需扣
+        if state.count >= state.period {
+            state.upSum -= state.upRing[state.head]
+            state.downSum -= state.downRing[state.head]
+            state.flatSum -= state.flatRing[state.head]
+        }
+        state.upRing[state.head] = upVol
+        state.downRing[state.head] = downVol
+        state.flatRing[state.head] = flatVol
+        state.head = (state.head + 1) % state.period
+        state.upSum += upVol
+        state.downSum += downVol
+        state.flatSum += flatVol
+        state.count += 1   // 不封顶 · 用 count > period 守卫跳首窗口
+
+        guard state.count > state.period else { return nil }
+
+        let halfFlat = state.flatSum / Decimal(2)
+        let denom = state.downSum + halfFlat
+        guard denom > 0 else { return nil }
+        return Kernels.round8((state.upSum + halfFlat) / denom * Decimal(100))
+    }
+}
+
+// MARK: - WP-41 v3 第 13 批 · Volume 增量 API（直通 · 极简 · 无周期 · 无 warm-up · 无内部状态）
+
+extension Volume: IncrementalIndicator {
+
+    /// state：空（Volume 是 Int → Decimal 直通 · 无累积/无窗口/无 prev · 极简）
+    public struct IncrementalState: Sendable {}
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        IncrementalState()
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        // 与 calculate `volumes.map { Decimal($0) }` 一致：每根直接转 Decimal · 无 round（与全量一致）
+        [Decimal(newBar.volume)]
     }
 }

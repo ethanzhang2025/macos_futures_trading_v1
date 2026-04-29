@@ -726,9 +726,43 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] 增量 API 覆盖率：**33/56 = 58.9%**（IndicatorCore 过半 + 8.9%）
 - [ ] **Volume.swift 4/6 增量化**（MFI / ADL / VOSC / PVT 已增量 · CMF / VR 留第 13 批 · Volume 数据 trivial 不需）
 - [ ] 量价类增量 5（含 OBV · 文件外）：OBV / PVT / **MFI / ADL / VOSC**（CMF / VR 留第 13 批）
+
+---
+
+## IndicatorCore 增量 API v3 第 13 批（CMF + VR + Volume · 36 指标 · Volume.swift 7/7 100% 收官 🎉 · 量价类全增量化 · CMF 创 3.7× v3 系列加速新纪录）
+
+### CMF 增量（双 sliding sum mfv/vol · 同 BOLL/StdDev ring 模式 · 不跳首窗口）
+- [ ] CMF 与全量精确一致（period=20 · 80 K · history 30）
+- [ ] history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量（不跳首 · 同 BOLL/StdDev）
+- [ ] hl == 0（一字板）→ mfv = 0（与 calculate if hl > 0 守卫一致）· vol 仍入 ring 参与 volSum
+- [ ] count == period 守卫输出（封顶 period · 同 BOLL/StdDev · 与 MFI/VR 单调递增不同）
+- [ ] volSum > 0 守卫（与 calculate sumV > 0 一致）
+- [ ] benchmark CMF(20) 满批 **~3.7× 加速 · v3 系列新纪录**（双 sliding sum O(1) vs 全量双 [Decimal] 数组分配 + 双 Kernels.slidingSum O(N²)）
+
+### VR 增量（三桶 sliding sum up/down/flat · 同 MFI count 单调递增 + 三桶分组）
+- [ ] VR 与全量精确一致（period=26 · 80 K · history 30）
+- [ ] history 空 · 第 1 根 prevClose=nil → 三桶都 0（与 calculate index 0 一致）
+- [ ] count 单调递增（不封顶 · 同 MFI 模式）· count > period 守卫等价 calculate `for i in n..<count` 跳首窗口
+- [ ] 第 2 根起：close > prev → upVol；close < prev → downVol；close == prev → flatVol
+- [ ] halfFlat = flatSum/2 · denom = downSum + halfFlat · denom > 0 时输出 (upSum + halfFlat) / denom * 100
+- [ ] 参数缺失 / period<1 抛错
+- [ ] benchmark VR(26) 满批 **~3.0× 加速**（三桶 sliding sum · 全量分配三个 [Decimal] 数组 + 三次 slidingSum）
+
+### Volume 增量（直通 · 极简 · 无周期 · 无 warm-up · 空 IncrementalState）
+- [ ] Volume 与全量精确一致（无参数 · 50 K · history 20）
+- [ ] history 空 · 第 1 根直接输出 Decimal(volume)
+- [ ] 空 IncrementalState struct（Volume 是 Int → Decimal 直通 · 无累积/无窗口/无 prev）
+- [ ] benchmark VOL 满批 ~0.1× 加速（合理"减速"· 全量是单一 .map 极快 · 增量 makeIncrementalState 反而有少量开销）
+
+### 36 指标增量基础（Volume.swift 7/7 100% 收官 🎉 · 量价类全增量化）
+- [ ] benchmark 完整输出 36 行
+- [ ] 增量 API 覆盖率：**36/56 = 64.3%**（IndicatorCore 过半 + 14.3%）
+- [ ] **Volume.swift 单文件 7/7 100% 增量化**（Volume + MFI + CMF + VR + PVT + ADL + VOSC 全 7 个）
+- [ ] 量价类增量 7（含 OBV · 文件外）：OBV / PVT / MFI / ADL / VOSC / **CMF / VR / Volume** （量价类全部增量化）
 - [ ] 趋势类增量 9：MA / EMA / WMA / DEMA / TEMA / HMA / ADX / DMI / VWAP
 - [ ] 震荡类增量 11：RSI / KDJ / CCI / MACD / WR / Stochastic / TRIX / PSY / CMO / ROC / BIAS
 - [ ] 波动率类增量 8：BOLL / ATR / Donchian / KC / StdDev / Envelopes / PriceChannel / HV
+- [ ] **CMF 3.7× 加速创 v3 系列新纪录**（之前最高 MA 2.5× / WMA 2.3×）
 
 ---
 

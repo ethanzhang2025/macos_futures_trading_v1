@@ -273,7 +273,8 @@ extension MFI: IncrementalIndicator {
             prevTP: nil,
             posRing: [Decimal](repeating: 0, count: n),
             negRing: [Decimal](repeating: 0, count: n),
-            head: 0, count: 0, posSum: 0, negSum: 0
+            head: 0, count: 0,
+            posSum: 0, negSum: 0
         )
         let countH = kline.highs.count
         for i in 0..<countH {
@@ -331,7 +332,6 @@ extension MFI: IncrementalIndicator {
 extension ADL: IncrementalIndicator {
 
     /// state：acc（流式累积 · 不 round · 输出 round8 · 与 calculate 一致）
-    /// 第 1 根直接输出（hl > 0 时也累加 · 与 calculate `for i in 0..<count` 从 i=0 开始一致）
     public struct IncrementalState: Sendable {
         public var acc: Decimal
     }
@@ -351,6 +351,7 @@ extension ADL: IncrementalIndicator {
                      close: newBar.close, volume: newBar.volume)]
     }
 
+    /// 第 1 根即输出（与 calculate `for i in 0..<count` 从 i=0 开始一致 · 无 warm-up）
     /// hl == 0（H==L · 一字板）→ acc 不变（与 calculate if hl > 0 守卫一致）
     /// hl > 0 → mfm = ((C-L)-(H-C))/hl · acc += mfm * volume
     private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal, volume: Int) -> Decimal? {
@@ -367,8 +368,7 @@ extension ADL: IncrementalIndicator {
 
 extension VOSC: IncrementalIndicator {
 
-    /// state：内嵌 2 EMA.IncrementalState（短/长周期 · 处理 volume · 用 advance(close:) 接口）
-    /// 输出守卫：short/long 都有值且 long > 0（与 calculate if l > 0 守卫一致）
+    /// state：内嵌 2 EMA.IncrementalState（短/长周期 · 用 advance(close:) 接口接 volume）
     public struct IncrementalState: Sendable {
         public var shortEMA: EMA.IncrementalState
         public var longEMA: EMA.IncrementalState
@@ -383,23 +383,31 @@ extension VOSC: IncrementalIndicator {
         guard short >= 1, long > short else {
             throw IndicatorError.invalidParameter("VOSC 参数非法 short=\(short) long=\(long)")
         }
-        // 用空 KLineSeries 构造 2 EMA state 的初值 · 然后手动迭代 volume 历史调 advance（不能直传 EMA.makeIncrementalState · EMA 用 closes）
+        // 用空 KLineSeries 构造 2 EMA state 的初值 · 然后手动迭代 volume 历史调 advance
+        // （不能直传 EMA.makeIncrementalState · 因 EMA 内部用 closes 而 VOSC 需 volume）
         let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
-        var shortState = try EMA.makeIncrementalState(kline: empty, params: [Decimal(short)])
-        var longState = try EMA.makeIncrementalState(kline: empty, params: [Decimal(long)])
+        var state = IncrementalState(
+            shortEMA: try EMA.makeIncrementalState(kline: empty, params: [Decimal(short)]),
+            longEMA: try EMA.makeIncrementalState(kline: empty, params: [Decimal(long)])
+        )
         for vol in kline.volumes {
-            _ = shortState.advance(close: Decimal(vol))
-            _ = longState.advance(close: Decimal(vol))
+            _ = processStep(state: &state, volume: vol)
         }
-        return IncrementalState(shortEMA: shortState, longEMA: longState)
+        return state
     }
 
     public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
-        let vol = Decimal(newBar.volume)
+        [processStep(state: &state, volume: newBar.volume)]
+    }
+
+    /// 内嵌 2 EMA · 输入 volume 而非 close（用 EMA.advance(close:) 接口 · 同 DEMA/TEMA 复合模式）
+    /// short/long 都有值且 long > 0 → round8((s-l)/l*100)（与 calculate `if l > 0` 守卫一致）
+    /// EMA.advance 内部已 round8 · 此处再 round8 一次外层公式（与 calculate Kernels.round8 包裹一致）
+    private static func processStep(state: inout IncrementalState, volume: Int) -> Decimal? {
+        let vol = Decimal(volume)
         let s = state.shortEMA.advance(close: vol)
         let l = state.longEMA.advance(close: vol)
-        // EMA.advance 已 round8 · 与 calculate Kernels.ema 输出一致 · 直接用作 (s-l)/l 即可
-        guard let sv = s, let lv = l, lv > 0 else { return [nil] }
-        return [Kernels.round8((sv - lv) / lv * Decimal(100))]
+        guard let sv = s, let lv = l, lv > 0 else { return nil }
+        return Kernels.round8((sv - lv) / lv * Decimal(100))
     }
 }

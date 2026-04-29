@@ -57,6 +57,10 @@ struct ChartScene: View {
     @State private var replay: ReplaySnapshot = ReplaySnapshot()
     @State private var replayObserveTask: Task<Void, Never>?
 
+    /// M5 持久化串行写：snapshot save / completedBar append 链式 await · 防多 Task 并发提交导致顺序乱
+    /// 风险：高频 completedBar（1 秒级）+ maxBars 截断时 · 无序写入可能丢中间根
+    @State private var klineSaveTask: Task<Void, Never>?
+
     /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
@@ -143,6 +147,8 @@ struct ChartScene: View {
                 await replayPlayer?.stop()
                 await replayDriver?.stop()
                 replayObserveTask?.cancel()
+                // 等链式 K 线落库完成 · 防窗口关闭时最后一根丢失
+                await klineSaveTask?.value
             }
         }
     }
@@ -308,16 +314,24 @@ struct ChartScene: View {
                 bars = snapBars
                 await updateIndicatorsFull(snapBars)
                 dataSourceLabel = "Sina 真行情"
-                // M5 持久化：snapshot 后异步 save 全量到磁盘缓存（覆盖 instrumentID/period 分桶）
+                // M5 持久化：snapshot 后异步 save 全量 · 链式串行（前一个 task 完成后再写）
                 if let store = storeManager?.kline {
-                    Task { try? await store.save(snapBars, instrumentID: instrumentID, period: period) }
+                    let prev = klineSaveTask
+                    klineSaveTask = Task {
+                        await prev?.value
+                        try? await store.save(snapBars, instrumentID: instrumentID, period: period)
+                    }
                 }
             case .completedBar(let k):
                 bars.append(k)
                 await stepIndicators(newBar: k)
-                // M5 持久化：完成的单根 K 线异步 append · maxBars 5000 防止无限增长
+                // M5 持久化：完成的单根 K 线异步 append · maxBars 5000 防无限增长 · 链式串行保 K 线时间序
                 if let store = storeManager?.kline {
-                    Task { try? await store.append([k], instrumentID: instrumentID, period: period, maxBars: 5000) }
+                    let prev = klineSaveTask
+                    klineSaveTask = Task {
+                        await prev?.value
+                        try? await store.append([k], instrumentID: instrumentID, period: period, maxBars: 5000)
+                    }
                 }
             }
         }

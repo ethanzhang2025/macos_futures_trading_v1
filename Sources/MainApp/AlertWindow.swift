@@ -12,6 +12,10 @@ import Foundation
 import AlertCore
 import StoreCore
 
+/// 消除 Mac 端 SwiftUI.Alert（deprecated 但仍存在）与 AlertCore.Alert 命名歧义
+/// Linux 编译跳过整个 SwiftUI 块 · 不暴露此冲突 · Mac 必须显式限定
+private typealias Alert = AlertCore.Alert
+
 // MARK: - Tab 切换
 
 private enum AlertTab: String, CaseIterable, Identifiable {

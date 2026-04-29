@@ -1084,7 +1084,7 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
-## v11.0 → v12.4 累积验收（2026-04-28 ~ 04-29 · 共 104 commit · L1-1/2/3/4 已通过）
+## v11.0 → v12.5 累积验收（2026-04-28 ~ 04-29 · 共 105 commit · L1-1/2/3/4 已通过）
 
 ### M5 持久化 7/7 全闭环（v11.0 5/7 → v12.0 7/7）
 
@@ -1199,7 +1199,17 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] **新增合约自动接入**：用户「+ 添加合约」加 cu2606 → 5s 内 Watchlist 显示真行情（无需重启窗口）
 - [ ] **WP-64 文华自选导入真闭环**：导入文华自选 .txt（含月份合约）→ Watchlist 显示真涨跌（不再 Mock）
 
-### Mac 验收 L1 进度表（v12.4 末）
+### v12.5 增量（2026-04-29 · 待 commit · W4 兜底实施 · 已交割合约 + sina 抖动容错）
+
+- [ ] **W4 兜底实施 SinaMarketData.fetchQuotesWithFallback**：实时端点失败合约自动走 K 线 5min 末根伪实时
+- [ ] **WatchlistWindow startQuoteFetch 改用 fetchQuotesWithFallback**：⌘L 自选合约面板渐进 degradation
+  - [ ] 加合约 I2509（已交割）→ Watchlist 显示真 last 816 + 真持仓量（v12.4 fallback Mock · v12.5 K 线兜底）
+  - [ ] 涨跌幅仍显示 Mock 占位（W4 partial quote 缺 preSettle · changePctText guard 仍兜 Mock）
+  - [ ] 加合约 abc（无效）→ K 线也失败 → quotes 字典无该 key → UI 走 Mock 全 fallback（合理）
+- [ ] **Sina 实时端点抖动容错**：人为模拟 sina 不可达（断网 / 阻断 hq.sinajs.cn）→ 5s 周期 fetch 失败 → 走 K 线兜底（端点不同 stock.finance.sina.com.cn）→ active 合约 last + oi 仍真值
+- [ ] **WatchlistImporter 真闭环增强**：导入文华自选含已交割合约（如某些合约表 .txt 含 I2505）→ Watchlist 显示真历史末值（不再纯 Mock）
+
+### Mac 验收 L1 进度表（v12.5 末）
 
 - [x] L1-1 启 App + 默认窗口 1280×800 + 深色（含回放未启动大绿块 bug 修验证）
 - [x] L1-2 鼠标 hover 主图 → 虚线十字 + OHLC 浮窗 + 右价格 + 底时间浮标

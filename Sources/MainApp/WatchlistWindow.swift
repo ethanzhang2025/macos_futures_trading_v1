@@ -549,14 +549,15 @@ struct WatchlistWindow: View {
     // MARK: - 真行情拉取（v12.4 · 5s 周期 · 失败保留旧值 / 首次失败 fallback Mock）
 
     /// 启动周期 fetch · 自动包含 book 内全部去重合约 ID · 失败 silent · 5s 间隔
+    /// v12.5 改用 fetchQuotesWithFallback：实时端点失败合约走 K 线 5min 末根伪实时（已交割 / sina 抖动场景）
     private func startQuoteFetch() {
         quoteFetchTask?.cancel()
         quoteFetchTask = Task { @MainActor in
             let sina = SinaMarketData()
             while !Task.isCancelled {
                 let allIDs = Array(Set(book.groups.flatMap { $0.instrumentIDs }))
-                if !allIDs.isEmpty,
-                   let fetched = try? await sina.fetchQuotes(symbols: allIDs) {
+                if !allIDs.isEmpty {
+                    let fetched = await sina.fetchQuotesWithFallback(symbols: allIDs)
                     var next = quotes
                     for q in fetched { next[q.symbol] = q }
                     quotes = next

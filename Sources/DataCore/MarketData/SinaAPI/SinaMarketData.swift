@@ -48,6 +48,47 @@ public final class SinaMarketData: @unchecked Sendable {
         return quotes.first
     }
 
+    /// 获取多合约报价（W4 兜底 · SinaQuoteWorkaroundDemo 3b2cb7e 验证）
+    /// 优先走 fetchQuotes 实时端点 · 缺失的合约走 K 线 5min 末根构造 partial quote（已交割合约 / Sina 实时端点抖动）
+    /// partial quote 含真实 last + open/high/low/close + oi + volume · 缺失字段（bid/ask/preSettle/settle）置 0
+    /// 调用方判 preSettle == 0 → fallback baseline（v12.1 ChartScene fetchPreSettle 已实现）
+    public func fetchQuotesWithFallback(symbols: [String]) async -> [SinaQuote] {
+        let realtime = (try? await fetchQuotes(symbols: symbols)) ?? []
+        let realtimeMap = Dictionary(uniqueKeysWithValues: realtime.map { ($0.symbol, $0) })
+        let missing = symbols.filter { realtimeMap[$0] == nil }
+        var fallback: [SinaQuote] = []
+        for sym in missing {
+            if let q = await fetchQuoteFromKLine(symbol: sym) {
+                fallback.append(q)
+            }
+        }
+        return realtime + fallback
+    }
+
+    /// W4 helper：从 fetchMinute5KLines 末根构造 partial SinaQuote
+    private func fetchQuoteFromKLine(symbol: String) async -> SinaQuote? {
+        guard let bars = try? await fetchMinute5KLines(symbol: symbol),
+              let last = bars.last else { return nil }
+        return SinaQuote(
+            symbol: symbol,
+            name: symbol,
+            open: last.open,
+            high: last.high,
+            low: last.low,
+            close: last.close,
+            bidPrice: 0,
+            askPrice: 0,
+            lastPrice: last.close,
+            settlementPrice: 0,
+            preSettlement: 0,
+            bidVolume: 0,
+            askVolume: 0,
+            openInterest: last.openInterest,
+            volume: last.volume,
+            timestamp: last.date
+        )
+    }
+
     // MARK: - K线数据（新 InnerFuturesNewService 端点，带持仓量字段 p）
 
     /// 获取日K线数据

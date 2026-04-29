@@ -216,6 +216,12 @@ let package = Package(
             dependencies: ["Shared", "DataCore", "IndicatorCore"],
             path: "Tools/MaiYuYanFormulaDemo"
         ),
+        // MaiYuYanWhDemo · WP-63 第 20 个真数据 demo（Sina 真行情 + .wh 批量导入 + 20 公式端到端 · 编译 + 执行 100%）
+        .executableTarget(
+            name: "MaiYuYanWhDemo",
+            dependencies: ["Shared", "DataCore", "IndicatorCore"],
+            path: "Tools/MaiYuYanWhDemo"
+        ),
         // FuturesContextualDemo · WP-41 B1 Step 2 第 19 个真数据 demo
         // (Sina RB0 真行情 + 模拟 FuturesContext + 4 ContextualIndicator)
         .executableTarget(

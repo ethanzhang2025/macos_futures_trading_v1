@@ -27,8 +27,13 @@ final class MarketDataPipeline {
     static let cacheMaxBars: Int = 500
 
     /// 主图可切换的合约清单（spike 硬编码 · 后续 WP-43 接 WatchlistBook UI 替换）
-    /// 复用 EndToEndDemo 验证过的 4 个 Sina 主力合约
-    static let supportedContracts: [String] = ["RB0", "IF0", "AU0", "CU0"]
+    /// 4 主连续（RB0/IF0/AU0/CU0）+ 4 active 月份合约（2026-04-29 主力月 · SinaMonthlyContractDemo 验证 K 线端点全支持）
+    /// 月份合约半年后会交割（rb2609 在 2026-09 失效）· 中期做主力月动态计算解决
+    /// 实时报价对小写 + I 字母合约失败（rb2609/i2609/au2606）· priceTopBar preSettle fallback first.close · K 线正常
+    static let supportedContracts: [String] = [
+        "RB0", "IF0", "AU0", "CU0",
+        "rb2609", "i2609", "au2606", "IF2605"
+    ]
 
     /// 主图可切换的周期清单（spike 保守 6 个 · 秒级/周月 spike 阶段不暴露）
     /// Sina API 拉 tick · KLineBuilder 客户端合成任意周期 · UI 仅放主流分钟+日

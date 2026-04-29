@@ -395,7 +395,7 @@ struct WatchlistWindow: View {
 
     private var footerHint: some View {
         HStack {
-            Text("双击合约打开主图 · 仅 \(MarketDataPipeline.supportedContracts.joined(separator: "/")) 支持 · Mock 数据待 M5 接真实行情")
+            Text("双击合约打开主图 · 含主连续 + 活跃月份合约 · 实时报价对小写/I 字母合约部分降级（K 线正常）")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()
@@ -668,15 +668,15 @@ private struct InstrumentIDSheet: View {
 // MARK: - Mock 数据（commit 1 静态 · commit 4 + M5 替换）
 
 private enum MockWatchlistBook {
-    /// 4 组按板块分类 · 全部 ∈ MarketDataPipeline.supportedContracts · 双击任意合约可直接切主图
+    /// 2 组共 8 合约 · 全部 ∈ MarketDataPipeline.supportedContracts · 双击任意合约可直接切主图
+    /// 主力月份组：贴近用户真实持仓盯盘（rb2609 螺纹 / i2609 铁矿 / au2606 黄金 / IF2605 股指）
+    /// 主连续组：跨多年合约连续 K 线分析（RB0/IF0/AU0/CU0）
     static func generate() -> WatchlistBook {
         var book = WatchlistBook()
         let now = Date()
         let groups: [(name: String, ids: [String])] = [
-            ("黑色",   ["RB0"]),
-            ("股指",   ["IF0"]),
-            ("贵金属", ["AU0"]),
-            ("有色",   ["CU0"])
+            ("主力月份", ["rb2609", "i2609", "au2606", "IF2605"]),
+            ("主连续",   ["RB0", "IF0", "AU0", "CU0"])
         ]
         for (name, ids) in groups {
             let groupID = book.addGroup(name: name, now: now).id

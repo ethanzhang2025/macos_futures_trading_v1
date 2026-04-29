@@ -103,6 +103,31 @@ struct ChartScene: View {
                 )
             }
         }
+        .onChange(of: selectedSubIndicator) { newValue in
+            // 埋点：用户切换副图指标（MACD / KDJ / RSI ...）· chart_open 之外的细粒度行为
+            guard let service = analytics else { return }
+            Task {
+                try? await service.record(
+                    .indicatorAdd,
+                    userID: FuturesTerminalApp.anonymousUserID,
+                    properties: ["kind": newValue.rawValue]
+                )
+            }
+        }
+        .onChange(of: chartMode) { newValue in
+            // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
+            guard newValue == .replay, let service = analytics else { return }
+            Task {
+                try? await service.record(
+                    .replayStart,
+                    userID: FuturesTerminalApp.anonymousUserID,
+                    properties: [
+                        "instrument": currentInstrumentID,
+                        "period": selectedPeriod.displayName
+                    ]
+                )
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { notification in
             // WP-43 commit 4 · WatchlistWindow 双击合约 → 同步切到当前主图（task(id:) 自动重启 pipeline）
             // 双重防护：WatchlistWindow 已本地 alert 拦截不支持的合约，这里再校验一次防外部直接 post

@@ -631,6 +631,40 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 10 批（KC + StdDev + Envelopes · 28 指标 · 波动率三连扩张）
+
+### KC 增量（内嵌 EMA + ATR · 同 MACD 内嵌 EMA 模式 · 输出 [mid, upper, lower]）
+- [ ] KC 三列与全量精确一致（emaN=12 atrN=14 mult=2 · 80 K · history 40）
+- [ ] history 空 · ema warm-up < atr warm-up：MID 第 12 根（i=11）先输出 · UPPER/LOWER 第 14 根（i=13）才有值
+- [ ] mid 直接复用 EMA round8 输出 · upper/lower = round8(mid ± mult * atr)（与 calculate 一致）
+- [ ] 参数缺失 / mult≤0 / 仅 2 参 抛错
+- [ ] benchmark KC(20,10,2) 满批 ~1.0× 加速（EMA + ATR 都 O(1) · 全量也 O(N) · 加速比有限）
+
+### StdDev 增量（BOLL 简化 · ring + sliding sum + ring.reduce variance · 单列 sd）
+- [ ] StdDev 与全量精确一致（period=20 · 80 K · history 30）
+- [ ] history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量
+- [ ] 算法与 Kernels.stddev 一致：raw mean + ring reduce variance + sqrt + round8
+- [ ] period<2 / 缺参 抛错
+- [ ] benchmark STDDEV(20) 满批 ~1.2× 加速（每步 ring.reduce O(N) · 与全量 O(N²) 同等量级）
+
+### Envelopes 增量（MA 复合 · ring + sliding sum · mid ± 百分比偏移 · 输出 [mid, upper, lower]）
+- [ ] Envelopes 三列与全量精确一致（period=20 percent=2.5 · 80 K · history 30）
+- [ ] history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量
+- [ ] mid = round8(sum/n) · upper/lower 用 round8(mid) snapshot · 与 calculate 中 m * (1±k) 链一致
+- [ ] kFactor = pct/100 预计算（state 内不变量 · 不每步重算）
+- [ ] 参数缺失 / percent≤0 / 仅 1 参 抛错
+- [ ] benchmark ENV(20,2.5) 满批 **~1.8× 加速**（第 10 批最高 · 全量 Kernels.ma O(N²) vs 增量 ring sliding sum）
+
+### 28 指标增量基础（波动率三连扩张 · 6 个波动率类全增量化）
+- [ ] benchmark 完整输出 28 行
+- [ ] 增量 API 覆盖率：**28/56 = 50.0%**（IndicatorCore 半数已增量化 🎉）
+- [ ] 波动率类增量全覆盖：BOLL + ATR + Donchian + KC + StdDev + Envelopes（6 · 与 calculate 全部对齐）
+- [ ] 趋势类增量 9：MA / EMA / WMA / DEMA / TEMA / HMA / ADX / DMI / VWAP
+- [ ] 震荡类增量 11：RSI / KDJ / CCI / MACD / WR / Stochastic / TRIX / PSY / CMO / ROC / BIAS
+- [ ] 量价类增量 2：OBV / PVT
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

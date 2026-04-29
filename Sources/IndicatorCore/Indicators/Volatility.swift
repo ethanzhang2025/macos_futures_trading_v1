@@ -2,6 +2,7 @@
 // KC / Donchian / StdDev / HV / PriceChannel / Envelopes
 //
 // WP-41 v3 第 9 批：Donchian 实现 IncrementalIndicator · 双 ring HHV/LLV（同 KDJ ring 模式）
+// WP-41 v3 第 10 批：KC + StdDev + Envelopes 增量 API（内嵌 EMA+ATR / BOLL 简化 / MA 复合 · 28 指标）
 
 import Foundation
 import Shared
@@ -230,5 +231,159 @@ public enum Envelopes: Indicator {
             IndicatorSeries(name: "ENV-UPPER", values: upper),
             IndicatorSeries(name: "ENV-LOWER", values: lower)
         ]
+    }
+}
+
+// MARK: - WP-41 v3 第 10 批 · KC 增量 API（内嵌 EMA + ATR · 同 MACD 内嵌 EMA 模式）
+
+extension KC: IncrementalIndicator {
+
+    /// state：multiplier + 内嵌 EMA.IncrementalState（mid 源）+ ATR.IncrementalState（带宽源）
+    /// 输出 [mid, upper, lower]：mid = ema（已 round8）· upper/lower = round8(mid ± mult * atr)
+    /// 与 calculate 等价：calculate 中 mid[i] = ema[i]（round8）· upper/lower = round8 用 round 后的 m * a
+    public struct IncrementalState: Sendable {
+        public let multiplier: Decimal
+        public var emaState: EMA.IncrementalState
+        public var atrState: ATR.IncrementalState
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        guard params.count >= 3 else {
+            throw IndicatorError.invalidParameter("KC 需要 3 参数（emaPeriod / atrPeriod / multiplier）")
+        }
+        let emaN = intValue(params[0])
+        let atrN = intValue(params[1])
+        let mult = params[2]
+        guard emaN >= 1, atrN >= 1, mult > 0 else {
+            throw IndicatorError.invalidParameter("KC 参数非法 ema=\(emaN) atr=\(atrN) mult=\(mult)")
+        }
+        let emaState = try EMA.makeIncrementalState(kline: kline, params: [Decimal(emaN)])
+        let atrState = try ATR.makeIncrementalState(kline: kline, params: [Decimal(atrN)])
+        return IncrementalState(multiplier: mult, emaState: emaState, atrState: atrState)
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        let emaRow = EMA.stepIncremental(state: &state.emaState, newBar: newBar)
+        let atrRow = ATR.stepIncremental(state: &state.atrState, newBar: newBar)
+        let mid = emaRow[0]
+        // mid 可能先于 atr 输出（emaN < atrN 时）· 按 calculate 仅 mid 不 nil → upper/lower 仍 nil
+        guard let m = mid, let a = atrRow[0] else { return [mid, nil, nil] }
+        let upper = Kernels.round8(m + state.multiplier * a)
+        let lower = Kernels.round8(m - state.multiplier * a)
+        return [mid, upper, lower]
+    }
+}
+
+// MARK: - WP-41 v3 第 10 批 · StdDev 增量 API（BOLL 简化 · ring + sliding sum + ring.reduce variance · 单列 sd）
+
+extension StdDev: IncrementalIndicator {
+
+    /// state：period + ring + head + count + sum（与 BOLL 同模式 · 不带 k · 仅输出 sd 一列）
+    /// 算法与 Kernels.stddev 一致：raw mean + ring reduce variance + sqrt + round8
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var ring: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var sum: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, min: 2, label: "StdDev period")
+        let closes = kline.closes
+        let startIdx = max(0, closes.count - n)
+        var ring = [Decimal](repeating: 0, count: n)
+        var head = 0
+        var count = 0
+        var sum = Decimal(0)
+        for v in closes[startIdx...] {
+            ring[head] = v
+            head = (head + 1) % n
+            count = min(count + 1, n)
+            sum += v
+        }
+        return IncrementalState(period: n, ring: ring, head: head, count: count, sum: sum)
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        if state.count == state.period {
+            state.sum -= state.ring[state.head]
+        } else {
+            state.count += 1
+        }
+        state.ring[state.head] = newBar.close
+        state.head = (state.head + 1) % state.period
+        state.sum += newBar.close
+
+        guard state.count == state.period else { return [nil] }
+
+        let nDec = Decimal(state.period)
+        let mean = state.sum / nDec
+        let variance = state.ring.reduce(Decimal(0)) { acc, x in
+            let d = x - mean
+            return acc + d * d
+        } / nDec
+        let sdRaw = Decimal(NSDecimalNumber(decimal: variance).doubleValue.squareRoot())
+        return [Kernels.round8(sdRaw)]
+    }
+}
+
+// MARK: - WP-41 v3 第 10 批 · Envelopes 增量 API（MA 复合 · ring + sliding sum · mid ± 百分比偏移）
+
+extension Envelopes: IncrementalIndicator {
+
+    /// state：period + kFactor（pct/100 预计算 · 不动）+ ring + head + count + sum
+    /// 输出 [mid, upper, lower]：mid = round8(sum/n) · upper/lower = round8(mid * (1 ± kFactor))
+    /// 与 calculate 等价：calculate 中 m = mid[i] = round8(ma) · upper/lower 用 round 后 m
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public let kFactor: Decimal
+        public var ring: [Decimal]
+        public var head: Int
+        public var count: Int
+        public var sum: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        guard params.count >= 2 else {
+            throw IndicatorError.invalidParameter("Envelopes 需要 2 参数（period / percent）")
+        }
+        let n = intValue(params[0])
+        let pct = params[1]
+        guard n >= 1, pct > 0 else {
+            throw IndicatorError.invalidParameter("Envelopes 参数非法 period=\(n) percent=\(pct)")
+        }
+        let kFactor = pct / Decimal(100)
+        let closes = kline.closes
+        let startIdx = max(0, closes.count - n)
+        var ring = [Decimal](repeating: 0, count: n)
+        var head = 0
+        var count = 0
+        var sum = Decimal(0)
+        for v in closes[startIdx...] {
+            ring[head] = v
+            head = (head + 1) % n
+            count = min(count + 1, n)
+            sum += v
+        }
+        return IncrementalState(period: n, kFactor: kFactor, ring: ring, head: head, count: count, sum: sum)
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        if state.count == state.period {
+            state.sum -= state.ring[state.head]
+        } else {
+            state.count += 1
+        }
+        state.ring[state.head] = newBar.close
+        state.head = (state.head + 1) % state.period
+        state.sum += newBar.close
+
+        guard state.count == state.period else { return [nil, nil, nil] }
+
+        let mid = Kernels.round8(state.sum / Decimal(state.period))
+        let upper = Kernels.round8(mid * (Decimal(1) + state.kFactor))
+        let lower = Kernels.round8(mid * (Decimal(1) - state.kFactor))
+        return [mid, upper, lower]
     }
 }

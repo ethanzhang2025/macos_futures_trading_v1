@@ -1582,6 +1582,187 @@ struct DonchianIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 10 批 · KC 增量 API（内嵌 EMA + ATR · 同 MACD 内嵌 EMA 模式）
+
+@Suite("WP-41 v3 第 10 批 · KC 增量 API")
+struct KCIncrementalTests {
+
+    @Test("history 满 + 增量推进：MID/UPPER/LOWER 3 列每步与全量精确一致（emaN=12 atrN=14 mult=2）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try KC.calculate(kline: series, params: [12, 14, 2])
+
+        let historyCount = 40
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try KC.makeIncrementalState(kline: history, params: [12, 14, 2])
+
+        for i in historyCount..<bars.count {
+            let row = KC.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 3)
+            #expect(row[0] == full[0].values[i], "KC-MID[\(i)]")
+            #expect(row[1] == full[1].values[i], "KC-UPPER[\(i)]")
+            #expect(row[2] == full[2].values[i], "KC-LOWER[\(i)]")
+        }
+    }
+
+    @Test("history 空 · ema warm-up < atr warm-up · MID 先于 UPPER/LOWER 输出 · 全程匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try KC.makeIncrementalState(kline: empty, params: [12, 14, 2])
+
+        let series = makeSeries(from: bars)
+        let full = try KC.calculate(kline: series, params: [12, 14, 2])
+
+        for i in 0..<bars.count {
+            let row = KC.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "KC-MID[\(i)]")
+            #expect(row[1] == full[1].values[i], "KC-UPPER[\(i)]")
+            #expect(row[2] == full[2].values[i], "KC-LOWER[\(i)]")
+        }
+        // 前 11 根 MID/UPPER/LOWER 全 nil（EMA 第 12 根才有 mid）
+        #expect(full[0].values[10] == nil)
+        // 第 12 根 MID 非 nil（i=11）· UPPER/LOWER 仍 nil（ATR 第 14 根才有）
+        #expect(full[0].values[11] != nil)
+        #expect(full[1].values[11] == nil)
+        #expect(full[2].values[11] == nil)
+        // 第 14 根（i=13）UPPER/LOWER 起非 nil
+        #expect(full[1].values[13] != nil)
+        #expect(full[2].values[13] != nil)
+    }
+
+    @Test("参数错误 / mult<=0 / 缺参 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try KC.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try KC.makeIncrementalState(kline: empty, params: [12, 14, 0])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try KC.makeIncrementalState(kline: empty, params: [12, 14])
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 10 批 · StdDev 增量 API（BOLL 简化 · ring + sliding sum + variance reduce）
+
+@Suite("WP-41 v3 第 10 批 · StdDev 增量 API")
+struct StdDevIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=20）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try StdDev.calculate(kline: series, params: [20])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try StdDev.makeIncrementalState(kline: history, params: [20])
+
+        for i in historyCount..<bars.count {
+            let row = StdDev.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "STDDEV[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try StdDev.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = StdDev.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let series = makeSeries(from: bars)
+        let full = try StdDev.calculate(kline: series, params: [10])
+        for i in 9..<bars.count {
+            let row = StdDev.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "STDDEV[\(i)]")
+        }
+    }
+
+    @Test("参数错误 / period<2 / 缺参 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try StdDev.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try StdDev.makeIncrementalState(kline: empty, params: [1])
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 10 批 · Envelopes 增量 API（MA 复合 · ring + sliding sum · 百分比偏移）
+
+@Suite("WP-41 v3 第 10 批 · Envelopes 增量 API")
+struct EnvelopesIncrementalTests {
+
+    @Test("history 满 + 增量推进：MID/UPPER/LOWER 3 列每步与全量精确一致（period=20 percent=2.5）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let pct = Decimal(string: "2.5")!
+        let full = try Envelopes.calculate(kline: series, params: [20, pct])
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try Envelopes.makeIncrementalState(kline: history, params: [20, pct])
+
+        for i in historyCount..<bars.count {
+            let row = Envelopes.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 3)
+            #expect(row[0] == full[0].values[i], "ENV-MID[\(i)]")
+            #expect(row[1] == full[1].values[i], "ENV-UPPER[\(i)]")
+            #expect(row[2] == full[2].values[i], "ENV-LOWER[\(i)]")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        let pct = Decimal(string: "1.5")!
+        var state = try Envelopes.makeIncrementalState(kline: empty, params: [10, pct])
+
+        for i in 0..<9 {
+            let row = Envelopes.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+            #expect(row[1] == nil)
+            #expect(row[2] == nil)
+        }
+        let series = makeSeries(from: bars)
+        let full = try Envelopes.calculate(kline: series, params: [10, pct])
+        for i in 9..<bars.count {
+            let row = Envelopes.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i])
+            #expect(row[1] == full[1].values[i])
+            #expect(row[2] == full[2].values[i])
+        }
+    }
+
+    @Test("参数错误 / percent<=0 / 缺参 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try Envelopes.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Envelopes.makeIncrementalState(kline: empty, params: [20])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Envelopes.makeIncrementalState(kline: empty, params: [20, 0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

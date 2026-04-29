@@ -437,7 +437,7 @@ struct ChartScene: View {
                 low: hist.low,
                 close: hist.close,
                 volume: hist.volume,
-                openInterest: hist.openInterest,
+                openInterest: Decimal(hist.openInterest),
                 turnover: 0
             )
         }

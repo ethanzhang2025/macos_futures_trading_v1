@@ -843,7 +843,7 @@ private struct ImportSheet: View {
                     Text(trade.offsetFlag.displayName)
                         .font(.caption)
                         .frame(width: 40)
-                    Text("\(trade.volume) @ \(trade.price)")
+                    Text("\(trade.volume) @ \(trade.price.description)")
                         .font(.system(.caption, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
@@ -963,7 +963,7 @@ private struct JournalEditorSheet: View {
             Text(trade.offsetFlag.displayName)
                 .font(.caption)
                 .frame(width: 40)
-            Text("\(trade.volume)手 @ \(trade.price)")
+            Text("\(trade.volume)手 @ \(trade.price.description)")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundColor(.secondary)
             Spacer()

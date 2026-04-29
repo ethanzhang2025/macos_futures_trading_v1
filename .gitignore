@@ -80,5 +80,5 @@ fastlane/test_output
 .env
 .env.local
 
-# Claude Code 本地权限配置（个人偏好，不入仓库）
-.claude/settings.local.json
+# Claude Code 本地状态（个人偏好 / 调度锁 / 计划文件等 · 全目录不入仓库）
+.claude/

@@ -384,8 +384,10 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
 
     private func makeViewMatrix(input: KLineRenderInput, visible: Int) -> simd_float4x4 {
         // sub-bar pixel-precise pan：xLeft 用 startIndex + startOffset（Float · 浮点平移）
+        // x 右边界用 viewport.visibleCount（期望可见 N 根 · 屏幕语义）· 不是 visible（实际 bar 数）
+        // 否则单根 bar 时 xRange=[0,1] · bar 实体 0.7 占 70% 屏宽 → 大绿块覆盖（回放未启动场景）
         let xLeft = Float(input.viewport.startIndex) + input.viewport.startOffset
-        let xRight = xLeft + Float(visible)
+        let xRight = xLeft + Float(input.viewport.visibleCount)
         let priceRange = input.viewport.priceRange ?? derivePriceRange(input: input, visible: visible)
         let yBottom = Self.float(priceRange.lowerBound)
         let yTop = Self.float(priceRange.upperBound)

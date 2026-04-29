@@ -925,8 +925,17 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] 删除日志重启后真删（不再出现）
 - [ ] CSV 导入 → trades 累加 → 自动 save 持久化
 
-### 留待第 4-N 批（持续推进）
-- [ ] ChartScene 接 SQLiteKLineCacheStore（K 线缓存 · 0.5-1 天 · 需懂 loadAndStream/loadReplay 数据流）
+### M5 持久化第 4 批 · ChartScene 接 SQLiteKLineCacheStore（K 线缓存 fast-path · 半小时实际工时）
+- [ ] ChartScene loadAndStream 网络 fetch 前先 load 磁盘缓存 → 立即显示老数据（dataSourceLabel="本地缓存（N 根）"）
+- [ ] 网络 snapshot 来后异步 store.save(snapBars, instrumentID, period) 全量替换
+- [ ] completedBar 来后异步 store.append([k], ..., maxBars: 5000) 单根追加（防无限增长）
+- [ ] 网络拉空 snapshot 但磁盘有缓存时保持缓存（dataSourceLabel="本地缓存（离线）"·不再退回 Mock · 离线友好）
+- [ ] 启动重启后立即看到上次的 K 线数据（不等网络 · 提升首屏速度）
+- [ ] loadReplay（回放路径）不接 store（历史数据已在云端 · 不需缓存）
+- [ ] maxBars=5000 硬编码上限（约 21 天分钟线 / 5000 天日线）
+- [ ] 多窗口（⌘N）同时拉同合约/周期时 SQLite actor 串行 OK · 无竞态
+
+### 留待第 5-N 批（持续推进）
 - [ ] AnalyticsEventStore 埋点落库（0.5 天 · 项目可能尚无埋点代码 · 优先级最低）
 - [ ] AlertEvaluator 接入 + alerts 数组持久化（需补 AlertConfigStore · 设计未定）
 

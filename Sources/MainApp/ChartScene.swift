@@ -16,6 +16,7 @@ import DataCore
 import ChartCore
 import IndicatorCore
 import ReplayCore
+import StoreCore
 
 // MARK: - 模式（实盘 / 回放）
 
@@ -55,6 +56,9 @@ struct ChartScene: View {
     @State private var replayAllBars: [KLine] = []
     @State private var replay: ReplaySnapshot = ReplaySnapshot()
     @State private var replayObserveTask: Task<Void, Never>?
+
+    /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
+    @Environment(\.storeManager) private var storeManager
 
     /// 回放 player 的 UI 镜像（cursor + state + speed 派生于 player · 通过 observe() 同步）
     private struct ReplaySnapshot: Equatable {
@@ -230,6 +234,16 @@ struct ChartScene: View {
     private func loadAndStream(instrumentID: String, period: KLinePeriod) async {
         if !(await ensureRenderer()) { return }
 
+        // M5 持久化 fast-path：网络 fetch 前先 load 磁盘缓存 · 立即显示 · 后续 snapshot 来后会替换
+        // 协议返 [KLine] 非 Optional · 单层 try? · isEmpty 跳过空缓存（与 Alert/Journal 同模式）
+        if let store = storeManager?.kline,
+           let cached = try? await store.load(instrumentID: instrumentID, period: period),
+           !cached.isEmpty {
+            bars = cached
+            await updateIndicatorsFull(cached)
+            dataSourceLabel = "本地缓存（\(cached.count) 根）"
+        }
+
         let pipe = MarketDataPipeline(instrumentID: instrumentID, period: period)
         pipeline = pipe
         instrumentLabel = pipe.instrumentID
@@ -241,19 +255,32 @@ struct ChartScene: View {
             switch update {
             case .snapshot(let snapBars):
                 if snapBars.isEmpty && !snapshotReceived {
-                    // 首次 snapshot 拉空 → Sina 不可达 / 节假日 → 退回 Mock
-                    await pipe.stop()
-                    pipeline = nil
-                    await loadMockFallback()
-                    return
+                    // 首次 snapshot 拉空 → Sina 不可达 / 节假日
+                    // 无缓存（bars 空）→ 退回 Mock；有缓存 → 保留并打离线 label · 等下次 snapshot
+                    if bars.isEmpty {
+                        await pipe.stop()
+                        pipeline = nil
+                        await loadMockFallback()
+                        return
+                    }
+                    dataSourceLabel = "本地缓存（离线）"
+                    continue
                 }
                 snapshotReceived = true
                 bars = snapBars
                 await updateIndicatorsFull(snapBars)
                 dataSourceLabel = "Sina 真行情"
+                // M5 持久化：snapshot 后异步 save 全量到磁盘缓存（覆盖 instrumentID/period 分桶）
+                if let store = storeManager?.kline {
+                    Task { try? await store.save(snapBars, instrumentID: instrumentID, period: period) }
+                }
             case .completedBar(let k):
                 bars.append(k)
                 await stepIndicators(newBar: k)
+                // M5 持久化：完成的单根 K 线异步 append · maxBars 5000 防止无限增长
+                if let store = storeManager?.kline {
+                    Task { try? await store.append([k], instrumentID: instrumentID, period: period, maxBars: 5000) }
+                }
             }
         }
     }

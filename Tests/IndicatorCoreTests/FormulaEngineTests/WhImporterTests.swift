@@ -203,4 +203,105 @@ struct WhImporterTests {
         """
         #expect(WhImporter.parseFormulas(text).isEmpty)
     }
+
+    // MARK: - WP-63 DoD · 20 个文华典型公式
+
+    @Test("WP-63 DoD · 20 个文华典型公式 .wh 批量导入全部编译成功")
+    func wp63DoD_TwentyClassicFormulas() {
+        let results = WhImporter.importAll(Self.wenhuaTop20Formulas)
+        #expect(results.count == 20)
+        // 失败诊断（仅当 successCount != 20 时打印 · 便于回归定位）
+        for r in results where !r.isSuccess {
+            if let err = r.error {
+                Issue.record("公式 \(r.formula.name) 编译失败：\(err)")
+            }
+        }
+        let successCount = results.filter { $0.isSuccess }.count
+        #expect(successCount == 20, "20 个文华典型公式应全部编译成功")
+    }
+
+    /// 文华典型 20 公式（扩展自 v6.0+ MaiYuYanFormulaDemo 8 公式 + 12 经典指标）
+    /// 仅验 Lexer + Parser 编译过 · 不跑 Interpreter（DoD 关心解析层兼容）
+    private static let wenhuaTop20Formulas: String = """
+    # WP-63 DoD · 20 个文华典型公式
+    # 1-8 来自 v6.0+ MaiYuYanFormulaDemo（已 18th demo 验证）
+    # 9-20 经典指标公式（KDJ/MACD/RSI/CCI/WR/ROC/BIAS/PSY/ATR/OBV/DMA/SLOPE）
+
+    {金叉死叉}
+    GOLD:CROSS(MA(CLOSE,5),MA(CLOSE,20));
+    DEAD:CROSSDOWN(MA(CLOSE,5),MA(CLOSE,20));
+
+    {布林通道外|MA20 ± 2σ 范围外}
+    M:MA(CLOSE,20);
+    S:STD(CLOSE,20);
+    OUT:NOT(RANGE(CLOSE,M-2*S,M+2*S));
+
+    {信号回设 3 根}
+    SIG:CROSS(MA(CLOSE,5),MA(CLOSE,20));
+    BS:BACKSET(SIG,3);
+
+    {波峰跟踪}
+    PB:PEAKBARS(CLOSE);
+    LP:LASTPEAK(CLOSE);
+
+    {波谷距离}
+    TB:TROUGHBARS(CLOSE);
+
+    {方差 vs STD²}
+    V:VARIANCE(CLOSE,20);
+    S:STD(CLOSE,20);
+    DIFF:V-S*S;
+
+    {中位数偏移}
+    MED:MEDIAN(CLOSE,21);
+    SPREAD:CLOSE-MED;
+
+    {MOD 取模}
+    P:MOD(CLOSE,5);
+
+    {KDJ|经典 9-3-3 KDJ}
+    RSV:=(CLOSE-LLV(LOW,9))/(HHV(HIGH,9)-LLV(LOW,9))*100;
+    K:SMA(RSV,3,1);
+    D:SMA(K,3,1);
+    J:3*K-2*D;
+
+    {MACD|经典 12-26-9 MACD}
+    DIFF:EMA(CLOSE,12)-EMA(CLOSE,26);
+    DEA:EMA(DIFF,9);
+    BAR:(DIFF-DEA)*2;
+
+    {RSI|14 期相对强弱指数}
+    LC:=REF(CLOSE,1);
+    RSI:SMA(MAX(CLOSE-LC,0),14,1)/SMA(ABS(CLOSE-LC),14,1)*100;
+
+    {CCI|14 期顺势指标}
+    TYP:=(HIGH+LOW+CLOSE)/3;
+    CCI:(TYP-MA(TYP,14))/(0.015*AVEDEV(TYP,14));
+
+    {WR|14 期威廉指标}
+    WR:100*(HHV(HIGH,14)-CLOSE)/(HHV(HIGH,14)-LLV(LOW,14));
+
+    {ROC|12 期变动率}
+    ROC:100*(CLOSE-REF(CLOSE,12))/REF(CLOSE,12);
+
+    {BIAS|6 期乖离率}
+    BIAS:(CLOSE-MA(CLOSE,6))/MA(CLOSE,6)*100;
+
+    {PSY|12 期心理线}
+    PSY:COUNT(CLOSE>REF(CLOSE,1),12)/12*100;
+
+    {ATR|14 期真实波幅}
+    TR:=MAX(MAX(HIGH-LOW,ABS(HIGH-REF(CLOSE,1))),ABS(LOW-REF(CLOSE,1)));
+    ATR:MA(TR,14);
+
+    {OBV|能量潮}
+    VA:=IF(CLOSE>REF(CLOSE,1),VOL,IF(CLOSE<REF(CLOSE,1),-VOL,0));
+    OBV:SUM(VA,0);
+
+    {DMA|动态平均}
+    AMA:DMA(CLOSE,0.1);
+
+    {SLOPE|10 期线性回归斜率}
+    SLP:SLOPE(CLOSE,10);
+    """
 }

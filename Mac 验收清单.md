@@ -607,6 +607,30 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 9 批（PVT + Donchian · 25 指标 · 跨 Volume / Volatility 类）
+
+### PVT 增量（量价累积 · 同 OBV 模式 · 无周期 · 第 1 根 PVT=0）
+- [ ] PVT 与全量精确一致（80 K · history 30）
+- [ ] history 空 · 第 1 根 PVT=0（无 warm-up · 与 calculate out[0]=0 一致）
+- [ ] 全程匹配全量
+- [ ] benchmark PVT 满批 ~1.0× 加速（极简累积式 · 全量本身已极快）
+
+### Donchian 增量（双 ring HHV/LLV · 同 KDJ ring 模式 · 输出 [upper, mid, lower]）
+- [ ] Donchian 三列与全量精确一致（period=20 · 80 K · history 30）
+- [ ] history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量
+- [ ] upper/lower 是 raw HHV/LLV（不 round8 · 与 Kernels.hhv/llv 一致）
+- [ ] mid = round8((upper+lower)/2)（与 calculate mid[i] 一致）
+- [ ] 参数缺失 / period<1 抛错
+- [ ] benchmark DONCHIAN(20) 满批 ~1.0× 加速（双 ring O(n) 同等工作量）
+
+### 25 指标增量基础（首次跨 Volume + Volatility 双类）
+- [ ] benchmark 完整输出 25 行
+- [ ] 增量 API 覆盖率：25/56 = 44.6%（IndicatorCore 接近 1/2 已增量化）
+- [ ] 量价类增量：OBV + PVT（2）
+- [ ] 波动率类增量：BOLL + ATR + Donchian（3）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

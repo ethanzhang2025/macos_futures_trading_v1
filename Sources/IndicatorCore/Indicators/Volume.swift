@@ -1,7 +1,10 @@
 // WP-41 第二批 · 量价类 7 指标（除 OBV 已在独立文件）
 // Volume / MFI / CMF / VR / PVT / ADL / VOSC
+//
+// WP-41 v3 第 9 批：PVT 实现 IncrementalIndicator · 累积式（同 OBV 模式 · 无周期）
 
 import Foundation
+import Shared
 
 // MARK: - Volume · 成交量柱（Int → Decimal 直通）
 
@@ -151,6 +154,40 @@ public enum PVT: Indicator {
             out[i] = Kernels.round8(acc)
         }
         return [IndicatorSeries(name: "PVT", values: out)]
+    }
+}
+
+// MARK: - WP-41 v3 第 9 批 · PVT 增量 API（累积式 · 同 OBV 模式 · 无周期 · 第 1 根 PVT=0）
+
+extension PVT: IncrementalIndicator {
+
+    /// state：prevClose（diff 计算）+ acc（流式累积 · 不 round · 输出 round8）
+    public struct IncrementalState: Sendable {
+        public var prevClose: Decimal?
+        public var acc: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        var state = IncrementalState(prevClose: nil, acc: 0)
+        let count = kline.closes.count
+        for i in 0..<count {
+            _ = processStep(state: &state, close: kline.closes[i], volume: kline.volumes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, close: newBar.close, volume: newBar.volume)]
+    }
+
+    /// 第 1 根：prevClose=nil → 不累加 · acc=0 · 输出 round8(0)=0（与 calculate out[0]=0 一致）
+    /// 第 2 根起：close 与 prev 比 · prev != 0 时累加 (close-prev)/prev * volume · 否则 acc 不变
+    private static func processStep(state: inout IncrementalState, close: Decimal, volume: Int) -> Decimal? {
+        if let prev = state.prevClose, prev != 0 {
+            state.acc += (close - prev) / prev * Decimal(volume)
+        }
+        state.prevClose = close
+        return Kernels.round8(state.acc)
     }
 }
 

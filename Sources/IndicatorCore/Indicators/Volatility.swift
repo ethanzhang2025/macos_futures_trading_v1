@@ -1,7 +1,10 @@
 // WP-41 第二批 · 波动率/通道类 6 指标（除 BOLL/ATR 已在独立文件）
 // KC / Donchian / StdDev / HV / PriceChannel / Envelopes
+//
+// WP-41 v3 第 9 批：Donchian 实现 IncrementalIndicator · 双 ring HHV/LLV（同 KDJ ring 模式）
 
 import Foundation
+import Shared
 
 // MARK: - KC · 肯特纳通道 EMA ± mult * ATR
 
@@ -68,6 +71,61 @@ public enum Donchian: Indicator {
             IndicatorSeries(name: "DC-MID", values: mid),
             IndicatorSeries(name: "DC-LOWER", values: llv)
         ]
+    }
+}
+
+// MARK: - WP-41 v3 第 9 批 · Donchian 增量 API（HHV/LLV 双 ring · 同 KDJ ring 模式）
+
+extension Donchian: IncrementalIndicator {
+
+    /// state：n + (high/low) ring buffer · 输出 [upper, mid, lower]
+    /// upper/lower 是 raw HHV/LLV（不 round8 · 与 calculate Kernels.hhv/llv 一致 · max/min 无精度损失）
+    /// mid = round8((upper+lower)/2)（与 calculate mid[i] = round8 一致）
+    public struct IncrementalState: Sendable {
+        public let period: Int
+        public var highRing: [Decimal]
+        public var lowRing: [Decimal]
+        public var head: Int
+        public var count: Int
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        let n = try requireIntParam(params, label: "Donchian period")
+        var state = IncrementalState(
+            period: n,
+            highRing: [Decimal](repeating: 0, count: n),
+            lowRing: [Decimal](repeating: 0, count: n),
+            head: 0, count: 0
+        )
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, high: kline.highs[i], low: kline.lows[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        processStep(state: &state, high: newBar.high, low: newBar.low)
+    }
+
+    /// ring 写入 O(1) · count < period → 全 nil（warm-up）
+    /// count == period 起：扫 ring 求 hhv/llv（O(n)）· 输出 [upper, mid, lower]
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal) -> [Decimal?] {
+        state.highRing[state.head] = high
+        state.lowRing[state.head] = low
+        state.head = (state.head + 1) % state.period
+        state.count = min(state.count + 1, state.period)
+
+        guard state.count == state.period else { return [nil, nil, nil] }
+
+        var hhv = state.highRing[0]
+        var llv = state.lowRing[0]
+        for i in 1..<state.period {
+            if state.highRing[i] > hhv { hhv = state.highRing[i] }
+            if state.lowRing[i] < llv { llv = state.lowRing[i] }
+        }
+        let mid = Kernels.round8((hhv + llv) / Decimal(2))
+        return [hhv, mid, llv]
     }
 }
 

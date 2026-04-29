@@ -1483,6 +1483,105 @@ struct HMAIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 9 批 · PVT 增量 API（累积式 · 同 OBV 模式）
+
+@Suite("WP-41 v3 第 9 批 · PVT 增量 API")
+struct PVTIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（无周期）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try PVT.calculate(kline: series, params: [])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try PVT.makeIncrementalState(kline: history, params: [])
+
+        for i in historyCount..<bars.count {
+            let row = PVT.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "PVT[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 第 1 根 PVT=0（与 calculate out[0]=0 一致 · 无 warm-up）· 全程匹配全量")
+    func incrementalNoWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try PVT.makeIncrementalState(kline: empty, params: [])
+
+        let row1 = PVT.stepIncremental(state: &state, newBar: bars[0])
+        #expect(row1[0] == Decimal(0))
+
+        let series = makeSeries(from: bars)
+        let full = try PVT.calculate(kline: series, params: [])
+        for i in 1..<bars.count {
+            let row = PVT.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "PVT[\(i)]")
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 9 批 · Donchian 增量 API（双 ring HHV/LLV）
+
+@Suite("WP-41 v3 第 9 批 · Donchian 增量 API")
+struct DonchianIncrementalTests {
+
+    @Test("history 满 + 增量推进：UPPER/MID/LOWER 3 列每步与全量精确一致（period=20）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try Donchian.calculate(kline: series, params: [20])
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try Donchian.makeIncrementalState(kline: history, params: [20])
+
+        for i in historyCount..<bars.count {
+            let row = Donchian.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 3)
+            #expect(row[0] == full[0].values[i], "DC-UPPER[\(i)]")
+            #expect(row[1] == full[1].values[i], "DC-MID[\(i)]")
+            #expect(row[2] == full[2].values[i], "DC-LOWER[\(i)]")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try Donchian.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = Donchian.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+            #expect(row[1] == nil)
+            #expect(row[2] == nil)
+        }
+        let series = makeSeries(from: bars)
+        let full = try Donchian.calculate(kline: series, params: [10])
+        for i in 9..<bars.count {
+            let row = Donchian.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i])
+            #expect(row[1] == full[1].values[i])
+            #expect(row[2] == full[2].values[i])
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try Donchian.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try Donchian.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

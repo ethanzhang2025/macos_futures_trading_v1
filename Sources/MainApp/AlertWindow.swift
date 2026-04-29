@@ -49,6 +49,7 @@ struct AlertWindow: View {
     @State private var isLoaded: Bool = false
 
     @Environment(\.storeManager) private var storeManager
+    @Environment(\.analytics) private var analytics
 
     var body: some View {
         VStack(spacing: 0) {
@@ -306,6 +307,18 @@ struct AlertWindow: View {
         await dispatcher.dispatch(event, to: a.channels)
         markAlertTriggered(a, at: event.triggeredAt)
         appendHistoryEntry(from: a, event: event)
+        // 埋点：alert 触发 · test=true 区分 Mock 触发（Stage B 接 evaluator 真触发时记 test=false）
+        if let service = analytics {
+            try? await service.record(
+                .alertTrigger,
+                userID: FuturesTerminalApp.anonymousUserID,
+                properties: [
+                    "alert_name": a.name,
+                    "instrument": a.instrumentID,
+                    "test": "true"
+                ]
+            )
+        }
     }
 
     private func markAlertTriggered(_ a: Alert, at: Date) {

@@ -197,18 +197,17 @@ struct ChartScene: View {
     // MARK: - 工具条
 
     private var toolbar: some View {
-        HStack(spacing: 12) {
-            Text("模式：").foregroundColor(.secondary)
+        HStack(spacing: 14) {
+            // 视觉迭代第 8 项：模式 / 副图 2 项 segmented 直接可见 · 合约 / 周期保留 menu（项多 segmented 挤）
             Picker("", selection: $chartMode) {
                 ForEach(ChartMode.allCases) { m in
                     Text(m.displayName).tag(m)
                 }
             }
-            .pickerStyle(.menu)
-            .frame(width: 80)
+            .pickerStyle(.segmented)
+            .frame(width: 130)
             .labelsHidden()
 
-            Text("合约：").foregroundColor(.secondary)
             Picker("", selection: $currentInstrumentID) {
                 ForEach(MarketDataPipeline.supportedContracts, id: \.self) { sym in
                     Text(sym).tag(sym)
@@ -218,24 +217,22 @@ struct ChartScene: View {
             .frame(width: 90)
             .labelsHidden()
 
-            Text("周期：").foregroundColor(.secondary)
             Picker("", selection: $selectedPeriod) {
                 ForEach(MarketDataPipeline.supportedPeriods, id: \.self) { p in
                     Text(p.displayName).tag(p)
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 70)
+            .frame(width: 80)
             .labelsHidden()
 
-            Text("副图：").foregroundColor(.secondary)
             Picker("", selection: $selectedSubIndicator) {
                 ForEach(SubIndicatorKind.allCases) { k in
                     Text(k.shortName).tag(k)
                 }
             }
-            .pickerStyle(.menu)
-            .frame(width: 90)
+            .pickerStyle(.segmented)
+            .frame(width: 130)
             .labelsHidden()
 
             Spacer()
@@ -708,7 +705,9 @@ struct ChartContentView: View {
                 KLineAxisView(bars: bars, viewport: viewport, priceRange: currentPriceRange, orientation: .price)
                     .frame(width: 60)
             }
-            Divider()
+            // 视觉迭代第 9 项：主图 ↔ 副图分割线增强 · 1.5pt 深灰条 · 比默认 Divider 醒目
+            Color.white.opacity(0.18)
+                .frame(height: 1)
             // 副图区（指数平滑异同移动平均线 MACD · 共享主图 viewport · 拖拽缩放主图时副图同步）
             HStack(spacing: 0) {
                 SubChartView(bars: bars, viewport: viewport, kind: subIndicatorKind)

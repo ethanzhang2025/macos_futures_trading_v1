@@ -140,6 +140,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
+                .preferredColorScheme(.dark)
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -163,6 +164,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
+                .preferredColorScheme(.dark)
         }
 
         // 复盘工作台（⌘R · 8 图独立窗口 · 与 K 线主图区分离）
@@ -171,6 +173,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
+                .preferredColorScheme(.dark)
         }
 
         // 预警面板（⌘B · Bell · 独立窗口）
@@ -179,6 +182,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
+                .preferredColorScheme(.dark)
         }
 
         // 交易日志（⌘J · Journal · 独立窗口 · WP-53 UI · M5 接 SQLiteJournalStore）
@@ -187,6 +191,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
+                .preferredColorScheme(.dark)
         }
 
         // 工作区模板（⌘K · workspace · 独立窗口 · WP-55 UI · M5 接 SQLiteWorkspaceBookStore）
@@ -195,6 +200,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
+                .preferredColorScheme(.dark)
         }
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）

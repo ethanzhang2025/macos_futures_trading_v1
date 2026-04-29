@@ -222,6 +222,12 @@ let package = Package(
             dependencies: ["Shared", "DataCore", "IndicatorCore"],
             path: "Tools/MaiYuYanWhDemo"
         ),
+        // SinaMonthlyContractDemo · 第 21 个真数据 demo（探索 Sina API 月份合约支持度 · 6 合约 × 3 端点）
+        .executableTarget(
+            name: "SinaMonthlyContractDemo",
+            dependencies: ["DataCore"],
+            path: "Tools/SinaMonthlyContractDemo"
+        ),
         // FuturesContextualDemo · WP-41 B1 Step 2 第 19 个真数据 demo
         // (Sina RB0 真行情 + 模拟 FuturesContext + 4 ContextualIndicator)
         .executableTarget(

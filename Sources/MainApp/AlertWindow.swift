@@ -71,11 +71,10 @@ struct AlertWindow: View {
                 alerts = MockAlerts.generate()
             }
             isLoaded = true
-            // M5 持久化：history 优先从 SQLiteAlertHistoryStore 加载 · 失败 / 空库 fallback Mock
-            // evaluator 接入后真实触发的 entry 会写入 store · 重启后保留
+            // M5 持久化：history 优先从 SQLiteAlertHistoryStore 加载 · 协议非 Optional · try? 失败 fallback Mock
+            // 空数组合法（用户清空 / evaluator 未触发但已开启 store）· 与 alerts 加载语义一致
             if let store = storeManager?.alertHistory,
-               let loaded = try? await store.allHistory(),
-               !loaded.isEmpty {
+               let loaded = try? await store.allHistory() {
                 historyEntries = loaded
             } else {
                 historyEntries = MockAlertHistory.generate()
@@ -340,6 +339,10 @@ struct AlertWindow: View {
             message: event.message
         )
         historyEntries.insert(entry, at: 0)
+        // M5 持久化：testTrigger 是 Stage A 当前 history 唯一信号源 · 必须落库 · evaluator 接入前不 fallback Mock
+        if let store = storeManager?.alertHistory {
+            Task { try? await store.append(entry) }
+        }
     }
 
     /// 按 condition 生成测试触发价（让 displayDescription 显示有意义的数字）

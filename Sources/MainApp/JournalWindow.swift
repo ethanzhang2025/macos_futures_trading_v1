@@ -143,7 +143,8 @@ struct JournalWindow: View {
         .onChange(of: trades) { newValue in
             // M5 自动持久化：trades UPSERT 全量批量（saveTrades 内 INSERT OR REPLACE · 重复 id 更新）
             // 删除点（如果有）需在 mutation 处显式调 store.deleteTrade(id:) · onChange 不能 DELETE
-            guard isLoaded, let store = storeManager?.journal, !newValue.isEmpty else { return }
+            // 空数组合法（用户清空意图）· saveTrades([]) 内是 no-op · 与 alerts 持久化语义对齐
+            guard isLoaded, let store = storeManager?.journal else { return }
             Task { try? await store.saveTrades(newValue) }
         }
         .onChange(of: journals) { newValue in

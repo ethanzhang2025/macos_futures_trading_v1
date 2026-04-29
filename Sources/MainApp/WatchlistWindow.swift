@@ -668,15 +668,15 @@ private struct InstrumentIDSheet: View {
 // MARK: - Mock 数据（commit 1 静态 · commit 4 + M5 替换）
 
 private enum MockWatchlistBook {
-    /// 3 组 9 合约 · 与 Stubs.swift 旧占位文案对齐
-    /// 主力 RB0/IF0/AU0 三个 ∈ MarketDataPipeline.supportedContracts，commit 4 主图联动可直接生效
+    /// 4 组按板块分类 · 全部 ∈ MarketDataPipeline.supportedContracts · 双击任意合约可直接切主图
     static func generate() -> WatchlistBook {
         var book = WatchlistBook()
         let now = Date()
         let groups: [(name: String, ids: [String])] = [
-            ("主力合约", ["RB0", "IF0", "AU0"]),
-            ("黑色系",   ["RB0", "HC0", "I0"]),
-            ("贵金属",   ["AU0", "AG0", "CU0"])
+            ("黑色",   ["RB0"]),
+            ("股指",   ["IF0"]),
+            ("贵金属", ["AU0"]),
+            ("有色",   ["CU0"])
         ]
         for (name, ids) in groups {
             let groupID = book.addGroup(name: name, now: now).id

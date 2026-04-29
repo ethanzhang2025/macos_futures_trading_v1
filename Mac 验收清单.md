@@ -906,11 +906,18 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] Workspace mutation 后 save 异步执行
 - [ ] swift test 790/197 全绿（StoreManagerTests / SQLiteWatchlistBookStoreTests / SQLiteWorkspaceBookStoreTests 都绿）
 
-### 留待第 2-N 批（持续推进）
-- [ ] JournalWindow 接 SQLiteJournalStore（trades + journals · 1 天）
-- [ ] AlertWindow 接 SQLiteAlertHistoryStore（事件历史 + AlertEvaluator 接入 · 0.5-1 天）
-- [ ] ChartScene 接 SQLiteKLineCacheStore（K 线缓存 · 0.5 天）
-- [ ] AnalyticsEventStore 埋点落库（0.5 天）
+### M5 持久化第 2 批 · Alert load history（占位接入 · evaluator 未接 · 半小时）
+- [ ] AlertWindow 启动 .task 优先从 SQLiteAlertHistoryStore.allHistory() 加载真实历史
+- [ ] 库空 / load 失败时 fallback MockAlertHistory.generate()
+- [ ] alerts 数组仍 Mock（StoreManager 暂无 AlertConfigStore · 后续补）
+- [ ] evaluator 接入前 history 库一直空 · 显示和 Mock 一致
+- [ ] evaluator 接入后真实触发的 entry 写入 store · 重启后保留
+
+### 留待第 3-N 批（持续推进）
+- [ ] JournalWindow 接 SQLiteJournalStore（trades + journals 双轨 · 1 天 · 复杂度高 · 删除需显式 deleteTrade/deleteJournal）
+- [ ] ChartScene 接 SQLiteKLineCacheStore（K 线缓存 · 0.5-1 天 · 需懂 loadAndStream/loadReplay 数据流）
+- [ ] AnalyticsEventStore 埋点落库（0.5 天 · 项目可能尚无埋点代码 · 优先级最低）
+- [ ] AlertEvaluator 接入 + alerts 数组持久化（需补 AlertConfigStore · 设计未定）
 
 ---
 

@@ -1,13 +1,16 @@
 // MainApp · 预警面板 Scene（WP-52 UI · 8 alerts × 4 status × 6 condition × 5 channel）
 //
 // 留待 Mac 切机：UserNotifications channel · NSSound channel（替换对应 LoggingChannel）
-// 留待 M5：StoreManager 注入 AlertEvaluator · onTick 实接 · 持久化 alerts + 真实历史
+// M5 持久化已部分接入：StoreManager 注入 historyEntries 加载（库空时 fallback Mock）
+// 留待 M5：AlertEvaluator onTick 实接 · 真实触发后 store.append → UI 自动刷新（监听机制）
+// 留待 M5：alerts 数组持久化（StoreManager 暂只有 AlertHistoryStore · 无 AlertConfigStore · 后续补）
 
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
 import Foundation
 import AlertCore
+import StoreCore
 
 // MARK: - Tab 切换
 
@@ -42,6 +45,8 @@ struct AlertWindow: View {
     @State private var consoleLog: [String] = []
     @State private var dispatcher: NotificationDispatcher = NotificationDispatcher()
 
+    @Environment(\.storeManager) private var storeManager
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -54,8 +59,17 @@ struct AlertWindow: View {
         }
         .frame(minWidth: 760, idealWidth: 920, minHeight: 480, idealHeight: 640)
         .task {
+            // alerts 还没有 AlertConfigStore · 暂保留 Mock（M5 后续补）
             alerts = MockAlerts.generate()
-            historyEntries = MockAlertHistory.generate()
+            // M5 持久化：history 优先从 SQLiteAlertHistoryStore 加载 · 失败 / 空库 fallback Mock
+            // evaluator 接入后真实触发的 entry 会写入 store · 重启后保留
+            if let store = storeManager?.alertHistory,
+               let loaded = try? await store.allHistory(),
+               !loaded.isEmpty {
+                historyEntries = loaded
+            } else {
+                historyEntries = MockAlertHistory.generate()
+            }
             await registerChannels()
         }
         .sheet(item: $sheetState) { state in

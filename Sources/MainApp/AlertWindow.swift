@@ -1,9 +1,9 @@
 // MainApp · 预警面板 Scene（WP-52 UI · 8 alerts × 4 status × 6 condition × 5 channel）
 //
 // 留待 Mac 切机：UserNotifications channel · NSSound channel（替换对应 LoggingChannel）
-// M5 持久化已部分接入：StoreManager 注入 historyEntries 加载（库空时 fallback Mock）
+// M5 持久化已接入：alerts 走 SQLiteAlertConfigStore（.task 异步 load · .onChange 异步 save · nil 才 fallback Mock · 空数组合法）
+//                  history 走 SQLiteAlertHistoryStore（.task 异步 load · 空库 fallback Mock · evaluator 接入后写库）
 // 留待 M5：AlertEvaluator onTick 实接 · 真实触发后 store.append → UI 自动刷新（监听机制）
-// 留待 M5：alerts 数组持久化（StoreManager 暂只有 AlertHistoryStore · 无 AlertConfigStore · 后续补）
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -45,6 +45,9 @@ struct AlertWindow: View {
     @State private var consoleLog: [String] = []
     @State private var dispatcher: NotificationDispatcher = NotificationDispatcher()
 
+    /// M5 持久化：load 完成前 isLoaded=false · 期间 alerts mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
+    @State private var isLoaded: Bool = false
+
     @Environment(\.storeManager) private var storeManager
 
     var body: some View {
@@ -59,8 +62,14 @@ struct AlertWindow: View {
         }
         .frame(minWidth: 760, idealWidth: 920, minHeight: 480, idealHeight: 640)
         .task {
-            // alerts 还没有 AlertConfigStore · 暂保留 Mock（M5 后续补）
-            alerts = MockAlerts.generate()
+            // M5 启动加载：alerts 优先从 SQLiteAlertConfigStore 加载 · nil（首次启动）才 fallback Mock · 空数组合法保留
+            if let store = storeManager?.alertConfig,
+               let loaded = (try? await store.load()) ?? nil {
+                alerts = loaded
+            } else {
+                alerts = MockAlerts.generate()
+            }
+            isLoaded = true
             // M5 持久化：history 优先从 SQLiteAlertHistoryStore 加载 · 失败 / 空库 fallback Mock
             // evaluator 接入后真实触发的 entry 会写入 store · 重启后保留
             if let store = storeManager?.alertHistory,
@@ -71,6 +80,11 @@ struct AlertWindow: View {
                 historyEntries = MockAlertHistory.generate()
             }
             await registerChannels()
+        }
+        .onChange(of: alerts) { newValue in
+            // M5 自动持久化：每次 alerts 变化异步 save（add/edit/delete/toggle/markTriggered 都覆盖）
+            guard isLoaded, let store = storeManager?.alertConfig else { return }
+            Task { try? await store.save(newValue) }
         }
         .sheet(item: $sheetState) { state in
             switch state {

@@ -48,8 +48,12 @@ struct AlertWindow: View {
     /// M5 持久化：load 完成前 isLoaded=false · 期间 alerts mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
+    /// v11.0+1 · evaluator observe stream 监听任务 · onDisappear cancel
+    @State private var evaluatorObserveTask: Task<Void, Never>?
+
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
+    @Environment(\.alertEvaluator) private var alertEvaluator
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,11 +84,19 @@ struct AlertWindow: View {
                 historyEntries = MockAlertHistory.generate()
             }
             await registerChannels()
+            // v11.0+1 · evaluator wiring：alerts 加载后全部 addAlert · 启动 observe 监听真实触发
+            await syncAlertsToEvaluator(newValue: alerts, oldValue: [])
+            startEvaluatorObserve()
         }
         .onChange(of: alerts) { newValue in
             // M5 自动持久化：每次 alerts 变化异步 save（add/edit/delete/toggle/markTriggered 都覆盖）
             guard isLoaded, let store = storeManager?.alertConfig else { return }
             Task { try? await store.save(newValue) }
+            // v11.0+1 · evaluator 同步（diff add/update/remove · updateAlert 内部保 lastTriggeredAt）
+            Task { await syncAlertsToEvaluator(newValue: newValue, oldValue: []) }
+        }
+        .onDisappear {
+            evaluatorObserveTask?.cancel()
         }
         .sheet(item: $sheetState) { state in
             switch state {
@@ -339,9 +351,52 @@ struct AlertWindow: View {
             message: event.message
         )
         historyEntries.insert(entry, at: 0)
-        // M5 持久化：testTrigger 是 Stage A 当前 history 唯一信号源 · 必须落库 · evaluator 接入前不 fallback Mock
+        // M5 持久化：testTrigger 走此路径（不通过 evaluator）· evaluator 真触发由 fire() 内部 history.append 写库 + observe stream 推 UI
         if let store = storeManager?.alertHistory {
             Task { try? await store.append(entry) }
+        }
+    }
+
+    // MARK: - v11.0+1 · evaluator wiring
+
+    /// 同步 alerts 数组到 evaluator · diff add/update/remove
+    /// updateAlert 内部保留 lastTriggeredAt（用户改 condition/name 不应重置冷却）
+    /// 参数 oldValue 当前未用（每次重新查 evaluator.allAlerts() 作为真实旧 set）· 保留接口扩展空间
+    private func syncAlertsToEvaluator(newValue: [Alert], oldValue: [Alert]) async {
+        guard let evaluator = alertEvaluator else { return }
+        let existing = await evaluator.allAlerts()
+        let existingIDs = Set(existing.map(\.id))
+        let newIDs = Set(newValue.map(\.id))
+        for id in existingIDs.subtracting(newIDs) {
+            await evaluator.removeAlert(id: id)
+        }
+        for alert in newValue {
+            if existingIDs.contains(alert.id) {
+                _ = await evaluator.updateAlert(alert)
+            } else {
+                await evaluator.addAlert(alert)
+            }
+        }
+    }
+
+    /// 启动 observe stream · 收 evaluator 真触发 event → UI insert（store.append 已 evaluator 内部完成）
+    private func startEvaluatorObserve() {
+        guard let evaluator = alertEvaluator, evaluatorObserveTask == nil else { return }
+        evaluatorObserveTask = Task {
+            for await event in await evaluator.observe() {
+                let entry = AlertHistoryEntry(
+                    alertID: event.alertID,
+                    alertName: event.alertName,
+                    instrumentID: event.instrumentID,
+                    triggerPrice: event.triggerPrice,
+                    triggeredAt: event.triggeredAt,
+                    conditionSnapshot: alerts.first(where: { $0.id == event.alertID })?.condition ?? .priceAbove(0),
+                    message: event.message
+                )
+                await MainActor.run {
+                    historyEntries.insert(entry, at: 0)
+                }
+            }
         }
     }
 

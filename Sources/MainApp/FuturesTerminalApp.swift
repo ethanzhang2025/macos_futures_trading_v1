@@ -18,6 +18,7 @@ import SwiftUI
 import AppKit
 import Shared
 import StoreCore
+import AlertCore
 
 // MARK: - StoreManager 环境注入（M5 集中接入持久化）
 
@@ -49,6 +50,22 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - AlertEvaluator 环境注入（v11.0+1 · alerts 真 e2e · K 线 close 假 Tick · 真 Tick Stage B 接）
+
+private struct AlertEvaluatorKey: EnvironmentKey {
+    static let defaultValue: AlertEvaluator? = nil
+}
+
+extension EnvironmentValues {
+    /// 预警评估器：App.init 一次性创建 · 注入 storeManager.alertHistory + NotificationDispatcher
+    /// AlertWindow 监听 observe 流写 history · ChartScene 用 K 线 close 模拟 onTick 触发评估
+    /// nil = storeManager 未启动 · UI 退化为 testTrigger 占位模式（与 v11.0+1 修复前等价）
+    var alertEvaluator: AlertEvaluator? {
+        get { self[AlertEvaluatorKey.self] }
+        set { self[AlertEvaluatorKey.self] = newValue }
+    }
+}
+
 @main
 struct FuturesTerminalApp: App {
 
@@ -61,6 +78,10 @@ struct FuturesTerminalApp: App {
     /// 埋点服务（M5 持久化第 5 批 c · StoreManager 7/7 收官 · WP-133a/G2）
     /// storeManager nil 时 analytics nil · 调用方走 fire-and-forget 模式安全降级
     private let analytics: AnalyticsService?
+
+    /// 预警评估器（v11.0+1 · alerts 真 e2e · 注入 alertHistory store · ChartScene 调 onTick）
+    /// storeManager nil 时 evaluator nil · UI 退化 testTrigger 占位
+    private let alertEvaluator: AlertEvaluator?
 
     init() {
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
@@ -77,6 +98,9 @@ struct FuturesTerminalApp: App {
                 deviceID: Self.loadOrCreateDeviceID(),
                 appVersion: Self.bundleAppVersion
             )
+        }
+        self.alertEvaluator = manager.map {
+            AlertEvaluator(history: $0.alertHistory, dispatcher: NotificationDispatcher())
         }
         // app_launch 异步发 · 失败静默（埋点不阻塞 App 启动）
         if let service = self.analytics {
@@ -115,6 +139,7 @@ struct FuturesTerminalApp: App {
             ChartScene()
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
+                .environment(\.alertEvaluator, alertEvaluator)
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -137,6 +162,7 @@ struct FuturesTerminalApp: App {
             WatchlistWindow()
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
+                .environment(\.alertEvaluator, alertEvaluator)
         }
 
         // 复盘工作台（⌘R · 8 图独立窗口 · 与 K 线主图区分离）
@@ -144,6 +170,7 @@ struct FuturesTerminalApp: App {
             ReviewWindow()
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
+                .environment(\.alertEvaluator, alertEvaluator)
         }
 
         // 预警面板（⌘B · Bell · 独立窗口）
@@ -151,6 +178,7 @@ struct FuturesTerminalApp: App {
             AlertWindow()
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
+                .environment(\.alertEvaluator, alertEvaluator)
         }
 
         // 交易日志（⌘J · Journal · 独立窗口 · WP-53 UI · M5 接 SQLiteJournalStore）
@@ -158,6 +186,7 @@ struct FuturesTerminalApp: App {
             JournalWindow()
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
+                .environment(\.alertEvaluator, alertEvaluator)
         }
 
         // 工作区模板（⌘K · workspace · 独立窗口 · WP-55 UI · M5 接 SQLiteWorkspaceBookStore）
@@ -165,6 +194,7 @@ struct FuturesTerminalApp: App {
             WorkspaceWindow()
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
+                .environment(\.alertEvaluator, alertEvaluator)
         }
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）

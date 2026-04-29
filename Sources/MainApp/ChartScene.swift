@@ -17,6 +17,7 @@ import ChartCore
 import IndicatorCore
 import ReplayCore
 import StoreCore
+import AlertCore
 
 // MARK: - 模式（实盘 / 回放）
 
@@ -64,6 +65,7 @@ struct ChartScene: View {
     /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
+    @Environment(\.alertEvaluator) private var alertEvaluator
 
     /// 回放 player 的 UI 镜像（cursor + state + speed 派生于 player · 通过 observe() 同步）
     private struct ReplaySnapshot: Equatable {
@@ -273,6 +275,28 @@ struct ChartScene: View {
         }
     }
 
+    // MARK: - v11.0+1 · K 线 close 假 Tick（evaluator wiring）
+
+    /// 用 K 线收尾构造模拟 Tick · 仅评估器需要的字段（lastPrice/volume/instrumentID）填真实值
+    /// 其余字段 0 / [] 占位 · 真 Tick Stage B CTP 接入后整体替换
+    private static func simulatedTick(from k: KLine) -> Tick {
+        Tick(
+            instrumentID: k.instrumentID,
+            lastPrice: k.close,
+            volume: k.volume,
+            openInterest: k.openInterest,
+            turnover: k.turnover,
+            bidPrices: [], askPrices: [], bidVolumes: [], askVolumes: [],
+            highestPrice: k.high,
+            lowestPrice: k.low,
+            openPrice: k.open,
+            preClosePrice: 0, preSettlementPrice: 0,
+            upperLimitPrice: 0, lowerLimitPrice: 0,
+            updateTime: "", updateMillisec: 0,
+            tradingDay: "", actionDay: ""
+        )
+    }
+
     // MARK: - 实盘加载
 
     private func loadAndStream(instrumentID: String, period: KLinePeriod) async {
@@ -332,6 +356,10 @@ struct ChartScene: View {
                         await prev?.value
                         try? await store.append([k], instrumentID: instrumentID, period: period, maxBars: 5000)
                     }
+                }
+                // v11.0+1 · evaluator 用 K 线 close 模拟 Tick · 真 Tick Stage B 接 CTP 后替换
+                if let evaluator = alertEvaluator {
+                    await evaluator.onTick(Self.simulatedTick(from: k))
                 }
             }
         }

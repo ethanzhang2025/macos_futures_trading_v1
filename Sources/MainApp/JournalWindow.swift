@@ -581,7 +581,7 @@ struct JournalWindow: View {
             // 埋点：CSV 导入是 Stage A 唯一新增 trade 入口（trades 数组的真实 mutation 信号）
             if let service = analytics {
                 Task {
-                    try? await service.record(
+                    _ = try? await service.record(
                         .journalEntrySave,
                         userID: FuturesTerminalApp.anonymousUserID,
                         properties: ["import_count": "\(newTrades.count)"]

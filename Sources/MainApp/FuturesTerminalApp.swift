@@ -104,7 +104,7 @@ struct FuturesTerminalApp: App {
         }
         // app_launch 异步发 · 失败静默（埋点不阻塞 App 启动）
         if let service = self.analytics {
-            Task { try? await service.record(.appLaunch, userID: Self.anonymousUserID) }
+            Task { _ = try? await service.record(.appLaunch, userID: Self.anonymousUserID) }
         }
     }
 

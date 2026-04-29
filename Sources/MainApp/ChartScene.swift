@@ -98,7 +98,7 @@ struct ChartScene: View {
             }
             // 埋点：每次 task(id:) 重启都记 chart_open（mode/instrument/period 切换均算"打开新图"）
             if let service = analytics {
-                try? await service.record(
+                _ = try? await service.record(
                     .chartOpen,
                     userID: FuturesTerminalApp.anonymousUserID,
                     properties: [
@@ -113,7 +113,7 @@ struct ChartScene: View {
             // 埋点：用户切换副图指标（MACD / KDJ / RSI ...）· chart_open 之外的细粒度行为
             guard let service = analytics else { return }
             Task {
-                try? await service.record(
+                _ = try? await service.record(
                     .indicatorAdd,
                     userID: FuturesTerminalApp.anonymousUserID,
                     properties: ["kind": newValue.rawValue]
@@ -124,7 +124,7 @@ struct ChartScene: View {
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
             guard newValue == .replay, let service = analytics else { return }
             Task {
-                try? await service.record(
+                _ = try? await service.record(
                     .replayStart,
                     userID: FuturesTerminalApp.anonymousUserID,
                     properties: [
@@ -426,7 +426,7 @@ struct ChartScene: View {
         default:  // minute1 / minute15 / minute30 / 其他 · Sina 不支持的 fallback 15min
             historical = try await sina.historicalMinute(symbol: instrumentID, intervalMinutes: 15)
         }
-        return historical.compactMap { hist in
+        return historical.compactMap { hist -> KLine? in
             guard let date = Self.parseHistoricalDate(hist.date) else { return nil }
             return KLine(
                 instrumentID: instrumentID,

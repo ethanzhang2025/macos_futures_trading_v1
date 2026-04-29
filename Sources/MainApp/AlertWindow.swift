@@ -14,7 +14,8 @@ import StoreCore
 
 /// 消除 Mac 端 SwiftUI.Alert（deprecated 但仍存在）与 AlertCore.Alert 命名歧义
 /// Linux 编译跳过整个 SwiftUI 块 · 不暴露此冲突 · Mac 必须显式限定
-private typealias Alert = AlertCore.Alert
+/// 注：默认 internal 而非 private · 否则文件内 internal 属性（如 AlertFormDraft.alert: Alert?）违反"private 类型用于更宽访问级别属性"规则
+typealias Alert = AlertCore.Alert
 
 // MARK: - Tab 切换
 
@@ -324,7 +325,7 @@ struct AlertWindow: View {
         appendHistoryEntry(from: a, event: event)
         // 埋点：alert 触发 · test=true 区分 Mock 触发（Stage B 接 evaluator 真触发时记 test=false）
         if let service = analytics {
-            try? await service.record(
+            _ = try? await service.record(
                 .alertTrigger,
                 userID: FuturesTerminalApp.anonymousUserID,
                 properties: [
@@ -349,9 +350,9 @@ struct AlertWindow: View {
             alertID: a.id,
             alertName: a.name,
             instrumentID: a.instrumentID,
-            triggerPrice: event.triggerPrice,
-            triggeredAt: event.triggeredAt,
             conditionSnapshot: a.condition,
+            triggeredAt: event.triggeredAt,
+            triggerPrice: event.triggerPrice,
             message: event.message
         )
         historyEntries.insert(entry, at: 0)
@@ -392,9 +393,9 @@ struct AlertWindow: View {
                     alertID: event.alertID,
                     alertName: event.alertName,
                     instrumentID: event.instrumentID,
-                    triggerPrice: event.triggerPrice,
-                    triggeredAt: event.triggeredAt,
                     conditionSnapshot: alerts.first(where: { $0.id == event.alertID })?.condition ?? .priceAbove(0),
+                    triggeredAt: event.triggeredAt,
+                    triggerPrice: event.triggerPrice,
                     message: event.message
                 )
                 await MainActor.run {
@@ -925,9 +926,9 @@ enum MockAlertHistory {
                 alertID: mockIDs[i % mockIDs.count],
                 alertName: t.name,
                 instrumentID: t.instrumentID,
-                triggerPrice: t.triggerPrice,
-                triggeredAt: now.addingTimeInterval(t.secondsAgo),
                 conditionSnapshot: t.condition,
+                triggeredAt: now.addingTimeInterval(t.secondsAgo),
+                triggerPrice: t.triggerPrice,
                 message: t.message
             )
         }

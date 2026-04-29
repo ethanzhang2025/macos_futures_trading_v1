@@ -228,6 +228,12 @@ let package = Package(
             dependencies: ["DataCore"],
             path: "Tools/SinaMonthlyContractDemo"
         ),
+        // SinaQuoteWorkaroundDemo · 第 22 个真数据 demo（探索 v12.2 实时报价失败合约 workaround · W1 大小写 + W4 K 线伪实时）
+        .executableTarget(
+            name: "SinaQuoteWorkaroundDemo",
+            dependencies: ["DataCore"],
+            path: "Tools/SinaQuoteWorkaroundDemo"
+        ),
         // FuturesContextualDemo · WP-41 B1 Step 2 第 19 个真数据 demo
         // (Sina RB0 真行情 + 模拟 FuturesContext + 4 ContextualIndicator)
         .executableTarget(

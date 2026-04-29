@@ -137,13 +137,14 @@ struct ReviewWindow: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(12)
-        .frame(height: 220)
+        .frame(minHeight: 220)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(8)
     }
 
+    /// 自适应列数：每列至少 260 · 窗口窄自动减到 3/2/1 列 · 不再固定 4 列裁切
     private var gridColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(minimum: 280, maximum: 600), spacing: 16), count: 4)
+        [GridItem(.adaptive(minimum: 260, maximum: 600), spacing: 16)]
     }
 
     private func errorView(_ msg: String) -> some View {

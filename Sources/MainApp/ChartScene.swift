@@ -62,6 +62,9 @@ struct ChartScene: View {
     /// 风险：高频 completedBar（1 秒级）+ maxBars 截断时 · 无序写入可能丢中间根
     @State private var klineSaveTask: Task<Void, Never>?
 
+    /// 实时报价的昨结算 · priceTopBar baseline · nil 时 fallback bars.first.close
+    @State private var preSettle: Decimal?
+
     /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
@@ -92,6 +95,7 @@ struct ChartScene: View {
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         .task(id: PipelineKey(mode: chartMode, instrumentID: currentInstrumentID, period: selectedPeriod)) {
             await resetForNewPipeline()
+            await fetchPreSettle(instrumentID: currentInstrumentID)
             switch chartMode {
             case .live:   await loadAndStream(instrumentID: currentInstrumentID, period: selectedPeriod)
             case .replay: await loadReplay(instrumentID: currentInstrumentID, period: selectedPeriod)
@@ -172,8 +176,19 @@ struct ChartScene: View {
         bars = []
         indicators = []
         indicatorRunner = nil
+        preSettle = nil
         dataSourceLabel = "加载中…"
         instrumentLabel = currentInstrumentID
+    }
+
+    /// 拉一次实时报价取昨结算 · priceTopBar baseline · 失败/未拉到保持 nil 由 priceTopBar fallback 周期首根
+    /// 仅 supportedContracts 拉 · 不阻塞 K 线流程（即使失败 K 线照常显示）
+    private func fetchPreSettle(instrumentID: String) async {
+        guard MarketDataPipeline.supportedContracts.contains(instrumentID) else { return }
+        let sina = SinaMarketData()
+        guard let quote = try? await sina.fetchQuote(symbol: instrumentID),
+              quote.preSettlement > 0 else { return }
+        preSettle = quote.preSettlement
     }
 
     /// 全量计算 indicators + 重建 indicatorRunner（commit 4/4 · snapshot / seek / Mock fallback 路径）
@@ -745,19 +760,20 @@ struct ChartContentView: View {
             hud
         }
         .overlay(alignment: .topTrailing) {
-            // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs 周期首根 · 真 preClose 待 Sina API 扩展）
+            // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
             priceTopBar
         }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
     }
 
-    /// 顶部当前价大字号 + 涨跌幅 · 红涨绿跌 · baseline 用 visible 周期首根（v1 · 待真 preClose）
+    /// 顶部当前价大字号 + 涨跌幅 · 红涨绿跌 · baseline 用 Sina 实时昨结算 preSettle · fallback visible 周期首根
     private var priceTopBar: some View {
         HStack(spacing: 10) {
             if let last = bars.last, let first = bars.first {
                 let close = NSDecimalNumber(decimal: last.close).doubleValue
-                let baseline = NSDecimalNumber(decimal: first.close).doubleValue
+                let baselineDecimal = preSettle ?? first.close
+                let baseline = NSDecimalNumber(decimal: baselineDecimal).doubleValue
                 let diff = close - baseline
                 let pct = baseline > 0 ? diff / baseline * 100 : 0
                 let isUp = diff >= 0

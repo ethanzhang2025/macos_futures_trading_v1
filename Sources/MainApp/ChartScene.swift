@@ -730,7 +730,7 @@ struct ChartContentView: View {
         }
     }
 
-    /// 主图区（K 线 + 网格 + indicators + HUD · gesture 挂这里）
+    /// 主图区（K 线 + 网格 + 十字光标 + indicators + HUD · gesture 挂这里）
     var chartMainArea: some View {
         ZStack(alignment: .topLeading) {
             KLineMetalView(
@@ -738,8 +738,10 @@ struct ChartContentView: View {
                 input: KLineRenderInput(bars: bars, indicators: indicators, viewport: viewport)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // 视觉迭代：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐
+            // 视觉迭代第 1 项：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐
             KLineGridView()
+            // 视觉迭代第 2 项：十字光标 + OHLC 浮窗（hover 跟随）
+            KLineCrosshairView(bars: bars, viewport: viewport, priceRange: currentPriceRange)
             hud
         }
         .simultaneousGesture(panGesture)
@@ -793,13 +795,24 @@ struct ChartContentView: View {
 
     var hud: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("📌 合约 \(instrumentLabel) · \(periodLabel) · 🌐 \(dataSourceLabel)")
-            Text("📊 可见: \(viewport.visibleCount) · 起点: \(viewport.startIndex) / \(bars.count)")
-            Text("⏱️  上一帧: \(String(format: "%.2f", lastFrameMs)) ms · 预算 16.67 ms")
-            ForEach(Array(indicators.enumerated()), id: \.offset) { _, series in
-                Text("📈 \(series.name): \(latestText(series))")
+            // 主标识行：合约 + 周期 + 数据源（核心信息 · 醒目）
+            Text("\(instrumentLabel) · \(periodLabel) · \(dataSourceLabel)")
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white)
+            // 视觉迭代第 3 项：MA / BOLL 数值彩色圆点 + 染色（与 Metal 折线 5 色调色板对齐 · 黄/紫/蓝/橙/粉）
+            ForEach(Array(indicators.enumerated()), id: \.offset) { idx, series in
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Self.indicatorTextColor(at: idx))
+                        .frame(width: 8, height: 8)
+                    Text("\(series.name): \(latestText(series))")
+                        .foregroundColor(Self.indicatorTextColor(at: idx))
+                }
             }
-            Text("🎮 触控板：双指缩放 · 拖拽平移 · ⌘N 新窗口")
+            // 视觉迭代第 4 项：调试信息（视野/帧时）淡化 · 字号缩小 + 灰色 · 不抢主信息
+            Text("可见 \(viewport.visibleCount) · 起点 \(viewport.startIndex)/\(bars.count) · 帧 \(String(format: "%.1f", lastFrameMs))ms")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.white.opacity(0.4))
         }
         .font(.system(size: 12, design: .monospaced))
         .foregroundColor(.white)
@@ -807,6 +820,18 @@ struct ChartContentView: View {
         .background(Color.black.opacity(0.6))
         .cornerRadius(6)
         .padding(12)
+    }
+
+    /// 与 MetalKLineRenderer.indicatorPalette 同步（黄/紫/蓝/橙/粉 · MA5/MA20/MA60/BOLL-UP/BOLL-DN）
+    private static func indicatorTextColor(at idx: Int) -> Color {
+        let palette: [Color] = [
+            Color(red: 1.00, green: 0.78, blue: 0.18),
+            Color(red: 0.63, green: 0.42, blue: 0.84),
+            Color(red: 0.20, green: 0.60, blue: 0.86),
+            Color(red: 0.95, green: 0.61, blue: 0.07),
+            Color(red: 0.91, green: 0.30, blue: 0.55)
+        ]
+        return palette[idx % palette.count]
     }
 
     /// 取 visible window 末位的 indicator 值（与画面对齐 · 不取全段末位）

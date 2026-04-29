@@ -1084,6 +1084,92 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## v11.0 → v12.1 累积验收（2026-04-28 ~ 04-29 · 共 ~95 commit · L1-1/2/3/4 已通过）
+
+### M5 持久化 7/7 全闭环（v11.0 5/7 → v12.0 7/7）
+
+- [x] L1-1 启动写入 `~/Library/Application Support/FuturesTerminal/db/` 7 个 sqlite 文件（journal / alert_history / **alert_config** / watchlist / workspace / kline_cache / **analytics**）
+- [ ] alerts 增删改 → 重启保留（SQLiteAlertConfigStore 聚合根模式 · v12.0 第 5 批 a-b）
+- [ ] alerts 清空 [] → 重启保留为空（非 fallback Mock · 空数组合法语义）
+- [ ] AnalyticsService 6/10 事件埋点（v12.0 第 5 批 c-e）：
+  - [ ] app_launch（每次启动 +1 行）
+  - [ ] chart_open（mode/instrument/period 切换 +1 行）
+  - [ ] indicator_add（副图指标切换 +1 行）
+  - [ ] replay_start（切回放模式 +1 行）
+  - [ ] journal_entry_save（CSV 导入 +1 行）
+  - [ ] alert_trigger（testTrigger 或 K 线假 Tick 触发 +1 行）
+
+### WP-63 文华 .wh 公式批量导入 ✅ DoD（v12.0）
+
+- [ ] `swift run MaiYuYanWhDemo` 第 20 个真数据 demo（Sina 真行情 RB0 60min 1023 根 · 20 公式编译 100% + 执行 100% · 12 经典指标 KDJ/MACD/RSI/CCI/WR/ROC/BIAS/PSY/ATR/OBV/DMA/SLOPE）
+- [ ] WhImportError 错误整文件相对行号定位（标头行偏移 + 公式内行号）
+
+### WP-64 文华自选文本导入 ✅ DoD（v12.0）
+
+- [ ] WatchlistImporter parse 5 组（黑色 / 化工 / 农产品 / 有色 / 贵金属）50+ 合约无丢失（Linux 已验 · Mac UI 入口待 commit 5）
+- [ ] merge 同名追加合约级去重 + 新名创建（addGroup）
+
+### AlertEvaluator 真 e2e wiring（v12.0）
+
+- [ ] 创建价格预警（rb2510 close > 3300）→ 实盘 K 线收尾时 close 假 Tick 自动触发 → history 自动 insert + UI observe 显示
+- [ ] testTrigger 独立路径（不通过 evaluator）→ history insert + alert_trigger 埋点（test=true 标识）
+- [ ] 重启后 history 保留（SQLiteAlertHistoryStore · P0-1 修后 testTrigger 也写库）
+
+### 视觉迭代 13 项（v12.0 · Mac 实盘截图已确认全到位）
+
+- [x] 第 1 项 主图 5×5 半透明白 0.08 横竖网格（KLineGridView · 与 KLineAxisView 5 等距标签对齐）
+- [x] 第 2-4 项 十字光标 + OHLC 浮窗 + HUD MA/BOLL 彩色圆点染色 + HUD 调试信息淡化
+- [x] 第 5-7 项 十字光标右价格 + 底时间黄色浮标 + 顶部当前价大字 22pt + 涨跌差 + 百分比 + 价格右轴最新 close 黄色高亮
+- [x] 第 8-10 项 工具条 segmented（模式 / 副图）+ 主图副图分割线 1.5pt 增强 + 6 WindowGroup .preferredColorScheme(.dark)
+- [x] 第 11-13 项 toolbar 深色 #15171C + SubChartView HUD 去 kind 名 + 6 WindowGroup .defaultSize（chart 1280×800 / watchlist 880×600 / review 1280×900 / alert 920×640 / journal 1100×720 / workspace 1100×720）
+
+### 视觉 bug 修复（v12.0 · 已 Mac 启动验证 L1-1 / L1-4）
+
+- [x] 回放未启动主图大绿块（MetalKLineRenderer.makeViewMatrix x 右边界 visible → viewport.visibleCount · 单根 bar 时 visible=1 占 70% 屏宽 → 修后 0.5%）
+- [x] 默认拖拽无效（visibleCount 200→120 + cacheMaxBars 200→500 · pan 空间 0→380 · 文华惯例 500-1000）
+
+### Mac 编译批量修复（v12.0 · Linux 跳 SwiftUI 未暴露的 9 类问题 · L1-1 启动验证编译正确）
+
+- [x] AlertWindow Alert 命名歧义（typealias Alert = AlertCore.Alert · 必须 internal 否则违反"private 类型用于更宽访问级别声明"）
+- [x] AlertHistoryEntry 3 处参数顺序修正（id / alertID / alertName / instrumentID / conditionSnapshot / triggeredAt / triggerPrice / message）
+- [x] ChartScene compactMap 显式 -> KLine? 防 Swift 6 推断 ambiguous
+- [x] 5 处 try? await service.record 加 _ = 消未用返回值 warning
+- [x] KLine.openInterest Decimal 转换（Int → Decimal）
+- [x] JournalWindow Decimal LocalizedStringKey deprecated 警告 → `.description` 显式 String
+- [x] .gitignore 整目录忽略 .claude/（含 lock 文件）+ git rm --cached scheduled_tasks.lock
+- [x] ReviewWindow 8 图自适应布局（adaptive(minimum: 260) + minHeight 替代固定 height · 修默认 1024 宽 4 列裁切）
+- [x] swift run **MainApp**（不是 FuturesTerminalApp · executable 名 Package.swift line 105）
+
+### 评估发现 P0 全修 + P1 部分（v12.0）
+
+- [ ] P0-1 AlertHistory testTrigger 重启保留（appendHistoryEntry 调 store.append 修后 · v11.0 仅内存 insert）
+- [ ] P0-2 K 线 append 多 Task 串行（klineSaveTask 链式 await · onDisappear 等最后一根落库 · 修高频 completedBar + maxBars 截断时丢中间根）
+- [ ] P0-3 trades 空数组持久化（onChange 去 isEmpty guard · 用户清空 trades 重启保留空）
+- [ ] P1-4 history 加载语义对齐 alerts（去 isEmpty guard · 空数组合法）
+
+### v12.1 增量（2026-04-29 · 4669e32 / aa34fe5）
+
+- [ ] **L1-5 Watchlist Mock bug 修**（4669e32）：⌘L 自选合约面板 → 双击任意合约（黑色 RB0 / 股指 IF0 / 贵金属 AU0 / 有色 CU0 · 4 组按板块分类）→ 主图自动切到该合约 + 加载真行情（不再被 alert 拦截 / 主图保持 RB0）
+- [ ] **真 preSettle 接入**（aa34fe5）：顶部当前价大字号涨跌色按 Sina 实时昨结算（preSettle 而非 visible 周期首根）· 与文华行情显示口径一致 · Sina API 失败 fallback first.close
+- [ ] 切回放模式 → preSettle 也清 nil（priceTopBar baseline 退回 first.close · 回放无前结算概念）
+
+### Mac 验收 L1 进度表（v12.1 末）
+
+- [x] L1-1 启 App + 默认窗口 1280×800 + 深色（含回放未启动大绿块 bug 修验证）
+- [x] L1-2 鼠标 hover 主图 → 虚线十字 + OHLC 浮窗 + 右价格 + 底时间浮标
+- [x] L1-3 工具条 4 Picker 切换响应（模式 segmented / 合约 menu / 周期 menu / 副图 segmented）
+- [x] L1-4 拖拽 + 缩放主图 + 惯性滑行（含默认拖拽 bug 修验证）
+- [ ] L1-5 自选合约 ⌘L · 双击合约联动主图（4669e32 修后待验）
+- [ ] L1-6 复盘 ⌘R · 8 图自适应（v12.0 已修 adaptive · 默认 1024 宽下不裁切）
+- [ ] L1-7 预警 ⌘B · 测试触发 → 历史 + 重启保留（P0-1 已修）+ 真 e2e（K 线假 Tick）
+- [ ] L1-8 交易日志 ⌘J · CSV 导入 + 重启保留（P0-3 空数组持久化）
+- [ ] L1-9 工作区模板 ⌘K · 模板编辑
+- [ ] L1-10 埋点 SQLite 文件增长（AnalyticsService 6/10 事件 · analytics.sqlite 行数）
+- [ ] L1-11 持久化重启场景（alerts 清空 / trades 清空 / history 清空 / K 线缓存连续无丢根）
+- [ ] L1-12 Alert e2e（创建价格预警 → K 线 close 假 Tick 触发 → history 自动 insert + 重启保留）
+
+---
+
 ## 待补（后续 commit 累积）
 
 后续每个 commit 完成功能后追加到对应章节 · 切机前在此清单逐项验收。

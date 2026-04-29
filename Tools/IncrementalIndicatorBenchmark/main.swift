@@ -1,8 +1,8 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（36 指标 · v3 第 13 批扩展 CMF + VR + Volume · Volume.swift 7/7 100% 收官）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（39 指标 · v3 第 14 批扩展 OpenInterest + OIDelta + PivotPoints · 期货持仓 + 结构 2 类首发增量化）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 36 个指标：
+// 测试 39 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
@@ -17,6 +17,7 @@
 //   v3 第 11 批（2）：PriceChannel 20（Donchian 单 ring · close 版）/ HV 20-252（log 收益 + ring StdDev + annual scaling）
 //   v3 第 12 批（3）：MFI 14（TP + 双 ring up/dn · 同 CMO 思路）/ ADL（累积式同 OBV/PVT · 无周期）/ VOSC 12-26（内嵌 2 EMA · 处理 volume）
 //   v3 第 13 批（3）：CMF 20（双 sliding sum mfv/vol · 不跳首窗口）/ VR 26（三桶 sliding sum · 同 MFI 跳首窗口）/ Volume（直通极简 · 无内部状态）
+//   v3 第 14 批（3）：OpenInterest（直通同 Volume）/ OIDelta（diff 同 PVT 第 1 根=0）/ PivotPoints（基于前一根 H/L/C · 7 列输出）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -431,6 +432,35 @@ benchmark("VOL") {
     guard var state = try? Volume.makeIncrementalState(kline: emptyHistory, params: []) else { return }
     for bar in bars {
         _ = Volume.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 14 批 · OpenInterest / OIDelta / PivotPoints（期货持仓 + 结构 2 类首发增量化）
+
+benchmark("OI") {
+    _ = try? OpenInterest.calculate(kline: series, params: [])
+} incremental: {
+    guard var state = try? OpenInterest.makeIncrementalState(kline: emptyHistory, params: []) else { return }
+    for bar in bars {
+        _ = OpenInterest.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("DOI") {
+    _ = try? OIDelta.calculate(kline: series, params: [])
+} incremental: {
+    guard var state = try? OIDelta.makeIncrementalState(kline: emptyHistory, params: []) else { return }
+    for bar in bars {
+        _ = OIDelta.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("PIVOT") {
+    _ = try? PivotPoints.calculate(kline: series, params: [])
+} incremental: {
+    guard var state = try? PivotPoints.makeIncrementalState(kline: emptyHistory, params: []) else { return }
+    for bar in bars {
+        _ = PivotPoints.stepIncremental(state: &state, newBar: bar)
     }
 }
 

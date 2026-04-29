@@ -2210,6 +2210,201 @@ struct VolumeIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 14 批 · OpenInterest 增量 API（直通 · 同 Volume 模式 · 极简）
+
+@Suite("WP-41 v3 第 14 批 · OpenInterest 增量 API")
+struct OpenInterestIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（无周期 · 直通）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBarsWithOI(count: 50)
+        let series = makeSeriesWithOI(from: bars)
+        let full = try OpenInterest.calculate(kline: series, params: [])
+        let fullValues = full[0].values
+
+        let historyCount = 20
+        let history = makeSeriesWithOI(from: Array(bars.prefix(historyCount)))
+        var state = try OpenInterest.makeIncrementalState(kline: history, params: [])
+
+        for i in historyCount..<bars.count {
+            let row = OpenInterest.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i], "OI[\(i)]")
+            #expect(row[0] == bars[i].openInterest, "OI[\(i)] 直通")
+        }
+    }
+
+    @Test("history 空 · 第 1 根直接输出 openInterest · 全程匹配全量")
+    func incrementalNoHistory() throws {
+        let bars = makeBarsWithOI(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try OpenInterest.makeIncrementalState(kline: empty, params: [])
+
+        let series = makeSeriesWithOI(from: bars)
+        let full = try OpenInterest.calculate(kline: series, params: [])
+        for i in 0..<bars.count {
+            let row = OpenInterest.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "OI[\(i)]")
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 14 批 · OIDelta 增量 API（diff 模式 · 同 PVT 第 1 根=0）
+
+@Suite("WP-41 v3 第 14 批 · OIDelta 增量 API")
+struct OIDeltaIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（无周期 · diff 模式）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBarsWithOI(count: 50)
+        let series = makeSeriesWithOI(from: bars)
+        let full = try OIDelta.calculate(kline: series, params: [])
+        let fullValues = full[0].values
+
+        let historyCount = 20
+        let history = makeSeriesWithOI(from: Array(bars.prefix(historyCount)))
+        var state = try OIDelta.makeIncrementalState(kline: history, params: [])
+
+        for i in historyCount..<bars.count {
+            let row = OIDelta.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i], "DOI[\(i)]")
+        }
+    }
+
+    @Test("history 空 · 第 1 根 prevOI=nil → 输出 0（与 calculate out[0]=0 一致）· 全程匹配全量")
+    func incrementalNoHistory() throws {
+        let bars = makeBarsWithOI(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try OIDelta.makeIncrementalState(kline: empty, params: [])
+
+        let row1 = OIDelta.stepIncremental(state: &state, newBar: bars[0])
+        #expect(row1[0] == Decimal(0), "DOI[0] 应为 0")
+
+        let series = makeSeriesWithOI(from: bars)
+        let full = try OIDelta.calculate(kline: series, params: [])
+        for i in 1..<bars.count {
+            let row = OIDelta.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "DOI[\(i)]")
+        }
+    }
+
+    @Test("OI 持平场景 · 输出 0（diff 为 0）")
+    func incrementalFlatOI() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let bar1 = KLine(instrumentID: "T", period: .minute1, openTime: baseDate,
+                         open: 100, high: 102, low: 99, close: 101, volume: 100, openInterest: 5000, turnover: 0)
+        let bar2 = KLine(instrumentID: "T", period: .minute1, openTime: baseDate.addingTimeInterval(60),
+                         open: 101, high: 103, low: 100, close: 102, volume: 110, openInterest: 5000, turnover: 0)
+        let bar3 = KLine(instrumentID: "T", period: .minute1, openTime: baseDate.addingTimeInterval(120),
+                         open: 102, high: 104, low: 101, close: 103, volume: 120, openInterest: 5500, turnover: 0)
+
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try OIDelta.makeIncrementalState(kline: empty, params: [])
+        #expect(OIDelta.stepIncremental(state: &state, newBar: bar1)[0] == 0)
+        #expect(OIDelta.stepIncremental(state: &state, newBar: bar2)[0] == 0)
+        #expect(OIDelta.stepIncremental(state: &state, newBar: bar3)[0] == 500)
+    }
+}
+
+// MARK: - WP-41 v3 第 14 批 · PivotPoints 增量 API（基于前一根 H/L/C · 7 列输出）
+
+@Suite("WP-41 v3 第 14 批 · PivotPoints 增量 API")
+struct PivotPointsIncrementalTests {
+
+    @Test("history 满 + 增量推进：7 列每步与全量精确一致（无周期）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 50)
+        let series = makeSeries(from: bars)
+        let full = try PivotPoints.calculate(kline: series, params: [])
+
+        let historyCount = 20
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try PivotPoints.makeIncrementalState(kline: history, params: [])
+
+        for i in historyCount..<bars.count {
+            let row = PivotPoints.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 7)
+            for col in 0..<7 {
+                #expect(row[col] == full[col].values[i], "PIVOT col=\(col) i=\(i)")
+            }
+        }
+    }
+
+    @Test("history 空 · 第 1 根 prev=nil → 全 nil（与 calculate `for i in 1..<count` 跳第 1 根一致）· 第 2 根起匹配全量")
+    func incrementalNoHistory() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try PivotPoints.makeIncrementalState(kline: empty, params: [])
+
+        let row1 = PivotPoints.stepIncremental(state: &state, newBar: bars[0])
+        for col in 0..<7 {
+            #expect(row1[col] == nil, "PIVOT[0] col=\(col) 应 nil")
+        }
+        let series = makeSeries(from: bars)
+        let full = try PivotPoints.calculate(kline: series, params: [])
+        for i in 1..<bars.count {
+            let row = PivotPoints.stepIncremental(state: &state, newBar: bars[i])
+            for col in 0..<7 {
+                #expect(row[col] == full[col].values[i], "PIVOT col=\(col) i=\(i)")
+            }
+        }
+    }
+
+    @Test("第 2 根起 7 列输出非 nil · pivot = (h+l+c)/3（验证算法）")
+    func incrementalFormula() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        let bar1 = KLine(instrumentID: "T", period: .minute1, openTime: baseDate,
+                         open: 100, high: 110, low: 90, close: 105, volume: 100, openInterest: 0, turnover: 0)
+        let bar2 = KLine(instrumentID: "T", period: .minute1, openTime: baseDate.addingTimeInterval(60),
+                         open: 105, high: 115, low: 100, close: 110, volume: 110, openInterest: 0, turnover: 0)
+
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try PivotPoints.makeIncrementalState(kline: empty, params: [])
+        _ = PivotPoints.stepIncremental(state: &state, newBar: bar1)   // 全 nil
+        let row2 = PivotPoints.stepIncremental(state: &state, newBar: bar2)
+        // pivot from bar1: (110+90+105)/3 = 305/3
+        let expectedPivot = Kernels.round8(Decimal(305) / Decimal(3))
+        #expect(row2[0] == expectedPivot, "PIVOT P[1]")
+        // R1 = 2P - L = 2*pivot - 90
+        let expectedR1 = Kernels.round8(Decimal(2) * (Decimal(305) / Decimal(3)) - Decimal(90))
+        #expect(row2[1] == expectedR1, "PIVOT R1[1]")
+    }
+}
+
+// MARK: - 第 14 批 fileprivate helper（带 OI · OpenInterest/OIDelta 共用）
+
+fileprivate func makeBarsWithOI(count: Int) -> [KLine] {
+    let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+    return (0..<count).map { i in
+        let noise = i % 7 - 3
+        let close = Decimal(100 + i + noise)
+        return KLine(
+            instrumentID: "TEST",
+            period: .minute1,
+            openTime: baseDate.addingTimeInterval(TimeInterval(i * 60)),
+            open: close - 1,
+            high: close + 2,
+            low: close - 2,
+            close: close,
+            volume: 100 + i,
+            // OI 模式：阶梯增长 + 周期波动 · 让 diff 有正/负/零变化
+            openInterest: Decimal(5000 + i * 10 + (i % 5) * 20),
+            turnover: 0
+        )
+    }
+}
+
+fileprivate func makeSeriesWithOI(from bars: [KLine]) -> KLineSeries {
+    KLineSeries(
+        opens: bars.map(\.open),
+        highs: bars.map(\.high),
+        lows: bars.map(\.low),
+        closes: bars.map(\.close),
+        volumes: bars.map(\.volume),
+        // KLineSeries.openInterests 是 [Int] · KLine.openInterest 是 Decimal · 此处转换
+        openInterests: bars.map { Int(NSDecimalNumber(decimal: $0.openInterest).intValue) }
+    )
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

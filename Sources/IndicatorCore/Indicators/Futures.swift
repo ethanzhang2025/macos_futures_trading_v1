@@ -18,8 +18,11 @@
 // 这是 Karpathy 手术式决定：占位 stub + 抛 notImplemented 会让调用方误以为"已实现只是有问题"，直接不暴露 Swift 类型更干净
 
 import Foundation
+import Shared
 
 // MARK: - OIDelta · 持仓量变化（持仓变动监测）
+//
+// WP-41 v3 第 14 批：OIDelta 实现 IncrementalIndicator · diff 模式（同 PVT 第 1 根=0 · 无周期）
 
 public enum OIDelta: Indicator {
     public static let identifier = "DOI"
@@ -35,5 +38,37 @@ public enum OIDelta: Indicator {
             out[i] = Decimal(kline.openInterests[i] - kline.openInterests[i - 1])
         }
         return [IndicatorSeries(name: "DOI", values: out)]
+    }
+}
+
+// MARK: - WP-41 v3 第 14 批 · OIDelta 增量 API（diff 模式 · 同 PVT 第 1 根=0 · 无周期）
+
+extension OIDelta: IncrementalIndicator {
+
+    /// state：prevOI（diff 计算 · 第 1 根 nil → 输出 0 与 calculate out[0]=0 一致）
+    /// 类型 Decimal? 而非 Int?：因为 KLine.openInterest 是 Decimal（而 KLineSeries.openInterests 是 [Int]
+    /// 历史不一致 · 增量内部统一用 Decimal · makeIncrementalState 把 Int 转 Decimal 传入）
+    public struct IncrementalState: Sendable {
+        public var prevOI: Decimal?
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        var state = IncrementalState(prevOI: nil)
+        for oi in kline.openInterests {
+            _ = processStep(state: &state, openInterest: Decimal(oi))
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, openInterest: newBar.openInterest)]
+    }
+
+    /// 第 1 根：prevOI=nil → 输出 0（与 calculate out[0]=0 一致 · diff 无前值参考）
+    /// 第 2 根起：输出 OI - prev（与 calculate `out[i] = Decimal(oi[i] - oi[i-1])` 等价 · Decimal 减法精确）
+    private static func processStep(state: inout IncrementalState, openInterest: Decimal) -> Decimal? {
+        let result: Decimal = state.prevOI.map { openInterest - $0 } ?? 0
+        state.prevOI = openInterest
+        return result
     }
 }

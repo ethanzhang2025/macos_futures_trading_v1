@@ -3,8 +3,11 @@
 // 归属调整：
 //   · Andrew's Pitchfork → 归 WP-42 画线工具（本质是 3 点定义的画线叉，非纯算法指标）
 //   · Elliott Wave → 不做（完整波浪识别是机器学习级别任务，TradingView 也仅提供画线辅助。Stage C 视用户呼声再评）
+//
+// WP-41 v3 第 14 批：PivotPoints 实现 IncrementalIndicator · 基于前一根 H/L/C 计算（无周期 · 7 列输出）
 
 import Foundation
+import Shared
 
 // MARK: - PivotPoints · 经典枢轴点
 // 每根 K 线基于前一根的 H/L/C 计算当日 P/R1/S1/R2/S2/R3/S3
@@ -205,6 +208,56 @@ public enum Fractal: Indicator {
         return [
             IndicatorSeries(name: "FRACTAL-UP", values: up),
             IndicatorSeries(name: "FRACTAL-DOWN", values: down)
+        ]
+    }
+}
+
+// MARK: - WP-41 v3 第 14 批 · PivotPoints 增量 API（基于前一根 H/L/C 计算 · 同 PVT prevClose 模式扩展到 3 字段 · 7 列输出）
+
+extension PivotPoints: IncrementalIndicator {
+
+    /// state：prevH / prevL / prevC（3 个 Optional · 第 1 根 nil → 全 nil · 同 calculate `for i in 1..<count` 跳第 1 根）
+    /// 输出 7 列：[P, R1, S1, R2, S2, R3, S3] · 与 calculate IndicatorSeries 顺序一致
+    public struct IncrementalState: Sendable {
+        public var prevH: Decimal?
+        public var prevL: Decimal?
+        public var prevC: Decimal?
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        var state = IncrementalState(prevH: nil, prevL: nil, prevC: nil)
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, high: kline.highs[i], low: kline.lows[i], close: kline.closes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        processStep(state: &state, high: newBar.high, low: newBar.low, close: newBar.close)
+    }
+
+    /// 第 1 根：state 都 nil → 输出全 nil（与 calculate 第 1 根不计算一致）· 之后 prev = (high, low, close)
+    /// 第 2 根起：用 prev H/L/C 算 pivot · 输出 7 列 round8 · 之后 prev 更新为当前 (high, low, close)
+    /// pivot = (h+l+c)/3 · R1 = 2P-l · S1 = 2P-h · R2 = P+(h-l) · S2 = P-(h-l) · R3 = h+2(P-l) · S3 = l-2(h-P)
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal) -> [Decimal?] {
+        defer {
+            state.prevH = high
+            state.prevL = low
+            state.prevC = close
+        }
+        guard let h = state.prevH, let l = state.prevL, let c = state.prevC else {
+            return [nil, nil, nil, nil, nil, nil, nil]
+        }
+        let pivot = (h + l + c) / Decimal(3)
+        return [
+            Kernels.round8(pivot),
+            Kernels.round8(Decimal(2) * pivot - l),
+            Kernels.round8(Decimal(2) * pivot - h),
+            Kernels.round8(pivot + (h - l)),
+            Kernels.round8(pivot - (h - l)),
+            Kernels.round8(h + Decimal(2) * (pivot - l)),
+            Kernels.round8(l - Decimal(2) * (h - pivot))
         ]
     }
 }

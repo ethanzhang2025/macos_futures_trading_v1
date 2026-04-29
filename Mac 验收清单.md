@@ -766,6 +766,45 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 14 批（OpenInterest + OIDelta + PivotPoints · 39 指标 · 期货持仓 + 结构 2 类首发增量化）
+
+### OpenInterest 增量（直通 · 同 Volume 模式 · 极简 · 无周期 · 无 warm-up · 空 IncrementalState）
+- [ ] OpenInterest 与全量精确一致（无参数 · 50 K · history 20）
+- [ ] history 空 · 第 1 根直接输出 KLine.openInterest
+- [ ] 空 IncrementalState struct（OI 是 Decimal 直通 · 无累积/无窗口/无 prev）
+- [ ] 注意类型不一致：KLine.openInterest 是 Decimal · KLineSeries.openInterests 是 [Int]（项目历史不一致 · 增量直接用 Decimal）
+- [ ] benchmark OI 满批 ~0.1× 加速（合理"减速" · 同 Volume · 全量是单一 .map 极快）
+
+### OIDelta 增量（diff 模式 · 同 PVT 第 1 根=0 · 无周期 · 无 warm-up）
+- [ ] OIDelta 与全量精确一致（无参数 · 50 K · history 20）
+- [ ] history 空 · 第 1 根 prevOI=nil → 输出 0（与 calculate out[0]=0 一致）
+- [ ] state.prevOI 用 Decimal? 而非 Int?（KLine.openInterest 是 Decimal · 增量内部统一 · makeIncrementalState 把 Int 转 Decimal 传入）
+- [ ] OI 持平场景验证 → 输出 0（diff 为 0）
+- [ ] OI 上涨场景验证 → 输出正值（diff 为正）
+- [ ] benchmark DOI 满批 ~0.1× 加速（合理"减速" · 全量极简 diff · 增量有空 state 开销）
+
+### PivotPoints 增量（基于前一根 H/L/C · 7 列输出 · 同 PVT prevClose 模式扩展到 3 字段）
+- [ ] PivotPoints 7 列与全量精确一致（无参数 · 50 K · history 20）
+- [ ] history 空 · 第 1 根 prev=nil → 全 7 列 nil（与 calculate `for i in 1..<count` 跳第 1 根一致）· 第 2 根起匹配全量
+- [ ] state = prevH / prevL / prevC（3 个 Optional Decimal · 第 1 根 nil）· defer 写法保证 prev 在 return 后才更新
+- [ ] 公式验证：pivot = (h+l+c)/3 · R1 = 2P-l · S1 = 2P-h · R2 = P+(h-l) · S2 = P-(h-l) · R3 = h+2(P-l) · S3 = l-2(h-P)
+- [ ] 7 列输出顺序与 calculate 一致：[P, R1, S1, R2, S2, R3, S3]
+- [ ] benchmark PIVOT 满批 ~1.0× 加速（无 sliding 优化 · 全量也是 O(N) 单趟）
+
+### 39 指标增量基础（期货持仓 + 结构 2 类首发增量化）
+- [ ] benchmark 完整输出 39 行
+- [ ] 增量 API 覆盖率：**39/56 = 69.6%**（IndicatorCore 过半 + 19.6% · 接近 7/10）
+- [ ] **持仓类增量首发 2**：OpenInterest（直通）+ OIDelta（diff）（独立类别 futures 首发）
+- [ ] **结构类增量首发 1**：PivotPoints（7 列输出 · 复合状态）（剩 ZigZag/Ichimoku/Fractal 留第 15 批）
+- [ ] 趋势类增量 9：MA / EMA / WMA / DEMA / TEMA / HMA / ADX / DMI / VWAP（剩 SAR / Supertrend）
+- [ ] 震荡类增量 11：RSI / KDJ / CCI / MACD / WR / Stochastic / TRIX / PSY / CMO / ROC / BIAS（已 100%）
+- [ ] 量价类增量 8：OBV / PVT / MFI / ADL / VOSC / CMF / VR / Volume（已 100%）
+- [ ] 波动率类增量 8：BOLL / ATR / Donchian / KC / StdDev / Envelopes / PriceChannel / HV（已 100%）
+- [ ] 持仓类增量 2：OpenInterest / OIDelta（首发）
+- [ ] 结构类增量 1：PivotPoints（首发 · 剩 3 个）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

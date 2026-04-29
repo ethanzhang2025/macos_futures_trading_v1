@@ -263,11 +263,10 @@ extension KC: IncrementalIndicator {
     }
 
     public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
-        let emaRow = EMA.stepIncremental(state: &state.emaState, newBar: newBar)
-        let atrRow = ATR.stepIncremental(state: &state.atrState, newBar: newBar)
-        let mid = emaRow[0]
+        let mid = EMA.stepIncremental(state: &state.emaState, newBar: newBar)[0]
+        let atr = ATR.stepIncremental(state: &state.atrState, newBar: newBar)[0]
         // mid 可能先于 atr 输出（emaN < atrN 时）· 按 calculate 仅 mid 不 nil → upper/lower 仍 nil
-        guard let m = mid, let a = atrRow[0] else { return [mid, nil, nil] }
+        guard let m = mid, let a = atr else { return [mid, nil, nil] }
         let upper = Kernels.round8(m + state.multiplier * a)
         let lower = Kernels.round8(m - state.multiplier * a)
         return [mid, upper, lower]
@@ -291,6 +290,7 @@ extension StdDev: IncrementalIndicator {
     public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
         let n = try requireIntParam(params, min: 2, label: "StdDev period")
         let closes = kline.closes
+        // 取 history 末尾 ≤ n 个 close 装入 ring · 重建 sum 与 calculate() 末值一致（与 BOLL/MA 同模式）
         let startIdx = max(0, closes.count - n)
         var ring = [Decimal](repeating: 0, count: n)
         var head = 0
@@ -306,6 +306,7 @@ extension StdDev: IncrementalIndicator {
     }
 
     public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        // ring 满 → 减旧值；未满 → count++（与 BOLL 同模式）
         if state.count == state.period {
             state.sum -= state.ring[state.head]
         } else {
@@ -317,6 +318,7 @@ extension StdDev: IncrementalIndicator {
 
         guard state.count == state.period else { return [nil] }
 
+        // 算法与 Kernels.stddev 一致：raw mean + ring reduce variance + sqrt + round8
         let nDec = Decimal(state.period)
         let mean = state.sum / nDec
         let variance = state.ring.reduce(Decimal(0)) { acc, x in
@@ -355,6 +357,7 @@ extension Envelopes: IncrementalIndicator {
         }
         let kFactor = pct / Decimal(100)
         let closes = kline.closes
+        // 取 history 末尾 ≤ n 个 close 装入 ring · 重建 sum 与 calculate() 末值一致（与 BOLL/MA 同模式）
         let startIdx = max(0, closes.count - n)
         var ring = [Decimal](repeating: 0, count: n)
         var head = 0
@@ -370,6 +373,7 @@ extension Envelopes: IncrementalIndicator {
     }
 
     public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        // ring 满 → 减旧值；未满 → count++（与 MA 同模式）
         if state.count == state.period {
             state.sum -= state.ring[state.head]
         } else {
@@ -381,6 +385,7 @@ extension Envelopes: IncrementalIndicator {
 
         guard state.count == state.period else { return [nil, nil, nil] }
 
+        // mid 先 round8（与 calculate mid[i] = round8(ma) 对齐）· upper/lower 用 round 后的 mid 算
         let mid = Kernels.round8(state.sum / Decimal(state.period))
         let upper = Kernels.round8(mid * (Decimal(1) + state.kFactor))
         let lower = Kernels.round8(mid * (Decimal(1) - state.kFactor))

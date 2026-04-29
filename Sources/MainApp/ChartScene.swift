@@ -259,8 +259,8 @@ struct ChartScene: View {
                 dataSourceLabel: dataSourceLabel,
                 subIndicatorKind: selectedSubIndicator,
                 initialViewport: RenderViewport(
-                    startIndex: max(0, bars.count - 200),
-                    visibleCount: 200
+                    startIndex: max(0, bars.count - 120),
+                    visibleCount: 120
                 )
             )
         } else if let loadError {

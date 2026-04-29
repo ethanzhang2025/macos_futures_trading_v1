@@ -23,7 +23,8 @@ final class MarketDataPipeline {
     static let defaultInstrumentID = "RB0"
     static let defaultPeriod: KLinePeriod = .minute15
     static let pollingInterval: TimeInterval = 5.0
-    static let cacheMaxBars: Int = 200
+    /// 实盘缓存上限（visibleCount=120 + 留 380 根 pan 空间 · 文华惯例 500-1000）
+    static let cacheMaxBars: Int = 500
 
     /// 主图可切换的合约清单（spike 硬编码 · 后续 WP-43 接 WatchlistBook UI 替换）
     /// 复用 EndToEndDemo 验证过的 4 个 Sina 主力合约

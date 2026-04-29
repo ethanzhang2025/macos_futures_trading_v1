@@ -1763,6 +1763,119 @@ struct EnvelopesIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 11 批 · PriceChannel 增量 API（基于 close 的 Donchian 变体 · 单 ring）
+
+@Suite("WP-41 v3 第 11 批 · PriceChannel 增量 API")
+struct PriceChannelIncrementalTests {
+
+    @Test("history 满 + 增量推进：UPPER/LOWER 2 列每步与全量精确一致（period=20）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try PriceChannel.calculate(kline: series, params: [20])
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try PriceChannel.makeIncrementalState(kline: history, params: [20])
+
+        for i in historyCount..<bars.count {
+            let row = PriceChannel.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 2)
+            #expect(row[0] == full[0].values[i], "PC-UPPER[\(i)]")
+            #expect(row[1] == full[1].values[i], "PC-LOWER[\(i)]")
+        }
+    }
+
+    @Test("history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try PriceChannel.makeIncrementalState(kline: empty, params: [10])
+
+        for i in 0..<9 {
+            let row = PriceChannel.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+            #expect(row[1] == nil)
+        }
+        let series = makeSeries(from: bars)
+        let full = try PriceChannel.calculate(kline: series, params: [10])
+        for i in 9..<bars.count {
+            let row = PriceChannel.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i])
+            #expect(row[1] == full[1].values[i])
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try PriceChannel.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try PriceChannel.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 11 批 · HV 增量 API（log 收益 + ring StdDev + annual scaling）
+
+@Suite("WP-41 v3 第 11 批 · HV 增量 API")
+struct HVIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=20 annual=252）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try HV.calculate(kline: series, params: [20, 252])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try HV.makeIncrementalState(kline: history, params: [20, 252])
+
+        for i in historyCount..<bars.count {
+            let row = HV.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "HV[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 第 1 根 logRet=0（与 calculate logRet[0]=0 一致 · 入 ring 参与 stddev）· 全程匹配全量")
+    func incrementalNoHistory() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try HV.makeIncrementalState(kline: empty, params: [10, 252])
+
+        // 前 period-1 步（i=0..8）全 nil
+        for i in 0..<9 {
+            let row = HV.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil)
+        }
+        let series = makeSeries(from: bars)
+        let full = try HV.calculate(kline: series, params: [10, 252])
+        // 第 period 步起匹配全量（i=9 起）
+        for i in 9..<bars.count {
+            let row = HV.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "HV[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<2 / annualDays<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try HV.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try HV.makeIncrementalState(kline: empty, params: [1])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try HV.makeIncrementalState(kline: empty, params: [20, 0])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

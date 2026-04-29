@@ -1,8 +1,8 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（28 指标 · v3 第 10 批扩展 KC + StdDev + Envelopes）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（30 指标 · v3 第 11 批扩展 PriceChannel + HV · Volatility.swift 6/6 100% 收官）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 28 个指标：
+// 测试 30 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
@@ -14,6 +14,7 @@
 //   v3 第 8 批（2）：WMA 10（O(1) Pascal triangle sliding）/ HMA 16（内嵌 3 WMA · halfN/n/sqrtN）
 //   v3 第 9 批（2）：PVT（量价累积式同 OBV）/ Donchian 20（HHV/LLV 双 ring · 同 KDJ 模式）
 //   v3 第 10 批（3）：KC 20-10-2（内嵌 EMA + ATR）/ StdDev 20（BOLL 简化）/ Envelopes 20-2.5（MA 复合 + 百分比偏移）
+//   v3 第 11 批（2）：PriceChannel 20（Donchian 单 ring · close 版）/ HV 20-252（log 收益 + ring StdDev + annual scaling）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -350,6 +351,26 @@ benchmark("ENV(20,2.5)") {
     guard var state = try? Envelopes.makeIncrementalState(kline: emptyHistory, params: [20, envPct]) else { return }
     for bar in bars {
         _ = Envelopes.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 11 批 · PriceChannel / HV（Volatility.swift 6/6 100% 收官）
+
+benchmark("PC(20)") {
+    _ = try? PriceChannel.calculate(kline: series, params: [20])
+} incremental: {
+    guard var state = try? PriceChannel.makeIncrementalState(kline: emptyHistory, params: [20]) else { return }
+    for bar in bars {
+        _ = PriceChannel.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("HV(20,252)") {
+    _ = try? HV.calculate(kline: series, params: [20, 252])
+} incremental: {
+    guard var state = try? HV.makeIncrementalState(kline: emptyHistory, params: [20, 252]) else { return }
+    for bar in bars {
+        _ = HV.stepIncremental(state: &state, newBar: bar)
     }
 }
 

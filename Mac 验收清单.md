@@ -665,6 +665,36 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 11 批（PriceChannel + HV · 30 指标 · Volatility.swift 6/6 100% 收官 🎉）
+
+### PriceChannel 增量（基于 close 的 Donchian 变体 · 单 ring · 同 Donchian ring 模式简化）
+- [ ] PriceChannel 两列与全量精确一致（period=20 · 80 K · history 30）
+- [ ] history 空 · 前 period-1 步全 nil · 第 period 步起匹配全量
+- [ ] upper/lower 是 raw HHV/LLV（不 round8 · 与 Kernels.hhv/llv 一致 · 与 Donchian 同模式）
+- [ ] 输出 [upper, lower] 仅 2 列（无 mid · 比 Donchian 简化）
+- [ ] 参数缺失 / period<1 抛错
+- [ ] benchmark PC(20) 满批 ~1.0× 加速（单 ring 简化 · 与 Donchian 同 O(n) 扫描 · 全量 Kernels.hhv/llv 已极快）
+
+### HV 增量（log 收益 + ring StdDev + annual scaling · 同 BOLL/StdDev ring 模式 + log 转换层）
+- [ ] HV 与全量精确一致（period=20 annual=252 · 80 K · history 30）
+- [ ] history 空 · 第 1 根 logRet=0（与 calculate logRet[0]=0 一致 · 入 ring 参与 stddev）
+- [ ] 第 2 根起 prevClose>0 时 logRet = log(close/prev) · 否则 0
+- [ ] sd 先 round8 snapshot（与 Kernels.stddev 输出一致）· 再乘 annualScale 再 round8（与 calculate out[i] 链一致）
+- [ ] annualScale = sqrt(annualDays) * 100 预计算（state 内不变量 · 不每步重算）
+- [ ] 参数缺失 / period<2 / annualDays<1 抛错
+- [ ] benchmark HV(20,252) 满批 ~1.3× 加速（log 收益 + ring reduce O(N) 与全量 O(N²) 同量级）
+
+### 30 指标增量基础（Volatility.swift 6/6 100% 收官 🎉）
+- [ ] benchmark 完整输出 30 行
+- [ ] 增量 API 覆盖率：**30/56 = 53.6%**（IndicatorCore 过半 + 5%）
+- [ ] **Volatility.swift 单文件 100% 增量化**（KC + Donchian + StdDev + HV + PriceChannel + Envelopes · 加 BOLL.swift / ATR.swift = 8 个波动率类全增量）
+- [ ] 趋势类增量 9：MA / EMA / WMA / DEMA / TEMA / HMA / ADX / DMI / VWAP
+- [ ] 震荡类增量 11：RSI / KDJ / CCI / MACD / WR / Stochastic / TRIX / PSY / CMO / ROC / BIAS
+- [ ] 量价类增量 2：OBV / PVT
+- [ ] 波动率类增量 8（含 BOLL + ATR · 文件外）：BOLL / ATR / Donchian / KC / StdDev / Envelopes / **PriceChannel / HV**
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

@@ -142,6 +142,8 @@ struct FuturesTerminalApp: App {
                 .environment(\.alertEvaluator, alertEvaluator)
                 .preferredColorScheme(.dark)
         }
+        // 视觉迭代第 13 项：显式 defaultSize · 启动时合理大窗 · 不依赖 SwiftUI 默认
+        .defaultSize(width: 1280, height: 800)
         .commands {
             CommandGroup(replacing: .newItem) {
                 NewChartButton()
@@ -166,6 +168,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.alertEvaluator, alertEvaluator)
                 .preferredColorScheme(.dark)
         }
+        .defaultSize(width: 880, height: 600)
 
         // 复盘工作台（⌘R · 8 图独立窗口 · 与 K 线主图区分离）
         WindowGroup("复盘", id: "review") {
@@ -175,6 +178,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.alertEvaluator, alertEvaluator)
                 .preferredColorScheme(.dark)
         }
+        .defaultSize(width: 1280, height: 900)
 
         // 预警面板（⌘B · Bell · 独立窗口）
         WindowGroup("预警", id: "alert") {
@@ -184,6 +188,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.alertEvaluator, alertEvaluator)
                 .preferredColorScheme(.dark)
         }
+        .defaultSize(width: 920, height: 640)
 
         // 交易日志（⌘J · Journal · 独立窗口 · WP-53 UI · M5 接 SQLiteJournalStore）
         WindowGroup("交易日志", id: "journal") {
@@ -193,6 +198,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.alertEvaluator, alertEvaluator)
                 .preferredColorScheme(.dark)
         }
+        .defaultSize(width: 1100, height: 720)
 
         // 工作区模板（⌘K · workspace · 独立窗口 · WP-55 UI · M5 接 SQLiteWorkspaceBookStore）
         WindowGroup("工作区模板", id: "workspace") {
@@ -202,6 +208,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.alertEvaluator, alertEvaluator)
                 .preferredColorScheme(.dark)
         }
+        .defaultSize(width: 1100, height: 720)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {

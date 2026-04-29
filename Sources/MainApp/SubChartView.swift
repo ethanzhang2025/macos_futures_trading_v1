@@ -145,13 +145,13 @@ struct SubChartView: View {
         let bLast = lastValue(seriesB, at: visibleEnd)
         let cLast = lastValue(seriesC, at: visibleEnd)
 
-        return HStack(spacing: 10) {
-            Text(kind.displayName).foregroundColor(.secondary)
+        // 视觉迭代第 12 项：副图 HUD 去 kind 名（工具条 segmented 已显示）· 仅数值 · 更紧凑
+        return HStack(spacing: 8) {
             switch kind {
             case .macd:
                 Text("DIF \(fmt(aLast))").foregroundColor(Self.macdDifColor)
                 Text("DEA \(fmt(bLast))").foregroundColor(Self.macdDeaColor)
-                Text("柱 \(fmt(cLast))").foregroundColor(
+                Text("MACD \(fmt(cLast))").foregroundColor(
                     cLast.map { $0 >= 0 ? Self.macdBullColor : Self.macdBearColor } ?? .secondary
                 )
             case .kdj:

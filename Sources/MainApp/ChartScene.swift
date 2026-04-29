@@ -242,7 +242,8 @@ struct ChartScene: View {
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 12)
         .frame(height: 32)
-        .background(.bar)
+        // 视觉迭代第 11 项：toolbar 显式深色 #15171C 与主图 #11141A 协调 · 替代 .bar 系统默认
+        .background(Color(red: 0.082, green: 0.090, blue: 0.110))
         .overlay(alignment: .bottom) { Divider() }
     }
 

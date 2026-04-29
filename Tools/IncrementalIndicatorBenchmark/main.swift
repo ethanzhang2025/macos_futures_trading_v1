@@ -1,8 +1,8 @@
-// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（30 指标 · v3 第 11 批扩展 PriceChannel + HV · Volatility.swift 6/6 100% 收官）
+// WP-41 v2/v3 · IndicatorCore 增量 vs 全量 性能基准（33 指标 · v3 第 12 批扩展 MFI + ADL + VOSC · 量价类 5/5 100% 收官）
 //
 // 运行：swift run IncrementalIndicatorBenchmark（或 IndicatorBenchmark）
 //
-// 测试 30 个指标：
+// 测试 33 个指标：
 //   v2 commit 1-3（5）：MA20 / EMA12 / RSI14 / MACD 12-26-9 / BOLL 20-2
 //   v3 第 1 批 commit 1-3（3）：KDJ 9-3-3 / CCI 20 / ATR 14
 //   v3 第 2 批 commit 1-3（4）：OBV / WR 14 / ADX 14 / DMI 14（DMI 复用 ADX state · 验证零开销复用）
@@ -15,6 +15,7 @@
 //   v3 第 9 批（2）：PVT（量价累积式同 OBV）/ Donchian 20（HHV/LLV 双 ring · 同 KDJ 模式）
 //   v3 第 10 批（3）：KC 20-10-2（内嵌 EMA + ATR）/ StdDev 20（BOLL 简化）/ Envelopes 20-2.5（MA 复合 + 百分比偏移）
 //   v3 第 11 批（2）：PriceChannel 20（Donchian 单 ring · close 版）/ HV 20-252（log 收益 + ring StdDev + annual scaling）
+//   v3 第 12 批（3）：MFI 14（TP + 双 ring up/dn · 同 CMO 思路）/ ADL（累积式同 OBV/PVT · 无周期）/ VOSC 12-26（内嵌 2 EMA · 处理 volume）
 // 全量 = 每批调 calculate(kline: 1000K) 一次
 // 增量 = 一次 makeIncrementalState(空 history) + 1000 次 stepIncremental
 //
@@ -371,6 +372,35 @@ benchmark("HV(20,252)") {
     guard var state = try? HV.makeIncrementalState(kline: emptyHistory, params: [20, 252]) else { return }
     for bar in bars {
         _ = HV.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+// MARK: - WP-41 v3 第 12 批 · MFI / ADL / VOSC（量价类 5/5 100% 收官）
+
+benchmark("MFI(14)") {
+    _ = try? MFI.calculate(kline: series, params: [14])
+} incremental: {
+    guard var state = try? MFI.makeIncrementalState(kline: emptyHistory, params: [14]) else { return }
+    for bar in bars {
+        _ = MFI.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("ADL") {
+    _ = try? ADL.calculate(kline: series, params: [])
+} incremental: {
+    guard var state = try? ADL.makeIncrementalState(kline: emptyHistory, params: []) else { return }
+    for bar in bars {
+        _ = ADL.stepIncremental(state: &state, newBar: bar)
+    }
+}
+
+benchmark("VOSC(12,26)") {
+    _ = try? VOSC.calculate(kline: series, params: [12, 26])
+} incremental: {
+    guard var state = try? VOSC.makeIncrementalState(kline: emptyHistory, params: [12, 26]) else { return }
+    for bar in bars {
+        _ = VOSC.stepIncremental(state: &state, newBar: bar)
     }
 }
 

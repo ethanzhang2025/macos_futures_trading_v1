@@ -1876,6 +1876,177 @@ struct HVIncrementalTests {
     }
 }
 
+// MARK: - WP-41 v3 第 12 批 · MFI 增量 API（TP + 双 ring up/dn money flow · 同 CMO 双 ring 思路 + TP/volume 转换层）
+
+@Suite("WP-41 v3 第 12 批 · MFI 增量 API")
+struct MFIIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（period=14）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try MFI.calculate(kline: series, params: [14])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try MFI.makeIncrementalState(kline: history, params: [14])
+
+        for i in historyCount..<bars.count {
+            let row = MFI.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "MFI[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 第 1 根 posMF=negMF=0（与 calculate 一致 · 入 ring 参与 sum）· count > period 守卫等价 calculate i in n..<count")
+    func incrementalNoHistory() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try MFI.makeIncrementalState(kline: empty, params: [10])
+
+        // 前 period（i=0..9）全 nil（count > period 守卫 · 即 count >= 11 才输出）
+        for i in 0..<10 {
+            let row = MFI.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil, "MFI[\(i)] 应 nil（warm-up · count<=period）")
+        }
+        let series = makeSeries(from: bars)
+        let full = try MFI.calculate(kline: series, params: [10])
+        // 第 period+1 步起（i=10）匹配全量
+        for i in 10..<bars.count {
+            let row = MFI.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "MFI[\(i)]")
+        }
+    }
+
+    @Test("参数缺失 / period<1 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try MFI.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try MFI.makeIncrementalState(kline: empty, params: [0])
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 12 批 · ADL 增量 API（累积式 · 同 OBV/PVT 模式 · 无周期）
+
+@Suite("WP-41 v3 第 12 批 · ADL 增量 API")
+struct ADLIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（无周期）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try ADL.calculate(kline: series, params: [])
+        let fullValues = full[0].values
+
+        let historyCount = 30
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try ADL.makeIncrementalState(kline: history, params: [])
+
+        for i in historyCount..<bars.count {
+            let row = ADL.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "ADL[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 第 1 根直接输出（hl > 0 时累加）· 全程匹配全量")
+    func incrementalNoHistory() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try ADL.makeIncrementalState(kline: empty, params: [])
+
+        let series = makeSeries(from: bars)
+        let full = try ADL.calculate(kline: series, params: [])
+        for i in 0..<bars.count {
+            let row = ADL.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "ADL[\(i)]")
+        }
+    }
+
+    @Test("hl == 0（一字板）→ acc 不变（与 calculate if hl > 0 守卫一致）")
+    func incrementalFlatBarKeepsAcc() throws {
+        let baseDate = Date(timeIntervalSinceReferenceDate: 0)
+        // 构造 3 根：第 1 根正常 / 第 2 根一字板（high == low）/ 第 3 根正常
+        let bar1 = KLine(instrumentID: "T", period: .minute1, openTime: baseDate, open: 99, high: 102, low: 98, close: 100, volume: 100, openInterest: 0, turnover: 0)
+        let barFlat = KLine(instrumentID: "T", period: .minute1, openTime: baseDate.addingTimeInterval(60), open: 100, high: 100, low: 100, close: 100, volume: 50, openInterest: 0, turnover: 0)
+        let bar3 = KLine(instrumentID: "T", period: .minute1, openTime: baseDate.addingTimeInterval(120), open: 100, high: 103, low: 99, close: 101, volume: 80, openInterest: 0, turnover: 0)
+        let bars = [bar1, barFlat, bar3]
+        let series = makeSeries(from: bars)
+        let full = try ADL.calculate(kline: series, params: [])
+
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try ADL.makeIncrementalState(kline: empty, params: [])
+        for i in 0..<bars.count {
+            let row = ADL.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "ADL[\(i)] 一字板 acc 不变")
+        }
+    }
+}
+
+// MARK: - WP-41 v3 第 12 批 · VOSC 增量 API（内嵌 2 EMA · 处理 volume · 同 DEMA/TEMA 复合 EMA 模式）
+
+@Suite("WP-41 v3 第 12 批 · VOSC 增量 API")
+struct VOSCIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量精确一致（short=12 long=26）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 80)
+        let series = makeSeries(from: bars)
+        let full = try VOSC.calculate(kline: series, params: [12, 26])
+        let fullValues = full[0].values
+
+        let historyCount = 40
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try VOSC.makeIncrementalState(kline: history, params: [12, 26])
+
+        for i in historyCount..<bars.count {
+            let row = VOSC.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == fullValues[i],
+                    "VOSC[\(i)]: incr=\(String(describing: row[0])) full=\(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · short EMA warm-up < long EMA warm-up · long warm-up 满后才输出 · 全程匹配全量")
+    func incrementalWarmup() throws {
+        let bars = makeBars(count: 40)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try VOSC.makeIncrementalState(kline: empty, params: [5, 10])
+
+        let series = makeSeries(from: bars)
+        let full = try VOSC.calculate(kline: series, params: [5, 10])
+        for i in 0..<bars.count {
+            let row = VOSC.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "VOSC[\(i)]")
+        }
+        // 前 long-1 步全 nil（i=0..8 · long EMA 第 10 根才有值）
+        #expect(full[0].values[8] == nil)
+        // 第 long 步起非 nil（i=9 起）
+        #expect(full[0].values[9] != nil)
+    }
+
+    @Test("参数错误 / long ≤ short / 缺参 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try VOSC.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try VOSC.makeIncrementalState(kline: empty, params: [12])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try VOSC.makeIncrementalState(kline: empty, params: [12, 12])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try VOSC.makeIncrementalState(kline: empty, params: [26, 12])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

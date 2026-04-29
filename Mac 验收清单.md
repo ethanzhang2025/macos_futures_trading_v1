@@ -695,6 +695,43 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## IndicatorCore 增量 API v3 第 12 批（MFI + ADL + VOSC · 33 指标 · Volume.swift 5/5 100% 收官 🎉）
+
+### MFI 增量（TP + 双 ring up/dn money flow · 同 CMO 双 ring 思路 + TP/volume 转换层）
+- [ ] MFI 与全量精确一致（period=14 · 80 K · history 30）
+- [ ] history 空 · 第 1 根 prevTP=nil → posMF=negMF=0（与 calculate posMF[0]=0 一致 · 入 ring 参与 sum）
+- [ ] count 单调递增（不封顶 · 与 BOLL/StdDev 不同）· count > period 守卫跳首窗口（calculate i in n..<count）
+- [ ] negSum == 0 时输出 100（与 calculate sn==0 一致）· 否则 round8(100 - 100/(1+mr))
+- [ ] ring 已满时减旧值（覆盖前）· 未满时旧位置初值 0 · 不需扣
+- [ ] 参数缺失 / period<1 抛错
+- [ ] benchmark MFI(14) 满批 ~1.3× 加速（双 ring sliding sum O(1) · 与全量 slidingSum O(N²) 同等量级）
+
+### ADL 增量（累积式 · 同 OBV/PVT 模式 · 无周期 · 无 warm-up）
+- [ ] ADL 与全量精确一致（无参数 · 80 K · history 30）
+- [ ] history 空 · 第 1 根直接输出（hl > 0 时累加 · 与 calculate `for i in 0..<count` 从 i=0 开始一致）
+- [ ] hl == 0（H==L · 一字板）→ acc 不变（与 calculate if hl > 0 守卫一致）
+- [ ] mfm = ((C-L)-(H-C))/hl · acc += mfm * volume · 输出 round8(acc)
+- [ ] benchmark ADL 满批 ~0.9× 加速（极简累积式 · 全量本身已极快 · 同 OBV/PVT）
+
+### VOSC 增量（内嵌 2 EMA · 处理 volume · 同 DEMA/TEMA 复合 EMA 模式）
+- [ ] VOSC 与全量精确一致（short=12 long=26 · 80 K · history 40）
+- [ ] history 空 · short EMA warm-up < long EMA warm-up · long warm-up 满后才输出
+- [ ] EMA.advance(close: Decimal(volume)) 接口处理 volume（不通过 EMA.makeIncrementalState · 避开 EMA 用 closes 字段）
+- [ ] EMA.advance 已 round8 · 直接用作 (s-l)/l * 100 · 输出 round8（与 calculate Kernels.ema 输出一致）
+- [ ] 参数错误 / long ≤ short / 缺参 抛错
+- [ ] benchmark VOSC(12,26) 满批 ~1.2× 加速（2 EMA O(1) · 与全量 O(N) 等级 · 加速比有限同 KC/DEMA）
+
+### 33 指标增量基础（Volume.swift 4/6 进度 · 量价类扩到 5 个）
+- [ ] benchmark 完整输出 33 行
+- [ ] 增量 API 覆盖率：**33/56 = 58.9%**（IndicatorCore 过半 + 8.9%）
+- [ ] **Volume.swift 4/6 增量化**（MFI / ADL / VOSC / PVT 已增量 · CMF / VR 留第 13 批 · Volume 数据 trivial 不需）
+- [ ] 量价类增量 5（含 OBV · 文件外）：OBV / PVT / **MFI / ADL / VOSC**（CMF / VR 留第 13 批）
+- [ ] 趋势类增量 9：MA / EMA / WMA / DEMA / TEMA / HMA / ADX / DMI / VWAP
+- [ ] 震荡类增量 11：RSI / KDJ / CCI / MACD / WR / Stochastic / TRIX / PSY / CMO / ROC / BIAS
+- [ ] 波动率类增量 8：BOLL / ATR / Donchian / KC / StdDev / Envelopes / PriceChannel / HV
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

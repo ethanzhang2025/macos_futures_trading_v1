@@ -730,7 +730,7 @@ struct ChartContentView: View {
         }
     }
 
-    /// 主图区（K 线 + indicators + HUD · gesture 挂这里）
+    /// 主图区（K 线 + 网格 + indicators + HUD · gesture 挂这里）
     var chartMainArea: some View {
         ZStack(alignment: .topLeading) {
             KLineMetalView(
@@ -738,6 +738,8 @@ struct ChartContentView: View {
                 input: KLineRenderInput(bars: bars, indicators: indicators, viewport: viewport)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 视觉迭代：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐
+            KLineGridView()
             hud
         }
         .simultaneousGesture(panGesture)

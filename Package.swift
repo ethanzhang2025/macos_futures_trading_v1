@@ -103,7 +103,7 @@ let package = Package(
         // 后续 WP 接入：WP-43 自选 UI / WP-44 多窗口 / WP-90 订阅 / M5 StoreCore 注入
         .executableTarget(
             name: "MainApp",
-            dependencies: ["Shared", "DataCore", "ChartCore", "IndicatorCore", "ReplayCore", "JournalCore", "AlertCore"],
+            dependencies: ["Shared", "DataCore", "ChartCore", "IndicatorCore", "ReplayCore", "JournalCore", "AlertCore", "StoreCore"],
             path: "Sources/MainApp"
         ),
 

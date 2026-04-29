@@ -7,7 +7,7 @@
 //      · JSON 导入/导出（NSSavePanel + NSOpenPanel · 整本 WorkspaceBook Codable · sortedKeys 稳定）
 //      · 模板预览图（sidebar 行右侧 mini layout · 直接渲染 windows.frame · 32×20px · 同 ApplyGridSheet 思路）
 //
-// 留待 M5：StoreManager 注入 SQLiteWorkspaceBookStore · 替换 Mock 真持久化
+// M5 持久化已接入：StoreManager 注入 SQLiteWorkspaceBookStore · .task 异步 load · .onChange 异步 save · store 不可用时 fallback Mock
 // 留待 M5：多窗口同时渲染（WP-44 + WP-40）+ CGRect 桥接 + 接收 .workspaceTemplateActivated
 // 留待 A12 (M7-M9)：CloudKit 同步（CKContainer/CKSubscription/冲突合并）
 
@@ -18,6 +18,7 @@ import AppKit
 import Foundation
 import UniformTypeIdentifiers
 import Shared
+import StoreCore
 
 // MARK: - Sheet 状态
 
@@ -53,6 +54,11 @@ struct WorkspaceWindow: View {
     @State private var pendingImportedBook: WorkspaceBook?
     @State private var importErrorMessage: String?
 
+    /// M5 持久化：load 完成前 isLoaded=false · 期间 book mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
+    @State private var isLoaded: Bool = false
+
+    @Environment(\.storeManager) private var storeManager
+
     var body: some View {
         NavigationSplitView {
             sidebar
@@ -62,10 +68,22 @@ struct WorkspaceWindow: View {
         }
         .frame(minWidth: 760, idealWidth: 920, minHeight: 520, idealHeight: 640)
         .animation(.easeInOut(duration: 0.22), value: book)
-        .onAppear {
+        .task {
+            // M5 启动加载：store 可用时尝试 load 真数据 · 失败 / 空库时保留 Mock · 加载完成后允许 onChange 自动 save
+            // try? await load() 嵌套返回 WorkspaceBook?? · 用 ?? nil flatten 成 WorkspaceBook? 一次解构即可
+            if let store = storeManager?.workspaceBook,
+               let loaded = (try? await store.load()) ?? nil {
+                book = loaded
+            }
+            isLoaded = true
             if selectedTemplateID == nil {
                 selectedTemplateID = book.activeTemplateID ?? book.templates.first?.id
             }
+        }
+        .onChange(of: book) { newValue in
+            // M5 自动持久化：每次 book 变化异步 save · isLoaded 守卫避免初始 Mock 误写覆盖真数据
+            guard isLoaded, let store = storeManager?.workspaceBook else { return }
+            Task { try? await store.save(newValue) }
         }
         .sheet(item: $sheetState) { state in
             switch state {

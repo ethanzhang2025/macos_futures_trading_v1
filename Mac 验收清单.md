@@ -876,6 +876,44 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
+## M5 持久化集中接入 SQLite · 第 1 批（Watchlist + Workspace · 切机后端到端验证）
+
+### 启动 + 路径
+- [ ] Mac 启动 App → `~/Library/Application Support/FuturesTerminal/db/` 自动创建
+- [ ] 6 个 .sqlite 文件存在：analytics / kline_cache / journal / alert_history / watchlist / workspace
+- [ ] StoreManager init 失败时 storeManager=nil · App 仍能启动 · Window 自动 fallback Mock（容错）
+
+### Watchlist 持久化（⌘L）
+- [ ] 首次启动 · watchlist.sqlite 空 · WatchlistWindow 显示 Mock 默认 3 组 9 合约
+- [ ] 添加分组 · contextMenu 重命名 · 添加合约 · 拖拽排序 · 全部即时 save 到 SQLite
+- [ ] 关闭 App · 重启 → 上次的修改持久化保留（不再回到 Mock）
+- [ ] 删除分组 · 重启后真删除（不再出现）
+
+### Workspace 持久化（⌘K）
+- [ ] 首次启动 · workspace.sqlite 空 · WorkspaceWindow 显示 Mock 默认 4 模板
+- [ ] CRUD 模板 · 切换激活 · 网格预设 · 编辑 windows · 快捷键编辑器 · JSON 导入/导出 · 拖拽排序 · 全部即时 save
+- [ ] 关闭 App · 重启 → 上次的所有修改持久化保留
+- [ ] activeTemplateID 持久化（重启后激活态保留）
+- [ ] 快捷键持久化（⌘⇧1 / ⌘⇧2 等绑定保留）
+
+### isLoaded 守卫验证
+- [ ] 启动瞬间 Mock book 显示 · .task load 完成后切到真数据（首启 .task load 返回 nil → 保留 Mock）
+- [ ] isLoaded=true 之后才 onChange 触发 save · 避免 Mock 误写覆盖磁盘真数据
+- [ ] 首启情况：Mock 显示 → 用户首次修改 → save 到磁盘（覆盖空库）
+
+### 性能 + 兼容性
+- [ ] Watchlist mutation 后 save 异步执行（不阻塞 UI · Task 内 await）
+- [ ] Workspace mutation 后 save 异步执行
+- [ ] swift test 790/197 全绿（StoreManagerTests / SQLiteWatchlistBookStoreTests / SQLiteWorkspaceBookStoreTests 都绿）
+
+### 留待第 2-N 批（持续推进）
+- [ ] JournalWindow 接 SQLiteJournalStore（trades + journals · 1 天）
+- [ ] AlertWindow 接 SQLiteAlertHistoryStore（事件历史 + AlertEvaluator 接入 · 0.5-1 天）
+- [ ] ChartScene 接 SQLiteKLineCacheStore（K 线缓存 · 0.5 天）
+- [ ] AnalyticsEventStore 埋点落库（0.5 天）
+
+---
+
 ## 工作区模板 ⌘K（WP-55 UI · 4 commit · 全部已交付 🎉）
 
 ### commit 1（d1ff2f5 · ⌘K 起步 · NavigationSplitView + 4 Kind + Mock 4 模板）

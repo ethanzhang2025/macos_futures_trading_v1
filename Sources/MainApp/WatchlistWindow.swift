@@ -12,7 +12,7 @@
 // ChartScene.swift commit 4 配套改动：body 加 .onReceive(.watchlistInstrumentSelected)
 //   → 命中 supportedContracts → currentInstrumentID = id（task(id:) 自动重启 pipeline）
 //
-// 留待 M5：StoreManager 注入 SQLiteWatchlistBookStore · 替换 Mock 真持久化数据
+// M5 持久化已接入：StoreManager 注入 SQLiteWatchlistBookStore · .task 异步 load · .onChange 异步 save · store 不可用时 fallback Mock
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -20,6 +20,7 @@ import SwiftUI
 import Foundation
 import UniformTypeIdentifiers
 import Shared
+import StoreCore
 
 // MARK: - Sheet 状态
 
@@ -58,7 +59,11 @@ struct WatchlistWindow: View {
     @State private var hoverTarget: HoverTarget?
     @State private var unsupportedInstrumentAlert: String?
 
+    /// M5 持久化：load 完成前 isLoaded=false · 期间 book mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
+    @State private var isLoaded: Bool = false
+
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.storeManager) private var storeManager
 
     var body: some View {
         NavigationSplitView {
@@ -69,10 +74,22 @@ struct WatchlistWindow: View {
         }
         .frame(minWidth: 720, idealWidth: 880, minHeight: 480, idealHeight: 600)
         .animation(.easeInOut(duration: 0.22), value: book)
-        .onAppear {
+        .task {
+            // M5 启动加载：store 可用时尝试 load 真数据 · 失败 / 空库时保留 Mock · 加载完成后允许 onChange 自动 save
+            // try? await load() 嵌套返回 WatchlistBook?? · 用 ?? nil flatten 成 WatchlistBook? 一次解构即可
+            if let store = storeManager?.watchlistBook,
+               let loaded = (try? await store.load()) ?? nil {
+                book = loaded
+            }
+            isLoaded = true
             if selectedGroupID == nil {
                 selectedGroupID = book.groups.first?.id
             }
+        }
+        .onChange(of: book) { newValue in
+            // M5 自动持久化：每次 book 变化异步 save · isLoaded 守卫避免初始 Mock 误写覆盖真数据
+            guard isLoaded, let store = storeManager?.watchlistBook else { return }
+            Task { try? await store.save(newValue) }
         }
         .onChange(of: selectedGroupID) { _ in
             selectedInstruments.removeAll()

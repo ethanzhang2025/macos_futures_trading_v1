@@ -10,15 +10,37 @@
 //   - WP-43 自选 UI → 替换 WatchlistContentView 真实数据源
 //   - WP-44 多周期 + 多窗口 UI → CommandMenu 加周期切换 Cmd+1~9
 //   - WP-90 上线决策 → Settings 真实订阅 / 账号 / 偏好
-//   - M5 集成（StoreCore）→ App.init() 一次 init 6 store + 注入到 Scene
+//   - M5 集成（StoreCore）→ App.init() 一次 init 6 store + 注入到 Scene ✅ 已交付（此文件）
 
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
 import AppKit
+import StoreCore
+
+// MARK: - StoreManager 环境注入（M5 集中接入持久化）
+
+private struct StoreManagerKey: EnvironmentKey {
+    static let defaultValue: StoreManager? = nil
+}
+
+extension EnvironmentValues {
+    /// M5 持久化：StoreManager 在 App.init 一次性创建 · 通过 .environment 注入到所有 Scene
+    /// nil = 未启动成功（路径写入失败 / SQLite 错误等）· Window 自动 fallback 到 Mock 数据
+    var storeManager: StoreManager? {
+        get { self[StoreManagerKey.self] }
+        set { self[StoreManagerKey.self] = newValue }
+    }
+}
 
 @main
 struct FuturesTerminalApp: App {
+
+    /// M5 集中接入：启动时一次性 init 6 store · 通过 .environment 注入到所有 Scene
+    /// 失败（路径写入失败 / SQLite 错误 / 加密参数错）→ storeManager = nil · Window fallback 到 Mock
+    /// 路径：~/Library/Application Support/FuturesTerminal/db/（macOS 沙盒友好 · M6 .app bundle 后路径不变）
+    /// passphrase = nil（明文）· M5 上线前评估是否启用 SQLCipher（视用户设置 / 合规要求）
+    private let storeManager: StoreManager?
 
     init() {
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
@@ -27,12 +49,21 @@ struct FuturesTerminalApp: App {
         // M6 打包 .app bundle 后此调用变成 no-op（Bundle Info.plist 已声明）。
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
+        self.storeManager = Self.bootStoreManager()
+    }
+
+    /// 启动 StoreManager · 失败保留 nil · UI 走 Mock fallback（不影响 App 启动）
+    private static func bootStoreManager() -> StoreManager? {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let root = base.appendingPathComponent("FuturesTerminal/db")
+        return try? StoreManager(rootDirectory: root, passphrase: nil)
     }
 
     var body: some Scene {
         // 主图表窗口（默认启动 + Cmd+N 新建多个 · 每窗口独立 renderer / viewport）
         WindowGroup("K 线图表", id: "chart") {
-            ChartScene()
+            ChartScene().environment(\.storeManager, storeManager)
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -50,29 +81,29 @@ struct FuturesTerminalApp: App {
             }
         }
 
-        // 自选合约窗口（菜单触发打开 · 单实例 · WP-43 UI commit 1/4 起接 WatchlistWindow）
+        // 自选合约窗口（菜单触发打开 · 单实例 · WP-43 UI · M5 接 SQLiteWatchlistBookStore）
         WindowGroup("自选合约", id: "watchlist") {
-            WatchlistWindow()
+            WatchlistWindow().environment(\.storeManager, storeManager)
         }
 
         // 复盘工作台（⌘R · 8 图独立窗口 · 与 K 线主图区分离）
         WindowGroup("复盘", id: "review") {
-            ReviewWindow()
+            ReviewWindow().environment(\.storeManager, storeManager)
         }
 
         // 预警面板（⌘B · Bell · 独立窗口）
         WindowGroup("预警", id: "alert") {
-            AlertWindow()
+            AlertWindow().environment(\.storeManager, storeManager)
         }
 
-        // 交易日志（⌘J · Journal · 独立窗口 · WP-53 UI commit 1/4 起）
+        // 交易日志（⌘J · Journal · 独立窗口 · WP-53 UI · M5 接 SQLiteJournalStore）
         WindowGroup("交易日志", id: "journal") {
-            JournalWindow()
+            JournalWindow().environment(\.storeManager, storeManager)
         }
 
-        // 工作区模板（⌘K · workspace · 独立窗口 · WP-55 UI commit 1/4 起）
+        // 工作区模板（⌘K · workspace · 独立窗口 · WP-55 UI · M5 接 SQLiteWorkspaceBookStore）
         WindowGroup("工作区模板", id: "workspace") {
-            WorkspaceWindow()
+            WorkspaceWindow().environment(\.storeManager, storeManager)
         }
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）

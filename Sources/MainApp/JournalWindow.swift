@@ -21,6 +21,7 @@ import AppKit
 import UniformTypeIdentifiers
 import JournalCore
 import Shared
+import StoreCore
 
 // MARK: - Tab 切换
 
@@ -102,6 +103,11 @@ struct JournalWindow: View {
     @State private var searchText: String = ""
     @State private var journalViewMode: JournalViewMode = .list
 
+    /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
+    @State private var isLoaded: Bool = false
+
+    @Environment(\.storeManager) private var storeManager
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -114,10 +120,39 @@ struct JournalWindow: View {
         }
         .frame(minWidth: 880, idealWidth: 1100, minHeight: 520, idealHeight: 720)
         .task {
+            // M5 持久化：load 真实 trades + journals · 失败 / 空库 fallback Mock · 加载完成后允许 onChange 自动 save
+            if let store = storeManager?.journal {
+                let loadedTrades = (try? await store.loadAllTrades()) ?? []
+                let loadedJournals = (try? await store.loadAllJournals()) ?? []
+                if !loadedTrades.isEmpty || !loadedJournals.isEmpty {
+                    trades = loadedTrades
+                    journals = loadedJournals
+                    isLoaded = true
+                    return
+                }
+            }
+            // fallback Mock（首启 / store 不可用 / 库空时）
             if trades.isEmpty {
                 let mock = MockJournalData.generate()
                 trades = mock.trades
                 journals = mock.journals
+            }
+            isLoaded = true
+        }
+        .onChange(of: trades) { newValue in
+            // M5 自动持久化：trades UPSERT 全量批量（saveTrades 内 INSERT OR REPLACE · 重复 id 更新）
+            // 删除点（如果有）需在 mutation 处显式调 store.deleteTrade(id:) · onChange 不能 DELETE
+            guard isLoaded, let store = storeManager?.journal, !newValue.isEmpty else { return }
+            Task { try? await store.saveTrades(newValue) }
+        }
+        .onChange(of: journals) { newValue in
+            // M5 自动持久化：journals 逐个 saveJournal（INSERT OR REPLACE · 协议无批量 saveJournals）
+            // 删除已通过 deleteJournal(_:) 内显式 store.deleteJournal(id:) 处理（line 584）
+            guard isLoaded, let store = storeManager?.journal else { return }
+            Task {
+                for j in newValue {
+                    try? await store.saveJournal(j)
+                }
             }
         }
         .sheet(isPresented: importSheetBinding) {
@@ -585,6 +620,10 @@ struct JournalWindow: View {
         journals.removeAll { $0.id == journal.id }
         selectedJournalIDs.remove(journal.id)
         pendingDeleteJournal = nil
+        // M5 持久化：显式 deleteJournal · onChange 只能 UPSERT 不能 DELETE · 必须在删除点单独触发
+        if isLoaded, let store = storeManager?.journal {
+            Task { try? await store.deleteJournal(id: journal.id) }
+        }
     }
 
     private func presentAutoGenerate() {

@@ -913,8 +913,19 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] evaluator 接入前 history 库一直空 · 显示和 Mock 一致
 - [ ] evaluator 接入后真实触发的 entry 写入 store · 重启后保留
 
-### 留待第 3-N 批（持续推进）
-- [ ] JournalWindow 接 SQLiteJournalStore（trades + journals 双轨 · 1 天 · 复杂度高 · 删除需显式 deleteTrade/deleteJournal）
+### M5 持久化第 3 批 · Journal 集成（trades + journals UPSERT + 显式 delete · 1 小时实际工时）
+- [ ] JournalWindow 启动 .task 优先 load store.loadAllTrades + loadAllJournals
+- [ ] 库内任一类非空（trades 或 journals）即用真实数据 · 都空才 fallback MockJournalData
+- [ ] onChange(of: trades) → store.saveTrades(trades) 全量批量 UPSERT（INSERT OR REPLACE）
+- [ ] onChange(of: journals) → for j in newValue: store.saveJournal(j) 逐个 UPSERT（协议无批量）
+- [ ] deleteJournal 显式调 store.deleteJournal(id:)（onChange 只能 UPSERT 不能 DELETE）
+- [ ] trades 当前无显式 delete 路径（无删除 UI · import 是 append 累加）· 后续若加删除需补 store.deleteTrade
+- [ ] isLoaded 守卫保护 · 防 Mock 误写覆盖磁盘真数据
+- [ ] 重启 App → 上次的 trades + journals 持久化保留（不再回到 Mock）
+- [ ] 删除日志重启后真删（不再出现）
+- [ ] CSV 导入 → trades 累加 → 自动 save 持久化
+
+### 留待第 4-N 批（持续推进）
 - [ ] ChartScene 接 SQLiteKLineCacheStore（K 线缓存 · 0.5-1 天 · 需懂 loadAndStream/loadReplay 数据流）
 - [ ] AnalyticsEventStore 埋点落库（0.5 天 · 项目可能尚无埋点代码 · 优先级最低）
 - [ ] AlertEvaluator 接入 + alerts 数组持久化（需补 AlertConfigStore · 设计未定）

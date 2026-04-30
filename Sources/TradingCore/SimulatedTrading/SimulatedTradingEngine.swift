@@ -49,16 +49,21 @@ public actor SimulatedTradingEngine {
     // MARK: - 初始化
 
     public init(initialBalance: Decimal, contracts: [String: Contract] = [:], now: Date = Date()) {
-        self.account = Account(
-            preBalance: initialBalance,
-            deposit: 0, withdraw: 0,
-            closePnL: 0, positionPnL: 0,
-            commission: 0, margin: 0
-        )
+        self.account = Self.freshAccount(initialBalance: initialBalance)
         self.contracts = contracts
         // v15.5 起始 baseline：曲线起点 = 初始权益 · 后续 accountChanged 追加
         self.equityCurve.append(
             EquityCurvePoint(timestamp: now, balance: initialBalance, positionPnL: 0)
+        )
+    }
+
+    /// 全零字段 + 给定 preBalance 的初始账户（init / reset 共用）
+    private static func freshAccount(initialBalance: Decimal) -> Account {
+        Account(
+            preBalance: initialBalance,
+            deposit: 0, withdraw: 0,
+            closePnL: 0, positionPnL: 0,
+            commission: 0, margin: 0
         )
     }
 
@@ -96,6 +101,50 @@ public actor SimulatedTradingEngine {
 
     /// v15.5 资金曲线快照（已按时间序 · 起始 baseline 永远是 index 0）
     public func equityCurveSnapshot() -> [EquityCurvePoint] { equityCurve }
+
+    // MARK: - 持久化（v15.6 · 完整状态快照导出 / 导入）
+
+    /// 导出当前完整状态用于持久化
+    /// orders / positions 排序固定（按 orderRef / positionKey）· 跨进程 snapshot 可 diff
+    public func snapshot() -> SimulatedTradingSnapshot {
+        SimulatedTradingSnapshot(
+            account: account,
+            orders: orders.values.sorted { $0.orderRef < $1.orderRef },
+            trades: trades,
+            positions: positions.values.sorted {
+                Self.positionKey(instrumentID: $0.instrumentID, direction: $0.direction)
+                    < Self.positionKey(instrumentID: $1.instrumentID, direction: $1.direction)
+            },
+            equityCurve: equityCurve,
+            orderRefCounter: orderRefCounter,
+            tradeIDCounter: tradeIDCounter
+        )
+    }
+
+    /// 从快照恢复 · 完整覆盖当前状态（warning：丢失订阅者 · UI 应在 restore 后重新 observe）
+    /// 不广播任何事件 · caller 自己刷新 UI（避免恢复期间 UI 收 N 条历史 events）
+    public func restore(_ snap: SimulatedTradingSnapshot) {
+        account = snap.account
+        orders = Dictionary(uniqueKeysWithValues: snap.orders.map { ($0.orderRef, $0) })
+        trades = snap.trades
+        positions = Dictionary(uniqueKeysWithValues: snap.positions.map {
+            (Self.positionKey(instrumentID: $0.instrumentID, direction: $0.direction), $0)
+        })
+        equityCurve = snap.equityCurve
+        orderRefCounter = snap.orderRefCounter
+        tradeIDCounter = snap.tradeIDCounter
+    }
+
+    /// 重置为初始状态（保留已注册合约 · 重新建 baseline）
+    public func reset(initialBalance: Decimal, now: Date = Date()) {
+        account = Self.freshAccount(initialBalance: initialBalance)
+        orders.removeAll()
+        trades.removeAll()
+        positions.removeAll()
+        equityCurve = [EquityCurvePoint(timestamp: now, balance: initialBalance, positionPnL: 0)]
+        orderRefCounter = 0
+        tradeIDCounter = 0
+    }
 
     // MARK: - 事件订阅
 

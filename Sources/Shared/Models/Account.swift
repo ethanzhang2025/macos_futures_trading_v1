@@ -1,7 +1,7 @@
 import Foundation
 
 /// 账户资金信息
-public struct Account: Sendable {
+public struct Account: Sendable, Codable, Equatable {
     /// 静态权益（上日结算后）
     public var preBalance: Decimal
     /// 当日入金

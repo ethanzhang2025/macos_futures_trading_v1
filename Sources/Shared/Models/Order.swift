@@ -39,7 +39,7 @@ public enum OrderPriceType: String, Sendable {
 }
 
 /// 委托状态
-public enum OrderStatus: Sendable {
+public enum OrderStatus: String, Sendable, Codable {
     case pending        // 待报
     case submitted      // 已报
     case partFilled     // 部分成交
@@ -92,7 +92,7 @@ public struct OrderRequest: Sendable {
 }
 
 /// 委托记录
-public struct OrderRecord: Sendable {
+public struct OrderRecord: Sendable, Codable, Equatable {
     public let orderRef: String
     public let instrumentID: String
     public let direction: Direction
@@ -132,7 +132,7 @@ public struct OrderRecord: Sendable {
 }
 
 /// 成交记录
-public struct TradeRecord: Sendable {
+public struct TradeRecord: Sendable, Codable, Equatable {
     public let tradeID: String
     public let orderRef: String
     public let instrumentID: String

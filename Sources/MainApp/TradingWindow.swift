@@ -53,6 +53,8 @@ struct TradingWindow: View {
     /// feedback 的单调递增 token · scheduleClearFeedback 5s 后只清自己那条
     /// 用 token 而非 == 比较 message · 避免短时间内同样内容反馈被误清
     @State private var feedbackToken: UInt = 0
+    /// v15.6 持久化节流 · 1s 间隔最多写盘 1 次（与 ChartScene viewport 同款）
+    @State private var lastSnapshotSaveTime: Date = .distantPast
 
     @Environment(\.simulatedTradingEngine) private var engine
 
@@ -99,6 +101,15 @@ struct TradingWindow: View {
             }
             .buttonStyle(.borderless)
             .help("当日交割单 · 委托 / 成交 / 持仓 三表合一 UTF-8 BOM")
+
+            // v15.6 重置账户（清持久化快照 · 重建 100w 初始）
+            Button {
+                resetAccountWithConfirmation()
+            } label: {
+                Label("重置账户", systemImage: "arrow.counterclockwise.circle")
+            }
+            .buttonStyle(.borderless)
+            .help("清空所有委托/成交/持仓/资金曲线 · 资金恢复 1,000,000")
         }
         .padding(.horizontal, 16)
         .frame(height: 56)
@@ -501,7 +512,24 @@ struct TradingWindow: View {
         observeTask = Task {
             for await _ in await engine.observe() {
                 await refresh()
+                await saveSnapshotIfNeeded()
             }
+        }
+    }
+
+    /// 1s 节流持久化 · 事件 burst 时仅最末一次写盘
+    /// @MainActor 保证 lastSnapshotSaveTime 读写均在 MainActor · 不跨 actor 边界访问 @State
+    @MainActor
+    private func saveSnapshotIfNeeded() async {
+        guard let engine else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastSnapshotSaveTime) >= 1 else { return }
+        lastSnapshotSaveTime = now
+        let snap = await engine.snapshot()
+        // 后台序列化 + UserDefaults set · 5000 trades JSON ~5ms
+        // fire-and-forget · v1 接受 App 退出时最末一次可能丢失（下次启动从倒数第二次恢复）
+        Task.detached(priority: .background) {
+            SimulatedTradingStore.save(snap)
         }
     }
 
@@ -532,6 +560,28 @@ struct TradingWindow: View {
             await MainActor.run {
                 if feedbackToken == myToken { feedback = nil }
             }
+        }
+    }
+
+    // MARK: - 重置账户（v15.6）
+
+    /// 弹 NSAlert 确认 · 用户点"重置"才执行：清快照 + engine.reset + 立即 refresh
+    private func resetAccountWithConfirmation() {
+        let alert = NSAlert()
+        alert.messageText = "重置模拟账户？"
+        alert.informativeText = "将清空所有委托 / 成交 / 持仓 / 资金曲线 · 资金恢复 1,000,000 · 此操作不可撤销。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "重置")
+        alert.addButton(withTitle: "取消")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        Task {
+            guard let engine else { return }
+            await engine.reset(initialBalance: 1_000_000)
+            SimulatedTradingStore.clear()
+            await MainActor.run { lastSnapshotSaveTime = .distantPast }
+            await refresh()
+            showFeedback(.success("已重置 · 资金恢复 1,000,000"))
         }
     }
 

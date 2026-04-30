@@ -125,9 +125,15 @@ struct FuturesTerminalApp: App {
             AlertEvaluator(history: $0.alertHistory, dispatcher: NotificationDispatcher())
         }
         // v15.4 模拟撮合引擎：100w 初始资金 + 4 主力合约注册（async actor 初始化用 Task 异步注册）
+        // v15.6 启动加载持久化快照 · 无快照保留默认初始资金 · 注册合约始终运行（合约不入快照 · 启动 hardcoded）
         let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
         self.simulatedTradingEngine = engine
-        Task { await engine.registerContracts(SimulatedContractDefaults.list) }
+        Task {
+            await engine.registerContracts(SimulatedContractDefaults.list)
+            if let snapshot = SimulatedTradingStore.load() {
+                await engine.restore(snapshot)
+            }
+        }
         // app_launch 异步发 · 失败静默（埋点不阻塞 App 启动）
         if let service = self.analytics {
             Task { _ = try? await service.record(.appLaunch, userID: Self.anonymousUserID) }

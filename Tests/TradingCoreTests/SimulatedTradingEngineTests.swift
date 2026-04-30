@@ -499,3 +499,136 @@ struct EquityCurveTests {
         #expect(count2 == count1)
     }
 }
+
+// MARK: - 8. 持久化快照 snapshot/restore（v15.6）
+
+@Suite("SimulatedTradingEngine · 持久化快照")
+struct SnapshotTests {
+
+    @Test("snapshot · 含 account/orders/trades/positions/equityCurve + counters")
+    func snapshotContents() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContract(makeContract())
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 1))
+        await engine.onTick(makeTick(3500))
+        await engine.onTick(makeTick(3600))   // 浮盈 +1000
+
+        let snap = await engine.snapshot()
+        #expect(snap.account.balance > 0)
+        #expect(snap.orders.count == 1)
+        #expect(snap.trades.count == 1)
+        #expect(snap.positions.count == 1)
+        #expect(snap.equityCurve.count >= 2)
+        #expect(snap.orderRefCounter == 1)
+        #expect(snap.tradeIDCounter == 1)
+    }
+
+    @Test("snapshot Codable JSON 往返")
+    func snapshotCodable() async throws {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContract(makeContract())
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 2))
+        await engine.onTick(makeTick(3500))
+
+        let snap = await engine.snapshot()
+        let data = try JSONEncoder().encode(snap)
+        let decoded = try JSONDecoder().decode(SimulatedTradingSnapshot.self, from: data)
+        #expect(decoded == snap)
+    }
+
+    @Test("restore · 完整恢复 + 后续 onTick 仍正常撮合")
+    func restoreAndContinue() async {
+        let engine1 = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine1.registerContract(makeContract())
+        _ = await engine1.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 1))
+        await engine1.onTick(makeTick(3500))
+        let snap = await engine1.snapshot()
+
+        // 模拟 App 重启 · 新 engine restore
+        let engine2 = SimulatedTradingEngine(initialBalance: 0)
+        await engine2.registerContract(makeContract())   // 合约重新注册
+        await engine2.restore(snap)
+
+        // 持仓 / 账户 / 委托 / 资金曲线全部恢复
+        let pos = await engine2.position(instrumentID: "rb2501", direction: .long)
+        #expect(pos?.volume == 1)
+        let acc = await engine2.currentAccount()
+        #expect(acc.balance == snap.account.balance)
+        let orders = await engine2.allOrders()
+        #expect(orders.count == 1)
+
+        // 后续操作仍正常：平 1 手 @ 3600
+        let (_, rejection) = await engine2.submitOrder(makeCloseOrder(direction: .sell, price: 3600, volume: 1))
+        #expect(rejection == nil)
+        await engine2.onTick(makeTick(3600))
+        let posAfter = await engine2.position(instrumentID: "rb2501", direction: .long)
+        // 平仓后清仓
+        #expect(posAfter == nil)
+    }
+
+    @Test("reset · 清空所有 + 资金恢复 + counter 归零")
+    func resetClears() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContract(makeContract())
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 1))
+        await engine.onTick(makeTick(3500))
+
+        await engine.reset(initialBalance: 1_000_000)
+        let acc = await engine.currentAccount()
+        #expect(acc.balance == 1_000_000)
+        #expect(acc.commission == 0)
+        let orders = await engine.allOrders()
+        #expect(orders.isEmpty)
+        let trades = await engine.allTrades()
+        #expect(trades.isEmpty)
+        let positions = await engine.allPositions()
+        #expect(positions.isEmpty)
+        let curve = await engine.equityCurveSnapshot()
+        #expect(curve.count == 1)   // 仅 baseline
+        #expect(curve.first?.balance == 1_000_000)
+
+        // 重置后 ref counter 归零（下一笔 ref = 00000001）
+        let (ref, _) = await engine.submitOrder(makeOpenOrder())
+        #expect(ref == "00000001")
+    }
+}
+
+// MARK: - 9. SimulatedTradingStore UserDefaults 持久化
+
+@Suite("SimulatedTradingStore · UserDefaults 持久化")
+struct SimulatedTradingStoreTests {
+
+    private func makeDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "SimulatedTradingTest-\(UUID().uuidString)")!
+    }
+
+    @Test("save then load · 反序列化等价")
+    func saveLoadRoundTrip() async {
+        let defaults = makeDefaults()
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContract(makeContract())
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 1))
+        await engine.onTick(makeTick(3500))
+        let snap = await engine.snapshot()
+
+        SimulatedTradingStore.save(snap, defaults: defaults)
+        let loaded = SimulatedTradingStore.load(defaults: defaults)
+        #expect(loaded == snap)
+    }
+
+    @Test("load 空时返回 nil")
+    func loadEmptyReturnsNil() {
+        let defaults = makeDefaults()
+        #expect(SimulatedTradingStore.load(defaults: defaults) == nil)
+    }
+
+    @Test("clear · 后续 load 返回 nil")
+    func clearRemovesData() async {
+        let defaults = makeDefaults()
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        let snap = await engine.snapshot()
+        SimulatedTradingStore.save(snap, defaults: defaults)
+        SimulatedTradingStore.clear(defaults: defaults)
+        #expect(SimulatedTradingStore.load(defaults: defaults) == nil)
+    }
+}

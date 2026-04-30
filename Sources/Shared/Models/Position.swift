@@ -1,7 +1,9 @@
 import Foundation
 
 /// 持仓方向
-public enum PositionDirection: Sendable {
+/// v15.6 加 String raw + Codable（WP-54 持久化）· 旧版本 Position 未持久化 · 无兼容包袱
+/// raw value = case 名（"long" / "short"）· 显示文案见 displayName
+public enum PositionDirection: String, Sendable, Codable {
     case long
     case short
 
@@ -14,7 +16,7 @@ public enum PositionDirection: Sendable {
 }
 
 /// 持仓记录
-public struct Position: Sendable {
+public struct Position: Sendable, Codable, Equatable {
     public let instrumentID: String
     public let direction: PositionDirection
     public var volume: Int

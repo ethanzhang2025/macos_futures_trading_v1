@@ -65,6 +65,13 @@ struct ChartScene: View {
     /// 实时报价的昨结算 · priceTopBar baseline · nil 时 fallback bars.first.close
     @State private var preSettle: Decimal?
 
+    /// v13.0 画线工具状态 · WP-42（数据模型在 v9.0 完成 · 此处为 UI 激活）
+    @State private var drawings: [Drawing] = []
+    @State private var activeDrawingTool: DrawingType?  // nil = 浏览模式 · 非 nil = 当前选中的画线工具
+    @State private var pendingDrawingPoint: DrawingPoint?  // 双点画线的第一点（hover 跟随预览第二点）
+    @State private var selectedDrawingID: UUID?  // 选中的画线（高亮 + Delete 键删除）
+    @State private var isDrawingsLoaded: Bool = false  // 守卫：load 完成前的 drawings = [] 不触发 save
+
     /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
@@ -96,6 +103,13 @@ struct ChartScene: View {
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         .task(id: PipelineKey(mode: chartMode, instrumentID: currentInstrumentID, period: selectedPeriod)) {
             await resetForNewPipeline()
+            // v13.0 WP-42 画线状态切合约/周期重载 · 各 (instrumentID, period) 组合独立持久化
+            isDrawingsLoaded = false
+            drawings = Self.loadDrawings(instrumentID: currentInstrumentID, period: selectedPeriod)
+            pendingDrawingPoint = nil
+            selectedDrawingID = nil
+            activeDrawingTool = nil
+            isDrawingsLoaded = true
             await fetchPreSettle(instrumentID: currentInstrumentID)
             switch chartMode {
             case .live:   await loadAndStream(instrumentID: currentInstrumentID, period: selectedPeriod)
@@ -124,6 +138,12 @@ struct ChartScene: View {
                     properties: ["kind": newValue.rawValue]
                 )
             }
+        }
+        .onChange(of: drawings) { newValue in
+            // v13.0 WP-42 画线持久化（UserDefaults JSON · v1 简化 · v13.1 升级 SQLiteDrawingStore）
+            // isDrawingsLoaded 守卫：避免初始 [] 误覆盖（同 alerts/trades/history 模式）
+            guard isDrawingsLoaded else { return }
+            Self.saveDrawings(newValue, instrumentID: currentInstrumentID, period: selectedPeriod)
         }
         .onChange(of: chartMode) { newValue in
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
@@ -234,6 +254,72 @@ struct ChartScene: View {
         .accessibilityHidden(true)
     }
 
+    // MARK: - 画线持久化（v13.0 v1 · UserDefaults JSON · 按 instrumentID + period 隔离）
+
+    /// 持久化 key（每个 instrumentID + period 组合独立 · 切换时不污染）
+    private static func drawingsKey(instrumentID: String, period: KLinePeriod) -> String {
+        "drawings.\(instrumentID).\(period.rawValue)"
+    }
+
+    /// 加载 drawings（启动 + 切合约/周期时调）· 解码失败 / 无数据返回空数组
+    static func loadDrawings(instrumentID: String, period: KLinePeriod) -> [Drawing] {
+        let key = drawingsKey(instrumentID: instrumentID, period: period)
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([Drawing].self, from: data) else {
+            return []
+        }
+        return decoded
+    }
+
+    /// 保存 drawings（onChange 触发 · 同步写入 UserDefaults · 极快无需 async）
+    static func saveDrawings(_ drawings: [Drawing], instrumentID: String, period: KLinePeriod) {
+        let key = drawingsKey(instrumentID: instrumentID, period: period)
+        if drawings.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else if let data = try? JSONEncoder().encode(drawings) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    // MARK: - 画线工具组（v13.0 · WP-42 UI 激活）
+
+    /// 工具条画线工具按钮组：选择 / 6 种画线 / 清空
+    private var drawingTools: some View {
+        HStack(spacing: 4) {
+            drawingToolButton(icon: "cursorarrow", tool: nil, help: "浏览（取消画线工具）")
+            drawingToolButton(icon: "line.diagonal", tool: .trendLine, help: "趋势线（双点）")
+            drawingToolButton(icon: "minus", tool: .horizontalLine, help: "水平线（一点）")
+            drawingToolButton(icon: "rectangle", tool: .rectangle, help: "矩形（双点对角）")
+            drawingToolButton(icon: "lines.measurement.horizontal", tool: .parallelChannel, help: "平行通道（双点 · 默认 +1.0 偏移）")
+            drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
+            drawingToolButton(icon: "textformat", tool: .text, help: "文字标注（一点）")
+            Button {
+                drawings.removeAll()
+                pendingDrawingPoint = nil
+                selectedDrawingID = nil
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("清空所有画线")
+        }
+    }
+
+    private func drawingToolButton(icon: String, tool: DrawingType?, help: String) -> some View {
+        Button {
+            activeDrawingTool = tool
+            pendingDrawingPoint = nil
+        } label: {
+            Image(systemName: icon)
+                .frame(width: 20, height: 20)
+        }
+        .buttonStyle(.borderless)
+        .padding(2)
+        .background(activeDrawingTool == tool ? Color.accentColor.opacity(0.3) : Color.clear)
+        .cornerRadius(4)
+        .help(help)
+    }
+
     // MARK: - 工具条
 
     private var toolbar: some View {
@@ -275,8 +361,11 @@ struct ChartScene: View {
             .frame(width: 130)
             .labelsHidden()
 
+            Divider().frame(height: 16)
+            drawingTools
+
             Spacer()
-            Text("⌘N 新窗口 · ⌘L 自选 · ⌘, 设置")
+            Text("⌘N 新窗口 · ⌘L 自选")
                 .foregroundColor(.secondary)
         }
         .font(.system(size: 12, design: .monospaced))
@@ -299,6 +388,10 @@ struct ChartScene: View {
                 dataSourceLabel: dataSourceLabel,
                 subIndicatorKind: selectedSubIndicator,
                 preSettle: preSettle,
+                drawings: $drawings,
+                activeDrawingTool: $activeDrawingTool,
+                pendingDrawingPoint: $pendingDrawingPoint,
+                selectedDrawingID: $selectedDrawingID,
                 initialViewport: RenderViewport(
                     startIndex: max(0, bars.count - 120),
                     visibleCount: 120
@@ -725,6 +818,11 @@ struct ChartContentView: View {
     let subIndicatorKind: SubIndicatorKind
     /// v12.1 真昨结算 · priceTopBar baseline · nil 时 fallback bars.first.close（由 ChartScene 父级注入）
     let preSettle: Decimal?
+    /// v13.0 WP-42 画线状态（绑定 ChartScene · 父子双向同步）
+    @Binding var drawings: [Drawing]
+    @Binding var activeDrawingTool: DrawingType?
+    @Binding var pendingDrawingPoint: DrawingPoint?
+    @Binding var selectedDrawingID: UUID?
     @State var viewport: RenderViewport
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
@@ -740,6 +838,10 @@ struct ChartContentView: View {
         dataSourceLabel: String,
         subIndicatorKind: SubIndicatorKind,
         preSettle: Decimal?,
+        drawings: Binding<[Drawing]>,
+        activeDrawingTool: Binding<DrawingType?>,
+        pendingDrawingPoint: Binding<DrawingPoint?>,
+        selectedDrawingID: Binding<UUID?>,
         initialViewport: RenderViewport
     ) {
         self.renderer = renderer
@@ -750,6 +852,10 @@ struct ChartContentView: View {
         self.dataSourceLabel = dataSourceLabel
         self.subIndicatorKind = subIndicatorKind
         self.preSettle = preSettle
+        self._drawings = drawings
+        self._activeDrawingTool = activeDrawingTool
+        self._pendingDrawingPoint = pendingDrawingPoint
+        self._selectedDrawingID = selectedDrawingID
         self._viewport = State(initialValue: initialViewport)
     }
 
@@ -800,7 +906,20 @@ struct ChartContentView: View {
             KLineGridView()
             // 视觉迭代第 2 项：十字光标 + OHLC 浮窗 + 轴边价格/时间浮标（hover 跟随）
             KLineCrosshairView(bars: bars, viewport: viewport, priceRange: currentPriceRange, period: bars.first?.period ?? .minute15)
+            // v13.0 WP-42 画线 overlay 渲染层（在十字光标上 · HUD 下）
+            DrawingsOverlayView(
+                bars: bars,
+                viewport: viewport,
+                priceRange: currentPriceRange,
+                drawings: drawings,
+                selectedID: selectedDrawingID,
+                pendingDrawing: nil
+            )
             hud
+            // v13.0 画线点击捕获层（仅 activeDrawingTool 非 nil 时启用 · 否则点击穿透到主图 gesture）
+            if activeDrawingTool != nil {
+                drawingClickCaptureLayer
+            }
         }
         .overlay(alignment: .topTrailing) {
             // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
@@ -808,6 +927,73 @@ struct ChartContentView: View {
         }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
+    }
+
+    /// 画线点击捕获层（v13.0 · 透明 contentShape · 拦截 onTapGesture · 仅工具激活时存在）
+    private var drawingClickCaptureLayer: some View {
+        GeometryReader { geom in
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    handleDrawingTap(at: location, in: geom.size)
+                }
+        }
+    }
+
+    /// 屏幕坐标 → 数据空间锚点（barIndex + price）
+    private func screenToDataPoint(_ location: CGPoint, in size: CGSize) -> DrawingPoint {
+        let visibleCount = max(1, viewport.visibleCount)
+        let barWidth = size.width / CGFloat(visibleCount)
+        let xOffset = CGFloat(viewport.startOffset)
+        let barIndex = viewport.startIndex + Int((location.x / barWidth) + xOffset)
+        let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+        let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+        let span = max(0.0001, hi - lo)
+        let priceRatio = (size.height - location.y) / size.height
+        let price = lo + Double(priceRatio) * span
+        return DrawingPoint(barIndex: barIndex, price: Decimal(price))
+    }
+
+    /// 处理画线工具激活下的点击：单点画线立即添加 / 双点画线第 1 点设 pending 第 2 点完成
+    private func handleDrawingTap(at location: CGPoint, in size: CGSize) {
+        guard let tool = activeDrawingTool else { return }
+        let point = screenToDataPoint(location, in: size)
+
+        if tool.needsTwoPoints {
+            if let firstPoint = pendingDrawingPoint {
+                // 第二点：完成画线
+                let drawing: Drawing
+                if tool == .parallelChannel {
+                    // 平行通道默认偏移 1.0%（参考 priceRange 跨度的 5%）
+                    let offset = (currentPriceRange.upperBound - currentPriceRange.lowerBound) * Decimal(string: "0.05")!
+                    drawing = Drawing.parallelChannel(from: firstPoint, to: point, offset: offset)
+                } else if tool == .fibonacci {
+                    drawing = Drawing.fibonacci(from: firstPoint, to: point)
+                } else if tool == .rectangle {
+                    drawing = Drawing.rectangle(from: firstPoint, to: point)
+                } else {
+                    drawing = Drawing.trendLine(from: firstPoint, to: point)
+                }
+                drawings.append(drawing)
+                pendingDrawingPoint = nil
+                activeDrawingTool = nil  // 完成后回浏览模式
+            } else {
+                // 第一点：记 pending（第二点击时使用）
+                pendingDrawingPoint = point
+            }
+        } else {
+            // 单点画线：立即完成
+            let drawing: Drawing
+            if tool == .horizontalLine {
+                drawing = Drawing.horizontalLine(price: point.price, barIndex: point.barIndex)
+            } else if tool == .text {
+                drawing = Drawing.text(at: point, content: "标注")
+            } else {
+                drawing = Drawing(type: tool, startPoint: point)
+            }
+            drawings.append(drawing)
+            activeDrawingTool = nil
+        }
     }
 
     /// 顶部当前价大字号 + 涨跌幅 · 红涨绿跌 · baseline 用 Sina 实时昨结算 preSettle · fallback visible 周期首根

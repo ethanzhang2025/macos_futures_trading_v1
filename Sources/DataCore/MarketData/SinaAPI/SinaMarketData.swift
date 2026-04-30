@@ -97,9 +97,21 @@ public final class SinaMarketData: @unchecked Sendable {
         return try await fetchKLines(urlString: url)
     }
 
+    /// 获取1分钟K线数据（type=1 · v12.6 探索补全 · SinaKLineGranularityDemo 验证）
+    public func fetchMinute1KLines(symbol: String) async throws -> [SinaKLineBar] {
+        let url = "https://stock.finance.sina.com.cn/futures/api/jsonp_v2.php/var%20t=/InnerFuturesNewService.getFewMinLine?symbol=\(symbol)&type=1"
+        return try await fetchKLines(urlString: url)
+    }
+
     /// 获取5分钟K线数据
     public func fetchMinute5KLines(symbol: String) async throws -> [SinaKLineBar] {
         let url = "https://stock.finance.sina.com.cn/futures/api/jsonp_v2.php/var%20t=/InnerFuturesNewService.getFewMinLine?symbol=\(symbol)&type=5"
+        return try await fetchKLines(urlString: url)
+    }
+
+    /// 获取30分钟K线数据（type=30 · v12.6 探索补全 · SinaKLineGranularityDemo 验证）
+    public func fetchMinute30KLines(symbol: String) async throws -> [SinaKLineBar] {
+        let url = "https://stock.finance.sina.com.cn/futures/api/jsonp_v2.php/var%20t=/InnerFuturesNewService.getFewMinLine?symbol=\(symbol)&type=30"
         return try await fetchKLines(urlString: url)
     }
 

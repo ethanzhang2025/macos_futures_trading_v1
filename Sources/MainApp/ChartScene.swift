@@ -425,18 +425,25 @@ struct ChartScene: View {
         }
     }
 
-    /// Sina 历史 K 线接口仅支持 5/15/60min + 日 · 不支持的周期 fallback 15min
+    /// Sina 历史 K 线 type=1/5/15/30/60min + 日 全部支持（v12.6 SinaKLineGranularityDemo 实测验证）
+    /// 之前 default fallback 15min 是错误结论 · 已扩 minute1 / minute15 / minute30 真 type 路径
     private func fetchHistoricalKLines(instrumentID: String, period: KLinePeriod) async throws -> [KLine] {
         let sina = SinaMarketData()
         let historical: [HistoricalKLine]
         switch period {
         case .daily, .weekly, .monthly:
             historical = try await sina.historicalDaily(symbol: instrumentID)
+        case .minute1:
+            historical = try await sina.historicalMinute(symbol: instrumentID, intervalMinutes: 1)
         case .minute5:
             historical = try await sina.historicalMinute(symbol: instrumentID, intervalMinutes: 5)
+        case .minute15:
+            historical = try await sina.historicalMinute(symbol: instrumentID, intervalMinutes: 15)
+        case .minute30:
+            historical = try await sina.historicalMinute(symbol: instrumentID, intervalMinutes: 30)
         case .hour1:
             historical = try await sina.historicalMinute(symbol: instrumentID, intervalMinutes: 60)
-        default:  // minute1 / minute15 / minute30 / 其他 · Sina 不支持的 fallback 15min
+        default:  // 周/月已在第一 case · 此分支理论不会进 · 安全 fallback 15min
             historical = try await sina.historicalMinute(symbol: instrumentID, intervalMinutes: 15)
         }
         return historical.compactMap { hist -> KLine? in

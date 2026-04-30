@@ -28,8 +28,10 @@ extension SinaMarketData: HistoricalKLineProvider {
     public func historicalMinute(symbol: String, intervalMinutes: Int) async throws -> [HistoricalKLine] {
         let bars: [SinaKLineBar]
         switch intervalMinutes {
+        case 1:  bars = try await fetchMinute1KLines(symbol: symbol)
         case 5:  bars = try await fetchMinute5KLines(symbol: symbol)
         case 15: bars = try await fetchMinute15KLines(symbol: symbol)
+        case 30: bars = try await fetchMinute30KLines(symbol: symbol)
         case 60: bars = try await fetchMinute60KLines(symbol: symbol)
         default: throw MarketDataError.unsupportedInterval(intervalMinutes)
         }

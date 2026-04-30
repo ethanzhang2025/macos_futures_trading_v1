@@ -1084,7 +1084,7 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 
 ---
 
-## v11.0 → v12.5 累积验收（2026-04-28 ~ 04-29 · 共 105 commit · L1-1/2/3/4 已通过）
+## v11.0 → v12.6 累积验收（2026-04-28 ~ 04-30 · 共 106 commit · L1-1/2/3/4 已通过）
 
 ### M5 持久化 7/7 全闭环（v11.0 5/7 → v12.0 7/7）
 
@@ -1209,7 +1209,17 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 - [ ] **Sina 实时端点抖动容错**：人为模拟 sina 不可达（断网 / 阻断 hq.sinajs.cn）→ 5s 周期 fetch 失败 → 走 K 线兜底（端点不同 stock.finance.sina.com.cn）→ active 合约 last + oi 仍真值
 - [ ] **WatchlistImporter 真闭环增强**：导入文华自选含已交割合约（如某些合约表 .txt 含 I2505）→ Watchlist 显示真历史末值（不再纯 Mock）
 
-### Mac 验收 L1 进度表（v12.5 末）
+### v12.6 增量（2026-04-30 · 待 commit · 多周期数据/UI 一致性修复）
+
+- [ ] **第 23 个真数据 demo SinaKLineGranularityDemo**：`swift run SinaKLineGranularityDemo` 验证 RB0 + rb2609 × 5 type（1/5/15/30/60）全 ✅
+- [ ] **修复隐性 bug**：ChartScene fetchHistoricalKLines 之前 minute1/15/30 默默 fallback 15min · v12.6 后走真 type
+  - [ ] 主图切到 1min 周期 → K 线显示真 1min（约 1023 根 · 末 date 含分钟 32/33/34）· 之前是 15min 数据
+  - [ ] 主图切到 15min 周期 → 真 15min（之前已经是 15min · 行为不变）
+  - [ ] 主图切到 30min 周期 → 真 30min（约 1023 根 · 末 date :30/00 整点）· 之前是 15min 数据
+- [ ] **Sina 端点全粒度 type 支持** SinaMarketData 加 fetchMinute1KLines + fetchMinute30KLines · Provider historicalMinute 扩 case 1/30
+- [ ] 数据/UI 一致性：工具条显示"15min" → 实际拉的是 15min · 显示"1min" → 实际是 1min · 不再隐性 fallback
+
+### Mac 验收 L1 进度表（v12.6 末）
 
 - [x] L1-1 启 App + 默认窗口 1280×800 + 深色（含回放未启动大绿块 bug 修验证）
 - [x] L1-2 鼠标 hover 主图 → 虚线十字 + OHLC 浮窗 + 右价格 + 底时间浮标

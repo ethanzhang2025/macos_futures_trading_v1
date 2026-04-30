@@ -234,6 +234,12 @@ let package = Package(
             dependencies: ["DataCore"],
             path: "Tools/SinaQuoteWorkaroundDemo"
         ),
+        // SinaKLineGranularityDemo · 第 23 个真数据 demo（探索 Sina K 线端点 type 粒度支持 1/5/15/30/60）
+        .executableTarget(
+            name: "SinaKLineGranularityDemo",
+            dependencies: ["DataCore"],
+            path: "Tools/SinaKLineGranularityDemo"
+        ),
         // FuturesContextualDemo · WP-41 B1 Step 2 第 19 个真数据 demo
         // (Sina RB0 真行情 + 模拟 FuturesContext + 4 ContextualIndicator)
         .executableTarget(

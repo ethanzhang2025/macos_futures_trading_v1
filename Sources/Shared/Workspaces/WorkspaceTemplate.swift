@@ -5,12 +5,6 @@
 
 import Foundation
 
-// MARK: - KLinePeriod Codable 扩展（WP-55 要求 Codable 序列化）
-
-/// 给 KLinePeriod 加 Codable（rawValue: String 已自动满足，仅声明 conformance）
-/// 放在 Workspaces 模块内是因为 WP-55 是首个序列化需求方；后续若 IndicatorCore 也需要可移到 KLine.swift
-extension KLinePeriod: Codable {}
-
 // MARK: - 跨端 Rect
 
 /// 跨端布局矩形（不依赖 CGRect/NSRect，Linux 也能用）

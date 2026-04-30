@@ -11,6 +11,7 @@
 
 import Foundation
 import Shared
+import IndicatorCore
 
 /// 单次触发事件 · AsyncStream 推送给 caller（UI 更新 / 集成测试）
 public struct AlertTriggeredEvent: Sendable, Equatable, Hashable {
@@ -67,6 +68,13 @@ public actor AlertEvaluator {
     private var volumeWindows: [String: [Int]] = [:]
     /// 价格时间窗口（按 instrumentID 累积 N 秒内的 (price, timestamp)）
     private var priceWindows: [String: [(price: Decimal, timestamp: Date)]] = [:]
+    /// K 线滑动窗口（按 instrumentID + period）· 指标条件预警评估用 · 最大 maxKlineWindow 根
+    private var klineWindows: [String: [KLinePeriod: [KLine]]] = [:]
+    /// 已记录 baseline 的指标预警 ID 集合（首次评估只记 baseline 不触发 · 防历史 K 线导入误触发）
+    /// 仅用 Set 标记存在性 · 无需保存上次的指标值（cross 比较直接读 kline 末两根）
+    private var indicatorBaselineRecorded: Set<UUID> = []
+    /// K 线窗口最大长度（500 根足够覆盖 MA(500) / MACD(26) / RSI(14) 等所有内置指标 warm-up）
+    private let maxKlineWindow: Int = 500
     /// 状态广播
     private var continuations: [UUID: AsyncStream<AlertTriggeredEvent>.Continuation] = [:]
 
@@ -107,16 +115,21 @@ public actor AlertEvaluator {
     /// 移除预警 + 联动清除其历史
     public func removeAlert(id: UUID) async {
         alerts[id] = nil
+        indicatorBaselineRecorded.remove(id)
         try? await history.clear(alertID: id)
     }
 
     /// 更新预警（保留 lastTriggeredAt 不被覆盖；用户改 condition/name 等不应重置冷却）
+    /// condition 变更时 reset 指标 baseline · 防止旧条件的 baseline 误判新条件 cross
     @discardableResult
     public func updateAlert(_ alert: Alert) -> Bool {
         guard let existing = alerts[alert.id] else { return false }
         var merged = alert
         merged.lastTriggeredAt = existing.lastTriggeredAt
         alerts[alert.id] = merged
+        if existing.condition != alert.condition {
+            indicatorBaselineRecorded.remove(alert.id)
+        }
         return true
     }
 
@@ -166,6 +179,33 @@ public actor AlertEvaluator {
         }
     }
 
+    /// onBar · 完成 K 线驱动方法（指标条件预警）
+    /// ChartScene 在 .completedBar 时与 onTick 并行调用 · spec.period 不匹配时不评估
+    /// - Parameters:
+    ///   - bar: 完成的 K 线
+    ///   - instrumentID: 合约（与 bar.instrumentID 一致 · 显式传入避免 caller 看不见）
+    ///   - period: K 线周期（与 bar.period 一致）
+    ///   - now: 当前时间（默认 Date()，注入便于测试）
+    public func onBar(_ bar: KLine, instrumentID: String, period: KLinePeriod, now: Date = Date()) async {
+        // 1. 维护该 (instrumentID, period) 的 K 线滑动窗口
+        var perInstrument = klineWindows[instrumentID] ?? [:]
+        var window = perInstrument[period] ?? []
+        window.append(bar)
+        if window.count > maxKlineWindow {
+            window.removeFirst(window.count - maxKlineWindow)
+        }
+        perInstrument[period] = window
+        klineWindows[instrumentID] = perInstrument
+
+        // 2. 评估该 instrumentID + period 的所有 active 指标预警
+        for alert in alerts.values where alert.instrumentID == instrumentID && alert.canTrigger(at: now) {
+            guard case .indicator(let spec) = alert.condition, spec.period == period else { continue }
+            if let event = evaluateIndicator(alert: alert, spec: spec, kline: window, now: now) {
+                await fire(event: event, alert: alert, now: now)
+            }
+        }
+    }
+
     // MARK: - 私有：评估各类条件
 
     private func evaluate(alert: Alert, tick: Tick, prevPrice: Decimal?, now: Date) -> AlertTriggeredEvent? {
@@ -194,6 +234,9 @@ public actor AlertEvaluator {
                     return (false, "")
                 }
                 return (abs(move) >= percentThreshold, "\(windowSeconds)s 内价格变化 \(move * 100)%（阈值 \(percentThreshold * 100)%）")
+            case .indicator:
+                // 指标条件预警走 onBar 路径 · onTick 不评估
+                return (false, "")
             }
         }()
 
@@ -269,5 +312,129 @@ public actor AlertEvaluator {
         guard let firstInWindow = window.first(where: { $0.timestamp >= cutoff }) else { return nil }
         guard firstInWindow.price > 0 else { return nil }
         return (currentPrice - firstInWindow.price) / firstInWindow.price
+    }
+
+    // MARK: - 私有：指标条件评估（v15.x 新增）
+
+    /// 末两根 (current, currentRef, previous, previousRef) · main vs ref 的 cross 用
+    /// - MA/EMA：main = close, ref = MA/EMA 值
+    /// - MACD：main = DIF, ref = DEA
+    /// - RSI：main = RSI, ref = 阈值（事件自带 · pair 中 ref 占位 0）
+    private typealias CrossPair = (current: Decimal, currentRef: Decimal, previous: Decimal, previousRef: Decimal)
+
+    /// 评估单条指标预警 · 计算指标 → 取末两根值 → 按 event 判断 cross
+    /// 返回 nil 表示未触发；返回 event 表示触发
+    private func evaluateIndicator(alert: Alert, spec: IndicatorAlertSpec, kline: [KLine], now: Date) -> AlertTriggeredEvent? {
+        guard kline.count >= 2 else { return nil }
+
+        let series = makeKLineSeries(from: kline)
+        let pair: CrossPair?
+        switch spec.indicator {
+        case .ma, .ema:
+            pair = computeLineCrossPair(series: series, kline: kline, kind: spec.indicator, params: spec.params)
+        case .macd:
+            pair = computeMACDCrossPair(series: series, params: spec.params)
+        case .rsi:
+            pair = computeRSIPair(series: series, params: spec.params)
+        }
+        guard let pair else { return nil }
+
+        // 首次评估只记 baseline 不触发（避免历史 K 线导入误触发）
+        let isBaseline = !indicatorBaselineRecorded.contains(alert.id)
+        defer { indicatorBaselineRecorded.insert(alert.id) }
+        if isBaseline { return nil }
+
+        guard let message = matchCrossEvent(spec.event, indicatorName: spec.indicator.displayName, pair: pair) else {
+            return nil
+        }
+        return AlertTriggeredEvent(
+            alertID: alert.id,
+            alertName: alert.name,
+            instrumentID: alert.instrumentID,
+            triggerPrice: kline.last?.close ?? 0,
+            triggeredAt: now,
+            message: message
+        )
+    }
+
+    /// 按事件类型判断 cross 并返回触发消息（返回 nil 表示未 cross）
+    /// crossedAbove = previous < previousRef ∧ current >= currentRef
+    /// crossedBelow = previous > previousRef ∧ current <= currentRef
+    private func matchCrossEvent(_ event: IndicatorEvent, indicatorName: String, pair: CrossPair) -> String? {
+        let (cur, curRef, prev, prevRef) = pair
+        switch event {
+        case .priceCrossAboveLine:
+            guard prev < prevRef, cur >= curRef else { return nil }
+            return "\(indicatorName) · 价格 \(cur) 上穿 \(curRef)（前 \(prev) < \(prevRef)）"
+        case .priceCrossBelowLine:
+            guard prev > prevRef, cur <= curRef else { return nil }
+            return "\(indicatorName) · 价格 \(cur) 下穿 \(curRef)（前 \(prev) > \(prevRef)）"
+        case .macdGoldenCross:
+            guard prev < prevRef, cur >= curRef else { return nil }
+            return "MACD 金叉 · DIF \(cur) 上穿 DEA \(curRef)"
+        case .macdDeathCross:
+            guard prev > prevRef, cur <= curRef else { return nil }
+            return "MACD 死叉 · DIF \(cur) 下穿 DEA \(curRef)"
+        case .rsiCrossAbove(let threshold):
+            guard prev < threshold, cur >= threshold else { return nil }
+            return "RSI \(cur) 上穿 \(threshold)（前 \(prev)）"
+        case .rsiCrossBelow(let threshold):
+            guard prev > threshold, cur <= threshold else { return nil }
+            return "RSI \(cur) 下穿 \(threshold)（前 \(prev)）"
+        }
+    }
+
+    /// MA/EMA 末两根 (close, line) 对
+    private func computeLineCrossPair(series: KLineSeries, kline: [KLine], kind: IndicatorKind, params: [Decimal]) -> CrossPair? {
+        let result: [IndicatorSeries]
+        do {
+            switch kind {
+            case .ma:  result = try MA.calculate(kline: series, params: params)
+            case .ema: result = try EMA.calculate(kline: series, params: params)
+            default:   return nil
+            }
+        } catch { return nil }
+        guard let line = result.first?.values, line.count == kline.count else { return nil }
+        let n = kline.count
+        guard let cur = line[n - 1], let prev = line[n - 2] else { return nil }
+        return (current: kline[n - 1].close, currentRef: cur, previous: kline[n - 2].close, previousRef: prev)
+    }
+
+    /// MACD 末两根 (DIF, DEA) 对
+    private func computeMACDCrossPair(series: KLineSeries, params: [Decimal]) -> CrossPair? {
+        guard let result = try? MACD.calculate(kline: series, params: params),
+              result.count >= 2
+        else { return nil }
+        let dif = result[0].values
+        let dea = result[1].values
+        let n = dif.count
+        guard n >= 2,
+              let curD = dif[n - 1], let prevD = dif[n - 2],
+              let curE = dea[n - 1], let prevE = dea[n - 2]
+        else { return nil }
+        return (current: curD, currentRef: curE, previous: prevD, previousRef: prevE)
+    }
+
+    /// RSI 末两根 (RSI, 0) 对（threshold 在事件自带，pair 中 ref 占位 0）
+    private func computeRSIPair(series: KLineSeries, params: [Decimal]) -> CrossPair? {
+        guard let result = try? RSI.calculate(kline: series, params: params),
+              let rsi = result.first?.values,
+              rsi.count >= 2
+        else { return nil }
+        let n = rsi.count
+        guard let cur = rsi[n - 1], let prev = rsi[n - 2] else { return nil }
+        return (current: cur, currentRef: 0, previous: prev, previousRef: 0)
+    }
+
+    /// [KLine] → KLineSeries 转换
+    private func makeKLineSeries(from bars: [KLine]) -> KLineSeries {
+        KLineSeries(
+            opens:         bars.map(\.open),
+            highs:         bars.map(\.high),
+            lows:          bars.map(\.low),
+            closes:        bars.map(\.close),
+            volumes:       bars.map(\.volume),
+            openInterests: bars.map { Int(truncating: $0.openInterest as NSDecimalNumber) }
+        )
     }
 }

@@ -891,8 +891,10 @@ struct ChartScene: View {
                     }
                 }
                 // v11.0+1 · evaluator 用 K 线 close 模拟 Tick · 真 Tick Stage B 接 CTP 后替换
+                // v15.x · 同步喂 onBar 给指标条件预警评估（spec.period 不匹配的 alert evaluator 内部跳过）
                 if let evaluator = alertEvaluator {
                     await evaluator.onTick(Self.simulatedTick(from: k))
+                    await evaluator.onBar(k, instrumentID: instrumentID, period: period)
                 }
             }
         }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// K线周期
-public enum KLinePeriod: String, Sendable, CaseIterable {
+public enum KLinePeriod: String, Sendable, Codable, CaseIterable {
     case second1  = "1s"
     case second3  = "3s"
     case second5  = "5s"

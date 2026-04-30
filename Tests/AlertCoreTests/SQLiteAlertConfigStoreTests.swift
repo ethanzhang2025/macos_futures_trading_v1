@@ -78,7 +78,7 @@ struct SQLiteAlertConfigStoreTests {
         #expect(loaded?.isEmpty == true)
     }
 
-    @Test("AlertCondition 5 种 JSON 往返")
+    @Test("AlertCondition 7 种 JSON 往返（含 v15.x indicator）")
     func conditionRoundtrip() async throws {
         let store = try makeStore()
         let drawingID = UUID()
@@ -87,7 +87,11 @@ struct SQLiteAlertConfigStoreTests {
             .priceCrossBelow(3200.5),
             .volumeSpike(multiple: 3, windowBars: 20),
             .priceMoveSpike(percentThreshold: 1.5, windowSeconds: 300),
-            .horizontalLineTouched(drawingID: drawingID, price: 3500)
+            .horizontalLineTouched(drawingID: drawingID, price: 3500),
+            .indicator(IndicatorAlertSpec(indicator: .ma, params: [20],
+                                          event: .priceCrossAboveLine, period: .minute5)),
+            .indicator(IndicatorAlertSpec(indicator: .macd, params: [12, 26, 9],
+                                          event: .macdGoldenCross, period: .minute15))
         ]
         let alerts = conditions.enumerated().map { i, c in
             makeAlert(name: "c\(i)", condition: c)
@@ -95,7 +99,7 @@ struct SQLiteAlertConfigStoreTests {
         try await store.save(alerts)
         let loaded = try await store.load()
 
-        #expect(loaded?.count == 5)
+        #expect(loaded?.count == 7)
         #expect(loaded?.map(\.condition) == conditions)
     }
 

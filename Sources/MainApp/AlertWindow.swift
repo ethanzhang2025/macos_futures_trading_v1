@@ -421,6 +421,7 @@ struct AlertWindow: View {
         case .priceCrossBelow(let p):           return p
         case .horizontalLineTouched(_, let p):  return p
         case .volumeSpike, .priceMoveSpike:     return 0
+        case .indicator:                        return 0
         }
     }
 
@@ -558,7 +559,7 @@ struct AlertWindow: View {
 
 // MARK: - 添加 / 编辑 预警 Sheet
 
-/// 6 类可编辑 condition（horizontalLineTouched 需 drawingID 选择 · 留 v2）
+/// 7 类可编辑 condition（horizontalLineTouched 需 drawingID 选择 · 留 v2）
 private enum ConditionKind: String, CaseIterable, Identifiable {
     case priceAbove       = "价格 >"
     case priceBelow       = "价格 <"
@@ -566,6 +567,7 @@ private enum ConditionKind: String, CaseIterable, Identifiable {
     case priceCrossBelow  = "下穿"
     case volumeSpike      = "成交量异常"
     case priceMoveSpike   = "价格急动"
+    case indicator        = "指标条件"
     var id: String { rawValue }
 
     static func of(_ c: AlertCondition) -> ConditionKind {
@@ -577,11 +579,12 @@ private enum ConditionKind: String, CaseIterable, Identifiable {
         case .horizontalLineTouched: return .priceAbove   // v2 加 horizontalLine kind 时改
         case .volumeSpike:           return .volumeSpike
         case .priceMoveSpike:        return .priceMoveSpike
+        case .indicator:             return .indicator
         }
     }
 }
 
-/// Sheet 表单草稿（聚合 14 字段 · 替代 14 个零散 @State · v2 加新 condition kind 单点扩展）
+/// Sheet 表单草稿（聚合字段 · 替代零散 @State · v2 加新 condition kind 单点扩展）
 private struct AlertFormDraft {
     var name: String = ""
     var instrumentID: String = "RB0"
@@ -594,6 +597,15 @@ private struct AlertFormDraft {
     var volumeWindowBars: Int = 20
     var movePercent: Double = 1
     var moveSeconds: Int = 60
+
+    // 指标条件预警字段（v15.x · 仅 conditionKind == .indicator 用到）
+    var indicatorKind: IndicatorKind = .ma
+    var indicatorParam0: Double = 20    // MA period / EMA period / MACD fast / RSI period
+    var indicatorParam1: Double = 26    // MACD slow（其他指标忽略）
+    var indicatorParam2: Double = 9     // MACD signal（其他指标忽略）
+    var indicatorPeriod: KLinePeriod = .minute5
+    var indicatorEventTag: IndicatorEventTag = .priceCrossAbove
+    var indicatorRSIThreshold: Double = 70
 
     var channels: Set<NotificationChannelKind> = [.inApp, .systemNotice]
 
@@ -621,6 +633,25 @@ private struct AlertFormDraft {
         case .priceMoveSpike(let p, let s):
             movePercent = NSDecimalNumber(decimal: p).doubleValue
             moveSeconds = s
+        case .indicator(let spec):
+            indicatorKind = spec.indicator
+            indicatorPeriod = spec.period
+            // params 按 indicatorParam0/1/2 顺序加载（每条预警按 indicatorKind 决定填几位 · MACD=3 / 其他=1）
+            if spec.params.count >= 1 { indicatorParam0 = NSDecimalNumber(decimal: spec.params[0]).doubleValue }
+            if spec.params.count >= 2 { indicatorParam1 = NSDecimalNumber(decimal: spec.params[1]).doubleValue }
+            if spec.params.count >= 3 { indicatorParam2 = NSDecimalNumber(decimal: spec.params[2]).doubleValue }
+            switch spec.event {
+            case .priceCrossAboveLine: indicatorEventTag = .priceCrossAbove
+            case .priceCrossBelowLine: indicatorEventTag = .priceCrossBelow
+            case .macdGoldenCross:     indicatorEventTag = .macdGolden
+            case .macdDeathCross:      indicatorEventTag = .macdDeath
+            case .rsiCrossAbove(let t):
+                indicatorEventTag = .rsiCrossAbove
+                indicatorRSIThreshold = NSDecimalNumber(decimal: t).doubleValue
+            case .rsiCrossBelow(let t):
+                indicatorEventTag = .rsiCrossBelow
+                indicatorRSIThreshold = NSDecimalNumber(decimal: t).doubleValue
+            }
         }
     }
 
@@ -634,8 +665,36 @@ private struct AlertFormDraft {
             return .volumeSpike(multiple: Decimal(volumeMultiple), windowBars: volumeWindowBars)
         case .priceMoveSpike:
             return .priceMoveSpike(percentThreshold: Decimal(movePercent), windowSeconds: moveSeconds)
+        case .indicator:
+            let params: [Decimal]
+            switch indicatorKind {
+            case .macd: params = [Decimal(indicatorParam0), Decimal(indicatorParam1), Decimal(indicatorParam2)]
+            default:    params = [Decimal(indicatorParam0)]
+            }
+            let event: IndicatorEvent
+            switch indicatorEventTag {
+            case .priceCrossAbove: event = .priceCrossAboveLine
+            case .priceCrossBelow: event = .priceCrossBelowLine
+            case .macdGolden:      event = .macdGoldenCross
+            case .macdDeath:       event = .macdDeathCross
+            case .rsiCrossAbove:   event = .rsiCrossAbove(Decimal(indicatorRSIThreshold))
+            case .rsiCrossBelow:   event = .rsiCrossBelow(Decimal(indicatorRSIThreshold))
+            }
+            let spec = IndicatorAlertSpec(indicator: indicatorKind, params: params, event: event, period: indicatorPeriod)
+            return .indicator(spec)
         }
     }
+}
+
+/// 指标事件的扁平 tag（UI 表单用 · 与 IndicatorEvent 之间双向映射 · RSI 阈值单独存 indicatorRSIThreshold）
+private enum IndicatorEventTag: String, CaseIterable, Identifiable {
+    case priceCrossAbove = "价格上穿单线"
+    case priceCrossBelow = "价格下穿单线"
+    case macdGolden      = "MACD 金叉"
+    case macdDeath       = "MACD 死叉"
+    case rsiCrossAbove   = "RSI 上穿阈值"
+    case rsiCrossBelow   = "RSI 下穿阈值"
+    var id: String { rawValue }
 }
 
 struct AddOrEditAlertSheet: View {
@@ -731,6 +790,84 @@ struct AddOrEditAlertSheet: View {
                     .frame(width: 60)
                 Text("秒")
             }
+        case .indicator:
+            indicatorParams
+        }
+    }
+
+    @ViewBuilder
+    private var indicatorParams: some View {
+        Picker("指标", selection: $draft.indicatorKind) {
+            ForEach(IndicatorKind.allCases, id: \.self) { k in
+                Text(k.displayName).tag(k)
+            }
+        }
+        .onChange(of: draft.indicatorKind) { newKind in
+            // 切换指标时按默认参数重置 + 选默认事件
+            let defaults = newKind.defaultParams
+            if defaults.count >= 1 { draft.indicatorParam0 = NSDecimalNumber(decimal: defaults[0]).doubleValue }
+            if defaults.count >= 2 { draft.indicatorParam1 = NSDecimalNumber(decimal: defaults[1]).doubleValue }
+            if defaults.count >= 3 { draft.indicatorParam2 = NSDecimalNumber(decimal: defaults[2]).doubleValue }
+            switch newKind {
+            case .ma, .ema: draft.indicatorEventTag = .priceCrossAbove
+            case .macd:     draft.indicatorEventTag = .macdGolden
+            case .rsi:      draft.indicatorEventTag = .rsiCrossAbove
+            }
+        }
+
+        Picker("周期", selection: $draft.indicatorPeriod) {
+            ForEach(KLinePeriod.allCases, id: \.self) { p in
+                Text(p.displayName).tag(p)
+            }
+        }
+
+        // 参数表单按指标种类显示对应字段数
+        switch draft.indicatorKind {
+        case .ma:
+            HStack {
+                Text("MA 周期")
+                TextField("", value: $draft.indicatorParam0, format: .number).frame(width: 80)
+            }
+        case .ema:
+            HStack {
+                Text("EMA 周期")
+                TextField("", value: $draft.indicatorParam0, format: .number).frame(width: 80)
+            }
+        case .macd:
+            HStack {
+                Text("快线")
+                TextField("", value: $draft.indicatorParam0, format: .number).frame(width: 60)
+                Text("慢线")
+                TextField("", value: $draft.indicatorParam1, format: .number).frame(width: 60)
+                Text("信号")
+                TextField("", value: $draft.indicatorParam2, format: .number).frame(width: 60)
+            }
+        case .rsi:
+            HStack {
+                Text("RSI 周期")
+                TextField("", value: $draft.indicatorParam0, format: .number).frame(width: 80)
+            }
+        }
+
+        Picker("事件", selection: $draft.indicatorEventTag) {
+            ForEach(supportedEventTags(for: draft.indicatorKind), id: \.self) { tag in
+                Text(tag.rawValue).tag(tag)
+            }
+        }
+
+        if draft.indicatorEventTag == .rsiCrossAbove || draft.indicatorEventTag == .rsiCrossBelow {
+            HStack {
+                Text("阈值")
+                TextField("", value: $draft.indicatorRSIThreshold, format: .number).frame(width: 80)
+            }
+        }
+    }
+
+    private func supportedEventTags(for kind: IndicatorKind) -> [IndicatorEventTag] {
+        switch kind {
+        case .ma, .ema: return [.priceCrossAbove, .priceCrossBelow]
+        case .macd:     return [.macdGolden, .macdDeath]
+        case .rsi:      return [.rsiCrossAbove, .rsiCrossBelow]
         }
     }
 
@@ -818,6 +955,7 @@ extension AlertCondition {
         case .horizontalLineTouched(_, let p):  return "触线 \(fmtDecimal(p))"
         case .volumeSpike(let m, let n):        return "成交量 ≥ \(fmtDecimal(m))× / \(n)期"
         case .priceMoveSpike(let p, let s):     return "急动 ≥ \(fmtDecimal(p))% / \(s)秒"
+        case .indicator(let spec):              return spec.displayDescription
         }
     }
 }

@@ -35,6 +35,12 @@ public enum AlertCondition: Sendable, Codable, Equatable, Hashable {
 
     /// 价格急动：windowSeconds 内价格变化绝对值 / 起始价 ≥ percentThreshold
     case priceMoveSpike(percentThreshold: Decimal, windowSeconds: Int)
+
+    // MARK: - 指标类（v15.x WP-52 扩展）
+
+    /// 指标条件预警 · 走 K 线序列驱动 · 由 evaluator.onBar 评估（不在 onTick 路径）
+    /// 详见 IndicatorAlertSpec
+    case indicator(IndicatorAlertSpec)
 }
 
 /// 预警状态

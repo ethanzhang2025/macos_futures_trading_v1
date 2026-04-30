@@ -280,7 +280,7 @@ public struct DrawingsOverlayView: View {
     private func drawText(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ opacity: Double) {
         let x = xForBar(d.startPoint.barIndex, size: size)
         let y = yForPrice(d.startPoint.price, size: size)
-        // v13.12 字体大小 · v13.26 加粗 / 斜体（用 .system + weight + italic modifier）
+        // v13.12 字体大小 · v13.26 加粗 / 斜体 · v13.35 下划线
         let fs = CGFloat(d.fontSize ?? 12)
         let weight: Font.Weight = (d.isBold == true) ? .bold : .regular
         var text = Text(d.text ?? "")
@@ -288,6 +288,9 @@ public struct DrawingsOverlayView: View {
             .foregroundColor(color.opacity(opacity))
         if d.isItalic == true {
             text = text.italic()
+        }
+        if d.isUnderline == true {
+            text = text.underline()
         }
         ctx.draw(text, at: CGPoint(x: x, y: y))
     }

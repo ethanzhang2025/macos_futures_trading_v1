@@ -245,11 +245,12 @@ struct DrawingExtraFieldsTests {
         #expect(back[2].drawing.channelOffset == 5)
     }
 
-    @Test("v13.26 文字 isBold + isItalic 默认 nil + 自定义往返 + 老 JSON 兼容")
+    @Test("v13.26+v13.35 文字 isBold + isItalic + isUnderline 默认 nil + 自定义往返 + 老 JSON 兼容")
     func textStyleRoundTrip() throws {
         let plain = Drawing.text(at: point(5, 105), content: "x")
         #expect(plain.isBold == nil)
         #expect(plain.isItalic == nil)
+        #expect(plain.isUnderline == nil)
 
         let styled = Drawing(
             type: .text,
@@ -257,14 +258,16 @@ struct DrawingExtraFieldsTests {
             text: "强调",
             fontSize: 16,
             isBold: true,
-            isItalic: true
+            isItalic: true,
+            isUnderline: true
         )
         #expect(styled.isBold == true)
         #expect(styled.isItalic == true)
+        #expect(styled.isUnderline == true)
         let back = try JSONDecoder().decode(Drawing.self, from: JSONEncoder().encode(styled))
         #expect(back == styled)
 
-        // 老 JSON 缺 isBold/isItalic → 解码 nil
+        // 老 JSON 缺 isBold/isItalic/isUnderline → 解码 nil
         let legacyJSON = """
         {
             "id": "550E8400-E29B-41D4-A716-446655440000",
@@ -276,6 +279,7 @@ struct DrawingExtraFieldsTests {
         let d = try JSONDecoder().decode(Drawing.self, from: legacyJSON.data(using: .utf8)!)
         #expect(d.isBold == nil)
         #expect(d.isItalic == nil)
+        #expect(d.isUnderline == nil)
     }
 
     @Test("v13.15 strokeOpacity 默认 nil + 自定义往返")

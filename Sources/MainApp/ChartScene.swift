@@ -1652,6 +1652,12 @@ struct ChartContentView: View {
                     }
                 }
                 .disabled(drawing.locked)
+                Button(drawing.isUnderline == true ? "取消下划线" : "下划线") {
+                    if let idx = drawings.firstIndex(where: { $0.id == drawing.id }) {
+                        drawings[idx].isUnderline = (drawing.isUnderline == true) ? nil : true
+                    }
+                }
+                .disabled(drawing.locked)
             }
             // v13.18 水平线 → 一键创建价格触及预警（与 WP-52 AlertCore 联动）
             if n == 1, let id = selectedDrawingIDs.first,
@@ -1880,7 +1886,8 @@ struct ChartContentView: View {
             strokeOpacity: drawing.strokeOpacity,
             extraPoints: newExtras,
             isBold: drawing.isBold,
-            isItalic: drawing.isItalic
+            isItalic: drawing.isItalic,
+            isUnderline: drawing.isUnderline
         )
     }
 

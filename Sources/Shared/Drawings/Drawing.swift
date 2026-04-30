@@ -84,6 +84,9 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
     /// v13.26 文字标注斜体（仅 .text 类型生效）· nil 视为 false
     public var isItalic: Bool?
 
+    /// v13.35 文字标注下划线（仅 .text 类型生效）· nil 视为 false
+    public var isUnderline: Bool?
+
     public init(
         id: UUID = UUID(),
         type: DrawingType,
@@ -98,7 +101,8 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         strokeOpacity: Double? = nil,
         extraPoints: [DrawingPoint]? = nil,
         isBold: Bool? = nil,
-        isItalic: Bool? = nil
+        isItalic: Bool? = nil,
+        isUnderline: Bool? = nil
     ) {
         self.id = id
         self.type = type
@@ -114,6 +118,7 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         self.extraPoints = extraPoints
         self.isBold = isBold
         self.isItalic = isItalic
+        self.isUnderline = isUnderline
     }
 
     /// v13.11 便利访问 · isLocked nil 视为 false

@@ -279,7 +279,7 @@ struct ChartScene: View {
 
     // MARK: - 画线工具组（v13.0 · WP-42 UI 激活 · v13.2 持久化升级 SQLiteDrawingStore）
 
-    /// 工具条画线工具按钮组：选择 / 6 种画线 / 清空
+    /// 工具条画线工具按钮组：选择 / 6 种画线 / 清空 + v13.7 导出/导入
     private var drawingTools: some View {
         HStack(spacing: 4) {
             drawingToolButton(icon: "cursorarrow", tool: nil, help: "浏览（取消画线工具）")
@@ -289,6 +289,16 @@ struct ChartScene: View {
             drawingToolButton(icon: "lines.measurement.horizontal", tool: .parallelChannel, help: "平行通道（双点 · 默认 +1.0 偏移）")
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
             drawingToolButton(icon: "textformat", tool: .text, help: "文字标注（一点）")
+            Button { exportDrawings() } label: {
+                Image(systemName: "square.and.arrow.up")
+            }
+            .buttonStyle(.borderless)
+            .help("导出当前合约+周期画线为 JSON")
+            Button { importDrawings() } label: {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .buttonStyle(.borderless)
+            .help("从 JSON 导入画线")
             Button {
                 drawings.removeAll()
                 pendingDrawingPoint = nil
@@ -298,6 +308,71 @@ struct ChartScene: View {
             }
             .buttonStyle(.borderless)
             .help("清空所有画线")
+        }
+    }
+
+    // MARK: - v13.7 画线导出/导入 JSON
+
+    /// 导出当前 (instrumentID, period) 的画线为 JSON 文件（NSSavePanel）
+    private func exportDrawings() {
+        guard !drawings.isEmpty else {
+            let alert = NSAlert()
+            alert.messageText = "无画线可导出"
+            alert.informativeText = "当前合约 \(currentInstrumentID) \(selectedPeriod.displayName) 没有画线。"
+            alert.runModal()
+            return
+        }
+        let panel = NSSavePanel()
+        panel.title = "导出画线"
+        panel.allowedContentTypes = [.json]
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        panel.nameFieldStringValue = "drawings_\(currentInstrumentID)_\(selectedPeriod.rawValue)_\(dateFormatter.string(from: Date())).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(drawings)
+            try data.write(to: url)
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "导出失败"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .critical
+            alert.runModal()
+        }
+    }
+
+    /// 导入 JSON 画线 · 弹 alert 询问覆盖/追加/取消
+    private func importDrawings() {
+        let panel = NSOpenPanel()
+        panel.title = "导入画线"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            let imported = try JSONDecoder().decode([Drawing].self, from: data)
+            let alert = NSAlert()
+            alert.messageText = "导入画线"
+            alert.informativeText = "解析到 \(imported.count) 个画线。当前已有 \(drawings.count) 个。\n\n选择操作："
+            alert.addButton(withTitle: "覆盖")
+            alert.addButton(withTitle: "追加")
+            alert.addButton(withTitle: "取消")
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                drawings = imported
+            } else if response == .alertSecondButtonReturn {
+                drawings.append(contentsOf: imported)
+            }
+            // 取消 → 不动
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "导入失败"
+            alert.informativeText = "JSON 解析失败：\(error.localizedDescription)"
+            alert.alertStyle = .critical
+            alert.runModal()
         }
     }
 

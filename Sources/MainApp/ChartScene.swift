@@ -769,7 +769,7 @@ struct ChartContentView: View {
             // 视觉迭代第 1 项：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐
             KLineGridView()
             // 视觉迭代第 2 项：十字光标 + OHLC 浮窗 + 轴边价格/时间浮标（hover 跟随）
-            KLineCrosshairView(bars: bars, viewport: viewport, priceRange: currentPriceRange)
+            KLineCrosshairView(bars: bars, viewport: viewport, priceRange: currentPriceRange, period: bars.first?.period ?? .minute15)
             hud
         }
         .overlay(alignment: .topTrailing) {

@@ -17,21 +17,27 @@ public struct KLineCrosshairView: View {
     public let bars: [KLine]
     public let viewport: RenderViewport
     public let priceRange: ClosedRange<Decimal>
+    public let period: KLinePeriod
 
     @State private var hoverPoint: CGPoint?
 
-    /// 时间格式（与 KLineAxisView.timeFormatter 同款）
-    private static let timeFormatter: DateFormatter = {
+    /// 时间格式按周期动态：分钟级 MM-dd HH:mm（不显示年 · 短期数据用户已知年份）· 日/周显示 yyyy-MM-dd · 月线 yyyy-MM
+    private var timeFormatter: DateFormatter {
         let f = DateFormatter()
-        f.dateFormat = "MM-dd HH:mm"
         f.locale = Locale(identifier: "zh_CN")
+        switch period {
+        case .daily, .weekly:  f.dateFormat = "yyyy-MM-dd"
+        case .monthly:         f.dateFormat = "yyyy-MM"
+        default:               f.dateFormat = "MM-dd HH:mm"
+        }
         return f
-    }()
+    }
 
-    public init(bars: [KLine], viewport: RenderViewport, priceRange: ClosedRange<Decimal>) {
+    public init(bars: [KLine], viewport: RenderViewport, priceRange: ClosedRange<Decimal>, period: KLinePeriod) {
         self.bars = bars
         self.viewport = viewport
         self.priceRange = priceRange
+        self.period = period
     }
 
     public var body: some View {
@@ -53,7 +59,7 @@ public struct KLineCrosshairView: View {
                     rightPriceTag(price: info.cursorPrice, at: pt, in: geom.size)
                     bottomTimeTag(time: info.bar.openTime, at: pt, in: geom.size)
                     OHLCTooltip(
-                        time: Self.timeFormatter.string(from: info.bar.openTime),
+                        time: timeFormatter.string(from: info.bar.openTime),
                         bar: info.bar,
                         cursorPrice: info.cursorPrice
                     )
@@ -110,7 +116,7 @@ public struct KLineCrosshairView: View {
 
     /// 底边时间浮标（贴主图下沿 · 黄底黑字 · 文华标准）
     private func bottomTimeTag(time: Date, at pt: CGPoint, in size: CGSize) -> some View {
-        Text(Self.timeFormatter.string(from: time))
+        Text(timeFormatter.string(from: time))
             .font(.system(size: 10, weight: .bold, design: .monospaced))
             .foregroundColor(.black)
             .padding(.horizontal, 4)

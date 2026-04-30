@@ -224,6 +224,39 @@ struct DrawingExtraFieldsTests {
         #expect(back[2].drawing.channelOffset == 5)
     }
 
+    @Test("v13.26 文字 isBold + isItalic 默认 nil + 自定义往返 + 老 JSON 兼容")
+    func textStyleRoundTrip() throws {
+        let plain = Drawing.text(at: point(5, 105), content: "x")
+        #expect(plain.isBold == nil)
+        #expect(plain.isItalic == nil)
+
+        let styled = Drawing(
+            type: .text,
+            startPoint: point(5, 105),
+            text: "强调",
+            fontSize: 16,
+            isBold: true,
+            isItalic: true
+        )
+        #expect(styled.isBold == true)
+        #expect(styled.isItalic == true)
+        let back = try JSONDecoder().decode(Drawing.self, from: JSONEncoder().encode(styled))
+        #expect(back == styled)
+
+        // 老 JSON 缺 isBold/isItalic → 解码 nil
+        let legacyJSON = """
+        {
+            "id": "550E8400-E29B-41D4-A716-446655440000",
+            "type": "text",
+            "startPoint": { "barIndex": 5, "price": 105 },
+            "text": "老标注"
+        }
+        """
+        let d = try JSONDecoder().decode(Drawing.self, from: legacyJSON.data(using: .utf8)!)
+        #expect(d.isBold == nil)
+        #expect(d.isItalic == nil)
+    }
+
     @Test("v13.15 strokeOpacity 默认 nil + 自定义往返")
     func strokeOpacityRoundTrip() throws {
         let plain = Drawing.trendLine(from: point(0, 100), to: point(10, 110))

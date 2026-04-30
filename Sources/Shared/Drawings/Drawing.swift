@@ -76,6 +76,12 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
     /// v13.17 额外锚点（3 点画线如 Pitchfork 用 [C] · 多边形可扩展用更多）· 兼容老 JSON nil
     public var extraPoints: [DrawingPoint]?
 
+    /// v13.26 文字标注加粗（仅 .text 类型生效）· nil 视为 false
+    public var isBold: Bool?
+
+    /// v13.26 文字标注斜体（仅 .text 类型生效）· nil 视为 false
+    public var isItalic: Bool?
+
     public init(
         id: UUID = UUID(),
         type: DrawingType,
@@ -88,7 +94,9 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         isLocked: Bool? = nil,
         fontSize: Double? = nil,
         strokeOpacity: Double? = nil,
-        extraPoints: [DrawingPoint]? = nil
+        extraPoints: [DrawingPoint]? = nil,
+        isBold: Bool? = nil,
+        isItalic: Bool? = nil
     ) {
         self.id = id
         self.type = type
@@ -102,6 +110,8 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         self.fontSize = fontSize
         self.strokeOpacity = strokeOpacity
         self.extraPoints = extraPoints
+        self.isBold = isBold
+        self.isItalic = isItalic
     }
 
     /// v13.11 便利访问 · isLocked nil 视为 false

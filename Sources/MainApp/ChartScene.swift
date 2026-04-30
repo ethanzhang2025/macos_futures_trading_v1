@@ -1520,6 +1520,19 @@ struct ChartContentView: View {
                     editFontSize(drawing)
                 }
                 .disabled(drawing.locked)
+                // v13.26 文字加粗 / 斜体 toggle
+                Button(drawing.isBold == true ? "取消加粗" : "加粗") {
+                    if let idx = drawings.firstIndex(where: { $0.id == drawing.id }) {
+                        drawings[idx].isBold = (drawing.isBold == true) ? nil : true
+                    }
+                }
+                .disabled(drawing.locked)
+                Button(drawing.isItalic == true ? "取消斜体" : "斜体") {
+                    if let idx = drawings.firstIndex(where: { $0.id == drawing.id }) {
+                        drawings[idx].isItalic = (drawing.isItalic == true) ? nil : true
+                    }
+                }
+                .disabled(drawing.locked)
             }
             // v13.18 水平线 → 一键创建价格触及预警（与 WP-52 AlertCore 联动）
             if n == 1, let id = selectedDrawingIDs.first,
@@ -1586,10 +1599,40 @@ struct ChartContentView: View {
             Button("复制可见区 OHLC（CSV）") {
                 copyVisibleBarsToCSV()
             }
+            Button("导出主图截图（PNG）…") {
+                exportChartScreenshot()
+            }
             Divider()
             Text("（按住 ⇧ 多选画线 · 右键画线弹更多操作）")
                 .foregroundColor(.secondary)
         }
+    }
+
+    /// v13.25 主图截图导出 PNG · ImageRenderer + NSSavePanel · macOS 13+
+    @MainActor
+    private func exportChartScreenshot() {
+        let renderer = ImageRenderer(content: chartMainArea
+            .frame(width: 1280, height: 720))
+        renderer.scale = 2  // Retina 高清
+        guard let nsImage = renderer.nsImage,
+              let tiff = nsImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            let err = NSAlert()
+            err.messageText = "截图失败"
+            err.informativeText = "ImageRenderer 渲染未返回有效图片。"
+            err.alertStyle = .warning
+            err.runModal()
+            return
+        }
+        let panel = NSSavePanel()
+        panel.title = "导出主图截图"
+        panel.allowedContentTypes = [.png]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyy-MM-dd-HHmm"
+        panel.nameFieldStringValue = "chart_\(instrumentLabel)_\(periodLabel)_\(dateFmt.string(from: Date())).png"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? pngData.write(to: url)
     }
 
     /// v13.24 复制 viewport 可见区 K 线为 CSV 到 NSPasteboard
@@ -1693,7 +1736,9 @@ struct ChartContentView: View {
             isLocked: nil,
             fontSize: drawing.fontSize,
             strokeOpacity: drawing.strokeOpacity,
-            extraPoints: newExtras
+            extraPoints: newExtras,
+            isBold: drawing.isBold,
+            isItalic: drawing.isItalic
         )
     }
 

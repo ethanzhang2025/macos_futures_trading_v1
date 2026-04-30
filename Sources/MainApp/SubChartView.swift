@@ -19,22 +19,28 @@ import IndicatorCore
 enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
     case macd
     case kdj
+    case rsi
+    case volume
 
     var id: String { rawValue }
 
     /// 中文 + 参数（HUD 完整标题）
     var displayName: String {
         switch self {
-        case .macd: return "MACD 12/26/9"
-        case .kdj:  return "KDJ 9/3/3"
+        case .macd:   return "MACD 12/26/9"
+        case .kdj:    return "KDJ 9/3/3"
+        case .rsi:    return "RSI 14"
+        case .volume: return "成交量"
         }
     }
 
     /// 短名（Picker 紧凑显示）
     var shortName: String {
         switch self {
-        case .macd: return "MACD"
-        case .kdj:  return "KDJ"
+        case .macd:   return "MACD"
+        case .kdj:    return "KDJ"
+        case .rsi:    return "RSI"
+        case .volume: return "成交量"
         }
     }
 }
@@ -69,6 +75,17 @@ struct SubChartView: View {
     // KDJ 视野（J 极端到 ±50 不裁断 · 仅副图内部用）
     private static let kdjViewMin: CGFloat = -20
     private static let kdjViewMax: CGFloat = 120
+
+    // RSI 视野（0~100 固定 · 70/30 超买超卖参考线）
+    private static let rsiViewMin: CGFloat = 0
+    private static let rsiViewMax: CGFloat = 100
+    static let rsiLineColor    = yellowColor
+    static let rsiGuideColor   = Color.white.opacity(0.15)
+
+    // 成交量配色（涨红跌绿 · 与 K 线一致）
+    static let volumeBullColor = bullColor
+    static let volumeBearColor = bearColor
+    static let volumeAxisColor = Color.white.opacity(0.15)
 
     let bars: [KLine]
     let viewport: RenderViewport
@@ -117,6 +134,10 @@ struct SubChartView: View {
                 return (try? MACD.calculate(kline: series, params: [12, 26, 9])) ?? []
             case .kdj:
                 return (try? KDJ.calculate(kline: series, params: [9, 3, 3])) ?? []
+            case .rsi:
+                return (try? RSI.calculate(kline: series, params: [14])) ?? []
+            case .volume:
+                return []  // 成交量直接读 bars · 不走 Indicator 计算
             }
         }.value
 
@@ -129,6 +150,16 @@ struct SubChartView: View {
             seriesA = doublesOf(result, name: "K")
             seriesB = doublesOf(result, name: "D")
             seriesC = doublesOf(result, name: "J")
+        case .rsi:
+            // RSI 14 输出系列名通常就是 "RSI" 或 "RSI14" · 取首个 series
+            let firstSeries = result.first?.values ?? []
+            seriesA = firstSeries.map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
+            seriesB = []
+            seriesC = []
+        case .volume:
+            seriesA = bars.map { Double($0.volume) }  // 直接读 K 线 volume（Int → Double）
+            seriesB = []
+            seriesC = []
         }
     }
 
@@ -158,6 +189,16 @@ struct SubChartView: View {
                 Text("K \(fmt(aLast))").foregroundColor(Self.kdjKColor)
                 Text("D \(fmt(bLast))").foregroundColor(Self.kdjDColor)
                 Text("J \(fmt(cLast))").foregroundColor(Self.kdjJColor)
+            case .rsi:
+                Text("RSI \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 70 ? Self.bullColor : ($0 <= 30 ? Self.bearColor : Self.rsiLineColor) } ?? .secondary
+                )
+            case .volume:
+                Text("VOL \(fmtVolume(aLast))").foregroundColor(
+                    visibleEnd >= 0 && visibleEnd < bars.count
+                        ? (bars[visibleEnd].close >= bars[visibleEnd].open ? Self.volumeBullColor : Self.volumeBearColor)
+                        : .secondary
+                )
             }
         }
         .font(.system(size: 11, design: .monospaced))
@@ -188,6 +229,68 @@ struct SubChartView: View {
             drawKDJ(ctx, size: size,
                     visibleStart: visibleStart, visibleEnd: visibleEnd,
                     barWidth: barWidth, xOffset: xOffset)
+        case .rsi:
+            drawRSI(ctx, size: size,
+                    visibleStart: visibleStart, visibleEnd: visibleEnd,
+                    barWidth: barWidth, xOffset: xOffset)
+        case .volume:
+            drawVolume(ctx, size: size,
+                       visibleStart: visibleStart, visibleEnd: visibleEnd,
+                       barWidth: barWidth, xOffset: xOffset)
+        }
+    }
+
+    /// RSI：固定 0~100 视野（70/50/30 参考线 · 超买/中位/超卖）· 单线
+    private func drawRSI(
+        _ ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        let viewMin = Self.rsiViewMin
+        let viewMax = Self.rsiViewMax
+        let span = viewMax - viewMin
+        let h = size.height
+        let yMap: (CGFloat) -> CGFloat = { v in h * (viewMax - v) / span }
+
+        for guide in [CGFloat(70), 50, 30] {
+            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: Self.rsiGuideColor)
+        }
+
+        drawLine(seriesA, color: Self.rsiLineColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+    }
+
+    /// 成交量：底部基线 0 · 顶部 visible max · 涨红跌绿（按 K 线 close >= open 判涨）
+    private func drawVolume(
+        _ ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        // y 范围：visible 内最大 volume · 顶部留 10% 边距
+        var maxVolume: Double = 1.0
+        for i in visibleStart..<visibleEnd where i < seriesA.count {
+            if let v = seriesA[i], v > maxVolume { maxVolume = v }
+        }
+        let yScale = size.height * 0.9 / CGFloat(maxVolume)
+        let yBase = size.height
+
+        drawDashLine(at: yBase - 1, ctx: ctx, width: size.width, color: Self.volumeAxisColor)
+
+        for i in visibleStart..<visibleEnd {
+            guard i < seriesA.count, let v = seriesA[i], i < bars.count else { continue }
+            let value = CGFloat(v)
+            let xCenter = (CGFloat(i - visibleStart) + 0.5 - xOffset) * barWidth
+            let height = value * yScale
+            let rect = CGRect(
+                x: xCenter - barWidth * 0.3,
+                y: yBase - height,
+                width: barWidth * 0.6,
+                height: height
+            )
+            let isUp = bars[i].close >= bars[i].open
+            ctx.fill(Path(rect),
+                     with: .color(isUp ? Self.volumeBullColor : Self.volumeBearColor))
         }
     }
 
@@ -311,6 +414,14 @@ struct SubChartView: View {
     private func fmt(_ v: Double?) -> String {
         guard let v else { return "—" }
         return String(format: "%.2f", v)
+    }
+
+    /// 成交量格式：≥1M 用 M / ≥1K 用 K · 与 Watchlist openInterestText 风格一致
+    private func fmtVolume(_ v: Double?) -> String {
+        guard let v else { return "—" }
+        if v >= 1_000_000 { return String(format: "%.2fM", v / 1_000_000) }
+        if v >= 1_000 { return String(format: "%.0fK", v / 1_000) }
+        return String(Int(v))
     }
 }
 

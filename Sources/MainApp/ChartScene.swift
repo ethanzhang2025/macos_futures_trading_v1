@@ -1464,8 +1464,9 @@ struct ChartContentView: View {
 
     /// v13.20 主图 ↔ 副图可拖分割条 · 4pt 区域捕获 · DragGesture 改 subChartTotalHeight
     /// 拖动方向：向上拖 = 副图变高（dy < 0 → height +=） · 向下拖 = 副图变矮
+    /// v15.10 用 chartTheme.gridLine 与副图分割条对齐
     private var mainSubDivider: some View {
-        Color.white.opacity(0.18)
+        chartTheme.gridLine
             .frame(height: 4)
             .contentShape(Rectangle())
             .onHover { hovering in
@@ -1622,7 +1623,8 @@ struct ChartContentView: View {
                 priceRange: currentPriceRange,
                 drawings: drawings,
                 selectedIDs: selectedDrawingIDs,
-                pendingDrawing: pendingPreviewDrawing
+                pendingDrawing: pendingPreviewDrawing,
+                textDefaultColor: chartTheme.textPrimary
             )
             // v13.34 HUD 显示在 4 角之一（用户偏好 · UserDefaults 持久化）· 默认左上
             if showHUD {
@@ -1666,19 +1668,20 @@ struct ChartContentView: View {
                         selectedDrawingIDs.removeAll()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(chartTheme.textSecondary)
                     }
                     .buttonStyle(.borderless)
                 }
                 Text("⌘D 全部复制 · Delete 全部删除 · 右键批量改色/线宽")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .foregroundColor(chartTheme.textSecondary.opacity(0.7))
                     .padding(.top, 2)
             }
             .font(.system(size: 11, design: .monospaced))
+            .foregroundColor(chartTheme.textPrimary)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(Color.black.opacity(0.65))
+            .background(chartTheme.hudBackground)
             .cornerRadius(6)
             .padding(12)
         } else if let id = selectedDrawingIDs.first, let d = drawings.first(where: { $0.id == id }) {
@@ -1691,23 +1694,23 @@ struct ChartContentView: View {
                         selectedDrawingIDs.removeAll()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(chartTheme.textSecondary)
                     }
                     .buttonStyle(.borderless)
                 }
                 Text("起：bar \(d.startPoint.barIndex) · 价 \(formatPrice(d.startPoint.price))")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(chartTheme.textSecondary)
                 if let end = d.endPoint {
                     Text("终：bar \(end.barIndex) · 价 \(formatPrice(end.price))")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(chartTheme.textSecondary)
                 }
                 if let text = d.text {
                     Text("文字：\(text)")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(chartTheme.textSecondary)
                 }
                 if let offset = d.channelOffset {
                     Text("通道偏移：\(formatPrice(offset))")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(chartTheme.textSecondary)
                 }
                 // v13.8 显示色 / 线宽 · v13.11 锁定 · v13.15 透明度
                 HStack(spacing: 6) {
@@ -1724,18 +1727,19 @@ struct ChartContentView: View {
                         Text("已锁定")
                     }
                 }
-                .foregroundColor(.secondary)
+                .foregroundColor(chartTheme.textSecondary)
                 Text(d.locked
                      ? "右键解锁后可拖动/删除"
                      : "⌘D 复制 · Delete 删除 · 拖动 anchor 改位置 · 右键编辑")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .foregroundColor(chartTheme.textSecondary.opacity(0.7))
                     .padding(.top, 2)
             }
             .font(.system(size: 11, design: .monospaced))
+            .foregroundColor(chartTheme.textPrimary)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(Color.black.opacity(0.65))
+            .background(chartTheme.hudBackground)
             .cornerRadius(6)
             .padding(12)
         }
@@ -1893,7 +1897,7 @@ struct ChartContentView: View {
             }
             Divider()
             Text("（按住 ⇧ 多选画线 · 右键画线弹更多操作）")
-                .foregroundColor(.secondary)
+                .foregroundColor(chartTheme.textSecondary)
         }
     }
 
@@ -2612,9 +2616,7 @@ struct ChartContentView: View {
                 let diff = close - baseline
                 let pct = baseline > 0 ? diff / baseline * 100 : 0
                 let isUp = diff >= 0
-                let color: Color = isUp
-                    ? Color(red: 0.96, green: 0.27, blue: 0.27)
-                    : Color(red: 0.18, green: 0.74, blue: 0.42)
+                let color: Color = isUp ? chartTheme.candleBull : chartTheme.candleBear
                 Text(String(format: "%.2f", close))
                     .font(.system(size: 22, weight: .bold, design: .monospaced))
                     .foregroundColor(color)
@@ -2630,7 +2632,7 @@ struct ChartContentView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color.black.opacity(0.6))
+        .background(chartTheme.hudBackground)
         .cornerRadius(6)
         .padding(12)
     }
@@ -2696,7 +2698,7 @@ struct ChartContentView: View {
             // 主标识行：合约 + 周期 + 数据源（核心信息 · 醒目）
             Text("\(instrumentLabel) · \(periodLabel) · \(dataSourceLabel)")
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundColor(chartTheme.textPrimary)
             // 视觉迭代第 3 项：MA / BOLL 数值彩色圆点 + 染色（与 Metal 折线 5 色调色板对齐 · 黄/紫/蓝/橙/粉）
             ForEach(Array(indicators.enumerated()), id: \.offset) { idx, series in
                 HStack(spacing: 6) {
@@ -2710,12 +2712,12 @@ struct ChartContentView: View {
             // 视觉迭代第 4 项：调试信息（视野/帧时）淡化 · 字号缩小 + 灰色 · 不抢主信息
             Text("可见 \(viewport.visibleCount) · 起点 \(viewport.startIndex)/\(bars.count) · 帧 \(String(format: "%.1f", lastFrameMs))ms")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(chartTheme.textSecondary)
         }
         .font(.system(size: 12, design: .monospaced))
-        .foregroundColor(.white)
+        .foregroundColor(chartTheme.textPrimary)
         .padding(8)
-        .background(Color.black.opacity(0.6))
+        .background(chartTheme.hudBackground)
         .cornerRadius(6)
         .padding(12)
     }

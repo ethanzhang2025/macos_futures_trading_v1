@@ -26,6 +26,8 @@ public struct DrawingsOverlayView: View {
     public let selectedIDs: Set<UUID>
     /// 正在创建中的双点画线（第一点已落 · 第二点未确定 · hover 跟随用 cursorPoint 预览）
     public let pendingDrawing: Drawing?
+    /// v15.10 .text 类型缺省色（无 strokeColorHex 时跟主图主题切换）· 默认 .white 保旧调用兼容
+    public let textDefaultColor: Color
 
     public init(
         bars: [KLine],
@@ -33,7 +35,8 @@ public struct DrawingsOverlayView: View {
         priceRange: ClosedRange<Decimal>,
         drawings: [Drawing],
         selectedIDs: Set<UUID> = [],
-        pendingDrawing: Drawing? = nil
+        pendingDrawing: Drawing? = nil,
+        textDefaultColor: Color = .white
     ) {
         self.bars = bars
         self.viewport = viewport
@@ -41,6 +44,7 @@ public struct DrawingsOverlayView: View {
         self.drawings = drawings
         self.selectedIDs = selectedIDs
         self.pendingDrawing = pendingDrawing
+        self.textDefaultColor = textDefaultColor
     }
 
     /// v13.0~v13.7 单选兼容入口（保留以减少调用方改动 · 内部转 Set）
@@ -50,7 +54,8 @@ public struct DrawingsOverlayView: View {
         priceRange: ClosedRange<Decimal>,
         drawings: [Drawing],
         selectedID: UUID?,
-        pendingDrawing: Drawing? = nil
+        pendingDrawing: Drawing? = nil,
+        textDefaultColor: Color = .white
     ) {
         self.init(
             bars: bars,
@@ -58,7 +63,8 @@ public struct DrawingsOverlayView: View {
             priceRange: priceRange,
             drawings: drawings,
             selectedIDs: selectedID.map { [$0] } ?? [],
-            pendingDrawing: pendingDrawing
+            pendingDrawing: pendingDrawing,
+            textDefaultColor: textDefaultColor
         )
     }
 
@@ -95,8 +101,12 @@ public struct DrawingsOverlayView: View {
     // MARK: - 画线分发
 
     private func draw(_ drawing: Drawing, in ctx: GraphicsContext, size: CGSize, isSelected: Bool = false, isPending: Bool = false) {
-        // v13.8 优先用 drawing 自定义 · 缺省回退类型默认 · v13.15 叠加 strokeOpacity
-        let baseColor = Self.effectiveColor(for: drawing)
+        // 配色优先级：用户自定义 hex > .text 类型用主题色 > 类型默认（语义色）· 叠加 strokeOpacity
+        let baseColor: Color = {
+            if let hex = drawing.strokeColorHex, let c = Self.colorFromHex(hex) { return c }
+            if drawing.type == .text { return textDefaultColor }
+            return Self.colorFor(drawing.type)
+        }()
         let baseWidth = CGFloat(drawing.strokeWidth ?? 1.5)
         let lineWidth: CGFloat = isSelected ? baseWidth + 1.0 : baseWidth
         let dash: [CGFloat] = isPending ? [4, 3] : []
@@ -330,14 +340,6 @@ public struct DrawingsOverlayView: View {
     }
 
     // MARK: - 配色
-
-    /// v13.8 优先解析 drawing.strokeColorHex · 失败回退到 colorFor(type) 默认色
-    public static func effectiveColor(for drawing: Drawing) -> Color {
-        if let hex = drawing.strokeColorHex, let c = Self.colorFromHex(hex) {
-            return c
-        }
-        return colorFor(drawing.type)
-    }
 
     public static func colorFor(_ type: DrawingType) -> Color {
         switch type {

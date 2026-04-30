@@ -955,33 +955,97 @@ struct ChartContentView: View {
         }
     }
 
-    /// 找点击位置最近的画线 anchor 点（startPoint / endPoint）· 距离 < 15 像素 selected
+    /// 找点击位置最近的画线（v13.4 升级 · 点击线段任意位置 · 不只 anchor）
+    /// 阈值 8 像素 · 6 种画线类型分别计算距离（线段 / 水平线 / 矩形 4 边 / 平行通道双轴 / fib 各档 / text 位置）
     private func findDrawingAt(_ location: CGPoint, in size: CGSize) -> UUID? {
+        let threshold: CGFloat = 8
+        var minDist: CGFloat = threshold
+        var closestID: UUID?
+        for d in drawings.reversed() {  // 最近画的在上层 · 优先选
+            let dist = distanceToDrawing(location, drawing: d, in: size)
+            if dist < minDist { minDist = dist; closestID = d.id }
+        }
+        return closestID
+    }
+
+    /// 屏幕点到画线的最近距离（按 type 分发计算）
+    private func distanceToDrawing(_ p: CGPoint, drawing: Drawing, in size: CGSize) -> CGFloat {
         let visibleCount = max(1, viewport.visibleCount)
         let barWidth = size.width / CGFloat(visibleCount)
         let xOffset = CGFloat(viewport.startOffset)
         let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
         let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
         let span = max(0.0001, hi - lo)
-        func screenPoint(_ p: DrawingPoint) -> CGPoint {
-            let x = (CGFloat(p.barIndex - viewport.startIndex) + 0.5 - xOffset) * barWidth
-            let priceD = NSDecimalNumber(decimal: p.price).doubleValue
+        func screenPoint(_ pt: DrawingPoint) -> CGPoint {
+            let x = (CGFloat(pt.barIndex - viewport.startIndex) + 0.5 - xOffset) * barWidth
+            let priceD = NSDecimalNumber(decimal: pt.price).doubleValue
             let y = CGFloat((hi - priceD) / span) * size.height
             return CGPoint(x: x, y: y)
         }
-        var minDist: CGFloat = 15
-        var closestID: UUID?
-        for d in drawings.reversed() {  // 最近画的在上层 · 优先选
-            let s = screenPoint(d.startPoint)
-            let d1 = hypot(location.x - s.x, location.y - s.y)
-            if d1 < minDist { minDist = d1; closestID = d.id }
-            if let end = d.endPoint {
-                let e = screenPoint(end)
-                let d2 = hypot(location.x - e.x, location.y - e.y)
-                if d2 < minDist { minDist = d2; closestID = d.id }
+
+        switch drawing.type {
+        case .trendLine:
+            guard let end = drawing.endPoint else { return .infinity }
+            return Self.pointToSegmentDistance(p, screenPoint(drawing.startPoint), screenPoint(end))
+
+        case .horizontalLine:
+            let y = screenPoint(drawing.startPoint).y
+            return abs(p.y - y)
+
+        case .rectangle:
+            guard let end = drawing.endPoint else { return .infinity }
+            let s = screenPoint(drawing.startPoint)
+            let e = screenPoint(end)
+            let xMin = min(s.x, e.x), xMax = max(s.x, e.x)
+            let yMin = min(s.y, e.y), yMax = max(s.y, e.y)
+            let topLeft = CGPoint(x: xMin, y: yMin)
+            let topRight = CGPoint(x: xMax, y: yMin)
+            let botLeft = CGPoint(x: xMin, y: yMax)
+            let botRight = CGPoint(x: xMax, y: yMax)
+            return min(
+                Self.pointToSegmentDistance(p, topLeft, topRight),
+                Self.pointToSegmentDistance(p, botLeft, botRight),
+                Self.pointToSegmentDistance(p, topLeft, botLeft),
+                Self.pointToSegmentDistance(p, topRight, botRight)
+            )
+
+        case .parallelChannel:
+            guard let end = drawing.endPoint, let offset = drawing.channelOffset else { return .infinity }
+            let s = screenPoint(drawing.startPoint)
+            let e = screenPoint(end)
+            let main = Self.pointToSegmentDistance(p, s, e)
+            let offsetStart = screenPoint(DrawingPoint(barIndex: drawing.startPoint.barIndex, price: drawing.startPoint.price + offset))
+            let offsetEnd = screenPoint(DrawingPoint(barIndex: end.barIndex, price: end.price + offset))
+            let secondary = Self.pointToSegmentDistance(p, offsetStart, offsetEnd)
+            return min(main, secondary)
+
+        case .fibonacci:
+            guard drawing.endPoint != nil else { return .infinity }
+            let prices = DrawingGeometry.fibonacciPrices(for: drawing)
+            var minD: CGFloat = .infinity
+            for price in prices {
+                let y = screenPoint(DrawingPoint(barIndex: drawing.startPoint.barIndex, price: price)).y
+                minD = min(minD, abs(p.y - y))
             }
+            return minD
+
+        case .text:
+            let pt = screenPoint(drawing.startPoint)
+            return hypot(p.x - pt.x, p.y - pt.y)
         }
-        return closestID
+    }
+
+    /// 点到线段的最近距离（投影夹钳到 [0,1] 区间）
+    private static func pointToSegmentDistance(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        let len2 = dx * dx + dy * dy
+        if len2 < 0.0001 {
+            return hypot(p.x - a.x, p.y - a.y)
+        }
+        let t = max(0, min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
+        let proj = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
+        return hypot(p.x - proj.x, p.y - proj.y)
     }
 
     /// v13.3 双点画线第二点 hover 实时预览 · pendingDrawingPoint + hoverDataPoint → 虚线 Drawing

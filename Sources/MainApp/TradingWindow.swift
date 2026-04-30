@@ -13,6 +13,7 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import AppKit
 import Foundation
 import Shared
 import TradingCore
@@ -23,6 +24,7 @@ private enum TradingTab: String, CaseIterable, Identifiable {
     case orders    = "委托"
     case trades    = "成交"
     case positions = "持仓"
+    case equity    = "资金曲线"
     var id: String { rawValue }
 }
 
@@ -35,6 +37,7 @@ struct TradingWindow: View {
     @State private var trades: [TradeRecord] = []
     @State private var positions: [Position] = []
     @State private var contracts: [Contract] = []
+    @State private var equityCurve: [EquityCurvePoint] = []
     @State private var selectedTab: TradingTab = .orders
     @State private var observeTask: Task<Void, Never>?
 
@@ -88,6 +91,14 @@ struct TradingWindow: View {
             stat("风险度", "\(fmtPercent(account.riskRatio))%",
                  color: account.riskRatio < 50 ? .green : (account.riskRatio < 80 ? .orange : .red))
             Spacer()
+            // v15.5 当日交割单 CSV 导出（委托 / 成交 / 持仓 三表合一）
+            Button {
+                exportCSV()
+            } label: {
+                Label("导出 CSV", systemImage: "square.and.arrow.up")
+            }
+            .buttonStyle(.borderless)
+            .help("当日交割单 · 委托 / 成交 / 持仓 三表合一 UTF-8 BOM")
         }
         .padding(.horizontal, 16)
         .frame(height: 56)
@@ -177,6 +188,7 @@ struct TradingWindow: View {
         case .orders:    return orders.count
         case .trades:    return trades.count
         case .positions: return positions.count
+        case .equity:    return equityCurve.count
         }
     }
 
@@ -186,7 +198,90 @@ struct TradingWindow: View {
         case .orders:    ordersList
         case .trades:    tradesList
         case .positions: positionsList
+        case .equity:    equityCurveView
         }
+    }
+
+    // MARK: - 资金曲线（v15.5）
+
+    private var equityCurveView: some View {
+        let firstBalance = equityCurve.first?.balance ?? 0
+        let lastBalance = equityCurve.last?.balance ?? 0
+        let balances = equityCurve.map(\.balance)
+        return VStack(spacing: 0) {
+            // HUD：起始 / 当前 / 最高 / 最低
+            HStack(spacing: 24) {
+                stat("起始", fmtMoney(firstBalance), color: .secondary)
+                stat("当前", fmtMoney(lastBalance),
+                     color: lastBalance >= firstBalance ? .green : .red)
+                stat("最高", fmtMoney(balances.max() ?? 0), color: .green)
+                stat("最低", fmtMoney(balances.min() ?? 0), color: .red)
+                Divider().frame(height: 24)
+                stat("点数", "\(equityCurve.count)", color: .secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.secondary.opacity(0.06))
+
+            Canvas { ctx, size in drawEquityCurve(ctx, size: size) }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+        }
+    }
+
+    /// 资金曲线绘制 · 起始基线虚线 + 折线 + 上涨绿/下跌红区分色
+    private func drawEquityCurve(_ ctx: GraphicsContext, size: CGSize) {
+        guard equityCurve.count >= 2 else {
+            // 单点 / 空 → 中央提示
+            let text = Text("等待交易事件 · 当前 \(equityCurve.count) 个数据点")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+            ctx.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2), anchor: .center)
+            return
+        }
+
+        let balances = equityCurve.map { NSDecimalNumber(decimal: $0.balance).doubleValue }
+        guard let minB = balances.min(), let maxB = balances.max() else { return }
+        let range = max(0.01, maxB - minB)
+        // 上下各留 10% padding · 防贴边
+        let viewMin = minB - range * 0.1
+        let viewMax = maxB + range * 0.1
+        let viewRange = viewMax - viewMin
+
+        let n = balances.count
+        let step = (n > 1) ? size.width / CGFloat(n - 1) : size.width
+        let baseline = balances.first ?? 0
+        // value → 屏幕 Y（顶部 = max · 底部 = min）
+        func yFor(_ value: Double) -> CGFloat {
+            (1 - (value - viewMin) / viewRange) * size.height
+        }
+
+        // 起始基线虚线
+        let baselineY = yFor(baseline)
+        var dash = Path()
+        dash.move(to: CGPoint(x: 0, y: baselineY))
+        dash.addLine(to: CGPoint(x: size.width, y: baselineY))
+        ctx.stroke(dash, with: .color(.white.opacity(0.25)),
+                   style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+
+        // 折线（终态盈利绿 / 亏损红 · v1 不分段）
+        var path = Path()
+        for (i, b) in balances.enumerated() {
+            let pt = CGPoint(x: CGFloat(i) * step, y: yFor(b))
+            if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+        }
+        let isProfitable = (balances.last ?? 0) >= baseline
+        let lineColor: Color = isProfitable ? .green : .red
+        ctx.stroke(path,
+                   with: .color(lineColor),
+                   style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+
+        // 终点圆点
+        let lastX = CGFloat(n - 1) * step
+        let lastY = yFor(balances.last ?? 0)
+        let dot = Path(ellipseIn: CGRect(x: lastX - 3, y: lastY - 3, width: 6, height: 6))
+        ctx.fill(dot, with: .color(lineColor))
     }
 
     // MARK: - 委托表
@@ -417,11 +512,13 @@ struct TradingWindow: View {
         let o = await engine.allOrders()
         let t = await engine.allTrades()
         let p = await engine.allPositions()
+        let eq = await engine.equityCurveSnapshot()
         await MainActor.run {
             account = a
             orders = o.sorted { $0.orderRef > $1.orderRef }   // 新的在前
             trades = t.reversed()
             positions = p
+            equityCurve = eq
         }
     }
 
@@ -436,6 +533,82 @@ struct TradingWindow: View {
                 if feedbackToken == myToken { feedback = nil }
             }
         }
+    }
+
+    // MARK: - CSV 导出（v15.5 · 当日交割单 · 委托/成交/持仓 三表合一）
+
+    private func exportCSV() {
+        let panel = NSSavePanel()
+        panel.title = "导出当日交割单"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyy-MM-dd-HHmmss"
+        dateFmt.locale = Locale(identifier: "en_US_POSIX")
+        panel.nameFieldStringValue = "trading_\(dateFmt.string(from: Date())).csv"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let csv = Self.buildCSV(orders: orders, trades: trades, positions: positions, account: account)
+        // UTF-8 BOM 让 Excel 正确识别中文
+        var data = Data([0xEF, 0xBB, 0xBF])
+        data.append(csv.data(using: .utf8) ?? Data())
+        do {
+            try data.write(to: url)
+            showFeedback(.success("交割单已导出：\(url.lastPathComponent)"))
+        } catch {
+            showFeedback(.error("导出失败：\(error.localizedDescription)"))
+        }
+    }
+
+    /// 三表合一 CSV · 章节标题（Excel 友好：单字段标题行 + 空行分隔，无 # 注释）
+    private static func buildCSV(
+        orders: [OrderRecord], trades: [TradeRecord],
+        positions: [Position], account: Account
+    ) -> String {
+        var lines: [String] = []
+        appendSection(into: &lines, title: "账户摘要", header: "项,值", rows: [
+            "动态权益,\(account.balance)",
+            "可用资金,\(account.available)",
+            "保证金,\(account.margin)",
+            "浮动盈亏,\(account.positionPnL)",
+            "平仓盈亏,\(account.closePnL)",
+            "手续费,\(account.commission)",
+        ])
+        appendSection(into: &lines, title: "委托记录",
+                      header: "时间,委托号,合约,方向,开平,价格,总量,已成,状态,消息",
+                      rows: orders.map { o in
+            "\(csvEscape(o.insertTime)),\(csvEscape(o.orderRef)),\(csvEscape(o.instrumentID)),\(o.direction.displayName),\(o.offsetFlag.displayName),\(o.price),\(o.totalVolume),\(o.filledVolume),\(o.status.displayName),\(csvEscape(o.statusMessage))"
+        })
+        appendSection(into: &lines, title: "成交记录",
+                      header: "时间,成交号,委托号,合约,方向,开平,成交价,数量,手续费",
+                      rows: trades.map { t in
+            "\(csvEscape(t.tradeTime)),\(csvEscape(t.tradeID)),\(csvEscape(t.orderRef)),\(csvEscape(t.instrumentID)),\(t.direction.displayName),\(t.offsetFlag.displayName),\(t.price),\(t.volume),\(t.commission)"
+        })
+        appendSection(into: &lines, title: "持仓快照",
+                      header: "合约,方向,数量,今仓,均价,保证金,乘数",
+                      rows: positions.map { p in
+            "\(csvEscape(p.instrumentID)),\(p.direction.displayName),\(p.volume),\(p.todayVolume),\(p.openAvgPrice),\(p.margin),\(p.volumeMultiple)"
+        }, trailingBlank: false)
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// 追加 CSV 章节：标题行（单字段 · Excel 直接识别）+ 表头 + 数据 + 可选尾空行
+    private static func appendSection(
+        into lines: inout [String],
+        title: String, header: String, rows: [String],
+        trailingBlank: Bool = true
+    ) {
+        lines.append(csvEscape(title))
+        lines.append(header)
+        lines.append(contentsOf: rows)
+        if trailingBlank { lines.append("") }
+    }
+
+    /// CSV 字段转义（RFC 4180）：含逗号 / 引号 / CR / LF 时用双引号包住 + 内部双引号转双双引号
+    private static func csvEscape(_ s: String) -> String {
+        if s.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" }) {
+            return "\"\(s.replacingOccurrences(of: "\"", with: "\"\""))\""
+        }
+        return s
     }
 
     // MARK: - 静态/格式化辅助

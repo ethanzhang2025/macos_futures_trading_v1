@@ -41,10 +41,14 @@ public actor SimulatedTradingEngine {
     private var orderRefCounter: Int = 0
     /// 成交序号自增（trade ID 用 · "T" 前缀 + 8 位）
     private var tradeIDCounter: Int = 0
+    /// 资金曲线时序（v15.5 · accountChanged 时追加 · 限 maxEquityPoints 防内存膨胀）
+    private var equityCurve: [EquityCurvePoint] = []
+    /// 资金曲线最大点数（5000 点足够覆盖一日盘中分钟级采样）
+    private let maxEquityPoints: Int = 5000
 
     // MARK: - 初始化
 
-    public init(initialBalance: Decimal, contracts: [String: Contract] = [:]) {
+    public init(initialBalance: Decimal, contracts: [String: Contract] = [:], now: Date = Date()) {
         self.account = Account(
             preBalance: initialBalance,
             deposit: 0, withdraw: 0,
@@ -52,6 +56,10 @@ public actor SimulatedTradingEngine {
             commission: 0, margin: 0
         )
         self.contracts = contracts
+        // v15.5 起始 baseline：曲线起点 = 初始权益 · 后续 accountChanged 追加
+        self.equityCurve.append(
+            EquityCurvePoint(timestamp: now, balance: initialBalance, positionPnL: 0)
+        )
     }
 
     // MARK: - 配置 API（运行时新增 / 替换合约）
@@ -85,6 +93,9 @@ public actor SimulatedTradingEngine {
     public func contract(_ instrumentID: String) -> Contract? { contracts[instrumentID] }
 
     public func allContracts() -> [Contract] { Array(contracts.values) }
+
+    /// v15.5 资金曲线快照（已按时间序 · 起始 baseline 永远是 index 0）
+    public func equityCurveSnapshot() -> [EquityCurvePoint] { equityCurve }
 
     // MARK: - 事件订阅
 
@@ -130,7 +141,7 @@ public actor SimulatedTradingEngine {
             }
             // 锁定保证金（资金可用减 · 撮合时再正式扣到 position.margin）
             account.margin += marginNeeded
-            broadcast(.accountChanged(account))
+            broadcast(.accountChanged(account), now: now)
         } else {
             // 平仓：检查持仓
             let posDirection: PositionDirection = (request.direction == .sell) ? .long : .short
@@ -154,26 +165,26 @@ public actor SimulatedTradingEngine {
             statusMessage: ""
         )
         orders[ref] = record
-        broadcast(.orderSubmitted(record))
+        broadcast(.orderSubmitted(record), now: now)
         return (ref, nil)
     }
 
     /// 撤单 · 仅 active 委托可撤 · 释放预占保证金（开仓单）
     @discardableResult
-    public func cancelOrder(orderRef: String) -> Bool {
+    public func cancelOrder(orderRef: String, now: Date = Date()) -> Bool {
         guard var record = orders[orderRef], record.status.isActive else { return false }
 
         // 释放预占保证金（开仓单）
         if record.offsetFlag == .open, let contract = contracts[record.instrumentID] {
             let margin = openMargin(contract: contract, price: record.price, volume: record.remainingVolume, direction: record.direction)
             account.margin -= margin
-            broadcast(.accountChanged(account))
+            broadcast(.accountChanged(account), now: now)
         }
 
         record.status = .cancelled
         record.statusMessage = "用户撤单"
         orders[orderRef] = record
-        broadcast(.orderCancelled(record))
+        broadcast(.orderCancelled(record), now: now)
         return true
     }
 
@@ -194,8 +205,8 @@ public actor SimulatedTradingEngine {
             // 字典 subscript 不支持 inout · fillOrder 修改的是本地副本 · 这里写回最终态
             orders[ref] = record
         }
-        // 撮合后更新持仓盈亏 → 账户 positionPnL
-        recomputePositionPnL(lastPrice: lastPrice, instrumentID: tick.instrumentID)
+        // 撮合后更新持仓盈亏 → 账户 positionPnL（共用同一 now · 曲线时间戳与 tick 同源）
+        recomputePositionPnL(lastPrice: lastPrice, instrumentID: tick.instrumentID, now: now)
     }
 
     // MARK: - 私有：撮合
@@ -222,9 +233,9 @@ public actor SimulatedTradingEngine {
         account.commission += commission
 
         if record.offsetFlag == .open {
-            applyOpen(record: record, contract: contract, fillPrice: matchPrice, fillVolume: fillVolume)
+            applyOpen(record: record, contract: contract, fillPrice: matchPrice, fillVolume: fillVolume, now: now)
         } else {
-            applyClose(record: record, fillPrice: matchPrice, fillVolume: fillVolume)
+            applyClose(record: record, fillPrice: matchPrice, fillVolume: fillVolume, now: now)
         }
 
         let trade = TradeRecord(
@@ -239,12 +250,12 @@ public actor SimulatedTradingEngine {
             commission: commission
         )
         trades.append(trade)
-        broadcast(.orderFilled(record, trade))
-        broadcast(.accountChanged(account))
+        broadcast(.orderFilled(record, trade), now: now)
+        broadcast(.accountChanged(account), now: now)
     }
 
     /// 开仓：建仓 / 加仓 · 锁定保证金（已在 submit 时预占 · 此处转 position.margin）
-    private func applyOpen(record: OrderRecord, contract: Contract, fillPrice: Decimal, fillVolume: Int) {
+    private func applyOpen(record: OrderRecord, contract: Contract, fillPrice: Decimal, fillVolume: Int, now: Date) {
         let posDirection: PositionDirection = (record.direction == .buy) ? .long : .short
         let key = Self.positionKey(instrumentID: record.instrumentID, direction: posDirection)
         let margin = openMargin(contract: contract, price: fillPrice, volume: fillVolume, direction: record.direction)
@@ -260,7 +271,7 @@ public actor SimulatedTradingEngine {
             existing.avgPrice = existing.openAvgPrice
             existing.margin += margin
             positions[key] = existing
-            broadcast(.positionChanged(existing))
+            broadcast(.positionChanged(existing), now: now)
         } else {
             let pos = Position(
                 instrumentID: record.instrumentID,
@@ -274,12 +285,12 @@ public actor SimulatedTradingEngine {
                 volumeMultiple: contract.volumeMultiple
             )
             positions[key] = pos
-            broadcast(.positionChanged(pos))
+            broadcast(.positionChanged(pos), now: now)
         }
     }
 
     /// 平仓：减仓 · 释放保证金 · 计算 closePnL
-    private func applyClose(record: OrderRecord, fillPrice: Decimal, fillVolume: Int) {
+    private func applyClose(record: OrderRecord, fillPrice: Decimal, fillVolume: Int, now: Date) {
         let posDirection: PositionDirection = (record.direction == .sell) ? .long : .short
         let key = Self.positionKey(instrumentID: record.instrumentID, direction: posDirection)
         guard var pos = positions[key] else { return }
@@ -300,11 +311,11 @@ public actor SimulatedTradingEngine {
         pos.volume -= fillVolume
         pos.todayVolume = max(0, pos.todayVolume - fillVolume)
         positions[key] = (pos.volume == 0) ? nil : pos
-        broadcast(.positionChanged(pos))
+        broadcast(.positionChanged(pos), now: now)
     }
 
     /// 重新计算所有持仓的浮盈 → 汇总到 account.positionPnL
-    private func recomputePositionPnL(lastPrice: Decimal, instrumentID: String) {
+    private func recomputePositionPnL(lastPrice: Decimal, instrumentID: String, now: Date = Date()) {
         var totalPnL: Decimal = 0
         for pos in positions.values where pos.volume > 0 {
             // 仅当前 instrument 用 tick lastPrice · 其他持仓保持已有 markPrice（v1 简化为开仓价 → 浮盈 0）
@@ -313,7 +324,7 @@ public actor SimulatedTradingEngine {
         }
         if account.positionPnL != totalPnL {
             account.positionPnL = totalPnL
-            broadcast(.accountChanged(account))
+            broadcast(.accountChanged(account), now: now)
         }
     }
 
@@ -339,7 +350,17 @@ public actor SimulatedTradingEngine {
 
     // MARK: - 私有：事件广播
 
-    private func broadcast(_ event: SimulatedTradingEvent) {
+    private func broadcast(_ event: SimulatedTradingEvent, now: Date = Date()) {
+        // v15.5 资金曲线：accountChanged 时追加点（去重相邻同 balance · 防 onTick 高频空 yield 撑爆）
+        if case .accountChanged(let acc) = event {
+            let last = equityCurve.last
+            if last?.balance != acc.balance || last?.positionPnL != acc.positionPnL {
+                equityCurve.append(EquityCurvePoint(timestamp: now, balance: acc.balance, positionPnL: acc.positionPnL))
+                if equityCurve.count > maxEquityPoints {
+                    equityCurve.removeFirst(equityCurve.count - maxEquityPoints)
+                }
+            }
+        }
         for cont in continuations.values { cont.yield(event) }
     }
 
@@ -358,7 +379,7 @@ public actor SimulatedTradingEngine {
             statusMessage: reason.displayMessage
         )
         orders[ref] = record
-        broadcast(.orderRejected(orderRef: ref, reason: reason))
+        broadcast(.orderRejected(orderRef: ref, reason: reason), now: now)
     }
 
     // MARK: - 私有：辅助

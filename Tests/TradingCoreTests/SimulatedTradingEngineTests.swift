@@ -424,3 +424,78 @@ struct EventStreamTests {
         #expect(hasRejected)
     }
 }
+
+// MARK: - 7. 资金曲线 equityCurve
+
+@Suite("SimulatedTradingEngine · 资金曲线")
+struct EquityCurveTests {
+
+    @Test("起始 baseline · index 0 = 初始余额")
+    func initialBaseline() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        let curve = await engine.equityCurveSnapshot()
+        #expect(curve.count == 1)
+        #expect(curve.first?.balance == 1_000_000)
+        #expect(curve.first?.positionPnL == 0)
+    }
+
+    @Test("EquityCurvePoint Codable 往返")
+    func codableRoundTrip() throws {
+        let pt = EquityCurvePoint(
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+            balance: 1_005_000,
+            positionPnL: 5_000
+        )
+        let data = try JSONEncoder().encode(pt)
+        let decoded = try JSONDecoder().decode(EquityCurvePoint.self, from: data)
+        #expect(decoded == pt)
+    }
+
+    @Test("成交后曲线追加新点 · balance 反映新值")
+    func appendAfterFill() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContract(makeContract())
+        // 买开 1 手 @ 3500 · 锁保证金 3500 → balance 不变（仅 margin 变）但仍触发 accountChanged
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 1))
+        // 成交价 3500 → 没浮盈 · 但手续费改变 balance
+        await engine.onTick(makeTick(3500))
+
+        let curve = await engine.equityCurveSnapshot()
+        #expect(curve.count >= 2)
+        // 末点 balance = 1_000_000 - fixedCommissionPerLot
+        let expected = Decimal(1_000_000) - SimulatedTradingEngine.fixedCommissionPerLot
+        #expect(curve.last?.balance == expected)
+    }
+
+    @Test("浮盈变化 → 曲线追加 · 反映 mark-to-market")
+    func appendOnPositionPnLChange() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContract(makeContract())
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 1))
+        await engine.onTick(makeTick(3500))   // 开仓
+        let countAfterOpen = await engine.equityCurveSnapshot().count
+
+        // 价格涨到 3600 → 浮盈 +1000
+        await engine.onTick(makeTick(3600))
+        let curve = await engine.equityCurveSnapshot()
+        #expect(curve.count > countAfterOpen)
+        #expect(curve.last?.positionPnL == 1_000)
+        // balance = 1_000_000 - 手续费 + 1000（浮盈）
+        let expected = Decimal(1_000_000) - SimulatedTradingEngine.fixedCommissionPerLot + 1_000
+        #expect(curve.last?.balance == expected)
+    }
+
+    @Test("相邻同 balance 不重复追加（去重防 onTick 高频空 yield 撑爆）")
+    func dedupeIdenticalPoints() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContract(makeContract())
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 1))
+        await engine.onTick(makeTick(3500))   // 一根 tick 触发开仓 + 浮盈计算
+
+        let count1 = await engine.equityCurveSnapshot().count
+        // 同样的 3500 价格再次 tick · positionPnL 不变 · balance 不变 → 不追加
+        await engine.onTick(makeTick(3500))
+        let count2 = await engine.equityCurveSnapshot().count
+        #expect(count2 == count1)
+    }
+}

@@ -20,6 +20,22 @@ public enum SimulatedTradingEvent: Sendable {
     case accountChanged(Account)
 }
 
+/// 资金曲线时序点（v15.5 · accountChanged 时追加 · UI Canvas 画折线）
+public struct EquityCurvePoint: Sendable, Codable, Equatable {
+    /// 采样时间
+    public let timestamp: Date
+    /// 动态权益（账户 balance · preBalance + closePnL + positionPnL - commission）
+    public let balance: Decimal
+    /// 持仓浮盈（用于次坐标 / HUD · 与 balance 同源 account 但单独可读）
+    public let positionPnL: Decimal
+
+    public init(timestamp: Date, balance: Decimal, positionPnL: Decimal) {
+        self.timestamp = timestamp
+        self.balance = balance
+        self.positionPnL = positionPnL
+    }
+}
+
 /// 委托被拒绝的原因
 public enum OrderRejectReason: Sendable, Error, Equatable {
     /// 合约不存在（contracts 字典未配置该 instrumentID）

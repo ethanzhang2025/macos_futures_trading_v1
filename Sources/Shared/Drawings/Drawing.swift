@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Andrew's Pitchfork = 9 种
+/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 = 10 种
 public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case trendLine        // 趋势线（两点）
     case horizontalLine   // 水平线（单点价格）
@@ -15,13 +15,15 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case ellipse          // 椭圆（两点定外接矩形对角 · v13.13）
     case ruler            // 测量工具（两点 · 渲染显示价格差/百分比/bar 数 · v13.14）
     case pitchfork        // Andrew's Pitchfork（3 点定中线 · 上下平行 · v13.17）
+    case polygon          // 多边形（任意 N≥3 点闭合 · v13.31 · 用户连续点击 + 工具栏"完成"按钮触发）
 
-    /// 完成画线所需的点数（v13.17 加 pitchfork = 3 点）
+    /// 完成画线所需的点数 · v13.31 polygon 用 0 表示动态（用户主动触发完成）
     public var pointsNeeded: Int {
         switch self {
         case .horizontalLine, .text: return 1
         case .trendLine, .rectangle, .parallelChannel, .fibonacci, .ellipse, .ruler: return 2
         case .pitchfork: return 3
+        case .polygon: return 0  // 0 = 动态点数 · 用户点 N 次后主动触发完成
         }
     }
 
@@ -164,5 +166,16 @@ extension Drawing {
     /// Andrew's Pitchfork（v13.17 · 3 点 · A 中线起点 / B 上轨锚 / C 下轨锚 · 中线方向 = A → midpoint(B,C)）
     public static func pitchfork(handle: DrawingPoint, upper: DrawingPoint, lower: DrawingPoint) -> Drawing {
         Drawing(type: .pitchfork, startPoint: handle, endPoint: upper, extraPoints: [lower])
+    }
+
+    /// 多边形（v13.31 · 任意 N≥3 点闭合 · startPoint = 第 1 点 · extraPoints = 第 2~N 点）
+    /// 渲染时连接所有点 + 闭合到第 1 点 · 半透明填充
+    public static func polygon(points: [DrawingPoint]) -> Drawing? {
+        guard points.count >= 3 else { return nil }
+        return Drawing(
+            type: .polygon,
+            startPoint: points[0],
+            extraPoints: Array(points.dropFirst())
+        )
     }
 }

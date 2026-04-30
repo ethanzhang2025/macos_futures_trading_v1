@@ -11,7 +11,7 @@ private func point(_ bar: Int, _ price: Int) -> DrawingPoint {
 
 @Suite("Drawing 创建与类型契约")
 struct DrawingFactoryTests {
-    @Test("9 种 factory 类型正确（v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork）")
+    @Test("10 种 factory 类型正确（v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形）")
     func factoryTypes() {
         #expect(Drawing.trendLine(from: point(0, 100), to: point(10, 110)).type == .trendLine)
         #expect(Drawing.horizontalLine(price: 100).type == .horizontalLine)
@@ -22,6 +22,24 @@ struct DrawingFactoryTests {
         #expect(Drawing.ellipse(from: point(0, 100), to: point(10, 110)).type == .ellipse)
         #expect(Drawing.ruler(from: point(0, 100), to: point(10, 110)).type == .ruler)
         #expect(Drawing.pitchfork(handle: point(0, 100), upper: point(10, 110), lower: point(10, 90)).type == .pitchfork)
+        let pg = Drawing.polygon(points: [point(0, 100), point(5, 105), point(10, 100)])
+        #expect(pg?.type == .polygon)
+    }
+
+    @Test("v13.31 多边形 factory · 至少 3 点 / 少于 3 返回 nil / startPoint+extraPoints 映射")
+    func polygonFactory() {
+        // 2 点 → nil
+        #expect(Drawing.polygon(points: [point(0, 100), point(5, 105)]) == nil)
+        // 3 点 OK
+        let triangle = Drawing.polygon(points: [point(0, 100), point(5, 110), point(10, 100)])
+        #expect(triangle != nil)
+        #expect(triangle?.startPoint.barIndex == 0)
+        #expect(triangle?.extraPoints?.count == 2)
+        #expect(triangle?.extraPoints?[0].barIndex == 5)
+        #expect(triangle?.extraPoints?[1].barIndex == 10)
+        // 5 点 OK
+        let pentagon = Drawing.polygon(points: [point(0, 100), point(2, 105), point(5, 110), point(8, 105), point(10, 100)])
+        #expect(pentagon?.extraPoints?.count == 4)
     }
 
     @Test("pointsNeeded 契约（v13.17 引入 · 1/2/3 点对应 horizontalLine+text / 双点画线 / pitchfork）")
@@ -38,12 +56,15 @@ struct DrawingFactoryTests {
         #expect(DrawingType.ruler.pointsNeeded == 2)
         // 3 点
         #expect(DrawingType.pitchfork.pointsNeeded == 3)
+        // 0 = 动态点数（多边形 · 用户主动触发完成）
+        #expect(DrawingType.polygon.pointsNeeded == 0)
 
         // needsTwoPoints 兼容入口（pointsNeeded == 2）
         #expect(DrawingType.trendLine.needsTwoPoints)
         #expect(!DrawingType.horizontalLine.needsTwoPoints)
         #expect(!DrawingType.text.needsTwoPoints)
         #expect(!DrawingType.pitchfork.needsTwoPoints)  // 3 点 · 不是 2
+        #expect(!DrawingType.polygon.needsTwoPoints)    // 0 动态 · 不是 2
     }
 
     @Test("文字画线携带内容")

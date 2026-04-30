@@ -401,7 +401,20 @@ struct ChartScene: View {
             drawingToolButton(icon: "circle", tool: .ellipse, help: "椭圆（双点对角）")
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
             drawingToolButton(icon: "tuningfork", tool: .pitchfork, help: "Andrew's Pitchfork（3 点 · 中线 + 上下平行轨）")
+            drawingToolButton(icon: "hexagon", tool: .polygon, help: "多边形（任意 N≥3 点 · 工具栏'完成'触发闭合）")
             drawingToolButton(icon: "textformat", tool: .text, help: "文字标注（一点）")
+            // v13.31 多边形完成按钮 · 仅 polygon 工具激活 + 已点 ≥ 2 点（含起点 ≥ 3 点）时显示
+            if activeDrawingTool == .polygon, pendingDrawingPoint != nil {
+                let totalPoints = 1 + pendingExtraPoints.count
+                Button(action: { finishPolygonFromToolbar() }) {
+                    Text("完成（\(totalPoints) 点）")
+                        .font(.system(size: 10, design: .monospaced))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(totalPoints < 3)
+                .help("闭合多边形（至少 3 点）")
+            }
             // v13.8 颜色 / 线宽自定义（仅作用于新建 · 已有画线通过右键菜单"应用当前颜色/线宽"修改）
             Divider().frame(height: 16)
             ColorPicker("", selection: $currentStrokeColor, supportsOpacity: true)
@@ -621,6 +634,24 @@ struct ChartScene: View {
         .help(help)
     }
 
+    /// v13.31 工具栏"完成（n 点）"按钮 · 闭合多边形 · 至少 3 点（startPoint + ≥2 extra）
+    /// ChartScene 入口（与 ChartContentView.finishPolygon 等价 · 工具栏 Button 在 ChartScene 范围内调用）
+    private func finishPolygonFromToolbar() {
+        guard let first = pendingDrawingPoint, pendingExtraPoints.count >= 2 else { return }
+        let drawing = Drawing(
+            type: .polygon,
+            startPoint: first,
+            extraPoints: pendingExtraPoints,
+            strokeColorHex: ChartContentView.hexString(from: currentStrokeColor),
+            strokeWidth: currentStrokeWidth,
+            strokeOpacity: ChartContentView.alphaComponent(from: currentStrokeColor)
+        )
+        drawings.append(drawing)
+        pendingDrawingPoint = nil
+        pendingExtraPoints = []
+        activeDrawingTool = nil
+    }
+
     // MARK: - 工具条
 
     private var toolbar: some View {
@@ -708,6 +739,7 @@ struct ChartScene: View {
                 drawings: $drawings,
                 activeDrawingTool: $activeDrawingTool,
                 pendingDrawingPoint: $pendingDrawingPoint,
+                pendingExtraPoints: $pendingExtraPoints,
                 selectedDrawingIDs: $selectedDrawingIDs,
                 currentStrokeColor: $currentStrokeColor,
                 currentStrokeWidth: $currentStrokeWidth,
@@ -1144,6 +1176,8 @@ struct ChartContentView: View {
     @Binding var drawings: [Drawing]
     @Binding var activeDrawingTool: DrawingType?
     @Binding var pendingDrawingPoint: DrawingPoint?
+    /// v13.17 Pitchfork B 点 / v13.31 多边形 N≥2 点（startPoint=第 1 点 · 这里是第 2~N 点）
+    @Binding var pendingExtraPoints: [DrawingPoint]
     /// v13.9 多选 · selected 集合（替换 v13.0 单 UUID? · ⇧ 加选 + 批量删/复制）
     @Binding var selectedDrawingIDs: Set<UUID>
     /// v13.8 工具栏当前颜色 · 新建画线应用 · 右键"应用当前颜色"批量改已有
@@ -1175,9 +1209,13 @@ struct ChartContentView: View {
     @State var inertiaTask: Task<Void, Never>?
 
     /// v13.10 拖动目标 · 唯一定位某 drawing 的某 anchor（startPoint vs endPoint）
+    /// v13.33 加 extraIndex 支持 extraPoints[i] 拖动（多边形 N 顶点 / Pitchfork C 点）
     struct AnchorDragTarget: Equatable {
         let drawingID: UUID
         let isStart: Bool
+        /// nil = startPoint(isStart=true) 或 endPoint(isStart=false)
+        /// 非 nil = extraPoints[extraIndex]（v13.33）
+        var extraIndex: Int? = nil
     }
 
     init(
@@ -1192,6 +1230,7 @@ struct ChartContentView: View {
         drawings: Binding<[Drawing]>,
         activeDrawingTool: Binding<DrawingType?>,
         pendingDrawingPoint: Binding<DrawingPoint?>,
+        pendingExtraPoints: Binding<[DrawingPoint]>,
         selectedDrawingIDs: Binding<Set<UUID>>,
         currentStrokeColor: Binding<Color>,
         currentStrokeWidth: Binding<Double>,
@@ -1210,6 +1249,7 @@ struct ChartContentView: View {
         self._drawings = drawings
         self._activeDrawingTool = activeDrawingTool
         self._pendingDrawingPoint = pendingDrawingPoint
+        self._pendingExtraPoints = pendingExtraPoints
         self._selectedDrawingIDs = selectedDrawingIDs
         self._currentStrokeColor = currentStrokeColor
         self._currentStrokeWidth = currentStrokeWidth
@@ -1509,6 +1549,7 @@ struct ChartContentView: View {
         case .ellipse:         return "椭圆"
         case .ruler:           return "测量工具"
         case .pitchfork:       return "Pitchfork"
+        case .polygon:         return "多边形"
         }
     }
 
@@ -1896,12 +1937,21 @@ struct ChartContentView: View {
                             let dist = hypot(value.translation.width, value.translation.height)
                             if dist >= 4, let target = anchorDragTarget {
                                 isDraggingAnchor = true
-                                let newPoint = screenToDataPoint(value.location, in: geom.size)
+                                let rawPoint = screenToDataPoint(value.location, in: geom.size)
+                                // v13.32 snap to OHLC 价格（5 像素阈值 · 按 ⌥ 临时关闭吸附）
+                                let snapped = NSEvent.modifierFlags.contains(.option)
+                                    ? rawPoint
+                                    : snapToOHLC(rawPoint, screenY: value.location.y, in: geom.size)
                                 if let idx = drawings.firstIndex(where: { $0.id == target.drawingID }) {
-                                    if target.isStart {
-                                        drawings[idx].startPoint = newPoint
+                                    if let ei = target.extraIndex {
+                                        // v13.33 extraPoints[i] 拖动（多边形 N 顶点 / Pitchfork C 点）
+                                        if drawings[idx].extraPoints?.indices.contains(ei) == true {
+                                            drawings[idx].extraPoints?[ei] = snapped
+                                        }
+                                    } else if target.isStart {
+                                        drawings[idx].startPoint = snapped
                                     } else {
-                                        drawings[idx].endPoint = newPoint
+                                        drawings[idx].endPoint = snapped
                                     }
                                 }
                             }
@@ -1921,7 +1971,7 @@ struct ChartContentView: View {
 
     /// v13.10 起点击中已选 drawing 的 anchor 检测（±15 像素）· 仅 selected 的画线参与
     /// v13.11 锁定的画线跳过（不接受拖动）
-    /// v13.17 v1 仅支持 startPoint / endPoint 拖动 · extraPoints 暂不支持拖（未来扩展 · backlog）
+    /// v13.33 支持 extraPoints[i] 拖动（多边形 N 顶点 / Pitchfork C 点）
     private func findAnchorAt(_ location: CGPoint, in size: CGSize) -> AnchorDragTarget? {
         guard !selectedDrawingIDs.isEmpty else { return nil }
         let threshold: CGFloat = 15
@@ -1936,8 +1986,45 @@ struct ChartContentView: View {
                     return AnchorDragTarget(drawingID: d.id, isStart: false)
                 }
             }
+            // v13.33 检查 extraPoints anchor（多边形顶点 / Pitchfork C）
+            if let extras = d.extraPoints {
+                for (i, p) in extras.enumerated() {
+                    let ep = anchorScreenPoint(p, in: size)
+                    if hypot(location.x - ep.x, location.y - ep.y) < threshold {
+                        return AnchorDragTarget(drawingID: d.id, isStart: false, extraIndex: i)
+                    }
+                }
+            }
         }
         return nil
+    }
+
+    /// v13.32 拖动 anchor 时 OHLC 价格吸附 · 5 像素阈值内最近的 K 线 OHLC 价格 → 自动 snap
+    /// 实战场景：用户拖支撑/阻力线时自动对齐到关键 K 线高低点 · 提高画线精度
+    /// 按 ⌥（option）键临时关闭吸附（自由模式）· 调用方判断
+    private func snapToOHLC(_ rawPoint: DrawingPoint, screenY: CGFloat, in size: CGSize) -> DrawingPoint {
+        let snapThreshold: CGFloat = 5
+        // 仅检查 viewport 可见区 K 线（节约计算）· bars 空 / viewport 越界全部走 guard fallback
+        let startIdx = max(0, min(bars.count, viewport.startIndex))
+        let endIdx = min(bars.count, startIdx + max(0, viewport.visibleCount))
+        guard startIdx < endIdx else { return rawPoint }
+        let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+        let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+        let span = max(0.0001, hi - lo)
+        var bestPrice = rawPoint.price
+        var bestDist = snapThreshold
+        for bar in bars[startIdx..<endIdx] {
+            for candidate in [bar.open, bar.high, bar.low, bar.close] {
+                let candidateD = NSDecimalNumber(decimal: candidate).doubleValue
+                let candidateY = CGFloat((hi - candidateD) / span) * size.height
+                let dist = abs(screenY - candidateY)
+                if dist < bestDist {
+                    bestDist = dist
+                    bestPrice = candidate
+                }
+            }
+        }
+        return DrawingPoint(barIndex: rawPoint.barIndex, price: bestPrice)
     }
 
     /// 数据空间锚点 → 屏幕坐标（用 viewport + currentPriceRange · 与 distanceToDrawing 内实现一致）
@@ -2071,6 +2158,19 @@ struct ChartContentView: View {
             guard let end = drawing.endPoint else { return .infinity }
             return Self.pointToSegmentDistance(p, screenPoint(drawing.startPoint), screenPoint(end))
 
+        case .polygon:
+            // v13.31 多边形 · 取所有边的最小距离（闭合 N 点 · 包括首尾连接边）
+            guard let extras = drawing.extraPoints, !extras.isEmpty else { return .infinity }
+            let allPoints = [drawing.startPoint] + extras
+            let screenPts = allPoints.map { screenPoint($0) }
+            var minDist: CGFloat = .infinity
+            for i in 0..<screenPts.count {
+                let a = screenPts[i]
+                let b = screenPts[(i + 1) % screenPts.count]
+                minDist = min(minDist, Self.pointToSegmentDistance(p, a, b))
+            }
+            return minDist
+
         case .pitchfork:
             // v13.17 3 条线段距离最小（中线 / 上轨 / 下轨 · 与 DrawingsOverlayView 渲染共用同一 t · 保证 hit-test = 可见范围）
             guard let upper = drawing.endPoint,
@@ -2132,6 +2232,10 @@ struct ChartContentView: View {
             // phase 1（B 未设）不预览 · phase 2（B 已设）显示完整 pitchfork
             guard !pendingExtraPoints.isEmpty else { return nil }
             return Drawing.pitchfork(handle: firstPoint, upper: pendingExtraPoints[0], lower: hoverPoint)
+        case .polygon:
+            // v13.31 实时预览：起点 + 已点 extraPoints + hover 当前位置 → 闭合多边形虚线
+            let extrasWithHover = pendingExtraPoints + [hoverPoint]
+            return Drawing(type: .polygon, startPoint: firstPoint, extraPoints: extrasWithHover)
         default:
             return nil
         }
@@ -2161,6 +2265,16 @@ struct ChartContentView: View {
         // v13.17 Pitchfork 单独 3 点输入
         if tool == .pitchfork {
             handlePitchforkTap(point)
+            return
+        }
+
+        // v13.31 多边形动态点输入 · 第 1 点 → pendingDrawingPoint · 后续 → pendingExtraPoints append · 工具栏"完成"触发闭合
+        if tool == .polygon {
+            if pendingDrawingPoint == nil {
+                pendingDrawingPoint = point
+            } else {
+                pendingExtraPoints.append(point)
+            }
             return
         }
 

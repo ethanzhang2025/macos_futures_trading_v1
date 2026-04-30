@@ -114,6 +114,7 @@ public struct DrawingsOverlayView: View {
         case .ellipse:          drawEllipse(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .ruler:            drawRuler(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .pitchfork:        drawPitchfork(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .polygon:          drawPolygon(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         }
 
         if isSelected, !isPending {
@@ -183,6 +184,22 @@ public struct DrawingsOverlayView: View {
                 .foregroundColor(color)
             ctx.draw(text, at: CGPoint(x: 4, y: y - 8))
         }
+    }
+
+    /// v13.31 多边形渲染 · 闭合 N 点 + 半透明填充 + 描边
+    /// startPoint = 第 1 点 · extraPoints = 第 2~N 点 · 闭合到 startPoint
+    private func drawPolygon(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let extras = d.extraPoints, !extras.isEmpty else { return }
+        let allPoints = [d.startPoint] + extras
+        var path = Path()
+        let first = CGPoint(x: xForBar(allPoints[0].barIndex, size: size), y: yForPrice(allPoints[0].price, size: size))
+        path.move(to: first)
+        for p in allPoints.dropFirst() {
+            path.addLine(to: CGPoint(x: xForBar(p.barIndex, size: size), y: yForPrice(p.price, size: size)))
+        }
+        path.closeSubpath()
+        ctx.fill(path, with: .color(color.opacity(0.10 * opacity)))
+        ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, lineJoin: .round, dash: dash))
     }
 
     /// v13.17 Andrew's Pitchfork · 3 点定中线 + 上下平行轨
@@ -330,6 +347,7 @@ public struct DrawingsOverlayView: View {
         case .ellipse:         return Color(red: 0.18, green: 0.83, blue: 0.74)  // 青（v13.13）
         case .ruler:           return Color(red: 0.96, green: 0.69, blue: 0.18)  // 金（v13.14）
         case .pitchfork:       return Color(red: 0.45, green: 0.78, blue: 0.42)  // 草绿（v13.17）
+        case .polygon:         return Color(red: 0.85, green: 0.40, blue: 0.65)  // 玫红（v13.31）
         }
     }
 

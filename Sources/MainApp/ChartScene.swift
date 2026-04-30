@@ -525,7 +525,14 @@ struct ChartScene: View {
 
             Button { Task { await onTapPlayPause() } } label: {
                 Image(systemName: replay.state == .playing ? "pause.fill" : "play.fill")
+                    .frame(width: 18, height: 18)
             }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(replay.state == .playing ? Color.accentColor : Color.secondary.opacity(0.15))
+            .foregroundColor(replay.state == .playing ? .white : .primary)
+            .cornerRadius(6)
             .keyboardShortcut(.space, modifiers: [])
             .help(replay.state == .playing ? "暂停（空格）" : "播放（空格）")
 
@@ -545,6 +552,7 @@ struct ChartScene: View {
                 }
             }
             .pickerStyle(.segmented)
+            .tint(.accentColor)
             .frame(width: 240)
             .labelsHidden()
 

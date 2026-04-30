@@ -19,6 +19,7 @@ import AppKit
 import Shared
 import StoreCore
 import AlertCore
+import IndicatorCore
 
 // MARK: - StoreManager 环境注入（M5 集中接入持久化）
 
@@ -158,6 +159,9 @@ struct FuturesTerminalApp: App {
                 Text("（多周期切换已支持工具条 Picker · 键盘 ⌘1~9 待 Mac 切机集中接）")
                     .foregroundColor(.secondary)
             }
+            CommandMenu("工具") {
+                ImportFormulaButton()
+            }
         }
 
         // 自选合约窗口（菜单触发打开 · 单实例 · WP-43 UI · M5 接 SQLiteWatchlistBookStore）
@@ -264,6 +268,48 @@ private struct OpenWorkspaceButton: View {
     var body: some View {
         Button("工作区模板") { openWindow(id: "workspace") }
             .keyboardShortcut("k", modifiers: [.command])
+    }
+}
+
+/// v12.18 文华 .wh 公式批量导入（WP-63 commit 4 · 完整真闭环）
+/// 工具菜单 → 选 .wh 文件 → WhImporter.importAll → NSAlert 显示编译报告
+private struct ImportFormulaButton: View {
+    var body: some View {
+        Button("导入文华公式（.wh）") { Self.runImport() }
+            .keyboardShortcut("i", modifiers: [.command, .shift])
+    }
+
+    private static func runImport() {
+        let panel = NSOpenPanel()
+        panel.title = "导入文华公式"
+        panel.allowedContentTypes = [.plainText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let alert = NSAlert()
+        alert.messageText = "导入文华公式"
+
+        do {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            let results = WhImporter.importAll(text)
+            let success = results.filter { (try? $0.compiled.get()) != nil }.count
+            let total = results.count
+            let failedDetails = results.compactMap { r -> String? in
+                guard case .failure(let err) = r.compiled else { return nil }
+                return "  \(r.formula.name)：\(err.localizedDescription)"
+            }
+            alert.informativeText = """
+            从 \(url.lastPathComponent) 导入 \(total) 个公式 · 成功编译 \(success) · 失败 \(total - success)
+            \(failedDetails.isEmpty ? "" : "\n失败明细：\n" + failedDetails.prefix(10).joined(separator: "\n"))
+            """
+            alert.alertStyle = success == total ? .informational : .warning
+        } catch {
+            alert.informativeText = "导入失败：\(error.localizedDescription)"
+            alert.alertStyle = .critical
+        }
+        alert.addButton(withTitle: "确定")
+        alert.runModal()
     }
 }
 

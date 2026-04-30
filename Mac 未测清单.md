@@ -38,6 +38,7 @@
 | **v13.14** | _本批_ | 测量工具（DrawingType 第 8 类 · 虚线 + 中点显示价格差/百分比/bar 数标签） | ⚠️ **未测** |
 | **v13.15** | _本批_ | 透明度自定义（strokeOpacity 字段 · ColorPicker supportsOpacity true · alpha 通道） | ⚠️ **未测** |
 | **v13.16** | _本批_ | 画线模板（DrawingTemplate · UserDefaults 持久化 · 工具栏 Menu · 跨合约复用） | ⚠️ **未测** |
+| **v13.17** | _本批_ | Andrew's Pitchfork（DrawingType 第 9 类 · 3 点输入 · 中线 + 上下平行轨） | ⚠️ **未测** |
 
 ---
 
@@ -248,12 +249,27 @@
 - [ ] 持久化 UserDefaults JSON（key drawingTemplates.v1 · 全局共享 · 不按合约/周期隔离）
 - [ ] 重启 App 模板列表保留
 
+### v13.17 Andrew's Pitchfork（DrawingType 第 9 类 · 3 点输入）
+- [ ] 工具栏多 1 按钮（SF Symbol "tuningfork"）介于 ruler 和 text 之间
+- [ ] 选 Pitchfork → 点击 3 次（A 中线起点 → B 上轨锚 → C 下轨锚）→ 完成
+- [ ] phase 1（A 已落 · B 未落）hover 不预览（只看到 A 的 anchor 点）
+- [ ] phase 2（A + B 已落 · C 未落）hover 实时预览**完整 3 线**（虚线半透明跟随）
+- [ ] 完成后渲染**草绿色** 3 线：中线粗 + 上下轨次粗 + BC 连接虚线提示
+- [ ] 中线方向 = A → midpoint(B, C)
+- [ ] 上轨/下轨延伸到屏幕边界（dx/dy 双方向取 min t · 至少 1×长度不内缩）
+- [ ] hit-test 与渲染范围对齐（同一个 t · 用户能点中可见延伸部分）
+- [ ] anchor 显示：startPoint / endPoint / extraPoints[0] 三个 anchor 都画
+- [ ] 拖动 anchor v1 仅支持 startPoint / endPoint（C 暂不支持拖 · backlog v13.17+）
+- [ ] 持久化 SQLite + 导出/导入 JSON 兼容
+- [ ] 切工具 / 清空 / 完成 / 重载合约 → 全部正确清理 pendingExtraPoints
+- [ ] code-simplifier 修了 3 真 bug：trash 漏清 pendingExtraPoints / 渲染 t 只看 dx 单向 / hit-test 与渲染范围不对齐
+
 ---
 
-## 后续 backlog（v13.16+ 未做）
+## 后续 backlog（v13.17+ 未做）
 
-- ❌ Andrew's Pitchfork 画线（3 点定中线 + 上下平行 · 需扩 extraPoints 字段）
-- ❌ 多边形画线（任意 N 点闭合 · 输入逻辑改动大）
+- ❌ Pitchfork extraPoints anchor 拖动支持（findAnchorAt 扩展）
+- ❌ 多边形画线（任意 N 点闭合 · 需 Enter/双击/Esc 完成机制）
 - ❌ 画线分组（group 多条画线一起拖动）
 
 ---

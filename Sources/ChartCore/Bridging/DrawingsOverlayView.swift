@@ -113,6 +113,7 @@ public struct DrawingsOverlayView: View {
         case .text:             drawText(drawing, ctx, size, baseColor, opacity)
         case .ellipse:          drawEllipse(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .ruler:            drawRuler(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .pitchfork:        drawPitchfork(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         }
 
         if isSelected, !isPending {
@@ -184,6 +185,43 @@ public struct DrawingsOverlayView: View {
         }
     }
 
+    /// v13.17 Andrew's Pitchfork · 3 点定中线 + 上下平行轨
+    /// 中线方向 = A → midpoint(B, C) · 上轨 = 平行中线过 B · 下轨 = 平行中线过 C
+    /// 延伸：取 dx 与 dy 各自到边界的最小 t（确保不超出画布 · 同时包住可见区域）
+    private func drawPitchfork(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let upper = d.endPoint,
+              let extras = d.extraPoints, let lower = extras.first else { return }
+        let a = CGPoint(x: xForBar(d.startPoint.barIndex, size: size), y: yForPrice(d.startPoint.price, size: size))
+        let b = CGPoint(x: xForBar(upper.barIndex, size: size), y: yForPrice(upper.price, size: size))
+        let c = CGPoint(x: xForBar(lower.barIndex, size: size), y: yForPrice(lower.price, size: size))
+        let midX = (b.x + c.x) / 2
+        let midY = (b.y + c.y) / 2
+        let dx = midX - a.x
+        let dy = midY - a.y
+        guard abs(dx) > 0.0001 || abs(dy) > 0.0001 else { return }
+        let t = Self.pitchforkExtensionScale(a: a, dx: dx, dy: dy, size: size)
+        // 中线（粗）
+        var centerPath = Path()
+        centerPath.move(to: a)
+        centerPath.addLine(to: CGPoint(x: a.x + t * dx, y: a.y + t * dy))
+        ctx.stroke(centerPath, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+        // 上轨（次粗）
+        var upperPath = Path()
+        upperPath.move(to: b)
+        upperPath.addLine(to: CGPoint(x: b.x + t * dx, y: b.y + t * dy))
+        ctx.stroke(upperPath, with: .color(color.opacity(0.7 * opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: dash))
+        // 下轨（次粗）
+        var lowerPath = Path()
+        lowerPath.move(to: c)
+        lowerPath.addLine(to: CGPoint(x: c.x + t * dx, y: c.y + t * dy))
+        ctx.stroke(lowerPath, with: .color(color.opacity(0.7 * opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: dash))
+        // BC 连接线（虚线提示 · 视觉显示 B/C 锚点关系）
+        var bcPath = Path()
+        bcPath.move(to: b)
+        bcPath.addLine(to: c)
+        ctx.stroke(bcPath, with: .color(color.opacity(0.3 * opacity)), style: StrokeStyle(lineWidth: width * 0.5, dash: [3, 2]))
+    }
+
     /// v13.14 测量工具渲染 · 两点定线段（虚线连接）+ 中点标签显示 价格差 / 百分比 / bar 数
     private func drawRuler(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
         guard let end = d.endPoint else { return }
@@ -243,6 +281,14 @@ public struct DrawingsOverlayView: View {
             let ey = yForPrice(e.price, size: size)
             drawAnchorMarker(at: CGPoint(x: ex, y: ey), in: ctx, color: color, locked: d.locked)
         }
+        // v13.17 extraPoints anchor 也画（Pitchfork 第 3 点 / 多边形其余点）
+        if let extras = d.extraPoints {
+            for p in extras {
+                let px = xForBar(p.barIndex, size: size)
+                let py = yForPrice(p.price, size: size)
+                drawAnchorMarker(at: CGPoint(x: px, y: py), in: ctx, color: color, locked: d.locked)
+            }
+        }
     }
 
     /// v13.11 锁定的 anchor 用小锁图标 · 否则圆点
@@ -279,7 +325,22 @@ public struct DrawingsOverlayView: View {
         case .text:            return .white
         case .ellipse:         return Color(red: 0.18, green: 0.83, blue: 0.74)  // 青（v13.13）
         case .ruler:           return Color(red: 0.96, green: 0.69, blue: 0.18)  // 金（v13.14）
+        case .pitchfork:       return Color(red: 0.45, green: 0.78, blue: 0.42)  // 草绿（v13.17）
         }
+    }
+
+    /// v13.17 Pitchfork 延伸 scale · 从 a 出发沿 (dx,dy) 找最近的 [0,size] 边界
+    /// 至少返回 1.0（保证至少超过 mid 点 · 不向内缩）· 同时考虑 dx/dy 取先到边界者
+    public static func pitchforkExtensionScale(a: CGPoint, dx: CGFloat, dy: CGFloat, size: CGSize) -> CGFloat {
+        var candidates: [CGFloat] = []
+        if abs(dx) > 0.0001 {
+            candidates.append(dx > 0 ? (size.width - a.x) / dx : -a.x / dx)
+        }
+        if abs(dy) > 0.0001 {
+            candidates.append(dy > 0 ? (size.height - a.y) / dy : -a.y / dy)
+        }
+        let bound = candidates.filter { $0 > 0 }.min() ?? 1
+        return max(1, bound)
     }
 
     /// 解析 6 位 RGB hex（不含 # · 大小写均可）· 失败返回 nil

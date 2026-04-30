@@ -11,7 +11,7 @@ private func point(_ bar: Int, _ price: Int) -> DrawingPoint {
 
 @Suite("Drawing 创建与类型契约")
 struct DrawingFactoryTests {
-    @Test("8 种 factory 类型正确（v13.13 加椭圆 · v13.14 加测量工具）")
+    @Test("9 种 factory 类型正确（v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork）")
     func factoryTypes() {
         #expect(Drawing.trendLine(from: point(0, 100), to: point(10, 110)).type == .trendLine)
         #expect(Drawing.horizontalLine(price: 100).type == .horizontalLine)
@@ -21,18 +21,29 @@ struct DrawingFactoryTests {
         #expect(Drawing.text(at: point(5, 105), content: "买入").type == .text)
         #expect(Drawing.ellipse(from: point(0, 100), to: point(10, 110)).type == .ellipse)
         #expect(Drawing.ruler(from: point(0, 100), to: point(10, 110)).type == .ruler)
+        #expect(Drawing.pitchfork(handle: point(0, 100), upper: point(10, 110), lower: point(10, 90)).type == .pitchfork)
     }
 
-    @Test("needsTwoPoints 契约（v13.13 ellipse · v13.14 ruler 都是双点）")
-    func twoPointsContract() {
+    @Test("pointsNeeded 契约（v13.17 引入 · 1/2/3 点对应 horizontalLine+text / 双点画线 / pitchfork）")
+    func pointsNeededContract() {
+        // 1 点
+        #expect(DrawingType.horizontalLine.pointsNeeded == 1)
+        #expect(DrawingType.text.pointsNeeded == 1)
+        // 2 点（v1 + v13.13/14）
+        #expect(DrawingType.trendLine.pointsNeeded == 2)
+        #expect(DrawingType.rectangle.pointsNeeded == 2)
+        #expect(DrawingType.parallelChannel.pointsNeeded == 2)
+        #expect(DrawingType.fibonacci.pointsNeeded == 2)
+        #expect(DrawingType.ellipse.pointsNeeded == 2)
+        #expect(DrawingType.ruler.pointsNeeded == 2)
+        // 3 点
+        #expect(DrawingType.pitchfork.pointsNeeded == 3)
+
+        // needsTwoPoints 兼容入口（pointsNeeded == 2）
         #expect(DrawingType.trendLine.needsTwoPoints)
-        #expect(DrawingType.rectangle.needsTwoPoints)
-        #expect(DrawingType.parallelChannel.needsTwoPoints)
-        #expect(DrawingType.fibonacci.needsTwoPoints)
-        #expect(DrawingType.ellipse.needsTwoPoints)
-        #expect(DrawingType.ruler.needsTwoPoints)
         #expect(!DrawingType.horizontalLine.needsTwoPoints)
         #expect(!DrawingType.text.needsTwoPoints)
+        #expect(!DrawingType.pitchfork.needsTwoPoints)  // 3 点 · 不是 2
     }
 
     @Test("文字画线携带内容")
@@ -51,7 +62,7 @@ struct DrawingFactoryTests {
 
 @Suite("Drawing Codable 往返")
 struct DrawingCodableTests {
-    @Test("8 种序列化 + 反序列化等价（v13.13 加椭圆 · v13.14 加测量）")
+    @Test("9 种序列化 + 反序列化等价（v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork）")
     func roundTrip() throws {
         let drawings = [
             Drawing.trendLine(from: point(0, 100), to: point(10, 120)),
@@ -61,7 +72,8 @@ struct DrawingCodableTests {
             Drawing.fibonacci(from: point(0, 100), to: point(10, 150)),
             Drawing.text(at: point(5, 105), content: "测试"),
             Drawing.ellipse(from: point(0, 100), to: point(10, 120)),
-            Drawing.ruler(from: point(0, 100), to: point(10, 130))
+            Drawing.ruler(from: point(0, 100), to: point(10, 130)),
+            Drawing.pitchfork(handle: point(0, 100), upper: point(10, 120), lower: point(10, 80))
         ]
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
@@ -132,6 +144,46 @@ struct DrawingExtraFieldsTests {
         #expect(r.endPoint?.price == 130)
         #expect(r.channelOffset == nil)
         #expect(r.text == nil)
+    }
+
+    @Test("v13.17 Pitchfork factory · 3 点 startPoint+endPoint+extraPoints[0]")
+    func pitchforkFactory() throws {
+        let pf = Drawing.pitchfork(
+            handle: point(0, 100),    // A 中线起点
+            upper: point(10, 120),    // B 上轨锚
+            lower: point(10, 80)      // C 下轨锚
+        )
+        #expect(pf.type == .pitchfork)
+        #expect(pf.startPoint.barIndex == 0)
+        #expect(pf.endPoint?.barIndex == 10)
+        #expect(pf.endPoint?.price == 120)
+        #expect(pf.extraPoints?.count == 1)
+        #expect(pf.extraPoints?[0].barIndex == 10)
+        #expect(pf.extraPoints?[0].price == 80)
+
+        // 序列化往返保留全部 3 点
+        let data = try JSONEncoder().encode(pf)
+        let back = try JSONDecoder().decode(Drawing.self, from: data)
+        #expect(back == pf)
+        #expect(back.extraPoints?[0].price == 80)
+    }
+
+    @Test("v13.17 extraPoints 默认 nil + 老 JSON（无 extraPoints 字段）兼容")
+    func extraPointsLegacyCompat() throws {
+        let plain = Drawing.trendLine(from: point(0, 100), to: point(10, 120))
+        #expect(plain.extraPoints == nil)
+
+        let legacyJSON = """
+        {
+            "id": "550E8400-E29B-41D4-A716-446655440000",
+            "type": "trendLine",
+            "startPoint": { "barIndex": 0, "price": 100 },
+            "endPoint": { "barIndex": 10, "price": 110 }
+        }
+        """
+        let data = legacyJSON.data(using: .utf8)!
+        let d = try JSONDecoder().decode(Drawing.self, from: data)
+        #expect(d.extraPoints == nil)
     }
 
     @Test("v13.16 DrawingTemplate 内嵌 Drawing 完整快照 + 序列化往返")

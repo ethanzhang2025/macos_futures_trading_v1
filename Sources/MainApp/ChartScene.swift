@@ -70,6 +70,8 @@ struct ChartScene: View {
     @State private var drawings: [Drawing] = []
     @State private var activeDrawingTool: DrawingType?  // nil = 浏览模式 · 非 nil = 当前选中的画线工具
     @State private var pendingDrawingPoint: DrawingPoint?  // 双点画线的第一点（hover 跟随预览第二点）
+    /// v13.17 Pitchfork 中间点（A 用 pendingDrawingPoint · B 暂存这里 · C 完成时点击）
+    @State private var pendingExtraPoints: [DrawingPoint] = []
     /// v13.9 多选 · 选中的画线集合（高亮 + Delete 批量删除 · ⇧ 加选）
     @State private var selectedDrawingIDs: Set<UUID> = []
     @State private var isDrawingsLoaded: Bool = false  // 守卫：load 完成前的 drawings = [] 不触发 save
@@ -126,6 +128,7 @@ struct ChartScene: View {
                 drawings = []
             }
             pendingDrawingPoint = nil
+            pendingExtraPoints = []
             selectedDrawingIDs.removeAll()
             activeDrawingTool = nil
             isDrawingsLoaded = true
@@ -327,6 +330,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
             drawingToolButton(icon: "circle", tool: .ellipse, help: "椭圆（双点对角）")
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
+            drawingToolButton(icon: "tuningfork", tool: .pitchfork, help: "Andrew's Pitchfork（3 点 · 中线 + 上下平行轨）")
             drawingToolButton(icon: "textformat", tool: .text, help: "文字标注（一点）")
             // v13.8 颜色 / 线宽自定义（仅作用于新建 · 已有画线通过右键菜单"应用当前颜色/线宽"修改）
             Divider().frame(height: 16)
@@ -366,6 +370,7 @@ struct ChartScene: View {
             Button {
                 drawings.removeAll()
                 pendingDrawingPoint = nil
+                pendingExtraPoints = []
                 selectedDrawingIDs.removeAll()
             } label: {
                 Image(systemName: "trash")
@@ -534,6 +539,7 @@ struct ChartScene: View {
         Button {
             activeDrawingTool = tool
             pendingDrawingPoint = nil
+            pendingExtraPoints = []
         } label: {
             Image(systemName: icon)
                 .frame(width: 20, height: 20)
@@ -1293,6 +1299,7 @@ struct ChartContentView: View {
         case .text:            return "文字标注"
         case .ellipse:         return "椭圆"
         case .ruler:           return "测量工具"
+        case .pitchfork:       return "Pitchfork"
         }
     }
 
@@ -1439,6 +1446,10 @@ struct ChartContentView: View {
         let newEnd: DrawingPoint? = drawing.endPoint.map {
             DrawingPoint(barIndex: $0.barIndex + barOffset, price: $0.price + priceOffset)
         }
+        // v13.17 extraPoints（Pitchfork 第 3 点等）也按相同 offset 平移 · 保持形状
+        let newExtras: [DrawingPoint]? = drawing.extraPoints?.map {
+            DrawingPoint(barIndex: $0.barIndex + barOffset, price: $0.price + priceOffset)
+        }
         return Drawing(
             type: drawing.type,
             startPoint: newStart,
@@ -1449,7 +1460,8 @@ struct ChartContentView: View {
             strokeWidth: drawing.strokeWidth,
             isLocked: nil,
             fontSize: drawing.fontSize,
-            strokeOpacity: drawing.strokeOpacity
+            strokeOpacity: drawing.strokeOpacity,
+            extraPoints: newExtras
         )
     }
 
@@ -1560,6 +1572,7 @@ struct ChartContentView: View {
 
     /// v13.10 起点击中已选 drawing 的 anchor 检测（±15 像素）· 仅 selected 的画线参与
     /// v13.11 锁定的画线跳过（不接受拖动）
+    /// v13.17 v1 仅支持 startPoint / endPoint 拖动 · extraPoints 暂不支持拖（未来扩展 · backlog）
     private func findAnchorAt(_ location: CGPoint, in size: CGSize) -> AnchorDragTarget? {
         guard !selectedDrawingIDs.isEmpty else { return nil }
         let threshold: CGFloat = 15
@@ -1708,6 +1721,27 @@ struct ChartContentView: View {
             // v13.14 测量工具 · 同 trendLine（点到线段距离）
             guard let end = drawing.endPoint else { return .infinity }
             return Self.pointToSegmentDistance(p, screenPoint(drawing.startPoint), screenPoint(end))
+
+        case .pitchfork:
+            // v13.17 3 条线段距离最小（中线 / 上轨 / 下轨 · 与 DrawingsOverlayView 渲染共用同一 t · 保证 hit-test = 可见范围）
+            guard let upper = drawing.endPoint,
+                  let extras = drawing.extraPoints, let lower = extras.first else { return .infinity }
+            let a = screenPoint(drawing.startPoint)
+            let b = screenPoint(upper)
+            let c = screenPoint(lower)
+            let mid = CGPoint(x: (b.x + c.x) / 2, y: (b.y + c.y) / 2)
+            let dx = mid.x - a.x
+            let dy = mid.y - a.y
+            guard abs(dx) > 0.0001 || abs(dy) > 0.0001 else { return .infinity }
+            let t = DrawingsOverlayView.pitchforkExtensionScale(a: a, dx: dx, dy: dy, size: size)
+            let centerEnd = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
+            let upperEnd = CGPoint(x: b.x + t * dx, y: b.y + t * dy)
+            let lowerEnd = CGPoint(x: c.x + t * dx, y: c.y + t * dy)
+            return min(
+                Self.pointToSegmentDistance(p, a, centerEnd),
+                Self.pointToSegmentDistance(p, b, upperEnd),
+                Self.pointToSegmentDistance(p, c, lowerEnd)
+            )
         }
     }
 
@@ -1725,11 +1759,12 @@ struct ChartContentView: View {
     }
 
     /// v13.3 双点画线第二点 hover 实时预览 · pendingDrawingPoint + hoverDataPoint → 虚线 Drawing
+    /// v13.17 Pitchfork phase 2 预览（A + B 已设 · 第 3 点 hover 完整 3 线显示）
     private var pendingPreviewDrawing: Drawing? {
         guard let firstPoint = pendingDrawingPoint,
               let hoverPoint = hoverDataPoint,
               let tool = activeDrawingTool,
-              tool.needsTwoPoints else { return nil }
+              tool.pointsNeeded > 1 else { return nil }
         switch tool {
         case .parallelChannel:
             let offset = (currentPriceRange.upperBound - currentPriceRange.lowerBound) * Decimal(string: "0.05")!
@@ -1744,6 +1779,10 @@ struct ChartContentView: View {
             return Drawing.ellipse(from: firstPoint, to: hoverPoint)
         case .ruler:
             return Drawing.ruler(from: firstPoint, to: hoverPoint)
+        case .pitchfork:
+            // phase 1（B 未设）不预览 · phase 2（B 已设）显示完整 pitchfork
+            guard !pendingExtraPoints.isEmpty else { return nil }
+            return Drawing.pitchfork(handle: firstPoint, upper: pendingExtraPoints[0], lower: hoverPoint)
         default:
             return nil
         }
@@ -1765,9 +1804,16 @@ struct ChartContentView: View {
 
     /// 处理画线工具激活下的点击：单点画线立即添加 / 双点画线第 1 点设 pending 第 2 点完成
     /// v13.8 新建画线时应用工具栏当前颜色 / 线宽（currentStrokeColor + currentStrokeWidth）
+    /// v13.17 Pitchfork 走 3 点路径（独立分发）
     private func handleDrawingTap(at location: CGPoint, in size: CGSize) {
         guard let tool = activeDrawingTool else { return }
         let point = screenToDataPoint(location, in: size)
+
+        // v13.17 Pitchfork 单独 3 点输入
+        if tool == .pitchfork {
+            handlePitchforkTap(point)
+            return
+        }
 
         if tool.needsTwoPoints {
             if let firstPoint = pendingDrawingPoint {
@@ -1818,6 +1864,30 @@ struct ChartContentView: View {
                 drawings.append(drawing)
                 activeDrawingTool = nil
             }
+        }
+    }
+
+    /// v13.17 Pitchfork 3 点输入：A handle / B upper / C lower → 完成
+    private func handlePitchforkTap(_ point: DrawingPoint) {
+        if pendingDrawingPoint == nil {
+            pendingDrawingPoint = point  // A
+        } else if pendingExtraPoints.isEmpty {
+            pendingExtraPoints = [point]  // B
+        } else {
+            // C → 完成
+            let drawing = Drawing(
+                type: .pitchfork,
+                startPoint: pendingDrawingPoint!,
+                endPoint: pendingExtraPoints[0],
+                extraPoints: [point],
+                strokeColorHex: Self.hexString(from: currentStrokeColor),
+                strokeWidth: currentStrokeWidth,
+                strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
+            )
+            drawings.append(drawing)
+            pendingDrawingPoint = nil
+            pendingExtraPoints = []
+            activeDrawingTool = nil
         }
     }
 

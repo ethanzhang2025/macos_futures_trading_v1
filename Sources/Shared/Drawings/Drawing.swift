@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// 画线类型 v1（Stage A 6 种）· v13.13 加椭圆 · v13.14 加测量 = 8 种
+/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Andrew's Pitchfork = 9 种
 public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case trendLine        // 趋势线（两点）
     case horizontalLine   // 水平线（单点价格）
@@ -14,14 +14,19 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case text             // 文字标注（单点位置）
     case ellipse          // 椭圆（两点定外接矩形对角 · v13.13）
     case ruler            // 测量工具（两点 · 渲染显示价格差/百分比/bar 数 · v13.14）
+    case pitchfork        // Andrew's Pitchfork（3 点定中线 · 上下平行 · v13.17）
 
-    /// 是否需要两次点击确定（v1 输入端契约）
-    public var needsTwoPoints: Bool {
+    /// 完成画线所需的点数（v13.17 加 pitchfork = 3 点）
+    public var pointsNeeded: Int {
         switch self {
-        case .trendLine, .rectangle, .parallelChannel, .fibonacci, .ellipse, .ruler: return true
-        case .horizontalLine, .text: return false
+        case .horizontalLine, .text: return 1
+        case .trendLine, .rectangle, .parallelChannel, .fibonacci, .ellipse, .ruler: return 2
+        case .pitchfork: return 3
         }
     }
+
+    /// 是否需要两次点击确定（v1 输入端契约 · 历史 API · 现在用 pointsNeeded == 2 等价）
+    public var needsTwoPoints: Bool { pointsNeeded == 2 }
 }
 
 /// 数据空间锚点 · K 线索引 + 价格
@@ -68,6 +73,9 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
     /// v13.15 透明度 0.0~1.0 · nil 用 1.0 · 用于 strokeColor 描边 + 填充共同透明度
     public var strokeOpacity: Double?
 
+    /// v13.17 额外锚点（3 点画线如 Pitchfork 用 [C] · 多边形可扩展用更多）· 兼容老 JSON nil
+    public var extraPoints: [DrawingPoint]?
+
     public init(
         id: UUID = UUID(),
         type: DrawingType,
@@ -79,7 +87,8 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         strokeWidth: Double? = nil,
         isLocked: Bool? = nil,
         fontSize: Double? = nil,
-        strokeOpacity: Double? = nil
+        strokeOpacity: Double? = nil,
+        extraPoints: [DrawingPoint]? = nil
     ) {
         self.id = id
         self.type = type
@@ -92,6 +101,7 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         self.isLocked = isLocked
         self.fontSize = fontSize
         self.strokeOpacity = strokeOpacity
+        self.extraPoints = extraPoints
     }
 
     /// v13.11 便利访问 · isLocked nil 视为 false
@@ -139,5 +149,10 @@ extension Drawing {
     /// 测量工具（v13.14 · 两点定线段 · 渲染时显示价格差 / 百分比 / bar 数）
     public static func ruler(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
         Drawing(type: .ruler, startPoint: start, endPoint: end)
+    }
+
+    /// Andrew's Pitchfork（v13.17 · 3 点 · A 中线起点 / B 上轨锚 / C 下轨锚 · 中线方向 = A → midpoint(B,C)）
+    public static func pitchfork(handle: DrawingPoint, upper: DrawingPoint, lower: DrawingPoint) -> Drawing {
+        Drawing(type: .pitchfork, startPoint: handle, endPoint: upper, extraPoints: [lower])
     }
 }

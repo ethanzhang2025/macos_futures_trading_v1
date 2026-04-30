@@ -43,7 +43,9 @@ struct ChartScene: View {
     @State private var dataSourceLabel: String = "加载中…"
     @State private var currentInstrumentID: String = MarketDataPipeline.defaultInstrumentID
     @State private var selectedPeriod: KLinePeriod = MarketDataPipeline.defaultPeriod
-    @State private var selectedSubIndicator: SubIndicatorKind = .macd
+    /// v13.19 副图多选 · selectedSubIndicators Set 替代单选 · 默认 [.macd]
+    /// vertical stack 渲染多个 SubChartView · 高度按数量等分（每个最少 80pt）
+    @State private var selectedSubIndicators: Set<SubIndicatorKind> = [.macd]
     @State private var chartMode: ChartMode = .live
 
     // 实盘 state
@@ -150,14 +152,15 @@ struct ChartScene: View {
                 )
             }
         }
-        .onChange(of: selectedSubIndicator) { newValue in
-            // 埋点：用户切换副图指标（MACD / KDJ / RSI ...）· chart_open 之外的细粒度行为
+        .onChange(of: selectedSubIndicators) { newValue in
+            // 埋点：用户切换副图指标组合（v13.19 多选）· 记最新组合
             guard let service = analytics else { return }
+            let kinds = newValue.map(\.rawValue).sorted().joined(separator: ",")
             Task {
                 _ = try? await service.record(
                     .indicatorAdd,
                     userID: FuturesTerminalApp.anonymousUserID,
-                    properties: ["kind": newValue.rawValue]
+                    properties: ["kinds": kinds]
                 )
             }
         }
@@ -583,14 +586,30 @@ struct ChartScene: View {
             .frame(width: 80)
             .labelsHidden()
 
-            Picker("", selection: $selectedSubIndicator) {
+            // v13.19 副图多选 · Menu 弹下拉显示 4 个 Toggle（用户可同时选 1~4 个 · vertical stack 显示）
+            Menu {
                 ForEach(SubIndicatorKind.allCases) { k in
-                    Text(k.shortName).tag(k)
+                    Button(action: {
+                        if selectedSubIndicators.contains(k) {
+                            // 至少保留 1 个不允许全部取消（防 UI 空白）
+                            if selectedSubIndicators.count > 1 {
+                                selectedSubIndicators.remove(k)
+                            }
+                        } else {
+                            selectedSubIndicators.insert(k)
+                        }
+                    }) {
+                        Label(k.shortName, systemImage: selectedSubIndicators.contains(k) ? "checkmark.circle.fill" : "circle")
+                    }
                 }
+            } label: {
+                let count = selectedSubIndicators.count
+                Text(count == 1 ? selectedSubIndicators.first!.shortName : "副图 \(count)")
+                    .frame(maxWidth: .infinity)
             }
-            .pickerStyle(.segmented)
-            .frame(width: 130)
-            .labelsHidden()
+            .menuStyle(.borderlessButton)
+            .frame(width: 90)
+            .help("副图指标多选（至少 1 · 最多 4 · vertical stack 显示）")
 
             Divider().frame(height: 16)
             drawingTools
@@ -617,7 +636,7 @@ struct ChartScene: View {
                 instrumentLabel: instrumentLabel,
                 periodLabel: periodLabel,
                 dataSourceLabel: dataSourceLabel,
-                subIndicatorKind: selectedSubIndicator,
+                subIndicatorKinds: Array(selectedSubIndicators).sorted(by: { $0.rawValue < $1.rawValue }),
                 preSettle: preSettle,
                 drawings: $drawings,
                 activeDrawingTool: $activeDrawingTool,
@@ -1049,7 +1068,7 @@ struct ChartContentView: View {
     let instrumentLabel: String
     let periodLabel: String
     let dataSourceLabel: String
-    let subIndicatorKind: SubIndicatorKind
+    let subIndicatorKinds: [SubIndicatorKind]  // v13.19 多副图（vertical stack · 至少 1 个）
     /// v12.1 真昨结算 · priceTopBar baseline · nil 时 fallback bars.first.close（由 ChartScene 父级注入）
     let preSettle: Decimal?
     /// v13.0 WP-42 画线状态（绑定 ChartScene · 父子双向同步）
@@ -1066,6 +1085,10 @@ struct ChartContentView: View {
     @Binding var currentFontSize: Double
     /// v13.3 hover 跟踪 · 双点画线第二点 hover 预览（虚线）
     @State var hoverDataPoint: DrawingPoint?
+    /// v13.20 副图区总高度 · 用户拖分割条调整 · 范围 80~480pt（默认 160 = subChartHeight 单副图）
+    @State var subChartTotalHeight: CGFloat = SubChart.defaultHeight
+    /// v13.20 拖分割条时的起始高度 · onChanged 累加 translation 算新高度
+    @State var dragStartSubHeight: CGFloat?
     /// v13.10 anchor 拖动目标 · onChanged 第一次落 · 释放清空
     @State var anchorDragTarget: AnchorDragTarget?
     /// v13.10 拖动状态 · 距离 ≥ 4 像素 + anchor 命中后置 true · 释放时 false 视为 tap
@@ -1089,7 +1112,7 @@ struct ChartContentView: View {
         instrumentLabel: String,
         periodLabel: String,
         dataSourceLabel: String,
-        subIndicatorKind: SubIndicatorKind,
+        subIndicatorKinds: [SubIndicatorKind],
         preSettle: Decimal?,
         drawings: Binding<[Drawing]>,
         activeDrawingTool: Binding<DrawingType?>,
@@ -1106,7 +1129,7 @@ struct ChartContentView: View {
         self.instrumentLabel = instrumentLabel
         self.periodLabel = periodLabel
         self.dataSourceLabel = dataSourceLabel
-        self.subIndicatorKind = subIndicatorKind
+        self.subIndicatorKinds = subIndicatorKinds
         self.preSettle = preSettle
         self._drawings = drawings
         self._activeDrawingTool = activeDrawingTool
@@ -1118,8 +1141,45 @@ struct ChartContentView: View {
         self._viewport = State(initialValue: initialViewport)
     }
 
-    /// 副图高度（spike 阶段固定 · 后续 WP 加可拖分割条）
+    /// 副图高度（v13.20 改为可拖分割条调整 · subChartTotalHeight @State 替代）
     static let subChartHeight: CGFloat = 160
+
+    /// v13.20 分割条配置（高度范围 + 默认）
+    enum SubChart {
+        static let defaultHeight: CGFloat = 160
+        static let minHeight: CGFloat = 80
+        static let maxHeight: CGFloat = 480
+    }
+
+    /// v13.20 主图 ↔ 副图可拖分割条 · 4pt 区域捕获 · DragGesture 改 subChartTotalHeight
+    /// 拖动方向：向上拖 = 副图变高（dy < 0 → height +=） · 向下拖 = 副图变矮
+    private var mainSubDivider: some View {
+        Color.white.opacity(0.18)
+            .frame(height: 4)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                // 用 .set() 替代 push/pop · 避免 hovering 多次触发或 view 销毁导致 cursor 栈失衡
+                // hovering=false 不主动还原 · macOS 指针离开 view 时会自动重新 resolve cursor
+                if hovering {
+                    NSCursor.resizeUpDown.set()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if dragStartSubHeight == nil {
+                            dragStartSubHeight = subChartTotalHeight
+                        }
+                        let base = dragStartSubHeight ?? subChartTotalHeight
+                        let delta = -value.translation.height  // 向上拖 = 副图变高
+                        let newHeight = base + delta
+                        subChartTotalHeight = max(SubChart.minHeight, min(SubChart.maxHeight, newHeight))
+                    }
+                    .onEnded { _ in
+                        dragStartSubHeight = nil
+                    }
+            )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1129,17 +1189,27 @@ struct ChartContentView: View {
                 KLineAxisView(bars: bars, viewport: viewport, priceRange: currentPriceRange, orientation: .price)
                     .frame(width: 60)
             }
-            // 视觉迭代第 9 项：主图 ↔ 副图分割线增强 · 1.5pt 深灰条 · 比默认 Divider 醒目
-            Color.white.opacity(0.18)
-                .frame(height: 1)
-            // 副图区（指数平滑异同移动平均线 MACD · 共享主图 viewport · 拖拽缩放主图时副图同步）
-            HStack(spacing: 0) {
-                SubChartView(bars: bars, viewport: viewport, kind: subIndicatorKind)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                Color(red: 0.07, green: 0.08, blue: 0.10)
-                    .frame(width: 60)  // 占位 · 与主图右侧价格轴对齐
+            // 视觉迭代第 9 项：主图 ↔ 副图分割线 · v13.20 升级为可拖分割条（4pt 高度 · 鼠标 hover 显示 row cursor · 拖动改副图总高度）
+            mainSubDivider
+            // 副图区 v13.19 多副图 vertical stack · 共享主图 viewport · 总高度 v13.20 用户可拖
+            // 副图之间用 1pt 分割线 · 每个副图右侧占位 60pt 与主图价格轴对齐
+            let count = max(1, subIndicatorKinds.count)
+            let perSubHeight: CGFloat = subChartTotalHeight / CGFloat(count)
+            VStack(spacing: 0) {
+                ForEach(Array(subIndicatorKinds.enumerated()), id: \.element) { idx, kind in
+                    if idx > 0 {
+                        Color.white.opacity(0.10).frame(height: 1)
+                    }
+                    HStack(spacing: 0) {
+                        SubChartView(bars: bars, viewport: viewport, kind: kind)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        Color(red: 0.07, green: 0.08, blue: 0.10)
+                            .frame(width: 60)
+                    }
+                    .frame(height: perSubHeight)
+                }
             }
-            .frame(height: Self.subChartHeight)
+            .frame(height: subChartTotalHeight)
             KLineAxisView(bars: bars, viewport: viewport, priceRange: currentPriceRange, orientation: .time)
                 .frame(height: 28)
         }
@@ -1339,6 +1409,15 @@ struct ChartContentView: View {
                 }
                 .disabled(drawing.locked)
             }
+            // v13.18 水平线 → 一键创建价格触及预警（与 WP-52 AlertCore 联动）
+            if n == 1, let id = selectedDrawingIDs.first,
+               let drawing = drawings.first(where: { $0.id == id }),
+               drawing.type == .horizontalLine {
+                Button("为此画线创建预警…") {
+                    createAlertForDrawing(drawing)
+                }
+                .disabled(drawing.locked)
+            }
             Divider()
             // v13.11 锁定 / 解锁（互斥 · 全锁显示解锁 · 全未锁显示锁定 · 混合显示锁定全部）
             if allLocked {
@@ -1481,6 +1560,37 @@ struct ChartContentView: View {
             if let idx = drawings.firstIndex(where: { $0.id == drawing.id }) {
                 drawings[idx].text = newText
             }
+        }
+    }
+
+    /// v13.18 为水平线画线创建价格触及预警（与 WP-52 AlertCore 联动 · 通过 NotificationCenter 通知 AlertWindow）
+    private func createAlertForDrawing(_ drawing: Drawing) {
+        guard drawing.type == .horizontalLine else { return }
+        let price = drawing.startPoint.price
+        let priceStr = formatPrice(price)
+        let nsAlert = NSAlert()
+        nsAlert.messageText = "为水平线创建预警"
+        nsAlert.informativeText = "价格触及 \(priceStr) 时预警 · \(currentInstrumentID)"
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        textField.stringValue = "\(currentInstrumentID) 触及 \(priceStr)"
+        nsAlert.accessoryView = textField
+        nsAlert.addButton(withTitle: "创建")
+        nsAlert.addButton(withTitle: "取消")
+        if nsAlert.runModal() == .alertFirstButtonReturn {
+            let name = textField.stringValue.isEmpty ? "水平线预警" : textField.stringValue
+            let newAlert = Alert(
+                name: name,
+                instrumentID: currentInstrumentID,
+                condition: .horizontalLineTouched(drawingID: drawing.id, price: price)
+            )
+            // post 给 AlertWindow（自动 alerts.append → onChange save + evaluator sync）
+            NotificationCenter.default.post(name: .alertAddedFromChart, object: newAlert)
+            // 反馈提示
+            let success = NSAlert()
+            success.messageText = "预警已创建"
+            success.informativeText = "在「预警」窗口可查看 / 编辑 / 暂停 / 删除。"
+            success.addButton(withTitle: "好")
+            success.runModal()
         }
     }
 

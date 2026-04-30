@@ -103,6 +103,13 @@ struct AlertWindow: View {
         .onDisappear {
             evaluatorObserveTask?.cancel()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .alertAddedFromChart)) { notification in
+            // v13.18 ChartScene 右键画线创建的预警 → 加入 alerts list（自动 onChange save + evaluator sync）
+            guard let alert = notification.object as? Alert else { return }
+            // 防重复（同 ID 已存在 → 跳过）
+            if alerts.contains(where: { $0.id == alert.id }) { return }
+            alerts.append(alert)
+        }
         .sheet(item: $sheetState) { state in
             switch state {
             case .add:
@@ -933,6 +940,11 @@ enum MockAlertHistory {
             )
         }
     }
+}
+
+/// v13.18 ChartScene 创建画线预警 → 通知 AlertWindow 同步到 alerts list（持久化 + evaluator）
+extension Notification.Name {
+    public static let alertAddedFromChart = Notification.Name("alertAddedFromChart")
 }
 
 #endif

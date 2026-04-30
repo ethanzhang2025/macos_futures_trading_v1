@@ -39,6 +39,9 @@
 | **v13.15** | _本批_ | 透明度自定义（strokeOpacity 字段 · ColorPicker supportsOpacity true · alpha 通道） | ⚠️ **未测** |
 | **v13.16** | _本批_ | 画线模板（DrawingTemplate · UserDefaults 持久化 · 工具栏 Menu · 跨合约复用） | ⚠️ **未测** |
 | **v13.17** | _本批_ | Andrew's Pitchfork（DrawingType 第 9 类 · 3 点输入 · 中线 + 上下平行轨） | ⚠️ **未测** |
+| **v13.18** | _本批_ | 画线 → 预警联动（水平线右键"创建预警…" → AlertCore + AlertWindow 自动同步） | ⚠️ **未测** |
+| **v13.19** | _本批_ | 副图多选叠加（Set<SubIndicatorKind> · Menu Toggle · vertical stack 1~4 个） | ⚠️ **未测** |
+| **v13.20** | _本批_ | 主图/副图分割条拖动调整副图高度（4pt + DragGesture · NSCursor.resizeUpDown.set） | ⚠️ **未测** |
 
 ---
 
@@ -248,6 +251,35 @@
 - [ ] 应用模板：drawing 用新 UUID + 不继承 isLocked
 - [ ] 持久化 UserDefaults JSON（key drawingTemplates.v1 · 全局共享 · 不按合约/周期隔离）
 - [ ] 重启 App 模板列表保留
+
+### v13.19 副图多选叠加（vertical stack 1~4 副图）
+- [ ] 工具栏副图选择器从 Picker(.segmented) 改为 Menu 弹下拉（默认显示当前选中数量"副图 N"或单选时显示 shortName）
+- [ ] Menu 内 4 个 Toggle（MACD/KDJ/RSI/成交量）· checkmark.circle.fill / circle 切换
+- [ ] 至少保留 1 个不允许全部取消（防 UI 空白 · 点最后 1 个不响应）
+- [ ] 选 2 个 → 副图区显示 2 个 vertical stack · 之间 1pt 分割线
+- [ ] 选 4 个 → 副图区显示 4 个 vertical stack · 总高度 = subChartTotalHeight
+- [ ] 每个副图 = subChartTotalHeight / count（v13.20 用户可拖调）
+- [ ] 切合约 / 重启 → selectedSubIndicators 默认 [.macd]（不持久化 · v1 设计）
+
+### v13.20 主图/副图分割条拖动
+- [ ] 主图 ↔ 副图之间 4pt 高度分割条（Color.white.opacity(0.18) · 比 v13.19 1pt 更醒目）
+- [ ] 鼠标 hover 分割条 → cursor 变 resizeUpDown 双向箭头
+- [ ] 鼠标按住 + 拖动：向上拖 = 副图变高 / 向下拖 = 副图变矮
+- [ ] 高度范围 80~480 pt（min/maxHeight clamp）
+- [ ] 释放鼠标 → 高度保持
+- [ ] 不持久化 · 切合约/重启回默认 160（v1 设计 · backlog 可加 UserDefaults）
+- [ ] 多副图（v13.19）时 perSubHeight 自动 = total / count
+
+### v13.18 画线 → 预警联动（WP-42 + WP-52 集成）
+- [ ] 选中水平线画线 → 右键 → "为此画线创建预警…"项可见（仅 .horizontalLine + n=1 + 未锁时）
+- [ ] 弹 NSAlert 输入预警名称（默认"合约 触及 价格"）
+- [ ] 创建后弹"预警已创建"提示
+- [ ] 打开「预警」窗口（CommandMenu / ⌘2 等）→ 列表里出现新预警
+- [ ] 预警 condition = horizontalLineTouched(drawingID, price) 自动关联画线 ID
+- [ ] AlertWindow.onChange(of: alerts) 自动 save 到 SQLiteAlertConfigStore + sync evaluator
+- [ ] NotificationCenter 模式：ChartScene post .alertAddedFromChart · AlertWindow .onReceive append
+- [ ] 防重复：alerts.contains 检查 ID 跳过重复添加
+- [ ] 关闭/重启 App → 预警仍存在（持久化生效）
 
 ### v13.17 Andrew's Pitchfork（DrawingType 第 9 类 · 3 点输入）
 - [ ] 工具栏多 1 按钮（SF Symbol "tuningfork"）介于 ruler 和 text 之间

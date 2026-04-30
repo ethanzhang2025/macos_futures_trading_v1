@@ -92,6 +92,7 @@ struct ChartScene: View {
                 replayControlBar
             }
         }
+        .background(periodShortcuts)
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         .task(id: PipelineKey(mode: chartMode, instrumentID: currentInstrumentID, period: selectedPeriod)) {
             await resetForNewPipeline()
@@ -208,6 +209,29 @@ struct ChartScene: View {
         } else {
             await updateIndicatorsFull(bars)
         }
+    }
+
+    // MARK: - 周期键盘快捷键 ⌘1~6（v12.19 · WP-44 · 隐藏 Button + .keyboardShortcut）
+
+    /// 隐藏按钮组绑定 ⌘1~6 切到对应周期 · zero-frame + 0 透明度不显示但 SwiftUI 仍处理 shortcut
+    private var periodShortcuts: some View {
+        Group {
+            Button("") { selectedPeriod = .minute1 }
+                .keyboardShortcut("1", modifiers: [.command])
+            Button("") { selectedPeriod = .minute5 }
+                .keyboardShortcut("2", modifiers: [.command])
+            Button("") { selectedPeriod = .minute15 }
+                .keyboardShortcut("3", modifiers: [.command])
+            Button("") { selectedPeriod = .minute30 }
+                .keyboardShortcut("4", modifiers: [.command])
+            Button("") { selectedPeriod = .hour1 }
+                .keyboardShortcut("5", modifiers: [.command])
+            Button("") { selectedPeriod = .daily }
+                .keyboardShortcut("6", modifiers: [.command])
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
     }
 
     // MARK: - 工具条

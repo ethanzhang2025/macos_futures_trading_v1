@@ -156,7 +156,7 @@ struct FuturesTerminalApp: App {
                 OpenWorkspaceButton()
             }
             CommandMenu("视图") {
-                Text("（多周期切换已支持工具条 Picker · 键盘 ⌘1~9 待 Mac 切机集中接）")
+                Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
                     .foregroundColor(.secondary)
             }
             CommandMenu("工具") {

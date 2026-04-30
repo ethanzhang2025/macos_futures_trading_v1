@@ -91,7 +91,12 @@ struct SubChartView: View {
     let viewport: RenderViewport
     let kind: SubIndicatorKind
     /// v15.2 自定义指标参数 · 由父级注入 · 改后通过 ComputeKey 触发重算
+    /// v15.7 父级已用 subParamsOverrides[slot] ?? globalParams · 这里就是 effective 参数
     let params: IndicatorParamsBook
+    /// v15.7 副图槽位 index（0~3）· 右键菜单"本副图参数..."回调用 · 父级 sheet 编辑该 slot 的 override
+    let slotIndex: Int
+    /// v15.7 用户右键选"本副图参数..."回调 · 父级弹 IndicatorParamsSheet 编辑 override
+    let onEditParams: () -> Void
 
     /// 三槽位（MACD: DIF/DEA/HIST · KDJ: K/D/J）
     /// compute() 末尾一次性 Decimal → Double 桥接 · 拖拽热路径直接读 Double，不再走 NSDecimalNumber
@@ -107,6 +112,10 @@ struct SubChartView: View {
         }
         .task(id: ComputeKey(barCount: bars.count, kind: kind, params: params)) {
             await compute()
+        }
+        .contextMenu {
+            // v15.7 右键菜单 · 本副图独立参数（仅本槽位生效）
+            Button("本副图参数（槽位 \(slotIndex + 1)）…") { onEditParams() }
         }
     }
 

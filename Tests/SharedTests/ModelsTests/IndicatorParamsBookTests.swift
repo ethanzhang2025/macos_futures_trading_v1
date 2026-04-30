@@ -104,3 +104,45 @@ struct IndicatorParamsStoreTests {
         #expect(IndicatorParamsStore.load(defaults: defaults) == nil)
     }
 }
+
+@Suite("SubChartParamsOverridesStore · 副图独立参数持久化")
+struct SubChartParamsOverridesStoreTests {
+
+    private func makeDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "SubOverridesTest-\(UUID().uuidString)")!
+    }
+
+    @Test("空 dict save then load → 空 dict 等价")
+    func emptyDict() {
+        let defaults = makeDefaults()
+        SubChartParamsOverridesStore.save([:], defaults: defaults)
+        let loaded = SubChartParamsOverridesStore.load(defaults: defaults)
+        #expect(loaded == [:])
+    }
+
+    @Test("Int key 持久化 · JSON 中转 String 后能正确解码回 Int")
+    func intKeyRoundTrip() {
+        let defaults = makeDefaults()
+        let custom = IndicatorParamsBook(
+            mainMAPeriods: [7, 33, 99],
+            mainBOLLParams: [25, 3],
+            macdParams: [10, 22, 8],
+            kdjParams: [14, 5, 5],
+            rsiPeriod: 7
+        )
+        let overrides: [Int: IndicatorParamsBook] = [0: .default, 2: custom]
+        SubChartParamsOverridesStore.save(overrides, defaults: defaults)
+        let loaded = SubChartParamsOverridesStore.load(defaults: defaults)
+        #expect(loaded == overrides)
+        // 关键：Int key 要能 decode 回（不是 String）
+        #expect(loaded?[0] == .default)
+        #expect(loaded?[2] == custom)
+        #expect(loaded?[1] == nil)
+    }
+
+    @Test("load 空时返回 nil")
+    func loadEmptyReturnsNil() {
+        let defaults = makeDefaults()
+        #expect(SubChartParamsOverridesStore.load(defaults: defaults) == nil)
+    }
+}

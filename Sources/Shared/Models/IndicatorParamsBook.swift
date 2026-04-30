@@ -86,3 +86,30 @@ public enum IndicatorParamsStore {
         defaults.set(data, forKey: key)
     }
 }
+
+// MARK: - 副图独立参数 overrides（v15.7 · 按副图槽位 0~3 独立调参）
+
+/// 副图独立参数 overrides 持久化（key = "indicators.subOverrides.v1"）
+/// 数据形态：`[Int: IndicatorParamsBook]` · int = 副图槽位 0~3 · 不存在 = 用全局 IndicatorParamsBook 默认
+/// 使用场景：用户同时开两个 RSI 副图 · 一个 RSI(14) 一个 RSI(7) 对比
+public enum SubChartParamsOverridesStore {
+    public static let key = "indicators.subOverrides.v1"
+
+    public static func load(defaults: UserDefaults = .standard) -> [Int: IndicatorParamsBook]? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        // JSON 不支持 Int 作 dict key · 用 [String: IndicatorParamsBook] 中转
+        guard let stringDict = try? JSONDecoder().decode([String: IndicatorParamsBook].self, from: data)
+        else { return nil }
+        var result: [Int: IndicatorParamsBook] = [:]
+        for (k, v) in stringDict {
+            if let i = Int(k) { result[i] = v }
+        }
+        return result
+    }
+
+    public static func save(_ overrides: [Int: IndicatorParamsBook], defaults: UserDefaults = .standard) {
+        let stringDict = Dictionary(uniqueKeysWithValues: overrides.map { (String($0.key), $0.value) })
+        guard let data = try? JSONEncoder().encode(stringDict) else { return }
+        defaults.set(data, forKey: key)
+    }
+}

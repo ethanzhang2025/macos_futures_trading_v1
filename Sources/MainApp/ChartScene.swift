@@ -125,6 +125,10 @@ struct ChartScene: View {
     @State private var isIndicatorParamsLoaded: Bool = false
     /// v15.2 指标参数编辑 Sheet 显隐
     @State private var showIndicatorParamsSheet: Bool = false
+    /// v15.7 副图独立参数 overrides · key = 副图槽位 0~3 · 缺失 = 用全局 indicatorParams
+    @State private var subParamsOverrides: [Int: IndicatorParamsBook] = [:]
+    /// v15.7 当前编辑的副图槽位（弹 sheet 时设 · sheet 关闭后清）
+    @State private var editingSubSlot: Int? = nil
     /// v15.2 参数变更触发 updateIndicatorsFull 的链式串行 task · 防快速连续变更产生重叠重算
     @State private var indicatorParamsRecomputeTask: Task<Void, Never>?
 
@@ -134,6 +138,23 @@ struct ChartScene: View {
     private static let subChartHeightKey = "subChartHeight.v1"
     /// v13.34 HUD 位置持久化（4 角偏好）
     private static let hudCornerKey = "hudCorner.v1"
+
+    /// v15.7 sheet(item:) 需要 Identifiable · Int 不能直接用 · 包一层
+    fileprivate struct SubSlotIdentified: Identifiable {
+        let slot: Int
+        var id: Int { slot }
+    }
+
+    /// v15.7 副图独立参数 binding · sheet 编辑 · 缺 override 时用 indicatorParams 作 fallback
+    /// 用户首次为某 slot 改参数时 fallback 注入 → override 写盘 · 后续直接读 override
+    /// 注意：fallback 后整本 IndicatorParamsBook 都被"凝固"成当时的全局值；后续全局 indicatorParams
+    /// 变更不再传播到此 slot（v1 接受 · 用户场景 = "我要这个 slot 独立调"）
+    private func bindingForSubSlot(_ slot: Int) -> Binding<IndicatorParamsBook> {
+        Binding(
+            get: { subParamsOverrides[slot] ?? indicatorParams },
+            set: { subParamsOverrides[slot] = $0 }
+        )
+    }
 
     /// v13.22 viewport 缩放级别按合约+周期记忆 · UserDefaults JSON · key prefix
     static func viewportKey(instrumentID: String, period: KLinePeriod) -> String {
@@ -274,6 +295,10 @@ struct ChartScene: View {
                 if let book = IndicatorParamsStore.load() {
                     indicatorParams = book
                 }
+                // v15.7 副图独立 overrides 同时加载（与 indicatorParams 同一守卫 · 1 次）
+                if let ov = SubChartParamsOverridesStore.load() {
+                    subParamsOverrides = ov
+                }
                 isIndicatorParamsLoaded = true
             }
         }
@@ -314,6 +339,18 @@ struct ChartScene: View {
         }
         .sheet(isPresented: $showIndicatorParamsSheet) {
             IndicatorParamsSheet(book: $indicatorParams)
+        }
+        .onChange(of: subParamsOverrides) { newValue in
+            // v15.7 副图独立参数 overrides 持久化（仅副图重算 · 主图不受影响）
+            guard isIndicatorParamsLoaded else { return }
+            SubChartParamsOverridesStore.save(newValue)
+        }
+        .sheet(item: Binding(
+            get: { editingSubSlot.map { SubSlotIdentified(slot: $0) } },
+            set: { editingSubSlot = $0?.slot }
+        )) { ident in
+            // v15.7 副图独立参数编辑 sheet · book binding 走 effectiveBindingForSlot
+            IndicatorParamsSheet(book: bindingForSubSlot(ident.slot))
         }
         .onChange(of: chartMode) { newValue in
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
@@ -835,6 +872,8 @@ struct ChartScene: View {
                 subIndicatorKinds: Array(selectedSubIndicators).sorted(by: { $0.rawValue < $1.rawValue }),
                 preSettle: preSettle,
                 indicatorParams: indicatorParams,
+                subParamsOverrides: subParamsOverrides,
+                onEditSubSlot: { slot in editingSubSlot = slot },
                 drawings: $drawings,
                 activeDrawingTool: $activeDrawingTool,
                 pendingDrawingPoint: $pendingDrawingPoint,
@@ -1283,6 +1322,10 @@ struct ChartContentView: View {
     let preSettle: Decimal?
     /// v15.2 自定义指标参数（主图 MA/BOLL · 副图 MACD/KDJ/RSI）· 由 ChartScene 父级 onChange 触发重渲染
     let indicatorParams: IndicatorParamsBook
+    /// v15.7 副图独立参数 overrides · 缺失 = 用 indicatorParams 全局
+    let subParamsOverrides: [Int: IndicatorParamsBook]
+    /// v15.7 用户右键副图选"参数..."时回调 · 通知父级 ChartScene 弹 sheet 编辑该 slot
+    let onEditSubSlot: (Int) -> Void
     /// v13.0 WP-42 画线状态（绑定 ChartScene · 父子双向同步）
     @Binding var drawings: [Drawing]
     @Binding var activeDrawingTool: DrawingType?
@@ -1341,6 +1384,8 @@ struct ChartContentView: View {
         subIndicatorKinds: [SubIndicatorKind],
         preSettle: Decimal?,
         indicatorParams: IndicatorParamsBook,
+        subParamsOverrides: [Int: IndicatorParamsBook],
+        onEditSubSlot: @escaping (Int) -> Void,
         drawings: Binding<[Drawing]>,
         activeDrawingTool: Binding<DrawingType?>,
         pendingDrawingPoint: Binding<DrawingPoint?>,
@@ -1362,6 +1407,8 @@ struct ChartContentView: View {
         self.subIndicatorKinds = subIndicatorKinds
         self.preSettle = preSettle
         self.indicatorParams = indicatorParams
+        self.subParamsOverrides = subParamsOverrides
+        self.onEditSubSlot = onEditSubSlot
         self._drawings = drawings
         self._activeDrawingTool = activeDrawingTool
         self._pendingDrawingPoint = pendingDrawingPoint
@@ -1435,7 +1482,14 @@ struct ChartContentView: View {
                         Color.white.opacity(0.10).frame(height: 1)
                     }
                     HStack(spacing: 0) {
-                        SubChartView(bars: bars, viewport: viewport, kind: kind, params: indicatorParams)
+                        SubChartView(
+                            bars: bars,
+                            viewport: viewport,
+                            kind: kind,
+                            params: subParamsOverrides[idx] ?? indicatorParams,
+                            slotIndex: idx,
+                            onEditParams: { onEditSubSlot(idx) }
+                        )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         Color(red: 0.07, green: 0.08, blue: 0.10)
                             .frame(width: 60)

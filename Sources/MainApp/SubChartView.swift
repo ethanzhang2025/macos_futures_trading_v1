@@ -24,12 +24,12 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    /// 中文 + 参数（HUD 完整标题）
-    var displayName: String {
+    /// 用当前参数生成 HUD 标题（用户改参数后立即更新 · 无参版本由调用方传 .default）
+    func displayName(params: IndicatorParamsBook) -> String {
         switch self {
-        case .macd:   return "MACD 12/26/9"
-        case .kdj:    return "KDJ 9/3/3"
-        case .rsi:    return "RSI 14"
+        case .macd:   return "MACD \(params.macdParams[0])/\(params.macdParams[1])/\(params.macdParams[2])"
+        case .kdj:    return "KDJ \(params.kdjParams[0])/\(params.kdjParams[1])/\(params.kdjParams[2])"
+        case .rsi:    return "RSI \(params.rsiPeriod)"
         case .volume: return "成交量"
         }
     }
@@ -90,6 +90,8 @@ struct SubChartView: View {
     let bars: [KLine]
     let viewport: RenderViewport
     let kind: SubIndicatorKind
+    /// v15.2 自定义指标参数 · 由父级注入 · 改后通过 ComputeKey 触发重算
+    let params: IndicatorParamsBook
 
     /// 三槽位（MACD: DIF/DEA/HIST · KDJ: K/D/J）
     /// compute() 末尾一次性 Decimal → Double 桥接 · 拖拽热路径直接读 Double，不再走 NSDecimalNumber
@@ -103,15 +105,16 @@ struct SubChartView: View {
             Canvas { ctx, size in drawChart(ctx, size: size) }
             hud
         }
-        .task(id: ComputeKey(barCount: bars.count, kind: kind)) {
+        .task(id: ComputeKey(barCount: bars.count, kind: kind, params: params)) {
             await compute()
         }
     }
 
-    /// 触发重算的复合 key（bars 增量 + 切副图都要重算）
+    /// 触发重算的复合 key（bars 增量 + 切副图 + 改参数都要重算）
     private struct ComputeKey: Equatable {
         let barCount: Int
         let kind: SubIndicatorKind
+        let params: IndicatorParamsBook
     }
 
     // MARK: - 计算（按 kind 分发 · 后台 detached 跑 · 末尾一次性桥接 Decimal → Double）
@@ -120,6 +123,7 @@ struct SubChartView: View {
     private func compute() async {
         let snap = bars
         let kindCopy = kind
+        let paramsCopy = params
         let result = await Task.detached(priority: .userInitiated) {
             let series = KLineSeries(
                 opens: snap.map(\.open),
@@ -131,11 +135,11 @@ struct SubChartView: View {
             )
             switch kindCopy {
             case .macd:
-                return (try? MACD.calculate(kline: series, params: [12, 26, 9])) ?? []
+                return (try? MACD.calculate(kline: series, params: paramsCopy.macdParamsDecimal)) ?? []
             case .kdj:
-                return (try? KDJ.calculate(kline: series, params: [9, 3, 3])) ?? []
+                return (try? KDJ.calculate(kline: series, params: paramsCopy.kdjParamsDecimal)) ?? []
             case .rsi:
-                return (try? RSI.calculate(kline: series, params: [14])) ?? []
+                return (try? RSI.calculate(kline: series, params: paramsCopy.rsiParamsDecimal)) ?? []
             case .volume:
                 return []  // 成交量直接读 bars · 不走 Indicator 计算
             }

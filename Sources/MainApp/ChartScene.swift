@@ -119,6 +119,13 @@ struct ChartScene: View {
     /// v13.34 HUD 位置 · 4 角切换 · 默认左上 · 通过 @Binding 传给 ChartContentView · UserDefaults 持久化
     @State private var hudCorner: HUDCorner = .topLeading
     @State private var isHUDPrefLoaded: Bool = false
+    /// v15.2 自定义指标参数（主图 MA/BOLL · 副图 MACD/KDJ/RSI）· UserDefaults 全局共享
+    @State private var indicatorParams: IndicatorParamsBook = .default
+    @State private var isIndicatorParamsLoaded: Bool = false
+    /// v15.2 指标参数编辑 Sheet 显隐
+    @State private var showIndicatorParamsSheet: Bool = false
+    /// v15.2 参数变更触发 updateIndicatorsFull 的链式串行 task · 防快速连续变更产生重叠重算
+    @State private var indicatorParamsRecomputeTask: Task<Void, Never>?
 
     private static let drawingTemplatesKey = "drawingTemplates.v1"
     /// v13.21 副图偏好持久化（重启保留 · 跨合约/周期共享）
@@ -259,6 +266,13 @@ struct ChartScene: View {
                 }
                 isHUDPrefLoaded = true
             }
+            // v15.2 自定义指标参数首次加载（全局 UserDefaults · 跨合约共享）
+            if !isIndicatorParamsLoaded {
+                if let book = IndicatorParamsStore.load() {
+                    indicatorParams = book
+                }
+                isIndicatorParamsLoaded = true
+            }
         }
         .onChange(of: drawingTemplates) { newValue in
             // v13.16 模板持久化 UserDefaults · 加载守卫避免初始 [] 误覆盖
@@ -282,6 +296,21 @@ struct ChartScene: View {
             // v13.34 HUD 位置持久化
             guard isHUDPrefLoaded else { return }
             UserDefaults.standard.set(newValue.rawValue, forKey: Self.hudCornerKey)
+        }
+        .onChange(of: indicatorParams) { newValue in
+            // v15.2 指标参数持久化 + 触发主图重算（副图 SubChartView 自己 onChange 触发）
+            // 链式串行（前一个完成才跑下一个）防快速连续变更产生重叠 updateIndicatorsFull
+            guard isIndicatorParamsLoaded else { return }
+            IndicatorParamsStore.save(newValue)
+            let prev = indicatorParamsRecomputeTask
+            let snap = bars
+            indicatorParamsRecomputeTask = Task {
+                await prev?.value
+                await updateIndicatorsFull(snap)
+            }
+        }
+        .sheet(isPresented: $showIndicatorParamsSheet) {
+            IndicatorParamsSheet(book: $indicatorParams)
         }
         .onChange(of: chartMode) { newValue in
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
@@ -355,7 +384,7 @@ struct ChartScene: View {
     /// 增量推进路径走 stepIndicators(newBar:)
     private func updateIndicatorsFull(_ snap: [KLine]) async {
         indicators = await computeIndicatorsAsync(snap)
-        indicatorRunner = ChartIndicatorRunner.prime(bars: snap)
+        indicatorRunner = ChartIndicatorRunner.prime(bars: snap, params: indicatorParams)
     }
 
     /// 增量推进 indicators · 仅在新 K 单调追加时调（barEmitted / completedBar 两条路径）
@@ -757,6 +786,17 @@ struct ChartScene: View {
             Divider().frame(height: 16)
             drawingTools
 
+            Divider().frame(height: 16)
+            // v15.2 自定义指标参数齿轮按钮 · 右键/单击打开 Sheet 表单
+            Button {
+                showIndicatorParamsSheet = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.borderless)
+            .help("指标参数（MA / BOLL / MACD / KDJ / RSI 周期可调）")
+
             Spacer()
             Text("⌘N 新窗口 · ⌘L 自选")
                 .foregroundColor(.secondary)
@@ -781,6 +821,7 @@ struct ChartScene: View {
                 dataSourceLabel: dataSourceLabel,
                 subIndicatorKinds: Array(selectedSubIndicators).sorted(by: { $0.rawValue < $1.rawValue }),
                 preSettle: preSettle,
+                indicatorParams: indicatorParams,
                 drawings: $drawings,
                 activeDrawingTool: $activeDrawingTool,
                 pendingDrawingPoint: $pendingDrawingPoint,
@@ -1166,21 +1207,23 @@ struct ChartScene: View {
 
     /// Sina 不可达兜底：5000 根 random walk Mock
     private func loadMockFallback() async {
+        let params = indicatorParams
         let result = await Task.detached(priority: .userInitiated) {
             let b = MockKLineData.generateBars(5_000)
-            let i = MockKLineData.computeIndicators(bars: b)
+            let i = MockKLineData.computeIndicators(bars: b, params: params)
             return (b, i)
         }.value
         bars = result.0
         indicators = result.1
-        indicatorRunner = ChartIndicatorRunner.prime(bars: result.0)
+        indicatorRunner = ChartIndicatorRunner.prime(bars: result.0, params: indicatorParams)
         dataSourceLabel = "Sina 不可达 · 已退回 Mock"
     }
 
     /// 200 根 ~10ms / 5k 根 ~50ms · 8× 回放速度下成为热路径瓶颈，下版本接 IndicatorCore 增量 API
     private func computeIndicatorsAsync(_ snap: [KLine]) async -> [IndicatorSeries] {
-        await Task.detached(priority: .userInitiated) {
-            MockKLineData.computeIndicators(bars: snap)
+        let params = indicatorParams
+        return await Task.detached(priority: .userInitiated) {
+            MockKLineData.computeIndicators(bars: snap, params: params)
         }.value
     }
 
@@ -1220,6 +1263,8 @@ struct ChartContentView: View {
     let subIndicatorKinds: [SubIndicatorKind]  // v13.19 多副图（vertical stack · 至少 1 个）
     /// v12.1 真昨结算 · priceTopBar baseline · nil 时 fallback bars.first.close（由 ChartScene 父级注入）
     let preSettle: Decimal?
+    /// v15.2 自定义指标参数（主图 MA/BOLL · 副图 MACD/KDJ/RSI）· 由 ChartScene 父级 onChange 触发重渲染
+    let indicatorParams: IndicatorParamsBook
     /// v13.0 WP-42 画线状态（绑定 ChartScene · 父子双向同步）
     @Binding var drawings: [Drawing]
     @Binding var activeDrawingTool: DrawingType?
@@ -1277,6 +1322,7 @@ struct ChartContentView: View {
         dataSourceLabel: String,
         subIndicatorKinds: [SubIndicatorKind],
         preSettle: Decimal?,
+        indicatorParams: IndicatorParamsBook,
         drawings: Binding<[Drawing]>,
         activeDrawingTool: Binding<DrawingType?>,
         pendingDrawingPoint: Binding<DrawingPoint?>,
@@ -1297,6 +1343,7 @@ struct ChartContentView: View {
         self.dataSourceLabel = dataSourceLabel
         self.subIndicatorKinds = subIndicatorKinds
         self.preSettle = preSettle
+        self.indicatorParams = indicatorParams
         self._drawings = drawings
         self._activeDrawingTool = activeDrawingTool
         self._pendingDrawingPoint = pendingDrawingPoint
@@ -1370,7 +1417,7 @@ struct ChartContentView: View {
                         Color.white.opacity(0.10).frame(height: 1)
                     }
                     HStack(spacing: 0) {
-                        SubChartView(bars: bars, viewport: viewport, kind: kind)
+                        SubChartView(bars: bars, viewport: viewport, kind: kind, params: indicatorParams)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         Color(red: 0.07, green: 0.08, blue: 0.10)
                             .frame(width: 60)
@@ -2626,32 +2673,35 @@ struct ChartContentView: View {
 /// - step(newBar:) 推进所有 state · 返回 series 末尾追加新值（每步 O(N) 主要来自 BOLL stddev）
 /// - 单调递增 append（barEmitted / completedBar）调 step · seek/重建走全量 prime
 fileprivate struct ChartIndicatorRunner {
-    var ma5: MA.IncrementalState
-    var ma20: MA.IncrementalState
-    var ma60: MA.IncrementalState
+    /// N 条 MA 的增量 state（按 params.mainMAPeriods 顺序 · 默认 [5, 20, 60] = 3 条）
+    var maStates: [MA.IncrementalState]
     var boll: BOLL.IncrementalState
     private(set) var series: [IndicatorSeries]   // 与 ChartScene.indicators 同步快照
 
-    /// 用 history 初始化全部 state 与 series（与 MockKLineData.computeIndicators 完全一致）
-    static func prime(bars: [KLine]) -> ChartIndicatorRunner? {
+    /// 用 history + params 初始化全部 state 与 series（与 MockKLineData.computeIndicators 完全一致）
+    static func prime(bars: [KLine], params: IndicatorParamsBook = .default) -> ChartIndicatorRunner? {
         let kline = makeKLineSeries(from: bars)
-        guard
-            let ma5State  = try? MA.makeIncrementalState(kline: kline, params: [5]),
-            let ma20State = try? MA.makeIncrementalState(kline: kline, params: [20]),
-            let ma60State = try? MA.makeIncrementalState(kline: kline, params: [60]),
-            let bollState = try? BOLL.makeIncrementalState(kline: kline, params: [20, 2])
-        else { return nil }
-        let series = MockKLineData.computeIndicators(bars: bars)
-        return ChartIndicatorRunner(ma5: ma5State, ma20: ma20State, ma60: ma60State, boll: bollState, series: series)
+        var maStates: [MA.IncrementalState] = []
+        for p in params.mainMAPeriodsDecimal {
+            guard let s = try? MA.makeIncrementalState(kline: kline, params: p) else { return nil }
+            maStates.append(s)
+        }
+        guard let bollState = try? BOLL.makeIncrementalState(kline: kline, params: params.mainBOLLParamsDecimal) else {
+            return nil
+        }
+        let series = MockKLineData.computeIndicators(bars: bars, params: params)
+        return ChartIndicatorRunner(maStates: maStates, boll: bollState, series: series)
     }
 
-    /// 推进 1 根新 K · 返回更新后的 series（顺序：MA5 / MA20 / MA60 / BOLL-UPPER / BOLL-LOWER · 与 computeIndicators 输出一致）
+    /// 推进 1 根新 K · 返回更新后的 series（顺序：N 条 MA + BOLL-UPPER + BOLL-LOWER · 与 computeIndicators 输出一致）
     mutating func step(newBar: KLine) -> [IndicatorSeries] {
-        let ma5Val  = MA.stepIncremental(state: &ma5,  newBar: newBar)[0]
-        let ma20Val = MA.stepIncremental(state: &ma20, newBar: newBar)[0]
-        let ma60Val = MA.stepIncremental(state: &ma60, newBar: newBar)[0]
+        var appended: [Decimal?] = []
+        for i in maStates.indices {
+            appended.append(MA.stepIncremental(state: &maStates[i], newBar: newBar)[0])
+        }
         let bollVals = BOLL.stepIncremental(state: &boll, newBar: newBar)   // [MID, UPPER, LOWER]
-        let appended: [Decimal?] = [ma5Val, ma20Val, ma60Val, bollVals[1], bollVals[2]]
+        appended.append(bollVals[1])
+        appended.append(bollVals[2])
         precondition(series.count == appended.count, "series count must match appended count")
         for i in series.indices {
             series[i] = IndicatorSeries(name: series[i].name, values: series[i].values + [appended[i]])
@@ -2703,8 +2753,8 @@ enum MockKLineData {
         return bars
     }
 
-    /// 5 条不重合：MA(5) + MA(20) + MA(60) + BOLL UPPER + BOLL LOWER（过滤 BOLL-MID = MA(20)）
-    static func computeIndicators(bars: [KLine]) -> [IndicatorSeries] {
+    /// 5 条不重合：3 条 MA（params.mainMAPeriods · 默认 5/20/60）+ BOLL UPPER + BOLL LOWER（过滤 BOLL-MID 与 MA(20) 重合）
+    static func computeIndicators(bars: [KLine], params: IndicatorParamsBook = .default) -> [IndicatorSeries] {
         let series = KLineSeries(
             opens: bars.map(\.open),
             highs: bars.map(\.high),
@@ -2713,12 +2763,12 @@ enum MockKLineData {
             volumes: bars.map(\.volume),
             openInterests: bars.map { _ in 0 }
         )
-        let ma5 = (try? MA.calculate(kline: series, params: [5])) ?? []
-        let ma20 = (try? MA.calculate(kline: series, params: [20])) ?? []
-        let ma60 = (try? MA.calculate(kline: series, params: [60])) ?? []
-        let boll = (try? BOLL.calculate(kline: series, params: [20, 2])) ?? []
+        let maSeries: [IndicatorSeries] = params.mainMAPeriodsDecimal.flatMap { p in
+            (try? MA.calculate(kline: series, params: p)) ?? []
+        }
+        let boll = (try? BOLL.calculate(kline: series, params: params.mainBOLLParamsDecimal)) ?? []
         let bollBands = boll.filter { $0.name != "BOLL-MID" }
-        return ma5 + ma20 + ma60 + bollBands
+        return maSeries + bollBands
     }
 }
 

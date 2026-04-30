@@ -87,8 +87,34 @@ struct ChartScene: View {
     @State private var drawingTemplates: [DrawingTemplate] = []
     /// v13.16 模板已加载守卫（避免初始 [] 误覆盖）
     @State private var isTemplatesLoaded: Bool = false
+    /// v13.21 副图偏好已加载守卫（避免初始默认值覆盖用户偏好）
+    @State private var isSubPrefsLoaded: Bool = false
 
     private static let drawingTemplatesKey = "drawingTemplates.v1"
+    /// v13.21 副图偏好持久化（重启保留 · 跨合约/周期共享）
+    private static let subIndicatorsKey = "subIndicators.v1"
+    private static let subChartHeightKey = "subChartHeight.v1"
+
+    /// v13.22 viewport 缩放级别按合约+周期记忆 · UserDefaults JSON · key prefix
+    static func viewportKey(instrumentID: String, period: KLinePeriod) -> String {
+        "viewport.v1.\(instrumentID).\(period.rawValue)"
+    }
+
+    /// v13.22 加载持久化 viewport · 失败回退到默认（最新 120 根）· bars.count 改变时 clamp 防越界
+    static func loadViewport(instrumentID: String, period: KLinePeriod, barsCount: Int) -> RenderViewport {
+        let key = viewportKey(instrumentID: instrumentID, period: period)
+        if let data = UserDefaults.standard.data(forKey: key),
+           let saved = try? JSONDecoder().decode(RenderViewport.self, from: data),
+           saved.visibleCount > 0 {
+            let clampedStart = max(0, min(max(0, barsCount - 1), saved.startIndex))
+            return RenderViewport(
+                startIndex: clampedStart,
+                visibleCount: min(saved.visibleCount, max(1, barsCount)),
+                startOffset: saved.startOffset
+            )
+        }
+        return RenderViewport(startIndex: max(0, barsCount - 120), visibleCount: 120)
+    }
 
     /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
     @Environment(\.storeManager) private var storeManager
@@ -181,6 +207,18 @@ struct ChartScene: View {
                 }
                 isTemplatesLoaded = true
             }
+            // v13.21 副图偏好首次加载（重启保留 · 多窗口共享）· 仅一次
+            if !isSubPrefsLoaded {
+                if let arr = UserDefaults.standard.array(forKey: Self.subIndicatorsKey) as? [String] {
+                    let kinds = arr.compactMap { SubIndicatorKind(rawValue: $0) }
+                    if !kinds.isEmpty { selectedSubIndicators = Set(kinds) }
+                }
+                let h = UserDefaults.standard.double(forKey: Self.subChartHeightKey)
+                if h >= SubChart.minHeight && h <= SubChart.maxHeight {
+                    subChartTotalHeight = CGFloat(h)
+                }
+                isSubPrefsLoaded = true
+            }
         }
         .onChange(of: drawingTemplates) { newValue in
             // v13.16 模板持久化 UserDefaults · 加载守卫避免初始 [] 误覆盖
@@ -188,6 +226,17 @@ struct ChartScene: View {
             if let data = try? JSONEncoder().encode(newValue) {
                 UserDefaults.standard.set(data, forKey: Self.drawingTemplatesKey)
             }
+        }
+        .onChange(of: selectedSubIndicators) { newValue in
+            // v13.21 副图选择持久化（覆盖之前 v13.19 onChange 埋点 · 此处合并 save）
+            guard isSubPrefsLoaded else { return }
+            let arr = newValue.map(\.rawValue).sorted()
+            UserDefaults.standard.set(arr, forKey: Self.subIndicatorsKey)
+        }
+        .onChange(of: subChartTotalHeight) { newValue in
+            // v13.21 副图高度持久化
+            guard isSubPrefsLoaded else { return }
+            UserDefaults.standard.set(Double(newValue), forKey: Self.subChartHeightKey)
         }
         .onChange(of: chartMode) { newValue in
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
@@ -645,9 +694,11 @@ struct ChartScene: View {
                 currentStrokeColor: $currentStrokeColor,
                 currentStrokeWidth: $currentStrokeWidth,
                 currentFontSize: $currentFontSize,
-                initialViewport: RenderViewport(
-                    startIndex: max(0, bars.count - 120),
-                    visibleCount: 120
+                viewportSaveKey: Self.viewportKey(instrumentID: currentInstrumentID, period: selectedPeriod),
+                initialViewport: Self.loadViewport(
+                    instrumentID: currentInstrumentID,
+                    period: selectedPeriod,
+                    barsCount: bars.count
                 )
             )
         } else if let loadError {
@@ -1083,6 +1134,10 @@ struct ChartContentView: View {
     @Binding var currentStrokeWidth: Double
     /// v13.12 工具栏当前字号 · 新建文字标注应用（仅 .text 工具激活时显示 Stepper）
     @Binding var currentFontSize: Double
+    /// v13.22 viewport 持久化 key（按 instrumentID + period 隔离）· onChange viewport 写 UserDefaults
+    let viewportSaveKey: String
+    /// v13.22 viewport save 节流 · 1s 间隔最多 1 次（避免 panGesture 60Hz 写盘）
+    @State var lastViewportSaveTime: Date = .distantPast
     /// v13.3 hover 跟踪 · 双点画线第二点 hover 预览（虚线）
     @State var hoverDataPoint: DrawingPoint?
     /// v13.20 副图区总高度 · 用户拖分割条调整 · 范围 80~480pt（默认 160 = subChartHeight 单副图）
@@ -1121,6 +1176,7 @@ struct ChartContentView: View {
         currentStrokeColor: Binding<Color>,
         currentStrokeWidth: Binding<Double>,
         currentFontSize: Binding<Double>,
+        viewportSaveKey: String,
         initialViewport: RenderViewport
     ) {
         self.renderer = renderer
@@ -1138,6 +1194,7 @@ struct ChartContentView: View {
         self._currentStrokeColor = currentStrokeColor
         self._currentStrokeWidth = currentStrokeWidth
         self._currentFontSize = currentFontSize
+        self.viewportSaveKey = viewportSaveKey
         self._viewport = State(initialValue: initialViewport)
     }
 
@@ -1214,6 +1271,16 @@ struct ChartContentView: View {
                 .frame(height: 28)
         }
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
+        .background(viewportShortcuts)
+        .onChange(of: viewport) { newValue in
+            // v13.22 viewport 节流持久化（panGesture 60Hz · 1s 节流避免高频写盘）
+            let now = Date()
+            guard now.timeIntervalSince(lastViewportSaveTime) >= 1 else { return }
+            lastViewportSaveTime = now
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: viewportSaveKey)
+            }
+        }
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 100_000_000)
@@ -1221,6 +1288,51 @@ struct ChartContentView: View {
                 lastFrameMs = stats.lastFrameDuration * 1000
             }
         }
+    }
+
+    /// v13.23 viewport 键盘快捷键（仅 keyWindow 响应 · 多窗口隔离）
+    /// ⌘= 放大 / ⌘- 缩小 / ⌘0 重置（默认 120 根） / ← 后退 5 / → 前进 5（带 ⇧ 键 25 根加速）
+    private var viewportShortcuts: some View {
+        Group {
+            Button("") {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.zoomed(by: 0.7))
+            }
+            .keyboardShortcut("=", modifiers: [.command])
+            Button("") {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.zoomed(by: 1.4))
+            }
+            .keyboardShortcut("-", modifiers: [.command])
+            Button("") {
+                inertiaTask?.cancel()
+                viewport = RenderViewport(startIndex: max(0, bars.count - 120), visibleCount: 120)
+            }
+            .keyboardShortcut("0", modifiers: [.command])
+            Button("") {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.pannedSmooth(byBars: -5))
+            }
+            .keyboardShortcut(.leftArrow, modifiers: [])
+            Button("") {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.pannedSmooth(byBars: 5))
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [])
+            Button("") {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.pannedSmooth(byBars: -25))
+            }
+            .keyboardShortcut(.leftArrow, modifiers: [.shift])
+            Button("") {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.pannedSmooth(byBars: 25))
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [.shift])
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
     }
 
     /// 主图区（K 线 + 网格 + 十字光标 + indicators + HUD · gesture 挂这里）
@@ -1457,9 +1569,50 @@ struct ChartContentView: View {
                 selectedDrawingIDs.removeAll()
             }
         } else {
-            Text("（无选中画线 · 点击画线选中后再右键 · 按住 ⇧ 多选）")
+            // v13.24 无选中画线 · 显示通用 chart 操作（重置缩放 / 复制可见区 CSV）
+            Button("重置缩放（⌘0）") {
+                inertiaTask?.cancel()
+                viewport = RenderViewport(startIndex: max(0, bars.count - 120), visibleCount: 120)
+            }
+            Button("放大（⌘=）") {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.zoomed(by: 0.7))
+            }
+            Button("缩小（⌘-）") {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.zoomed(by: 1.4))
+            }
+            Divider()
+            Button("复制可见区 OHLC（CSV）") {
+                copyVisibleBarsToCSV()
+            }
+            Divider()
+            Text("（按住 ⇧ 多选画线 · 右键画线弹更多操作）")
                 .foregroundColor(.secondary)
         }
+    }
+
+    /// v13.24 复制 viewport 可见区 K 线为 CSV 到 NSPasteboard
+    private func copyVisibleBarsToCSV() {
+        let endIdx = min(bars.count, viewport.startIndex + viewport.visibleCount)
+        let startIdx = max(0, viewport.startIndex)
+        guard startIdx < endIdx else { return }
+        let slice = bars[startIdx..<endIdx]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyy-MM-dd HH:mm"
+        var lines: [String] = ["time,open,high,low,close,volume"]
+        for bar in slice {
+            let t = dateFmt.string(from: bar.timestamp)
+            let o = NSDecimalNumber(decimal: bar.open).stringValue
+            let h = NSDecimalNumber(decimal: bar.high).stringValue
+            let l = NSDecimalNumber(decimal: bar.low).stringValue
+            let c = NSDecimalNumber(decimal: bar.close).stringValue
+            lines.append("\(t),\(o),\(h),\(l),\(c),\(bar.volume)")
+        }
+        let csv = lines.joined(separator: "\n")
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(csv, forType: .string)
     }
 
     /// v13.11 批量改 isLocked

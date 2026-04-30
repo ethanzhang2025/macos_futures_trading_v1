@@ -42,6 +42,10 @@
 | **v13.18** | _本批_ | 画线 → 预警联动（水平线右键"创建预警…" → AlertCore + AlertWindow 自动同步） | ⚠️ **未测** |
 | **v13.19** | _本批_ | 副图多选叠加（Set<SubIndicatorKind> · Menu Toggle · vertical stack 1~4 个） | ⚠️ **未测** |
 | **v13.20** | _本批_ | 主图/副图分割条拖动调整副图高度（4pt + DragGesture · NSCursor.resizeUpDown.set） | ⚠️ **未测** |
+| **v13.21** | _本批_ | 副图选择 + 高度持久化（UserDefaults 跨合约/周期共享 + 重启保留） | ⚠️ **未测** |
+| **v13.22** | _本批_ | viewport 缩放级别按合约+周期记忆（1s 节流 · UserDefaults JSON · clamp 防越界） | ⚠️ **未测** |
+| **v13.23** | _本批_ | viewport 键盘快捷键（⌘=放大 / ⌘-缩小 / ⌘0 重置 / ←/→ pan 5/25 根） | ⚠️ **未测** |
+| **v13.24** | _本批_ | K 线主图右键扩展（无选中时显示重置/放大/缩小/复制可见区 CSV） | ⚠️ **未测** |
 
 ---
 

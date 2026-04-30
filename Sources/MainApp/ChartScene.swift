@@ -79,6 +79,12 @@ struct ChartScene: View {
     @State private var currentStrokeWidth: Double = 1.5
     /// v13.12 工具栏当前文字字号（pt · 范围 8~32 步进 1）· 默认 12（与渲染层 default 一致）· 仅 .text 工具激活时显示
     @State private var currentFontSize: Double = 12
+    /// v13.16 画线模板（保存常用画线 · 跨合约复用）· UserDefaults 持久化（全局共享 · 不按合约/周期隔离）
+    @State private var drawingTemplates: [DrawingTemplate] = []
+    /// v13.16 模板已加载守卫（避免初始 [] 误覆盖）
+    @State private var isTemplatesLoaded: Bool = false
+
+    private static let drawingTemplatesKey = "drawingTemplates.v1"
 
     /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
     @Environment(\.storeManager) private var storeManager
@@ -159,6 +165,23 @@ struct ChartScene: View {
             let id = currentInstrumentID
             let p = selectedPeriod
             Task { try? await store.save(newValue, instrumentID: id, period: p) }
+        }
+        .onAppear {
+            // v13.16 模板首次加载（全局共享 · UserDefaults）· 仅一次
+            if !isTemplatesLoaded {
+                if let data = UserDefaults.standard.data(forKey: Self.drawingTemplatesKey),
+                   let list = try? JSONDecoder().decode([DrawingTemplate].self, from: data) {
+                    drawingTemplates = list
+                }
+                isTemplatesLoaded = true
+            }
+        }
+        .onChange(of: drawingTemplates) { newValue in
+            // v13.16 模板持久化 UserDefaults · 加载守卫避免初始 [] 误覆盖
+            guard isTemplatesLoaded else { return }
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Self.drawingTemplatesKey)
+            }
         }
         .onChange(of: chartMode) { newValue in
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
@@ -307,10 +330,10 @@ struct ChartScene: View {
             drawingToolButton(icon: "textformat", tool: .text, help: "文字标注（一点）")
             // v13.8 颜色 / 线宽自定义（仅作用于新建 · 已有画线通过右键菜单"应用当前颜色/线宽"修改）
             Divider().frame(height: 16)
-            ColorPicker("", selection: $currentStrokeColor, supportsOpacity: false)
+            ColorPicker("", selection: $currentStrokeColor, supportsOpacity: true)
                 .labelsHidden()
                 .frame(width: 28)
-                .help("画线颜色（新建生效 · 老画线右键应用）")
+                .help("画线颜色 + 透明度（v13.15 alpha 通道 · 新建生效 · 老画线右键应用）")
             Stepper(value: $currentStrokeWidth, in: 0.5...5.0, step: 0.5) {
                 Text(String(format: "%.1f", currentStrokeWidth))
                     .font(.system(size: 10, design: .monospaced))
@@ -326,6 +349,9 @@ struct ChartScene: View {
                 }
                 .help("文字字号 8~32 pt（新建文字应用 · 老文字右键修改字号）")
             }
+            Divider().frame(height: 16)
+            // v13.16 画线模板 Menu（保存常用 · 跨合约复用）
+            templatesMenu
             Divider().frame(height: 16)
             Button { exportDrawings() } label: {
                 Image(systemName: "square.and.arrow.up")
@@ -411,6 +437,96 @@ struct ChartScene: View {
             alert.informativeText = "JSON 解析失败：\(error.localizedDescription)"
             alert.alertStyle = .critical
             alert.runModal()
+        }
+    }
+
+    /// v13.16 画线模板 Menu · 列出已存模板（点击即插入到当前合约）+ 保存当前选中 + 删全部
+    private var templatesMenu: some View {
+        Menu {
+            if drawingTemplates.isEmpty {
+                Text("（无模板 · 选中画线后点下方保存项）")
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(drawingTemplates) { template in
+                    Button("\(template.name) · \(Self.drawingTypeLabel(template.drawing.type))") {
+                        let d = instantiateTemplate(template)
+                        drawings.append(d)
+                        selectedDrawingIDs = [d.id]
+                    }
+                }
+                Divider()
+            }
+            // 保存选中画线为模板（仅 n=1 + 未锁时可点）
+            if selectedDrawingIDs.count == 1,
+               let id = selectedDrawingIDs.first,
+               let drawing = drawings.first(where: { $0.id == id }),
+               !drawing.locked {
+                Button("保存选中画线为模板…") {
+                    saveCurrentAsTemplate(drawing)
+                }
+            }
+            if !drawingTemplates.isEmpty {
+                Button("删除全部模板（\(drawingTemplates.count) 个）", role: .destructive) {
+                    confirmDeleteAllTemplates()
+                }
+            }
+        } label: {
+            Image(systemName: "star")
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: 28)
+        .help("画线模板（保存常用 / 一键插入 · 跨合约复用）")
+    }
+
+    /// v13.16 从模板实例化新画线 · 锚点重定位到最新 30 根 bar 区间（可见区附近）· 价格保留模板原值
+    private func instantiateTemplate(_ template: DrawingTemplate) -> Drawing {
+        var drawing = template.drawing
+        drawing.id = UUID()
+        drawing.isLocked = nil  // 模板不应继承锁
+        let baseBar = max(0, bars.count - 30)
+        if let end = drawing.endPoint {
+            let deltaBars = end.barIndex - drawing.startPoint.barIndex
+            drawing.startPoint = DrawingPoint(barIndex: baseBar, price: drawing.startPoint.price)
+            drawing.endPoint = DrawingPoint(barIndex: baseBar + max(1, deltaBars), price: end.price)
+        } else {
+            drawing.startPoint = DrawingPoint(barIndex: baseBar, price: drawing.startPoint.price)
+        }
+        return drawing
+    }
+
+    /// v13.16 保存选中画线为模板 · NSAlert 输入名称
+    private func saveCurrentAsTemplate(_ drawing: Drawing) {
+        let alert = NSAlert()
+        alert.messageText = "保存为模板"
+        alert.informativeText = "输入模板名称（已存 \(drawingTemplates.count) 个）："
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        let typeName = Self.drawingTypeLabel(drawing.type)
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "MM-dd HH:mm"
+        textField.stringValue = "\(typeName) \(dateFmt.string(from: Date()))"
+        alert.accessoryView = textField
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "取消")
+        if alert.runModal() == .alertFirstButtonReturn {
+            let name = textField.stringValue.isEmpty ? typeName : textField.stringValue
+            var clean = drawing
+            clean.id = UUID()
+            clean.isLocked = nil
+            let template = DrawingTemplate(name: name, drawing: clean)
+            drawingTemplates.append(template)
+        }
+    }
+
+    /// v13.16 删全部模板（confirmation alert）
+    private func confirmDeleteAllTemplates() {
+        let alert = NSAlert()
+        alert.messageText = "删除全部模板"
+        alert.informativeText = "确认删除全部 \(drawingTemplates.count) 个画线模板？此操作不可撤销。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "删除")
+        alert.addButton(withTitle: "取消")
+        if alert.runModal() == .alertFirstButtonReturn {
+            drawingTemplates.removeAll()
         }
     }
 
@@ -1135,11 +1251,15 @@ struct ChartContentView: View {
                     Text("通道偏移：\(formatPrice(offset))")
                         .foregroundColor(.secondary)
                 }
-                // v13.8 显示色 / 线宽 · v13.11 锁定标志
+                // v13.8 显示色 / 线宽 · v13.11 锁定 · v13.15 透明度
                 HStack(spacing: 6) {
                     Text("色：\(d.strokeColorHex ?? "默认")")
                     Text("·")
                     Text("宽：\(String(format: "%.1f", d.strokeWidth ?? 1.5))")
+                    if let op = d.strokeOpacity, op < 1.0 {
+                        Text("·")
+                        Text("透：\(String(format: "%.0f%%", op * 100))")
+                    }
                     if d.locked {
                         Text("·")
                         Image(systemName: "lock.fill")
@@ -1231,10 +1351,11 @@ struct ChartContentView: View {
                 }
             }
             Divider()
-            // v13.8 应用工具栏当前颜色 / 线宽（批量改）· v13.11 锁定时禁用
+            // v13.8 应用工具栏当前颜色 / 线宽（批量改）· v13.11 锁定时禁用 · v13.15 同时应用透明度
             Button("应用当前颜色（\(n) 个）") {
                 let hex = Self.hexString(from: currentStrokeColor)
-                applyStrokeColor(hex, to: selectedDrawingIDs)
+                let alpha = Self.alphaComponent(from: currentStrokeColor)
+                applyStrokeColor(hex, opacity: alpha, to: selectedDrawingIDs)
             }
             .disabled(allLocked)
             Button("应用当前线宽 \(String(format: "%.1f", currentStrokeWidth)) pt（\(n) 个）") {
@@ -1262,10 +1383,11 @@ struct ChartContentView: View {
         }
     }
 
-    /// v13.8 批量改 strokeColorHex
-    private func applyStrokeColor(_ hex: String?, to ids: Set<UUID>) {
+    /// v13.8 批量改 strokeColorHex · v13.15 同时改 strokeOpacity（来自 ColorPicker alpha）
+    private func applyStrokeColor(_ hex: String?, opacity: Double, to ids: Set<UUID>) {
         for i in drawings.indices where ids.contains(drawings[i].id) {
             drawings[i].strokeColorHex = hex
+            drawings[i].strokeOpacity = opacity < 1.0 ? opacity : nil  // 1.0 视为默认 nil 节省字节
         }
     }
 
@@ -1276,11 +1398,12 @@ struct ChartContentView: View {
         }
     }
 
-    /// v13.8 重置色 + 宽为 nil（用类型默认）
+    /// v13.8 重置色 + 宽为 nil（用类型默认）· v13.15 同时重置 strokeOpacity
     private func resetStrokeStyle(for ids: Set<UUID>) {
         for i in drawings.indices where ids.contains(drawings[i].id) {
             drawings[i].strokeColorHex = nil
             drawings[i].strokeWidth = nil
+            drawings[i].strokeOpacity = nil
         }
     }
 
@@ -1291,6 +1414,12 @@ struct ChartContentView: View {
         let g = Int((ns.greenComponent * 255).rounded())
         let b = Int((ns.blueComponent * 255).rounded())
         return String(format: "%02X%02X%02X", max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
+    }
+
+    /// v13.15 SwiftUI Color → alpha 通道 0~1 · 默认 1.0
+    static func alphaComponent(from color: Color) -> Double {
+        let ns = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        return Double(ns.alphaComponent)
     }
 
     /// v13.6 单条复制（兼容入口 · 内部走 duplicatedDrawing + append）· v13.9 多选时走 ⌘D shortcut 直接批量
@@ -1319,7 +1448,8 @@ struct ChartContentView: View {
             strokeColorHex: drawing.strokeColorHex,
             strokeWidth: drawing.strokeWidth,
             isLocked: nil,
-            fontSize: drawing.fontSize
+            fontSize: drawing.fontSize,
+            strokeOpacity: drawing.strokeOpacity
         )
     }
 
@@ -1652,7 +1782,8 @@ struct ChartContentView: View {
                     endPoint: endPoint,
                     channelOffset: channelOffset,
                     strokeColorHex: Self.hexString(from: currentStrokeColor),
-                    strokeWidth: currentStrokeWidth
+                    strokeWidth: currentStrokeWidth,
+                    strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
                 )
                 drawings.append(drawing)
                 pendingDrawingPoint = nil
@@ -1668,7 +1799,8 @@ struct ChartContentView: View {
                     type: .horizontalLine,
                     startPoint: point,
                     strokeColorHex: Self.hexString(from: currentStrokeColor),
-                    strokeWidth: currentStrokeWidth
+                    strokeWidth: currentStrokeWidth,
+                    strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
                 )
                 drawings.append(drawing)
                 activeDrawingTool = nil
@@ -1680,7 +1812,8 @@ struct ChartContentView: View {
                     type: tool,
                     startPoint: point,
                     strokeColorHex: Self.hexString(from: currentStrokeColor),
-                    strokeWidth: currentStrokeWidth
+                    strokeWidth: currentStrokeWidth,
+                    strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
                 )
                 drawings.append(drawing)
                 activeDrawingTool = nil
@@ -1709,7 +1842,8 @@ struct ChartContentView: View {
                 text: text,
                 strokeColorHex: Self.hexString(from: currentStrokeColor),
                 strokeWidth: currentStrokeWidth,
-                fontSize: currentFontSize
+                fontSize: currentFontSize,
+                strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
             )
             drawings.append(drawing)
         }

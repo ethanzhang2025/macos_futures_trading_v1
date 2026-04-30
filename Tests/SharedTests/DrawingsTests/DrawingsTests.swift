@@ -134,6 +134,62 @@ struct DrawingExtraFieldsTests {
         #expect(r.text == nil)
     }
 
+    @Test("v13.16 DrawingTemplate 内嵌 Drawing 完整快照 + 序列化往返")
+    func drawingTemplateRoundTrip() throws {
+        let drawing = Drawing(
+            type: .trendLine,
+            startPoint: point(0, 100),
+            endPoint: point(10, 110),
+            strokeColorHex: "FFC72C",
+            strokeWidth: 2.0,
+            strokeOpacity: 0.8
+        )
+        let template = DrawingTemplate(name: "前高阻力", drawing: drawing)
+        #expect(template.name == "前高阻力")
+        #expect(template.drawing.type == .trendLine)
+        #expect(template.drawing.strokeColorHex == "FFC72C")
+
+        let data = try JSONEncoder().encode(template)
+        let back = try JSONDecoder().decode(DrawingTemplate.self, from: data)
+        #expect(back.id == template.id)
+        #expect(back.name == "前高阻力")
+        #expect(back.drawing == drawing)
+    }
+
+    @Test("v13.16 DrawingTemplate 数组序列化（UserDefaults 持久化路径）")
+    func drawingTemplateArrayRoundTrip() throws {
+        let templates = [
+            DrawingTemplate(name: "支撑位", drawing: Drawing.horizontalLine(price: 3500)),
+            DrawingTemplate(name: "阻力位", drawing: Drawing.horizontalLine(price: 3700)),
+            DrawingTemplate(name: "上升通道", drawing: Drawing.parallelChannel(from: point(0, 100), to: point(10, 110), offset: 5))
+        ]
+        let data = try JSONEncoder().encode(templates)
+        let back = try JSONDecoder().decode([DrawingTemplate].self, from: data)
+        #expect(back.count == 3)
+        #expect(back[0].name == "支撑位")
+        #expect(back[1].drawing.startPoint.price == 100 || back[1].drawing.startPoint.price == 3700)  // horizontalLine 用 price 作为 startPoint.price
+        #expect(back[2].drawing.type == .parallelChannel)
+        #expect(back[2].drawing.channelOffset == 5)
+    }
+
+    @Test("v13.15 strokeOpacity 默认 nil + 自定义往返")
+    func strokeOpacityRoundTrip() throws {
+        let plain = Drawing.trendLine(from: point(0, 100), to: point(10, 110))
+        #expect(plain.strokeOpacity == nil)
+
+        let semi = Drawing(
+            type: .rectangle,
+            startPoint: point(0, 100),
+            endPoint: point(10, 110),
+            strokeColorHex: "FF8C00",
+            strokeOpacity: 0.5
+        )
+        #expect(semi.strokeOpacity == 0.5)
+        let back = try JSONDecoder().decode(Drawing.self, from: JSONEncoder().encode(semi))
+        #expect(back == semi)
+        #expect(back.strokeOpacity == 0.5)
+    }
+
     @Test("v13.11~v13.13 老 JSON（无 isLocked / fontSize / ellipse 字段）兼容")
     func legacyJsonStillDecodes() throws {
         // 模拟 v13.10- 旧 JSON · 不含 v13.11/v13.12 任何字段

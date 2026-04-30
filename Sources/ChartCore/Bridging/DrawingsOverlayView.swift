@@ -95,12 +95,14 @@ public struct DrawingsOverlayView: View {
     // MARK: - 画线分发
 
     private func draw(_ drawing: Drawing, in ctx: GraphicsContext, size: CGSize, isSelected: Bool = false, isPending: Bool = false) {
-        // v13.8 优先用 drawing 自定义 · 缺省回退类型默认
+        // v13.8 优先用 drawing 自定义 · 缺省回退类型默认 · v13.15 叠加 strokeOpacity
         let baseColor = Self.effectiveColor(for: drawing)
         let baseWidth = CGFloat(drawing.strokeWidth ?? 1.5)
         let lineWidth: CGFloat = isSelected ? baseWidth + 1.0 : baseWidth
         let dash: [CGFloat] = isPending ? [4, 3] : []
-        let opacity = isPending ? 0.6 : 1.0
+        let baseOpacity = isPending ? 0.6 : 1.0
+        let userOpacity = drawing.strokeOpacity ?? 1.0
+        let opacity = baseOpacity * max(0.0, min(1.0, userOpacity))
 
         switch drawing.type {
         case .trendLine:        drawTrendLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)

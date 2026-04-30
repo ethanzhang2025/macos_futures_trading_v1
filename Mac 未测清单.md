@@ -36,6 +36,8 @@
 | **v13.12** | _本批_ | 文字字体大小（fontSize 字段 8~32pt · 工具栏条件 Stepper · 右键改字号 NSAlert） | ⚠️ **未测** |
 | **v13.13** | _本批_ | 椭圆画线（DrawingType 第 7 类 · 工具栏 + 半透明填充 + 椭圆周 hit-test） | ⚠️ **未测** |
 | **v13.14** | _本批_ | 测量工具（DrawingType 第 8 类 · 虚线 + 中点显示价格差/百分比/bar 数标签） | ⚠️ **未测** |
+| **v13.15** | _本批_ | 透明度自定义（strokeOpacity 字段 · ColorPicker supportsOpacity true · alpha 通道） | ⚠️ **未测** |
+| **v13.16** | _本批_ | 画线模板（DrawingTemplate · UserDefaults 持久化 · 工具栏 Menu · 跨合约复用） | ⚠️ **未测** |
 
 ---
 
@@ -225,14 +227,34 @@
 - [ ] Inspector 显示"测量工具"
 - [ ] 持久化兼容
 
+### v13.15 透明度自定义
+- [ ] 工具栏 ColorPicker 改 supportsOpacity: true · 弹色板时**显示 alpha 滑块**
+- [ ] 选半透明色 → 新建画线渲染**透明度生效**（描边 + 半透明填充共同应用）
+- [ ] 右键菜单"应用当前颜色"同时应用 alpha 通道（不只 RGB）
+- [ ] 右键菜单"恢复默认颜色/线宽"同时重置 strokeOpacity 为 nil
+- [ ] Inspector 显示"透：XX%"（仅当 strokeOpacity < 1.0 时显示）
+- [ ] 老 JSON（无 strokeOpacity 字段）正常解码 → 用 1.0 默认
+
+### v13.16 画线模板（保存常用 / 跨合约复用）
+- [ ] 工具栏多 1 按钮（SF Symbol "star"）位于颜色/线宽之后 · 导出/导入之前
+- [ ] 点星号弹下拉 Menu：
+  - 已存模板列表（每项格式"名称 · 类型"）· 点击立即插入到当前合约
+  - 分隔线
+  - "保存选中画线为模板…"项（仅 selected 1 个 + 未锁时显示）
+  - "删除全部模板（N 个）"项（destructive 红色 · 含 alert 确认）
+- [ ] 保存模板 NSAlert 输入名称（默认值"类型 + 当前时间"）
+- [ ] 应用模板：锚点重定位到最近 30 根 bar 区间（baseBar = bars.count - 30）· 价格保留模板原值 · 用户后续可拖到合适位置
+- [ ] 应用模板：drawing 用新 UUID + 不继承 isLocked
+- [ ] 持久化 UserDefaults JSON（key drawingTemplates.v1 · 全局共享 · 不按合约/周期隔离）
+- [ ] 重启 App 模板列表保留
+
 ---
 
-## 后续 backlog（v13.14+ 未做）
+## 后续 backlog（v13.16+ 未做）
 
-- ❌ 画线透明度自定义（strokeOpacity 字段）
-- ❌ 画线模板（保存常用 → 一键插入）
-- ❌ 多边形画线（任意 N 点闭合）
-- ❌ Andrew's Pitchfork 画线（3 点定中线 + 上下平行线）
+- ❌ Andrew's Pitchfork 画线（3 点定中线 + 上下平行 · 需扩 extraPoints 字段）
+- ❌ 多边形画线（任意 N 点闭合 · 输入逻辑改动大）
+- ❌ 画线分组（group 多条画线一起拖动）
 
 ---
 

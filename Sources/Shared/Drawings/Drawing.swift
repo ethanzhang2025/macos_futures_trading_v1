@@ -65,6 +65,9 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
     /// v13.12 文字标注字体大小（pt · 仅 .text 类型生效）· nil 用默认 12
     public var fontSize: Double?
 
+    /// v13.15 透明度 0.0~1.0 · nil 用 1.0 · 用于 strokeColor 描边 + 填充共同透明度
+    public var strokeOpacity: Double?
+
     public init(
         id: UUID = UUID(),
         type: DrawingType,
@@ -75,7 +78,8 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         strokeColorHex: String? = nil,
         strokeWidth: Double? = nil,
         isLocked: Bool? = nil,
-        fontSize: Double? = nil
+        fontSize: Double? = nil,
+        strokeOpacity: Double? = nil
     ) {
         self.id = id
         self.type = type
@@ -87,6 +91,7 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         self.strokeWidth = strokeWidth
         self.isLocked = isLocked
         self.fontSize = fontSize
+        self.strokeOpacity = strokeOpacity
     }
 
     /// v13.11 便利访问 · isLocked nil 视为 false

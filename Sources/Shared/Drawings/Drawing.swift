@@ -51,13 +51,21 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
     /// 平行通道副线相对主轴的价格偏移（仅 type == .parallelChannel 时使用）
     public var channelOffset: Decimal?
 
+    /// v13.8 自定义描边色 6 位 RGB hex（如 "FFC72C"）· nil 用类型默认色 · 老 JSON 缺该字段自动 nil
+    public var strokeColorHex: String?
+
+    /// v13.8 自定义线宽（pt）· nil 用 1.5 默认 · 选中态在此基础上 +1.0
+    public var strokeWidth: Double?
+
     public init(
         id: UUID = UUID(),
         type: DrawingType,
         startPoint: DrawingPoint,
         endPoint: DrawingPoint? = nil,
         text: String? = nil,
-        channelOffset: Decimal? = nil
+        channelOffset: Decimal? = nil,
+        strokeColorHex: String? = nil,
+        strokeWidth: Double? = nil
     ) {
         self.id = id
         self.type = type
@@ -65,6 +73,8 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         self.endPoint = endPoint
         self.text = text
         self.channelOffset = channelOffset
+        self.strokeColorHex = strokeColorHex
+        self.strokeWidth = strokeWidth
     }
 }
 

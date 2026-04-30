@@ -1,10 +1,11 @@
 // WP-42 · 画线 SwiftUI Canvas 渲染层（v13.0 · 接 ChartScene drawings 状态）
 //
 // 职责：
-//   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedID
+//   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedIDs
 //   - 用 SwiftUI Canvas 绘制 6 种画线类型（trendLine / horizontalLine / rectangle / parallelChannel / fibonacci / text）
-//   - 选中态高亮（线宽 2.5 vs 默认 1.5 · 色彩饱和度提高）
-//   - allowsHitTesting false（鼠标事件在 ChartScene 内的 onTapGesture 处理 · 这里只渲染）
+//   - 选中态高亮（线宽 +1.0 · 色彩饱和度提高）· v13.9 升级支持多选
+//   - v13.8 渲染优先用 drawing.strokeColorHex / strokeWidth · 缺省回退到类型默认色 + 1.5
+//   - allowsHitTesting false（鼠标事件在 ChartScene 内的 onTapGesture / DragGesture 处理 · 这里只渲染）
 //
 // 数据空间 → 屏幕坐标转换：
 //   x = (barIndex - viewport.startIndex) * barWidth
@@ -21,8 +22,8 @@ public struct DrawingsOverlayView: View {
     public let viewport: RenderViewport
     public let priceRange: ClosedRange<Decimal>
     public let drawings: [Drawing]
-    /// 选中的画线 ID（高亮显示 · nil 表示未选中）
-    public let selectedID: UUID?
+    /// 选中的画线 ID 集合（高亮显示 · 空集表示未选中 · v13.9 多选）
+    public let selectedIDs: Set<UUID>
     /// 正在创建中的双点画线（第一点已落 · 第二点未确定 · hover 跟随用 cursorPoint 预览）
     public let pendingDrawing: Drawing?
 
@@ -31,21 +32,40 @@ public struct DrawingsOverlayView: View {
         viewport: RenderViewport,
         priceRange: ClosedRange<Decimal>,
         drawings: [Drawing],
-        selectedID: UUID? = nil,
+        selectedIDs: Set<UUID> = [],
         pendingDrawing: Drawing? = nil
     ) {
         self.bars = bars
         self.viewport = viewport
         self.priceRange = priceRange
         self.drawings = drawings
-        self.selectedID = selectedID
+        self.selectedIDs = selectedIDs
         self.pendingDrawing = pendingDrawing
+    }
+
+    /// v13.0~v13.7 单选兼容入口（保留以减少调用方改动 · 内部转 Set）
+    public init(
+        bars: [KLine],
+        viewport: RenderViewport,
+        priceRange: ClosedRange<Decimal>,
+        drawings: [Drawing],
+        selectedID: UUID?,
+        pendingDrawing: Drawing? = nil
+    ) {
+        self.init(
+            bars: bars,
+            viewport: viewport,
+            priceRange: priceRange,
+            drawings: drawings,
+            selectedIDs: selectedID.map { [$0] } ?? [],
+            pendingDrawing: pendingDrawing
+        )
     }
 
     public var body: some View {
         Canvas { ctx, size in
             for drawing in drawings {
-                draw(drawing, in: ctx, size: size, isSelected: drawing.id == selectedID)
+                draw(drawing, in: ctx, size: size, isSelected: selectedIDs.contains(drawing.id))
             }
             // pending（创建中的）画线用半透明虚线预览
             if let p = pendingDrawing {
@@ -75,8 +95,10 @@ public struct DrawingsOverlayView: View {
     // MARK: - 画线分发
 
     private func draw(_ drawing: Drawing, in ctx: GraphicsContext, size: CGSize, isSelected: Bool = false, isPending: Bool = false) {
-        let baseColor = Self.colorFor(drawing.type)
-        let lineWidth: CGFloat = isSelected ? 2.5 : 1.5
+        // v13.8 优先用 drawing 自定义 · 缺省回退类型默认
+        let baseColor = Self.effectiveColor(for: drawing)
+        let baseWidth = CGFloat(drawing.strokeWidth ?? 1.5)
+        let lineWidth: CGFloat = isSelected ? baseWidth + 1.0 : baseWidth
         let dash: [CGFloat] = isPending ? [4, 3] : []
         let opacity = isPending ? 0.6 : 1.0
 
@@ -183,7 +205,15 @@ public struct DrawingsOverlayView: View {
 
     // MARK: - 配色
 
-    private static func colorFor(_ type: DrawingType) -> Color {
+    /// v13.8 优先解析 drawing.strokeColorHex · 失败回退到 colorFor(type) 默认色
+    public static func effectiveColor(for drawing: Drawing) -> Color {
+        if let hex = drawing.strokeColorHex, let c = Self.colorFromHex(hex) {
+            return c
+        }
+        return colorFor(drawing.type)
+    }
+
+    public static func colorFor(_ type: DrawingType) -> Color {
         switch type {
         case .trendLine:       return Color(red: 1.00, green: 0.78, blue: 0.18)  // 黄
         case .horizontalLine:  return Color(red: 0.30, green: 0.78, blue: 1.00)  // 蓝
@@ -192,6 +222,17 @@ public struct DrawingsOverlayView: View {
         case .fibonacci:       return Color(red: 1.00, green: 0.55, blue: 0.18)  // 橙
         case .text:            return .white
         }
+    }
+
+    /// 解析 6 位 RGB hex（不含 # · 大小写均可）· 失败返回 nil
+    public static func colorFromHex(_ hex: String) -> Color? {
+        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
+        let r = Double((v >> 16) & 0xFF) / 255.0
+        let g = Double((v >> 8) & 0xFF) / 255.0
+        let b = Double(v & 0xFF) / 255.0
+        return Color(red: r, green: g, blue: b)
     }
 
     private func formatPrice(_ p: Decimal) -> String {

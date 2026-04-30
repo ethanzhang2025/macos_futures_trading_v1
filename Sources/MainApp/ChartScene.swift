@@ -70,8 +70,13 @@ struct ChartScene: View {
     @State private var drawings: [Drawing] = []
     @State private var activeDrawingTool: DrawingType?  // nil = 浏览模式 · 非 nil = 当前选中的画线工具
     @State private var pendingDrawingPoint: DrawingPoint?  // 双点画线的第一点（hover 跟随预览第二点）
-    @State private var selectedDrawingID: UUID?  // 选中的画线（高亮 + Delete 键删除）
+    /// v13.9 多选 · 选中的画线集合（高亮 + Delete 批量删除 · ⇧ 加选）
+    @State private var selectedDrawingIDs: Set<UUID> = []
     @State private var isDrawingsLoaded: Bool = false  // 守卫：load 完成前的 drawings = [] 不触发 save
+    /// v13.8 工具栏当前画线颜色 · 新建画线时应用 · 默认黄（与趋势线类型默认色一致）
+    @State private var currentStrokeColor: Color = Color(red: 1.00, green: 0.78, blue: 0.18)
+    /// v13.8 工具栏当前画线线宽（pt · 范围 0.5~5.0 步进 0.5）· 默认 1.5（与渲染层 baseWidth 一致）
+    @State private var currentStrokeWidth: Double = 1.5
 
     /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
     @Environment(\.storeManager) private var storeManager
@@ -113,7 +118,7 @@ struct ChartScene: View {
                 drawings = []
             }
             pendingDrawingPoint = nil
-            selectedDrawingID = nil
+            selectedDrawingIDs.removeAll()
             activeDrawingTool = nil
             isDrawingsLoaded = true
             await fetchPreSettle(instrumentID: currentInstrumentID)
@@ -257,17 +262,21 @@ struct ChartScene: View {
                 .keyboardShortcut("5", modifiers: [.command])
             Button("") { selectedPeriod = .daily }
                 .keyboardShortcut("6", modifiers: [.command])
+            // v13.9 多选 · Delete 批量删除全部 selectedDrawingIDs
             Button("") {
-                if let id = selectedDrawingID {
-                    drawings.removeAll { $0.id == id }
-                    selectedDrawingID = nil
+                if !selectedDrawingIDs.isEmpty {
+                    drawings.removeAll { selectedDrawingIDs.contains($0.id) }
+                    selectedDrawingIDs.removeAll()
                 }
             }
             .keyboardShortcut(.delete, modifiers: [])
-            // v13.6 ⌘D 复制选中画线
+            // v13.9 多选 · ⌘D 批量复制全部选中（每条偏移 +20 bar / 5% 价格）
             Button("") {
-                if let id = selectedDrawingID, let d = drawings.first(where: { $0.id == id }) {
-                    duplicateDrawing(d)
+                let toClone = drawings.filter { selectedDrawingIDs.contains($0.id) }
+                if !toClone.isEmpty {
+                    let copies = toClone.map { duplicatedDrawing($0) }
+                    drawings.append(contentsOf: copies)
+                    selectedDrawingIDs = Set(copies.map(\.id))
                 }
             }
             .keyboardShortcut("d", modifiers: [.command])
@@ -279,7 +288,8 @@ struct ChartScene: View {
 
     // MARK: - 画线工具组（v13.0 · WP-42 UI 激活 · v13.2 持久化升级 SQLiteDrawingStore）
 
-    /// 工具条画线工具按钮组：选择 / 6 种画线 / 清空 + v13.7 导出/导入
+    /// 工具条画线工具按钮组：选择 / 6 种画线 / 颜色 / 线宽 / 导出导入 / 清空
+    /// v13.7 加导出/导入 · v13.8 加 ColorPicker + Stepper（颜色/线宽自定义）
     private var drawingTools: some View {
         HStack(spacing: 4) {
             drawingToolButton(icon: "cursorarrow", tool: nil, help: "浏览（取消画线工具）")
@@ -289,6 +299,19 @@ struct ChartScene: View {
             drawingToolButton(icon: "lines.measurement.horizontal", tool: .parallelChannel, help: "平行通道（双点 · 默认 +1.0 偏移）")
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
             drawingToolButton(icon: "textformat", tool: .text, help: "文字标注（一点）")
+            // v13.8 颜色 / 线宽自定义（仅作用于新建 · 已有画线通过右键菜单"应用当前颜色/线宽"修改）
+            Divider().frame(height: 16)
+            ColorPicker("", selection: $currentStrokeColor, supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 28)
+                .help("画线颜色（新建生效 · 老画线右键应用）")
+            Stepper(value: $currentStrokeWidth, in: 0.5...5.0, step: 0.5) {
+                Text(String(format: "%.1f", currentStrokeWidth))
+                    .font(.system(size: 10, design: .monospaced))
+                    .frame(width: 24)
+            }
+            .help("画线线宽 0.5~5.0 pt（新建生效 · 老画线右键应用）")
+            Divider().frame(height: 16)
             Button { exportDrawings() } label: {
                 Image(systemName: "square.and.arrow.up")
             }
@@ -302,7 +325,7 @@ struct ChartScene: View {
             Button {
                 drawings.removeAll()
                 pendingDrawingPoint = nil
-                selectedDrawingID = nil
+                selectedDrawingIDs.removeAll()
             } label: {
                 Image(systemName: "trash")
             }
@@ -462,7 +485,9 @@ struct ChartScene: View {
                 drawings: $drawings,
                 activeDrawingTool: $activeDrawingTool,
                 pendingDrawingPoint: $pendingDrawingPoint,
-                selectedDrawingID: $selectedDrawingID,
+                selectedDrawingIDs: $selectedDrawingIDs,
+                currentStrokeColor: $currentStrokeColor,
+                currentStrokeWidth: $currentStrokeWidth,
                 initialViewport: RenderViewport(
                     startIndex: max(0, bars.count - 120),
                     visibleCount: 120
@@ -893,14 +918,29 @@ struct ChartContentView: View {
     @Binding var drawings: [Drawing]
     @Binding var activeDrawingTool: DrawingType?
     @Binding var pendingDrawingPoint: DrawingPoint?
-    @Binding var selectedDrawingID: UUID?
+    /// v13.9 多选 · selected 集合（替换 v13.0 单 UUID? · ⇧ 加选 + 批量删/复制）
+    @Binding var selectedDrawingIDs: Set<UUID>
+    /// v13.8 工具栏当前颜色 · 新建画线应用 · 右键"应用当前颜色"批量改已有
+    @Binding var currentStrokeColor: Color
+    /// v13.8 工具栏当前线宽 · 同上
+    @Binding var currentStrokeWidth: Double
     /// v13.3 hover 跟踪 · 双点画线第二点 hover 预览（虚线）
     @State var hoverDataPoint: DrawingPoint?
+    /// v13.10 anchor 拖动目标 · onChanged 第一次落 · 释放清空
+    @State var anchorDragTarget: AnchorDragTarget?
+    /// v13.10 拖动状态 · 距离 ≥ 4 像素 + anchor 命中后置 true · 释放时 false 视为 tap
+    @State var isDraggingAnchor: Bool = false
     @State var viewport: RenderViewport
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
     @State var zoomStartViewport: RenderViewport?
     @State var inertiaTask: Task<Void, Never>?
+
+    /// v13.10 拖动目标 · 唯一定位某 drawing 的某 anchor（startPoint vs endPoint）
+    struct AnchorDragTarget: Equatable {
+        let drawingID: UUID
+        let isStart: Bool
+    }
 
     init(
         renderer: MetalKLineRenderer,
@@ -914,7 +954,9 @@ struct ChartContentView: View {
         drawings: Binding<[Drawing]>,
         activeDrawingTool: Binding<DrawingType?>,
         pendingDrawingPoint: Binding<DrawingPoint?>,
-        selectedDrawingID: Binding<UUID?>,
+        selectedDrawingIDs: Binding<Set<UUID>>,
+        currentStrokeColor: Binding<Color>,
+        currentStrokeWidth: Binding<Double>,
         initialViewport: RenderViewport
     ) {
         self.renderer = renderer
@@ -928,7 +970,9 @@ struct ChartContentView: View {
         self._drawings = drawings
         self._activeDrawingTool = activeDrawingTool
         self._pendingDrawingPoint = pendingDrawingPoint
-        self._selectedDrawingID = selectedDrawingID
+        self._selectedDrawingIDs = selectedDrawingIDs
+        self._currentStrokeColor = currentStrokeColor
+        self._currentStrokeWidth = currentStrokeWidth
         self._viewport = State(initialValue: initialViewport)
     }
 
@@ -986,7 +1030,7 @@ struct ChartContentView: View {
                 viewport: viewport,
                 priceRange: currentPriceRange,
                 drawings: drawings,
-                selectedID: selectedDrawingID,
+                selectedIDs: selectedDrawingIDs,
                 pendingDrawing: pendingPreviewDrawing
             )
             hud
@@ -1014,17 +1058,43 @@ struct ChartContentView: View {
         }
     }
 
-    /// v13.6 选中画线 Inspector 浮窗（仅 selectedDrawingID 非 nil 时显示）
+    /// v13.6 选中画线 Inspector 浮窗 · v13.9 多选适配（≥2 显示数量 / 1 显示详情）
     @ViewBuilder
     private var drawingInspector: some View {
-        if let id = selectedDrawingID, let d = drawings.first(where: { $0.id == id }) {
+        if selectedDrawingIDs.count >= 2 {
+            // 多选模式：只显示数量 + 操作提示
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("已选 \(selectedDrawingIDs.count) 个画线")
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Button {
+                        selectedDrawingIDs.removeAll()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                Text("⌘D 全部复制 · Delete 全部删除 · 右键批量改色/线宽")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+                    .padding(.top, 2)
+            }
+            .font(.system(size: 11, design: .monospaced))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.65))
+            .cornerRadius(6)
+            .padding(12)
+        } else if let id = selectedDrawingIDs.first, let d = drawings.first(where: { $0.id == id }) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(Self.drawingTypeLabel(d.type))
                         .fontWeight(.semibold)
                     Spacer()
                     Button {
-                        selectedDrawingID = nil
+                        selectedDrawingIDs.removeAll()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.secondary)
@@ -1045,7 +1115,14 @@ struct ChartContentView: View {
                     Text("通道偏移：\(formatPrice(offset))")
                         .foregroundColor(.secondary)
                 }
-                Text("⌘D 复制 · Delete 删除 · 右键编辑")
+                // v13.8 显示色 / 线宽
+                HStack(spacing: 6) {
+                    Text("色：\(d.strokeColorHex ?? "默认")")
+                    Text("·")
+                    Text("宽：\(String(format: "%.1f", d.strokeWidth ?? 1.5))")
+                }
+                .foregroundColor(.secondary)
+                Text("⌘D 复制 · Delete 删除 · 拖动 anchor 改位置 · 右键编辑")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.secondary.opacity(0.7))
                     .padding(.top, 2)
@@ -1074,34 +1151,91 @@ struct ChartContentView: View {
         String(format: "%.2f", NSDecimalNumber(decimal: p).doubleValue)
     }
 
-    /// v13.5 画线右键上下文菜单（仅 selectedDrawingID 非 nil 时显示有效项）· v13.6 加复制
+    /// v13.5 画线右键上下文菜单 · v13.6 加复制 · v13.9 多选 · v13.8 改颜色/线宽
     @ViewBuilder
     private var drawingContextMenu: some View {
-        if let id = selectedDrawingID, let drawing = drawings.first(where: { $0.id == id }) {
-            Button("删除选中画线", role: .destructive) {
-                drawings.removeAll { $0.id == id }
-                selectedDrawingID = nil
+        if !selectedDrawingIDs.isEmpty {
+            let n = selectedDrawingIDs.count
+            Button("删除选中画线（\(n) 个）", role: .destructive) {
+                drawings.removeAll { selectedDrawingIDs.contains($0.id) }
+                selectedDrawingIDs.removeAll()
             }
-            Button("复制画线（⌘D）") {
-                duplicateDrawing(drawing)
+            Button("复制画线（⌘D · \(n) 个）") {
+                let toClone = drawings.filter { selectedDrawingIDs.contains($0.id) }
+                let copies = toClone.map { duplicatedDrawing($0) }
+                drawings.append(contentsOf: copies)
+                selectedDrawingIDs = Set(copies.map(\.id))
             }
-            if drawing.type == .text {
+            // 编辑文字仅当 selected 全部是单条 .text 类型时才有意义
+            if n == 1, let id = selectedDrawingIDs.first,
+               let drawing = drawings.first(where: { $0.id == id }),
+               drawing.type == .text {
                 Button("编辑文字…") {
                     editTextDrawing(drawing)
                 }
             }
             Divider()
+            // v13.8 应用工具栏当前颜色 / 线宽（批量改）
+            Button("应用当前颜色（\(n) 个）") {
+                let hex = Self.hexString(from: currentStrokeColor)
+                applyStrokeColor(hex, to: selectedDrawingIDs)
+            }
+            Button("应用当前线宽 \(String(format: "%.1f", currentStrokeWidth)) pt（\(n) 个）") {
+                applyStrokeWidth(currentStrokeWidth, to: selectedDrawingIDs)
+            }
+            Button("恢复默认颜色/线宽（\(n) 个）") {
+                resetStrokeStyle(for: selectedDrawingIDs)
+            }
+            Divider()
             Button("取消选中") {
-                selectedDrawingID = nil
+                selectedDrawingIDs.removeAll()
             }
         } else {
-            Text("（无选中画线 · 点击画线选中后再右键）")
+            Text("（无选中画线 · 点击画线选中后再右键 · 按住 ⇧ 多选）")
                 .foregroundColor(.secondary)
         }
     }
 
-    /// v13.6 复制画线 · 克隆 + 偏移 20 bar / 价格区间 5%（避免完全重叠）
+    /// v13.8 批量改 strokeColorHex
+    private func applyStrokeColor(_ hex: String?, to ids: Set<UUID>) {
+        for i in drawings.indices where ids.contains(drawings[i].id) {
+            drawings[i].strokeColorHex = hex
+        }
+    }
+
+    /// v13.8 批量改 strokeWidth
+    private func applyStrokeWidth(_ width: Double, to ids: Set<UUID>) {
+        for i in drawings.indices where ids.contains(drawings[i].id) {
+            drawings[i].strokeWidth = width
+        }
+    }
+
+    /// v13.8 重置色 + 宽为 nil（用类型默认）
+    private func resetStrokeStyle(for ids: Set<UUID>) {
+        for i in drawings.indices where ids.contains(drawings[i].id) {
+            drawings[i].strokeColorHex = nil
+            drawings[i].strokeWidth = nil
+        }
+    }
+
+    /// SwiftUI Color → 6 位 RGB hex（用 NSColor 桥）· 失败返回 nil（fallback 用类型默认）
+    static func hexString(from color: Color) -> String? {
+        let ns = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        let r = Int((ns.redComponent * 255).rounded())
+        let g = Int((ns.greenComponent * 255).rounded())
+        let b = Int((ns.blueComponent * 255).rounded())
+        return String(format: "%02X%02X%02X", max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
+    }
+
+    /// v13.6 单条复制（兼容入口 · 内部走 duplicatedDrawing + append）· v13.9 多选时走 ⌘D shortcut 直接批量
     private func duplicateDrawing(_ drawing: Drawing) {
+        let copy = duplicatedDrawing(drawing)
+        drawings.append(copy)
+        selectedDrawingIDs = [copy.id]
+    }
+
+    /// v13.6 克隆 helper · 偏移 20 bar / 价格区间 5%（避免完全重叠）· v13.8 复制色/线宽 · v13.9 多选用
+    private func duplicatedDrawing(_ drawing: Drawing) -> Drawing {
         let barOffset = 20
         let priceSpan = currentPriceRange.upperBound - currentPriceRange.lowerBound
         let priceOffset = priceSpan * Decimal(string: "0.05")!
@@ -1109,15 +1243,15 @@ struct ChartContentView: View {
         let newEnd: DrawingPoint? = drawing.endPoint.map {
             DrawingPoint(barIndex: $0.barIndex + barOffset, price: $0.price + priceOffset)
         }
-        let copy = Drawing(
+        return Drawing(
             type: drawing.type,
             startPoint: newStart,
             endPoint: newEnd,
             text: drawing.text,
-            channelOffset: drawing.channelOffset
+            channelOffset: drawing.channelOffset,
+            strokeColorHex: drawing.strokeColorHex,
+            strokeWidth: drawing.strokeWidth
         )
-        drawings.append(copy)
-        selectedDrawingID = copy.id
     }
 
     /// v13.5 编辑文字画线内容（弹 NSAlert + NSTextField）
@@ -1159,14 +1293,100 @@ struct ChartContentView: View {
         }
     }
 
-    /// 画线 hit-test 层（v13.1 · 浏览模式 + drawings 非空时启用 · 点击 anchor ±15 像素阈值 selected）
+    /// 画线 hit-test 层 · v13.1 单击选中 → v13.9 ⇧ 多选 → v13.10 拖动 anchor
+    /// 用 DragGesture(minimumDistance: 0) 一手势包揽：
+    /// - 起点击中 selected drawing 的 anchor → 拖动改 startPoint/endPoint
+    /// - 释放距离 < 4 → 当 tap 处理（普通：单选替换 · ⇧：toggle 加选 / 取消选）
     private var drawingHitTestLayer: some View {
         GeometryReader { geom in
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture { location in
-                    selectedDrawingID = findDrawingAt(location, in: geom.size)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            // 第一次 onChanged：探查起点是否击中已选画线的 anchor
+                            if anchorDragTarget == nil && !isDraggingAnchor {
+                                anchorDragTarget = findAnchorAt(value.startLocation, in: geom.size)
+                                // 命中 anchor 时立即 cancel 主图惯性滑行（否则 viewport 会继续变 · anchor 漂移）
+                                if anchorDragTarget != nil {
+                                    inertiaTask?.cancel()
+                                }
+                            }
+                            // 距离 ≥ 4 像素 + 起点击中 anchor → 进入拖动模式
+                            let dist = hypot(value.translation.width, value.translation.height)
+                            if dist >= 4, let target = anchorDragTarget {
+                                isDraggingAnchor = true
+                                let newPoint = screenToDataPoint(value.location, in: geom.size)
+                                if let idx = drawings.firstIndex(where: { $0.id == target.drawingID }) {
+                                    if target.isStart {
+                                        drawings[idx].startPoint = newPoint
+                                    } else {
+                                        drawings[idx].endPoint = newPoint
+                                    }
+                                }
+                            }
+                        }
+                        .onEnded { value in
+                            let dist = hypot(value.translation.width, value.translation.height)
+                            if !isDraggingAnchor && dist < 4 {
+                                handleSelectionClick(at: value.startLocation, in: geom.size)
+                            }
+                            // 重置状态（允许下次拖动）
+                            anchorDragTarget = nil
+                            isDraggingAnchor = false
+                        }
+                )
+        }
+    }
+
+    /// v13.10 起点击中已选 drawing 的 anchor 检测（±15 像素）· 仅 selected 的画线参与
+    private func findAnchorAt(_ location: CGPoint, in size: CGSize) -> AnchorDragTarget? {
+        guard !selectedDrawingIDs.isEmpty else { return nil }
+        let threshold: CGFloat = 15
+        for d in drawings.reversed() where selectedDrawingIDs.contains(d.id) {
+            let s = anchorScreenPoint(d.startPoint, in: size)
+            if hypot(location.x - s.x, location.y - s.y) < threshold {
+                return AnchorDragTarget(drawingID: d.id, isStart: true)
+            }
+            if let end = d.endPoint {
+                let e = anchorScreenPoint(end, in: size)
+                if hypot(location.x - e.x, location.y - e.y) < threshold {
+                    return AnchorDragTarget(drawingID: d.id, isStart: false)
                 }
+            }
+        }
+        return nil
+    }
+
+    /// 数据空间锚点 → 屏幕坐标（用 viewport + currentPriceRange · 与 distanceToDrawing 内实现一致）
+    private func anchorScreenPoint(_ pt: DrawingPoint, in size: CGSize) -> CGPoint {
+        let visibleCount = max(1, viewport.visibleCount)
+        let barWidth = size.width / CGFloat(visibleCount)
+        let xOffset = CGFloat(viewport.startOffset)
+        let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+        let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+        let span = max(0.0001, hi - lo)
+        let x = (CGFloat(pt.barIndex - viewport.startIndex) + 0.5 - xOffset) * barWidth
+        let priceD = NSDecimalNumber(decimal: pt.price).doubleValue
+        let y = CGFloat((hi - priceD) / span) * size.height
+        return CGPoint(x: x, y: y)
+    }
+
+    /// v13.9 选中点击处理 · 普通点击 = 单选替换 · ⇧ 点击 = toggle 加选 · 点空白 = 单击清空（⇧ 不动）
+    private func handleSelectionClick(at location: CGPoint, in size: CGSize) {
+        let isShift = NSEvent.modifierFlags.contains(.shift)
+        if let id = findDrawingAt(location, in: size) {
+            if isShift {
+                if selectedDrawingIDs.contains(id) {
+                    selectedDrawingIDs.remove(id)
+                } else {
+                    selectedDrawingIDs.insert(id)
+                }
+            } else {
+                selectedDrawingIDs = [id]
+            }
+        } else if !isShift {
+            selectedDrawingIDs.removeAll()
         }
     }
 
@@ -1299,6 +1519,7 @@ struct ChartContentView: View {
     }
 
     /// 处理画线工具激活下的点击：单点画线立即添加 / 双点画线第 1 点设 pending 第 2 点完成
+    /// v13.8 新建画线时应用工具栏当前颜色 / 线宽（currentStrokeColor + currentStrokeWidth）
     private func handleDrawingTap(at location: CGPoint, in size: CGSize) {
         guard let tool = activeDrawingTool else { return }
         let point = screenToDataPoint(location, in: size)
@@ -1306,18 +1527,18 @@ struct ChartContentView: View {
         if tool.needsTwoPoints {
             if let firstPoint = pendingDrawingPoint {
                 // 第二点：完成画线
-                let drawing: Drawing
-                if tool == .parallelChannel {
-                    // 平行通道默认偏移 1.0%（参考 priceRange 跨度的 5%）
-                    let offset = (currentPriceRange.upperBound - currentPriceRange.lowerBound) * Decimal(string: "0.05")!
-                    drawing = Drawing.parallelChannel(from: firstPoint, to: point, offset: offset)
-                } else if tool == .fibonacci {
-                    drawing = Drawing.fibonacci(from: firstPoint, to: point)
-                } else if tool == .rectangle {
-                    drawing = Drawing.rectangle(from: firstPoint, to: point)
-                } else {
-                    drawing = Drawing.trendLine(from: firstPoint, to: point)
-                }
+                let endPoint: DrawingPoint? = point
+                let channelOffset: Decimal? = (tool == .parallelChannel)
+                    ? (currentPriceRange.upperBound - currentPriceRange.lowerBound) * Decimal(string: "0.05")!
+                    : nil
+                let drawing = Drawing(
+                    type: tool,
+                    startPoint: firstPoint,
+                    endPoint: endPoint,
+                    channelOffset: channelOffset,
+                    strokeColorHex: Self.hexString(from: currentStrokeColor),
+                    strokeWidth: currentStrokeWidth
+                )
                 drawings.append(drawing)
                 pendingDrawingPoint = nil
                 activeDrawingTool = nil  // 完成后回浏览模式
@@ -1328,14 +1549,24 @@ struct ChartContentView: View {
         } else {
             // 单点画线：立即完成
             if tool == .horizontalLine {
-                let drawing = Drawing.horizontalLine(price: point.price, barIndex: point.barIndex)
+                let drawing = Drawing(
+                    type: .horizontalLine,
+                    startPoint: point,
+                    strokeColorHex: Self.hexString(from: currentStrokeColor),
+                    strokeWidth: currentStrokeWidth
+                )
                 drawings.append(drawing)
                 activeDrawingTool = nil
             } else if tool == .text {
                 // v13.1 弹 NSAlert 让用户输入文字（之前 v13.0 hardcode "标注"）
                 promptTextInput(at: point)
             } else {
-                let drawing = Drawing(type: tool, startPoint: point)
+                let drawing = Drawing(
+                    type: tool,
+                    startPoint: point,
+                    strokeColorHex: Self.hexString(from: currentStrokeColor),
+                    strokeWidth: currentStrokeWidth
+                )
                 drawings.append(drawing)
                 activeDrawingTool = nil
             }
@@ -1343,6 +1574,7 @@ struct ChartContentView: View {
     }
 
     /// v13.1 文字标注输入 · NSAlert + NSTextField · 取消则不添加
+    /// v13.8 应用工具栏当前色 / 线宽
     private func promptTextInput(at point: DrawingPoint) {
         let alert = NSAlert()
         alert.messageText = "文字标注"
@@ -1356,7 +1588,13 @@ struct ChartContentView: View {
         if response == .alertFirstButtonReturn {
             let raw = textField.stringValue
             let text = raw.isEmpty ? "标注" : raw
-            let drawing = Drawing.text(at: point, content: text)
+            let drawing = Drawing(
+                type: .text,
+                startPoint: point,
+                text: text,
+                strokeColorHex: Self.hexString(from: currentStrokeColor),
+                strokeWidth: currentStrokeWidth
+            )
             drawings.append(drawing)
         }
         activeDrawingTool = nil
@@ -1396,9 +1634,12 @@ struct ChartContentView: View {
     }
 
     /// 拖拽平移 + 松手惯性滑行
+    /// v13.10 · 起点击中 anchor（anchorDragTarget != nil）时短路 onChanged ·
+    /// onEnded 通过 dragStartViewport == nil 判定 pan 是否实际跑过（避免触发误惯性）
     private var panGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                if anchorDragTarget != nil { return }
                 inertiaTask?.cancel()
                 let base = dragStartViewport ?? viewport
                 dragStartViewport = base
@@ -1407,7 +1648,9 @@ struct ChartContentView: View {
                 viewport = clamp(base.pannedSmooth(byBars: deltaBars))
             }
             .onEnded { value in
+                let didPan = (dragStartViewport != nil)
                 dragStartViewport = nil
+                guard didPan else { return }
                 let perBar = Self.assumedViewWidth / CGFloat(max(1, viewport.visibleCount))
                 let predictedExtraPx = value.predictedEndTranslation.width - value.translation.width
                 let initialVelocity = Float(-predictedExtraPx / perBar) / Self.inertiaSpreadFrames

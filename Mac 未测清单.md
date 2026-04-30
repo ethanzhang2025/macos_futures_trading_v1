@@ -28,6 +28,10 @@
 | **v13.4** | `553c834` | hit-test 线段任意点击（不只 anchor） | ⚠️ **未测** |
 | **v13.5** | `b9b6bc3` | 右键上下文菜单（删除/编辑/取消） | ⚠️ **未测** |
 | **v13.6** | `5a8fd24` | 复制画线（⌘D）+ Inspector 浮窗 | ⚠️ **未测** |
+| **v13.7** | `6538ea1` | 画线导出/导入 JSON（NSSavePanel + NSOpenPanel） | ⚠️ **未测** |
+| **v13.8** | _本批_ | 画线颜色/线宽自定义（ColorPicker + Stepper + 右键批量改） | ⚠️ **未测** |
+| **v13.9** | _本批_ | 多选画线（selectedIDs Set + ⇧ 加选 + 批量删/复制/改色/改宽） | ⚠️ **未测** |
+| **v13.10** | _本批_ | 拖动 anchor（DragGesture · 改 startPoint/endPoint · 手势冲突已修） | ⚠️ **未测** |
 
 ---
 
@@ -152,14 +156,41 @@
 - ⌘D + 右键"复制画线" · 偏移 +20 bar / 价格区间 5% · 自动选中新
 - bottomTrailing Inspector 浮窗：类型中文 / 起终点 / 文字 / 通道偏移 / 操作提示 / 关闭按钮
 
+### v13.7 画线导出/导入 JSON
+- 工具栏 square.and.arrow.up / down 两按钮 · NSSavePanel 默认文件名 drawings_合约_周期_yyyy-MM-dd.json · prettyPrinted
+- NSOpenPanel 导入 · alert 3 项（覆盖/追加/取消）· 解析失败 critical alert
+
+### v13.8 画线颜色 / 线宽自定义
+- [ ] 工具栏画线工具组之间显示 **ColorPicker**（28 pt 宽 · 系统色板 · 默认黄）+ **Stepper 0.5~5.0 步进 0.5**（默认 1.5）
+- [ ] 选好色 + 线宽 → 新建画线（任一 6 类）渲染时应用自定义色 + 线宽
+- [ ] 持久化：drawings.sqlite JSON 含 strokeColorHex（6 位 RGB hex）+ strokeWidth（Double）· 重启保留
+- [ ] 选中画线 → 右键 → "应用当前颜色（n 个）" / "应用当前线宽 X.X pt（n 个）" / "恢复默认颜色/线宽（n 个）"
+- [ ] Inspector 浮窗（单选时）显示色（hex 或"默认"）+ 宽（X.X）
+- [ ] 老 JSON（v13.7-）导入 → 字段缺失时正常解码（strokeColorHex/Width = nil 用默认）
+
+### v13.9 多选画线（⇧ 加选）
+- [ ] 单击画线 = 单选（selectedDrawingIDs = [id]）
+- [ ] **⇧ + 单击**：toggle 加选（已选 → 取消选 · 未选 → 加入选）
+- [ ] 多选时全部 anchor 高亮 + Inspector 浮窗显示"已选 N 个画线"
+- [ ] **Delete** 键 → 批量删除全部 selected
+- [ ] **⌘D** → 批量复制全部 selected · 自动选中新副本
+- [ ] 右键菜单"删除选中画线（N 个）" / "复制画线（⌘D · N 个）" / "应用当前颜色（N 个）" / "应用当前线宽（N 个）" / "恢复默认（N 个）"
+- [ ] 编辑文字仅在 N=1 且类型 .text 时显示
+
+### v13.10 拖动 anchor
+- [ ] 选中画线后（anchor 显示高亮圆点）· 鼠标按住 anchor ±15 像素 + 拖动 ≥4 像素 → 进入拖动模式
+- [ ] 拖动期间 startPoint / endPoint 实时更新（rect/channel/fib 形状跟着变）
+- [ ] 拖动期间**主图 panGesture 不应跟着平移**（anchorDragTarget 命中时 panGesture onChanged 立即 return + 取消主图惯性滑行）
+- [ ] 释放鼠标 → drawings 自动 save 到 SQLite
+- [ ] 拖动距离 < 4 像素 → 视为单击（不触发拖动 · 走选中 / 多选逻辑）
+
 ---
 
-## 后续 backlog（v13.7+ 未做）
+## 后续 backlog（v13.10+ 未做）
 
-- ❌ 拖动 anchor 重新定位（DragGesture on selected anchor 拖动修改 startPoint/endPoint）
-- ❌ 多选画线（按住 ⇧ 多选 + 批量删除）
-- ❌ 画线颜色 / 线宽自定义
-- ❌ 画线导出 / 导入 JSON
+- ❌ 锁定画线（lock 后不可拖 / 不可删 · 适合关键支撑/阻力位）
+- ❌ 文字字体大小 / 透明度自定义
+- ❌ 画线模板（保存常用 → 一键插入）
 
 ---
 

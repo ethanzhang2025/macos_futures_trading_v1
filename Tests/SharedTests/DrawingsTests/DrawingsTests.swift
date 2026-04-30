@@ -67,6 +67,82 @@ struct DrawingCodableTests {
     }
 }
 
+// v13.8 颜色 / 线宽自定义字段
+@Suite("Drawing v13.8 strokeColorHex + strokeWidth")
+struct DrawingStrokeStyleTests {
+    @Test("默认值：工厂方法 + init 缺省 → 都是 nil（用类型默认色 / 1.5 宽）")
+    func defaultsAreNil() {
+        let trend = Drawing.trendLine(from: point(0, 100), to: point(10, 110))
+        #expect(trend.strokeColorHex == nil)
+        #expect(trend.strokeWidth == nil)
+
+        let plain = Drawing(type: .horizontalLine, startPoint: point(0, 100))
+        #expect(plain.strokeColorHex == nil)
+        #expect(plain.strokeWidth == nil)
+    }
+
+    @Test("自定义构造：color hex + width 序列化往返保持")
+    func customStyleRoundTrip() throws {
+        let d = Drawing(
+            type: .trendLine,
+            startPoint: point(0, 100),
+            endPoint: point(10, 110),
+            strokeColorHex: "FF8C00",
+            strokeWidth: 2.5
+        )
+        let data = try JSONEncoder().encode(d)
+        let back = try JSONDecoder().decode(Drawing.self, from: data)
+        #expect(back == d)
+        #expect(back.strokeColorHex == "FF8C00")
+        #expect(back.strokeWidth == 2.5)
+    }
+
+    @Test("老 JSON 兼容：缺 strokeColorHex / strokeWidth 字段 → 解码 nil")
+    func legacyJsonDecodesNil() throws {
+        // 模拟 v13.7- 旧 JSON · 不含 v13.8 两个字段
+        let legacyJSON = """
+        {
+            "id": "550E8400-E29B-41D4-A716-446655440000",
+            "type": "trendLine",
+            "startPoint": { "barIndex": 0, "price": 100 },
+            "endPoint": { "barIndex": 10, "price": 110 }
+        }
+        """
+        let data = legacyJSON.data(using: .utf8)!
+        let d = try JSONDecoder().decode(Drawing.self, from: data)
+        #expect(d.type == .trendLine)
+        #expect(d.strokeColorHex == nil)
+        #expect(d.strokeWidth == nil)
+    }
+
+    @Test("仅 strokeColorHex 自定义 · width 仍 nil")
+    func partialCustomColorOnly() throws {
+        let d = Drawing(
+            type: .horizontalLine,
+            startPoint: point(0, 100),
+            strokeColorHex: "00FF7F"
+        )
+        #expect(d.strokeColorHex == "00FF7F")
+        #expect(d.strokeWidth == nil)
+        // 序列化往返保持
+        let back = try JSONDecoder().decode(Drawing.self, from: JSONEncoder().encode(d))
+        #expect(back == d)
+    }
+
+    @Test("仅 strokeWidth 自定义 · color 仍 nil")
+    func partialCustomWidthOnly() {
+        let d = Drawing(
+            type: .text,
+            startPoint: point(5, 105),
+            text: "标注",
+            strokeWidth: 3.0
+        )
+        #expect(d.strokeWidth == 3.0)
+        #expect(d.strokeColorHex == nil)
+        #expect(d.text == "标注")
+    }
+}
+
 @Suite("Drawing 几何")
 struct DrawingGeometryTests {
     @Test("趋势线在中点插值")

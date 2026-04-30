@@ -32,6 +32,12 @@ public struct SinaQuote: Sendable {
 
     /// 是否上涨
     public var isUp: Bool { change > 0 }
+
+    /// priceTopBar baseline 候选（v12.15 语义化）：
+    /// - 商品期货：返回真昨结算（preSettlement · Sina 字段 10）
+    /// - 金融期货 IF/IC/IM/IH：Sina 接口无独立昨结字段 · preSettlement 用昨收近似（SinaMarketData line 210）
+    /// 两者都是 priceTopBar 涨跌色的合理基线 · 此属性语义清晰便于将来 Stage B CTP 接入时区分真 preClose
+    public var priceBaseline: Decimal { preSettlement }
 }
 
 /// 新浪K线数据（单根）

@@ -181,14 +181,15 @@ struct ChartScene: View {
         instrumentLabel = currentInstrumentID
     }
 
-    /// 拉一次实时报价取昨结算 · priceTopBar baseline · 失败/未拉到保持 nil 由 priceTopBar fallback 周期首根
+    /// 拉一次实时报价取 priceBaseline · priceTopBar baseline · 失败/未拉到保持 nil 由 priceTopBar fallback 周期首根
     /// 仅 supportedContracts 拉 · 不阻塞 K 线流程（即使失败 K 线照常显示）
+    /// v12.15 用 SinaQuote.priceBaseline 替代直接 .preSettlement · 商品昨结算 / 金融昨收近似 语义统一
     private func fetchPreSettle(instrumentID: String) async {
         guard MarketDataPipeline.supportedContracts.contains(instrumentID) else { return }
         let sina = SinaMarketData()
         guard let quote = try? await sina.fetchQuote(symbol: instrumentID),
-              quote.preSettlement > 0 else { return }
-        preSettle = quote.preSettlement
+              quote.priceBaseline > 0 else { return }
+        preSettle = quote.priceBaseline
     }
 
     /// 全量计算 indicators + 重建 indicatorRunner（commit 4/4 · snapshot / seek / Mock fallback 路径）

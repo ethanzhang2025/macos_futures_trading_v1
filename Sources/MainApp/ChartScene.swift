@@ -922,6 +922,52 @@ struct ChartContentView: View {
         }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
+        .contextMenu {
+            // v13.5 选中画线右键菜单（删除 / 编辑文字 / 取消选中）
+            drawingContextMenu
+        }
+    }
+
+    /// v13.5 画线右键上下文菜单（仅 selectedDrawingID 非 nil 时显示有效项）
+    @ViewBuilder
+    private var drawingContextMenu: some View {
+        if let id = selectedDrawingID, let drawing = drawings.first(where: { $0.id == id }) {
+            Button("删除选中画线", role: .destructive) {
+                drawings.removeAll { $0.id == id }
+                selectedDrawingID = nil
+            }
+            if drawing.type == .text {
+                Button("编辑文字…") {
+                    editTextDrawing(drawing)
+                }
+            }
+            Divider()
+            Button("取消选中") {
+                selectedDrawingID = nil
+            }
+        } else {
+            Text("（无选中画线 · 点击画线选中后再右键）")
+                .foregroundColor(.secondary)
+        }
+    }
+
+    /// v13.5 编辑文字画线内容（弹 NSAlert + NSTextField）
+    private func editTextDrawing(_ drawing: Drawing) {
+        guard drawing.type == .text else { return }
+        let alert = NSAlert()
+        alert.messageText = "编辑文字"
+        alert.informativeText = "修改标注内容："
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        textField.stringValue = drawing.text ?? ""
+        alert.accessoryView = textField
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "取消")
+        if alert.runModal() == .alertFirstButtonReturn {
+            let newText = textField.stringValue.isEmpty ? "标注" : textField.stringValue
+            if let idx = drawings.firstIndex(where: { $0.id == drawing.id }) {
+                drawings[idx].text = newText
+            }
+        }
     }
 
     /// 画线点击捕获层（v13.0 · 透明 contentShape · 拦截 onTapGesture · 仅工具激活时存在）

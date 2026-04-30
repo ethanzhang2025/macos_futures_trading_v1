@@ -19,6 +19,7 @@ import IndicatorCore
 import ReplayCore
 import StoreCore
 import AlertCore
+import TradingCore
 
 // MARK: - HUD 4 角位置（v13.34 · file scope 让 ChartScene + ChartContentView 都能访问）
 
@@ -159,6 +160,8 @@ struct ChartScene: View {
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
     @Environment(\.alertEvaluator) private var alertEvaluator
+    @Environment(\.simulatedTradingEngine) private var simulatedTradingEngine
+    @Environment(\.openWindow) private var openWindow
 
     /// 回放 player 的 UI 镜像（cursor + state + speed 派生于 player · 通过 observe() 同步）
     private struct ReplaySnapshot: Equatable {
@@ -797,8 +800,18 @@ struct ChartScene: View {
             .buttonStyle(.borderless)
             .help("指标参数（MA / BOLL / MACD / KDJ / RSI 周期可调）")
 
+            // v15.4 · 模拟交易快捷入口（⌘T · 与主菜单 OpenTradingButton 对齐）
+            Button {
+                openWindow(id: "trading")
+            } label: {
+                Image(systemName: "dollarsign.circle")
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.borderless)
+            .help("模拟交易（⌘T · SimNow 模拟训练）")
+
             Spacer()
-            Text("⌘N 新窗口 · ⌘L 自选")
+            Text("⌘N 新窗口 · ⌘L 自选 · ⌘T 模拟交易")
                 .foregroundColor(.secondary)
         }
         .font(.system(size: 12, design: .monospaced))
@@ -933,9 +946,14 @@ struct ChartScene: View {
                 }
                 // v11.0+1 · evaluator 用 K 线 close 模拟 Tick · 真 Tick Stage B 接 CTP 后替换
                 // v15.x · 同步喂 onBar 给指标条件预警评估（spec.period 不匹配的 alert evaluator 内部跳过）
+                let simulatedTick = Self.simulatedTick(from: k)
                 if let evaluator = alertEvaluator {
-                    await evaluator.onTick(Self.simulatedTick(from: k))
+                    await evaluator.onTick(simulatedTick)
                     await evaluator.onBar(k, instrumentID: instrumentID, period: period)
+                }
+                // v15.4 · 模拟撮合引擎吃同一条假 Tick · 触发委托撮合 + 持仓盯市浮盈刷新
+                if let trading = simulatedTradingEngine {
+                    await trading.onTick(simulatedTick)
                 }
             }
         }

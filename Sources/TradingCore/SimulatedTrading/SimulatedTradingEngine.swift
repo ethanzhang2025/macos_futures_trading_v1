@@ -84,6 +84,8 @@ public actor SimulatedTradingEngine {
 
     public func contract(_ instrumentID: String) -> Contract? { contracts[instrumentID] }
 
+    public func allContracts() -> [Contract] { Array(contracts.values) }
+
     // MARK: - 事件订阅
 
     public func observe() -> AsyncStream<SimulatedTradingEvent> {

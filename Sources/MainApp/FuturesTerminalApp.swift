@@ -20,6 +20,7 @@ import Shared
 import StoreCore
 import AlertCore
 import IndicatorCore
+import TradingCore
 
 // MARK: - StoreManager 环境注入（M5 集中接入持久化）
 
@@ -67,6 +68,22 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - SimulatedTradingEngine 环境注入（v15.4 · WP-54 SimNow 模拟训练）
+
+private struct SimulatedTradingEngineKey: EnvironmentKey {
+    static let defaultValue: SimulatedTradingEngine? = nil
+}
+
+extension EnvironmentValues {
+    /// 模拟撮合引擎：App.init 一次性创建 · 初始资金 1,000,000 · 注册主力 4 合约（RB0/IF0/AU0/CU0）
+    /// TradingWindow 订阅 observe + submitOrder/cancelOrder · ChartScene K 线 close 模拟 onTick 撮合
+    /// 不依赖 CTP 二进制 · M5 节点 SimNow 真接入留 v15.5+
+    var simulatedTradingEngine: SimulatedTradingEngine? {
+        get { self[SimulatedTradingEngineKey.self] }
+        set { self[SimulatedTradingEngineKey.self] = newValue }
+    }
+}
+
 @main
 struct FuturesTerminalApp: App {
 
@@ -83,6 +100,10 @@ struct FuturesTerminalApp: App {
     /// 预警评估器（v11.0+1 · alerts 真 e2e · 注入 alertHistory store · ChartScene 调 onTick）
     /// storeManager nil 时 evaluator nil · UI 退化 testTrigger 占位
     private let alertEvaluator: AlertEvaluator?
+
+    /// 模拟撮合引擎（v15.4 · WP-54 SimNow 模拟训练第 2 批）
+    /// 默认初始资金 1,000,000 · 启动注册 4 主力合约（RB0/IF0/AU0/CU0）
+    private let simulatedTradingEngine: SimulatedTradingEngine?
 
     init() {
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
@@ -103,6 +124,10 @@ struct FuturesTerminalApp: App {
         self.alertEvaluator = manager.map {
             AlertEvaluator(history: $0.alertHistory, dispatcher: NotificationDispatcher())
         }
+        // v15.4 模拟撮合引擎：100w 初始资金 + 4 主力合约注册（async actor 初始化用 Task 异步注册）
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        self.simulatedTradingEngine = engine
+        Task { await engine.registerContracts(SimulatedContractDefaults.list) }
         // app_launch 异步发 · 失败静默（埋点不阻塞 App 启动）
         if let service = self.analytics {
             Task { _ = try? await service.record(.appLaunch, userID: Self.anonymousUserID) }
@@ -141,6 +166,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
+                .environment(\.simulatedTradingEngine, simulatedTradingEngine)
                 .preferredColorScheme(.dark)
         }
         // 视觉迭代第 13 项：显式 defaultSize · 启动时合理大窗 · 不依赖 SwiftUI 默认
@@ -154,6 +180,7 @@ struct FuturesTerminalApp: App {
                 OpenAlertButton()
                 OpenJournalButton()
                 OpenWorkspaceButton()
+                OpenTradingButton()
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -214,6 +241,16 @@ struct FuturesTerminalApp: App {
         }
         .defaultSize(width: 1100, height: 720)
 
+        // 模拟交易（⌘T · trading · 独立窗口 · WP-54 v15.4 SimNow 模拟训练）
+        WindowGroup("模拟交易", id: "trading") {
+            TradingWindow()
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
+                .environment(\.simulatedTradingEngine, simulatedTradingEngine)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 1100, height: 720)
+
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
             SettingsContentView()
@@ -268,6 +305,14 @@ private struct OpenWorkspaceButton: View {
     var body: some View {
         Button("工作区模板") { openWindow(id: "workspace") }
             .keyboardShortcut("k", modifiers: [.command])
+    }
+}
+
+private struct OpenTradingButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("模拟交易") { openWindow(id: "trading") }
+            .keyboardShortcut("t", modifiers: [.command])
     }
 }
 

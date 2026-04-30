@@ -193,11 +193,15 @@ public actor UnifiedDataSource {
         return Self.merge(historical: historicalKLines, cache: cache, maxBars: cacheMaxBars)
     }
 
-    /// KLinePeriod → Sina 历史 K 周期分钟数（仅 5/15/60 三档；其他 period 返回 nil 回退到 cache）
+    /// KLinePeriod → Sina 历史 K 周期分钟数（v12.7 SinaKLineGranularityDemo 实测 type=1/5/15/30/60 全支持）
+    /// 之前仅 5/15/60 是错误结论 · v12.6 修了回放路径但漏修此实盘路径 · v12.7 补齐 case 1 / 30
+    /// daily/weekly/monthly 走外层 historicalDaily 不在此函数
     private static func intervalMinutes(for period: KLinePeriod) -> Int? {
         switch period {
+        case .minute1:  return 1
         case .minute5:  return 5
         case .minute15: return 15
+        case .minute30: return 30
         case .hour1:    return 60
         default:        return nil
         }

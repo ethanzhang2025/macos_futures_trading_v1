@@ -496,14 +496,16 @@ struct UnifiedDataSourceHistoryMergeTests {
         await source.stopAll()
     }
 
-    @Test("不支持的 period（minute1）→ 不查 historical，回退到 cache")
+    @Test("不支持的 period（monthly）→ 不查 historical minute，回退到 cache")
     func unsupportedPeriodSkipsHistorical() async {
+        // v12.7：minute1/5/15/30/60 全支持 historicalMinute · 仅 daily/weekly/monthly 走 historicalDaily 不在此函数
+        // 用 .monthly 测 intervalMinutes(for:) 返 nil 时 UDS 跳过 historicalMinute 调用
         let cache = InMemoryKLineCacheStore()
         let realtime = MockMarketDataProvider()
         let stub = StubHistoricalProvider()
         await stub.setMinute(.success([hk("2026-04-23 14:00:00")]))  // 即使设了也不应被调用
         let source = UnifiedDataSource(cache: cache, realtime: realtime, historical: stub)
-        let stream = await source.start(instrumentID: "RB0", period: .minute1)
+        let stream = await source.start(instrumentID: "RB0", period: .monthly)
 
         var iter = stream.makeAsyncIterator()
         if case .snapshot(let bars) = await iter.next() {
@@ -511,7 +513,7 @@ struct UnifiedDataSourceHistoryMergeTests {
         } else {
             Issue.record("期望 snapshot")
         }
-        // 不支持的 period 不应触发 historical fetch
+        // 不支持的 period 不应触发 historical minute fetch
         let calls = await stub.minuteCalls
         #expect(calls.isEmpty)
         await source.stopAll()

@@ -20,6 +20,33 @@ import ReplayCore
 import StoreCore
 import AlertCore
 
+// MARK: - HUD 4 角位置（v13.34 · file scope 让 ChartScene + ChartContentView 都能访问）
+
+enum HUDCorner: String, CaseIterable {
+    case topLeading
+    case topTrailing
+    case bottomLeading
+    case bottomTrailing
+
+    var alignment: Alignment {
+        switch self {
+        case .topLeading:     return .topLeading
+        case .topTrailing:    return .topTrailing
+        case .bottomLeading:  return .bottomLeading
+        case .bottomTrailing: return .bottomTrailing
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .topLeading:     return "左上"
+        case .topTrailing:    return "右上"
+        case .bottomLeading:  return "左下"
+        case .bottomTrailing: return "右下"
+        }
+    }
+}
+
 // MARK: - 模式（实盘 / 回放）
 
 enum ChartMode: String, CaseIterable, Identifiable {
@@ -89,11 +116,16 @@ struct ChartScene: View {
     @State private var isTemplatesLoaded: Bool = false
     /// v13.21 副图偏好已加载守卫（避免初始默认值覆盖用户偏好）
     @State private var isSubPrefsLoaded: Bool = false
+    /// v13.34 HUD 位置 · 4 角切换 · 默认左上 · 通过 @Binding 传给 ChartContentView · UserDefaults 持久化
+    @State private var hudCorner: HUDCorner = .topLeading
+    @State private var isHUDPrefLoaded: Bool = false
 
     private static let drawingTemplatesKey = "drawingTemplates.v1"
     /// v13.21 副图偏好持久化（重启保留 · 跨合约/周期共享）
     private static let subIndicatorsKey = "subIndicators.v1"
     private static let subChartHeightKey = "subChartHeight.v1"
+    /// v13.34 HUD 位置持久化（4 角偏好）
+    private static let hudCornerKey = "hudCorner.v1"
 
     /// v13.22 viewport 缩放级别按合约+周期记忆 · UserDefaults JSON · key prefix
     static func viewportKey(instrumentID: String, period: KLinePeriod) -> String {
@@ -219,6 +251,14 @@ struct ChartScene: View {
                 }
                 isSubPrefsLoaded = true
             }
+            // v13.34 HUD 位置首次加载
+            if !isHUDPrefLoaded {
+                if let raw = UserDefaults.standard.string(forKey: Self.hudCornerKey),
+                   let corner = HUDCorner(rawValue: raw) {
+                    hudCorner = corner
+                }
+                isHUDPrefLoaded = true
+            }
         }
         .onChange(of: drawingTemplates) { newValue in
             // v13.16 模板持久化 UserDefaults · 加载守卫避免初始 [] 误覆盖
@@ -237,6 +277,11 @@ struct ChartScene: View {
             // v13.21 副图高度持久化
             guard isSubPrefsLoaded else { return }
             UserDefaults.standard.set(Double(newValue), forKey: Self.subChartHeightKey)
+        }
+        .onChange(of: hudCorner) { newValue in
+            // v13.34 HUD 位置持久化
+            guard isHUDPrefLoaded else { return }
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.hudCornerKey)
         }
         .onChange(of: chartMode) { newValue in
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
@@ -744,6 +789,7 @@ struct ChartScene: View {
                 currentStrokeColor: $currentStrokeColor,
                 currentStrokeWidth: $currentStrokeWidth,
                 currentFontSize: $currentFontSize,
+                hudCorner: $hudCorner,
                 viewportSaveKey: Self.viewportKey(instrumentID: currentInstrumentID, period: selectedPeriod),
                 initialViewport: Self.loadViewport(
                     instrumentID: currentInstrumentID,
@@ -1202,6 +1248,8 @@ struct ChartContentView: View {
     @State var isDraggingAnchor: Bool = false
     /// v13.30 HUD 显隐切换（⌘⇧H · 截图前暂时隐藏可让画面更干净）· 默认显示
     @State var showHUD: Bool = true
+    /// v13.34 HUD 显示位置（4 角切换 · @Binding 来自 ChartScene · UserDefaults 持久化）
+    @Binding var hudCorner: HUDCorner
     @State var viewport: RenderViewport
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
@@ -1235,6 +1283,7 @@ struct ChartContentView: View {
         currentStrokeColor: Binding<Color>,
         currentStrokeWidth: Binding<Double>,
         currentFontSize: Binding<Double>,
+        hudCorner: Binding<HUDCorner>,
         viewportSaveKey: String,
         initialViewport: RenderViewport
     ) {
@@ -1254,6 +1303,7 @@ struct ChartContentView: View {
         self._currentStrokeColor = currentStrokeColor
         self._currentStrokeWidth = currentStrokeWidth
         self._currentFontSize = currentFontSize
+        self._hudCorner = hudCorner
         self.viewportSaveKey = viewportSaveKey
         self._viewport = State(initialValue: initialViewport)
     }
@@ -1422,8 +1472,9 @@ struct ChartContentView: View {
                 selectedIDs: selectedDrawingIDs,
                 pendingDrawing: pendingPreviewDrawing
             )
+            // v13.34 HUD 显示在 4 角之一（用户偏好 · UserDefaults 持久化）· 默认左上
             if showHUD {
-                hud
+                hudCornerOverlay
             }
             // v13.0 画线点击捕获层（仅 activeDrawingTool 非 nil 时启用 · 否则点击穿透到主图 gesture）
             if activeDrawingTool != nil {
@@ -1672,6 +1723,15 @@ struct ChartContentView: View {
             }
             Button("复制主图截图到剪贴板") {
                 copyChartScreenshotToClipboard()
+            }
+            Divider()
+            // v13.34 HUD 位置切换（4 角）
+            Menu("HUD 位置（当前：\(hudCorner.label)）") {
+                ForEach(HUDCorner.allCases, id: \.rawValue) { corner in
+                    Button(corner.label + (corner == hudCorner ? " ✓" : "")) {
+                        hudCorner = corner
+                    }
+                }
             }
             Divider()
             Text("（按住 ⇧ 多选画线 · 右键画线弹更多操作）")
@@ -2464,6 +2524,12 @@ struct ChartContentView: View {
         let lo = slice.map(\.low).min() ?? Decimal(0)
         let hi = slice.map(\.high).max() ?? Decimal(1)
         return lo...max(hi, lo + Decimal(1))
+    }
+
+    /// v13.34 HUD 用 frame(maxWidth/Height: .infinity, alignment: hudCorner.alignment) 在 ZStack 内贴 4 角之一
+    var hudCornerOverlay: some View {
+        hud
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: hudCorner.alignment)
     }
 
     var hud: some View {

@@ -516,29 +516,26 @@ struct ChartScene: View {
             Button { Task { await onTapStop() } } label: {
                 Image(systemName: "stop.fill")
             }
+            .buttonStyle(ReplayBarButtonStyle())
             .help("停止 · 重置到第 1 根")
 
             Button { Task { await onTapStepBackward() } } label: {
                 Image(systemName: "backward.frame.fill")
             }
+            .buttonStyle(ReplayBarButtonStyle())
             .help("单步后退 1 根")
 
             Button { Task { await onTapPlayPause() } } label: {
                 Image(systemName: replay.state == .playing ? "pause.fill" : "play.fill")
-                    .frame(width: 18, height: 18)
             }
-            .buttonStyle(.borderless)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(replay.state == .playing ? Color.accentColor : Color.secondary.opacity(0.15))
-            .foregroundColor(replay.state == .playing ? .white : .primary)
-            .cornerRadius(6)
+            .buttonStyle(ReplayBarButtonStyle(active: replay.state == .playing))
             .keyboardShortcut(.space, modifiers: [])
             .help(replay.state == .playing ? "暂停（空格）" : "播放（空格）")
 
             Button { Task { await onTapStepForward() } } label: {
                 Image(systemName: "forward.frame.fill")
             }
+            .buttonStyle(ReplayBarButtonStyle())
             .help("单步前进 1 根")
 
             Divider().frame(height: 18)
@@ -1044,6 +1041,22 @@ enum MockKLineData {
         let boll = (try? BOLL.calculate(kline: series, params: [20, 2])) ?? []
         let bollBands = boll.filter { $0.name != "BOLL-MID" }
         return ma5 + ma20 + ma60 + bollBands
+    }
+}
+
+/// 回放控制条按钮统一样式（v12.13 · 用户反馈：所有按钮点击瞬间蓝底白字 · 播放按钮 playing 态持续蓝底白字）
+/// active=true 时持续高亮（用于 play/pause 在 playing 状态时的持续表现）
+private struct ReplayBarButtonStyle: ButtonStyle {
+    var active: Bool = false
+    func makeBody(configuration: Configuration) -> some View {
+        let highlight = configuration.isPressed || active
+        return configuration.label
+            .frame(width: 18, height: 18)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(highlight ? Color.accentColor : Color.secondary.opacity(0.15))
+            .foregroundColor(highlight ? .white : .primary)
+            .cornerRadius(6)
     }
 }
 

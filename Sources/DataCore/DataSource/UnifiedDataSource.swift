@@ -185,12 +185,30 @@ public actor UnifiedDataSource {
 
     // MARK: - v2 · 历史 K 线合并
 
-    /// 拉历史 K 与 cache 合并去重（cache 优先）；historical 不可用 / 失败 / 周期不支持 → 静默回退到 cache
+    /// 拉历史 K 与 cache 合并去重（cache 优先）；historical 不可用 / 失败 → 静默回退到 cache
+    /// v12.8：daily/weekly/monthly 走 historicalDaily 路径（之前漏 · 切日 K 时 UDS 不拉历史 fallback Mock 1min）
     private func loadHistorySnapshot(instrumentID: String, period: KLinePeriod, cache: [KLine]) async -> [KLine] {
-        guard let historical, let interval = Self.intervalMinutes(for: period) else { return cache }
-        guard let raw = try? await historical.historicalMinute(symbol: instrumentID, intervalMinutes: interval) else { return cache }
+        guard let historical else { return cache }
+        let raw: [HistoricalKLine]
+        if let interval = Self.intervalMinutes(for: period) {
+            guard let bars = try? await historical.historicalMinute(symbol: instrumentID, intervalMinutes: interval) else { return cache }
+            raw = bars
+        } else if Self.isDailyOrAbove(period: period) {
+            guard let bars = try? await historical.historicalDaily(symbol: instrumentID) else { return cache }
+            raw = bars
+        } else {
+            return cache
+        }
         let historicalKLines = raw.compactMap { Self.toKLine($0, instrumentID: instrumentID, period: period) }
         return Self.merge(historical: historicalKLines, cache: cache, maxBars: cacheMaxBars)
+    }
+
+    /// daily / weekly / monthly 走 historicalDaily 路径（Sina 仅返回日级 · 周/月由客户端聚合 · v1 直接用日 K）
+    private static func isDailyOrAbove(period: KLinePeriod) -> Bool {
+        switch period {
+        case .daily, .weekly, .monthly: return true
+        default: return false
+        }
     }
 
     /// KLinePeriod → Sina 历史 K 周期分钟数（v12.7 SinaKLineGranularityDemo 实测 type=1/5/15/30/60 全支持）

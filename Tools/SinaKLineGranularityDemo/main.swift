@@ -46,12 +46,14 @@ struct SinaKLineGranularityDemo {
     }
 
     private static func testType(label: String, bars: [SinaKLineBar]?) async {
-        guard let b = bars, let last = b.last else {
-            print("  ❌ \(label) → 0 根（端点不支持）")
+        guard let b = bars, let last = b.last, b.count >= 4 else {
+            print("  ❌ \(label) → 0 根 / 不足 4 根（端点不支持）")
             return
         }
         let close = NSDecimalNumber(decimal: last.close).doubleValue
         print("  ✅ \(label) → \(b.count) 根 · 末 close=\(fmt(close)) date=\(last.date)")
+        print("       前 3 根 date：\(b[0].date) | \(b[1].date) | \(b[2].date)")
+        print("       末 3 根 date：\(b[b.count-3].date) | \(b[b.count-2].date) | \(b[b.count-1].date)")
     }
 
     private static func fmt(_ v: Double) -> String { String(format: "%.2f", v) }

@@ -131,6 +131,9 @@ struct ChartScene: View {
     @State private var editingSubSlot: Int? = nil
     /// v15.2 参数变更触发 updateIndicatorsFull 的链式串行 task · 防快速连续变更产生重叠重算
     @State private var indicatorParamsRecomputeTask: Task<Void, Never>?
+    /// v15.8 主图主题（深色 / 浅色）· UserDefaults 全局共享
+    @State private var chartTheme: ChartTheme = .dark
+    @State private var isChartThemeLoaded: Bool = false
 
     private static let drawingTemplatesKey = "drawingTemplates.v1"
     /// v13.21 副图偏好持久化（重启保留 · 跨合约/周期共享）
@@ -301,6 +304,13 @@ struct ChartScene: View {
                 }
                 isIndicatorParamsLoaded = true
             }
+            // v15.8 主题加载（独立守卫 · 与 indicatorParams 解耦）
+            if !isChartThemeLoaded {
+                if let theme = ChartThemeStore.load() {
+                    chartTheme = theme
+                }
+                isChartThemeLoaded = true
+            }
         }
         .onChange(of: drawingTemplates) { newValue in
             // v13.16 模板持久化 UserDefaults · 加载守卫避免初始 [] 误覆盖
@@ -344,6 +354,11 @@ struct ChartScene: View {
             // v15.7 副图独立参数 overrides 持久化（仅副图重算 · 主图不受影响）
             guard isIndicatorParamsLoaded else { return }
             SubChartParamsOverridesStore.save(newValue)
+        }
+        .onChange(of: chartTheme) { newValue in
+            // v15.8 主题持久化（颜色 SwiftUI Binding 自动重渲染 · 不需手动 refresh）
+            guard isChartThemeLoaded else { return }
+            ChartThemeStore.save(newValue)
         }
         .sheet(item: Binding(
             get: { editingSubSlot.map { SubSlotIdentified(slot: $0) } },
@@ -847,6 +862,16 @@ struct ChartScene: View {
             .buttonStyle(.borderless)
             .help("模拟交易（⌘T · SimNow 模拟训练）")
 
+            // v15.8 · 主题切换（深色 ↔ 浅色 · UserDefaults 持久化）
+            Button {
+                chartTheme = (chartTheme == .dark) ? .light : .dark
+            } label: {
+                Image(systemName: chartTheme.icon)
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.borderless)
+            .help("切换 \(chartTheme == .dark ? "浅色" : "深色") 主题")
+
             Spacer()
             Text("⌘N 新窗口 · ⌘L 自选 · ⌘T 模拟交易")
                 .foregroundColor(.secondary)
@@ -854,8 +879,8 @@ struct ChartScene: View {
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 12)
         .frame(height: 32)
-        // 视觉迭代第 11 项：toolbar 显式深色 #15171C 与主图 #11141A 协调 · 替代 .bar 系统默认
-        .background(Color(red: 0.082, green: 0.090, blue: 0.110))
+        // v15.8 toolbar 背景跟随主题（深 #15171C / 浅 #ECEEF1 · 替代 .bar 系统默认 · 与主图协调）
+        .background(chartTheme.toolbarBackground)
         .overlay(alignment: .bottom) { Divider() }
     }
 
@@ -874,6 +899,7 @@ struct ChartScene: View {
                 indicatorParams: indicatorParams,
                 subParamsOverrides: subParamsOverrides,
                 onEditSubSlot: { slot in editingSubSlot = slot },
+                chartTheme: chartTheme,
                 drawings: $drawings,
                 activeDrawingTool: $activeDrawingTool,
                 pendingDrawingPoint: $pendingDrawingPoint,
@@ -1326,6 +1352,8 @@ struct ChartContentView: View {
     let subParamsOverrides: [Int: IndicatorParamsBook]
     /// v15.7 用户右键副图选"参数..."时回调 · 通知父级 ChartScene 弹 sheet 编辑该 slot
     let onEditSubSlot: (Int) -> Void
+    /// v15.8 主图主题（深色 / 浅色）· 影响背景 / 文字 / 网格 / candle 配色
+    let chartTheme: ChartTheme
     /// v13.0 WP-42 画线状态（绑定 ChartScene · 父子双向同步）
     @Binding var drawings: [Drawing]
     @Binding var activeDrawingTool: DrawingType?
@@ -1386,6 +1414,7 @@ struct ChartContentView: View {
         indicatorParams: IndicatorParamsBook,
         subParamsOverrides: [Int: IndicatorParamsBook],
         onEditSubSlot: @escaping (Int) -> Void,
+        chartTheme: ChartTheme,
         drawings: Binding<[Drawing]>,
         activeDrawingTool: Binding<DrawingType?>,
         pendingDrawingPoint: Binding<DrawingPoint?>,
@@ -1409,6 +1438,7 @@ struct ChartContentView: View {
         self.indicatorParams = indicatorParams
         self.subParamsOverrides = subParamsOverrides
         self.onEditSubSlot = onEditSubSlot
+        self.chartTheme = chartTheme
         self._drawings = drawings
         self._activeDrawingTool = activeDrawingTool
         self._pendingDrawingPoint = pendingDrawingPoint
@@ -1479,7 +1509,7 @@ struct ChartContentView: View {
             VStack(spacing: 0) {
                 ForEach(Array(subIndicatorKinds.enumerated()), id: \.element) { idx, kind in
                     if idx > 0 {
-                        Color.white.opacity(0.10).frame(height: 1)
+                        chartTheme.gridLine.frame(height: 1)
                     }
                     HStack(spacing: 0) {
                         SubChartView(
@@ -1491,7 +1521,7 @@ struct ChartContentView: View {
                             onEditParams: { onEditSubSlot(idx) }
                         )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        Color(red: 0.07, green: 0.08, blue: 0.10)
+                        chartTheme.background
                             .frame(width: 60)
                     }
                     .frame(height: perSubHeight)

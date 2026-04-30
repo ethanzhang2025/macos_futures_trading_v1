@@ -173,11 +173,11 @@ struct StoreManagerTests {
         await m.close()
     }
 
-    @Test("allFileNames 与 7 个公开常量一致 · 无遗漏无重复")
+    @Test("allFileNames 与 8 个公开常量一致 · 无遗漏无重复（v13.2 加 drawings）")
     func allFileNamesMatchConstants() {
         let names = StoreManager.allFileNames
-        #expect(names.count == 7)
-        #expect(Set(names).count == 7)
+        #expect(names.count == 8)
+        #expect(Set(names).count == 8)
         #expect(names.contains(StoreManager.analyticsFileName))
         #expect(names.contains(StoreManager.klineFileName))
         #expect(names.contains(StoreManager.journalFileName))
@@ -185,5 +185,6 @@ struct StoreManagerTests {
         #expect(names.contains(StoreManager.alertConfigFileName))
         #expect(names.contains(StoreManager.watchlistFileName))
         #expect(names.contains(StoreManager.workspaceFileName))
+        #expect(names.contains(StoreManager.drawingsFileName))
     }
 }

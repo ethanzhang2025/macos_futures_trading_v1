@@ -105,8 +105,13 @@ struct ChartScene: View {
         .task(id: PipelineKey(mode: chartMode, instrumentID: currentInstrumentID, period: selectedPeriod)) {
             await resetForNewPipeline()
             // v13.0 WP-42 画线状态切合约/周期重载 · 各 (instrumentID, period) 组合独立持久化
+            // v13.2 升级 UserDefaults JSON → SQLiteDrawingStore（M5 持久化 8/8）
             isDrawingsLoaded = false
-            drawings = Self.loadDrawings(instrumentID: currentInstrumentID, period: selectedPeriod)
+            if let store = storeManager?.drawings {
+                drawings = (try? await store.load(instrumentID: currentInstrumentID, period: selectedPeriod)) ?? []
+            } else {
+                drawings = []
+            }
             pendingDrawingPoint = nil
             selectedDrawingID = nil
             activeDrawingTool = nil
@@ -141,10 +146,12 @@ struct ChartScene: View {
             }
         }
         .onChange(of: drawings) { newValue in
-            // v13.0 WP-42 画线持久化（UserDefaults JSON · v1 简化 · v13.1 升级 SQLiteDrawingStore）
+            // v13.2 WP-42 画线 SQLite 持久化（接 StoreManager.drawings · M5 持久化 8/8）
             // isDrawingsLoaded 守卫：避免初始 [] 误覆盖（同 alerts/trades/history 模式）
-            guard isDrawingsLoaded else { return }
-            Self.saveDrawings(newValue, instrumentID: currentInstrumentID, period: selectedPeriod)
+            guard isDrawingsLoaded, let store = storeManager?.drawings else { return }
+            let id = currentInstrumentID
+            let p = selectedPeriod
+            Task { try? await store.save(newValue, instrumentID: id, period: p) }
         }
         .onChange(of: chartMode) { newValue in
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
@@ -263,34 +270,7 @@ struct ChartScene: View {
         .accessibilityHidden(true)
     }
 
-    // MARK: - 画线持久化（v13.0 v1 · UserDefaults JSON · 按 instrumentID + period 隔离）
-
-    /// 持久化 key（每个 instrumentID + period 组合独立 · 切换时不污染）
-    private static func drawingsKey(instrumentID: String, period: KLinePeriod) -> String {
-        "drawings.\(instrumentID).\(period.rawValue)"
-    }
-
-    /// 加载 drawings（启动 + 切合约/周期时调）· 解码失败 / 无数据返回空数组
-    static func loadDrawings(instrumentID: String, period: KLinePeriod) -> [Drawing] {
-        let key = drawingsKey(instrumentID: instrumentID, period: period)
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let decoded = try? JSONDecoder().decode([Drawing].self, from: data) else {
-            return []
-        }
-        return decoded
-    }
-
-    /// 保存 drawings（onChange 触发 · 同步写入 UserDefaults · 极快无需 async）
-    static func saveDrawings(_ drawings: [Drawing], instrumentID: String, period: KLinePeriod) {
-        let key = drawingsKey(instrumentID: instrumentID, period: period)
-        if drawings.isEmpty {
-            UserDefaults.standard.removeObject(forKey: key)
-        } else if let data = try? JSONEncoder().encode(drawings) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
-    }
-
-    // MARK: - 画线工具组（v13.0 · WP-42 UI 激活）
+    // MARK: - 画线工具组（v13.0 · WP-42 UI 激活 · v13.2 持久化升级 SQLiteDrawingStore）
 
     /// 工具条画线工具按钮组：选择 / 6 种画线 / 清空
     private var drawingTools: some View {

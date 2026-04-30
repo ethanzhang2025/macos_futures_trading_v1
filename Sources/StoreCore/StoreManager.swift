@@ -29,6 +29,8 @@ public struct StoreManager: Sendable {
     public let alertConfig: SQLiteAlertConfigStore
     public let watchlistBook: SQLiteWatchlistBookStore
     public let workspaceBook: SQLiteWorkspaceBookStore
+    /// v13.2 WP-42 画线持久化 · 按 (instrumentID + period) 复合主键 · M5 持久化 7→8 store
+    public let drawings: SQLiteDrawingStore
 
     // MARK: - 配置内省
 
@@ -44,8 +46,9 @@ public struct StoreManager: Sendable {
     public static let alertConfigFileName = "alert_config.sqlite"
     public static let watchlistFileName = "watchlist.sqlite"
     public static let workspaceFileName = "workspace.sqlite"
+    public static let drawingsFileName = "drawings.sqlite"
 
-    /// 全部 7 个数据库文件名（迁移 / 备份 / 测试可引用）
+    /// 全部 8 个数据库文件名（v13.2 加 drawings）
     public static let allFileNames: [String] = [
         analyticsFileName,
         klineFileName,
@@ -53,7 +56,8 @@ public struct StoreManager: Sendable {
         alertHistoryFileName,
         alertConfigFileName,
         watchlistFileName,
-        workspaceFileName
+        workspaceFileName,
+        drawingsFileName
     ]
 
     // MARK: - 初始化
@@ -103,11 +107,15 @@ public struct StoreManager: Sendable {
             path: dbPath(Self.workspaceFileName),
             passphrase: passphrase
         )
+        self.drawings = try SQLiteDrawingStore(
+            path: dbPath(Self.drawingsFileName),
+            passphrase: passphrase
+        )
     }
 
     // MARK: - 生命周期
 
-    /// 关闭全部 7 store · 进程退出 / 用户登出 / 切换数据库时调用
+    /// 关闭全部 8 store（v13.2 加 drawings）· 进程退出 / 用户登出 / 切换数据库时调用
     public func close() async {
         await analytics.close()
         await kline.close()
@@ -116,5 +124,6 @@ public struct StoreManager: Sendable {
         await alertConfig.close()
         await watchlistBook.close()
         await workspaceBook.close()
+        await drawings.close()
     }
 }

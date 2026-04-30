@@ -21,14 +21,19 @@ public struct KLineCrosshairView: View {
 
     @State private var hoverPoint: CGPoint?
 
-    /// 时间格式按周期动态：分钟级 MM-dd HH:mm（不显示年 · 短期数据用户已知年份）· 日/周显示 yyyy-MM-dd · 月线 yyyy-MM
+    /// 时间格式按周期动态（v12.11 折衷方案）：
+    /// - 1/5/15分：MM-dd HH:mm（跨度 ≤ 4 个月 · 跨年罕见 · 紧凑）
+    /// - 30/60分：yy-MM-dd HH:mm（跨度 5-8 个月 · 简化 2 位年区分跨年）
+    /// - 日/周：yyyy-MM-dd（日期为主 · 完整年份）
+    /// - 月：yyyy-MM
     private var timeFormatter: DateFormatter {
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
         switch period {
-        case .daily, .weekly:  f.dateFormat = "yyyy-MM-dd"
-        case .monthly:         f.dateFormat = "yyyy-MM"
-        default:               f.dateFormat = "MM-dd HH:mm"
+        case .daily, .weekly:        f.dateFormat = "yyyy-MM-dd"
+        case .monthly:               f.dateFormat = "yyyy-MM"
+        case .minute30, .hour1:      f.dateFormat = "yy-MM-dd HH:mm"
+        default:                     f.dateFormat = "MM-dd HH:mm"
         }
         return f
     }

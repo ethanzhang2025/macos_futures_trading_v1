@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// 画线类型 v1（Stage A 6 种）
+/// 画线类型 v1（Stage A 6 种）· v13.13 加椭圆 · v13.14 加测量 = 8 种
 public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case trendLine        // 趋势线（两点）
     case horizontalLine   // 水平线（单点价格）
@@ -12,11 +12,13 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case parallelChannel  // 平行通道（两点定主轴 + 偏移定副线）
     case fibonacci        // 斐波那契回调（两点定 0/100%）
     case text             // 文字标注（单点位置）
+    case ellipse          // 椭圆（两点定外接矩形对角 · v13.13）
+    case ruler            // 测量工具（两点 · 渲染显示价格差/百分比/bar 数 · v13.14）
 
     /// 是否需要两次点击确定（v1 输入端契约）
     public var needsTwoPoints: Bool {
         switch self {
-        case .trendLine, .rectangle, .parallelChannel, .fibonacci: return true
+        case .trendLine, .rectangle, .parallelChannel, .fibonacci, .ellipse, .ruler: return true
         case .horizontalLine, .text: return false
         }
     }
@@ -57,6 +59,12 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
     /// v13.8 自定义线宽（pt）· nil 用 1.5 默认 · 选中态在此基础上 +1.0
     public var strokeWidth: Double?
 
+    /// v13.11 锁定标志 · true 时拖动 anchor / Delete / ⌘D 都不响应（防误改重要支撑阻力）· nil 视为 false
+    public var isLocked: Bool?
+
+    /// v13.12 文字标注字体大小（pt · 仅 .text 类型生效）· nil 用默认 12
+    public var fontSize: Double?
+
     public init(
         id: UUID = UUID(),
         type: DrawingType,
@@ -65,7 +73,9 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         text: String? = nil,
         channelOffset: Decimal? = nil,
         strokeColorHex: String? = nil,
-        strokeWidth: Double? = nil
+        strokeWidth: Double? = nil,
+        isLocked: Bool? = nil,
+        fontSize: Double? = nil
     ) {
         self.id = id
         self.type = type
@@ -75,7 +85,12 @@ public struct Drawing: Sendable, Codable, Equatable, Identifiable {
         self.channelOffset = channelOffset
         self.strokeColorHex = strokeColorHex
         self.strokeWidth = strokeWidth
+        self.isLocked = isLocked
+        self.fontSize = fontSize
     }
+
+    /// v13.11 便利访问 · isLocked nil 视为 false
+    public var locked: Bool { isLocked == true }
 }
 
 // MARK: - 类型安全的工厂方法
@@ -109,5 +124,15 @@ extension Drawing {
     /// 文字标注
     public static func text(at point: DrawingPoint, content: String) -> Drawing {
         Drawing(type: .text, startPoint: point, text: content)
+    }
+
+    /// 椭圆（v13.13 · 对角两点定外接矩形 · 内接椭圆 · 顶点未规定顺序）
+    public static func ellipse(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
+        Drawing(type: .ellipse, startPoint: start, endPoint: end)
+    }
+
+    /// 测量工具（v13.14 · 两点定线段 · 渲染时显示价格差 / 百分比 / bar 数）
+    public static func ruler(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
+        Drawing(type: .ruler, startPoint: start, endPoint: end)
     }
 }

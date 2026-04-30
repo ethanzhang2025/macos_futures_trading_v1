@@ -11,7 +11,7 @@ private func point(_ bar: Int, _ price: Int) -> DrawingPoint {
 
 @Suite("Drawing 创建与类型契约")
 struct DrawingFactoryTests {
-    @Test("6 种 factory 类型正确")
+    @Test("8 种 factory 类型正确（v13.13 加椭圆 · v13.14 加测量工具）")
     func factoryTypes() {
         #expect(Drawing.trendLine(from: point(0, 100), to: point(10, 110)).type == .trendLine)
         #expect(Drawing.horizontalLine(price: 100).type == .horizontalLine)
@@ -19,14 +19,18 @@ struct DrawingFactoryTests {
         #expect(Drawing.parallelChannel(from: point(0, 100), to: point(10, 110), offset: 5).type == .parallelChannel)
         #expect(Drawing.fibonacci(from: point(0, 100), to: point(10, 110)).type == .fibonacci)
         #expect(Drawing.text(at: point(5, 105), content: "买入").type == .text)
+        #expect(Drawing.ellipse(from: point(0, 100), to: point(10, 110)).type == .ellipse)
+        #expect(Drawing.ruler(from: point(0, 100), to: point(10, 110)).type == .ruler)
     }
 
-    @Test("needsTwoPoints 契约")
+    @Test("needsTwoPoints 契约（v13.13 ellipse · v13.14 ruler 都是双点）")
     func twoPointsContract() {
         #expect(DrawingType.trendLine.needsTwoPoints)
         #expect(DrawingType.rectangle.needsTwoPoints)
         #expect(DrawingType.parallelChannel.needsTwoPoints)
         #expect(DrawingType.fibonacci.needsTwoPoints)
+        #expect(DrawingType.ellipse.needsTwoPoints)
+        #expect(DrawingType.ruler.needsTwoPoints)
         #expect(!DrawingType.horizontalLine.needsTwoPoints)
         #expect(!DrawingType.text.needsTwoPoints)
     }
@@ -47,7 +51,7 @@ struct DrawingFactoryTests {
 
 @Suite("Drawing Codable 往返")
 struct DrawingCodableTests {
-    @Test("6 种序列化 + 反序列化等价")
+    @Test("8 种序列化 + 反序列化等价（v13.13 加椭圆 · v13.14 加测量）")
     func roundTrip() throws {
         let drawings = [
             Drawing.trendLine(from: point(0, 100), to: point(10, 120)),
@@ -55,7 +59,9 @@ struct DrawingCodableTests {
             Drawing.rectangle(from: point(2, 95), to: point(8, 115)),
             Drawing.parallelChannel(from: point(0, 100), to: point(10, 110), offset: Decimal(string: "3.5")!),
             Drawing.fibonacci(from: point(0, 100), to: point(10, 150)),
-            Drawing.text(at: point(5, 105), content: "测试")
+            Drawing.text(at: point(5, 105), content: "测试"),
+            Drawing.ellipse(from: point(0, 100), to: point(10, 120)),
+            Drawing.ruler(from: point(0, 100), to: point(10, 130))
         ]
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
@@ -64,6 +70,91 @@ struct DrawingCodableTests {
             let back = try decoder.decode(Drawing.self, from: data)
             #expect(back == d)
         }
+    }
+}
+
+// v13.11~v13.13 锁定 / 字号 / 椭圆字段
+@Suite("Drawing v13.11~v13.13 isLocked + fontSize + ellipse")
+struct DrawingExtraFieldsTests {
+    @Test("v13.11 isLocked 默认 nil + locked computed property")
+    func isLockedDefaultsAndComputed() {
+        let unlocked = Drawing.trendLine(from: point(0, 100), to: point(10, 110))
+        #expect(unlocked.isLocked == nil)
+        #expect(unlocked.locked == false)
+
+        let locked = Drawing(type: .trendLine, startPoint: point(0, 100), endPoint: point(10, 110), isLocked: true)
+        #expect(locked.isLocked == true)
+        #expect(locked.locked == true)
+
+        let explicitFalse = Drawing(type: .text, startPoint: point(5, 105), text: "x", isLocked: false)
+        #expect(explicitFalse.isLocked == false)
+        #expect(explicitFalse.locked == false)  // false 也视为不锁
+    }
+
+    @Test("v13.11 isLocked 序列化往返")
+    func isLockedRoundTrip() throws {
+        let d = Drawing(type: .horizontalLine, startPoint: point(0, 3550), isLocked: true)
+        let data = try JSONEncoder().encode(d)
+        let back = try JSONDecoder().decode(Drawing.self, from: data)
+        #expect(back == d)
+        #expect(back.locked)
+    }
+
+    @Test("v13.12 fontSize 默认 nil + 自定义往返")
+    func fontSizeDefaultsAndRoundTrip() throws {
+        let plain = Drawing.text(at: point(5, 105), content: "x")
+        #expect(plain.fontSize == nil)
+
+        let big = Drawing(type: .text, startPoint: point(5, 105), text: "大字", fontSize: 24)
+        #expect(big.fontSize == 24)
+        let back = try JSONDecoder().decode(Drawing.self, from: JSONEncoder().encode(big))
+        #expect(back == big)
+        #expect(back.fontSize == 24)
+    }
+
+    @Test("v13.13 椭圆 factory + 几何（外接矩形对角两点）")
+    func ellipseFactory() {
+        let e = Drawing.ellipse(from: point(0, 100), to: point(10, 200))
+        #expect(e.type == .ellipse)
+        #expect(e.startPoint.barIndex == 0)
+        #expect(e.endPoint?.barIndex == 10)
+        #expect(e.text == nil)
+        #expect(e.channelOffset == nil)
+    }
+
+    @Test("v13.14 测量工具 factory · 双点 + 不带 channelOffset/text")
+    func rulerFactory() {
+        let r = Drawing.ruler(from: point(0, 100), to: point(10, 130))
+        #expect(r.type == .ruler)
+        #expect(r.startPoint.barIndex == 0)
+        #expect(r.startPoint.price == 100)
+        #expect(r.endPoint?.barIndex == 10)
+        #expect(r.endPoint?.price == 130)
+        #expect(r.channelOffset == nil)
+        #expect(r.text == nil)
+    }
+
+    @Test("v13.11~v13.13 老 JSON（无 isLocked / fontSize / ellipse 字段）兼容")
+    func legacyJsonStillDecodes() throws {
+        // 模拟 v13.10- 旧 JSON · 不含 v13.11/v13.12 任何字段
+        let legacyJSON = """
+        {
+            "id": "550E8400-E29B-41D4-A716-446655440000",
+            "type": "trendLine",
+            "startPoint": { "barIndex": 0, "price": 100 },
+            "endPoint": { "barIndex": 10, "price": 110 },
+            "strokeColorHex": "FF8C00",
+            "strokeWidth": 2.0
+        }
+        """
+        let data = legacyJSON.data(using: .utf8)!
+        let d = try JSONDecoder().decode(Drawing.self, from: data)
+        #expect(d.isLocked == nil)
+        #expect(d.fontSize == nil)
+        #expect(!d.locked)
+        // v13.8 字段保留
+        #expect(d.strokeColorHex == "FF8C00")
+        #expect(d.strokeWidth == 2.0)
     }
 }
 

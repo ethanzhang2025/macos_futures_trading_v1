@@ -32,6 +32,10 @@
 | **v13.8** | _本批_ | 画线颜色/线宽自定义（ColorPicker + Stepper + 右键批量改） | ⚠️ **未测** |
 | **v13.9** | _本批_ | 多选画线（selectedIDs Set + ⇧ 加选 + 批量删/复制/改色/改宽） | ⚠️ **未测** |
 | **v13.10** | _本批_ | 拖动 anchor（DragGesture · 改 startPoint/endPoint · 手势冲突已修） | ⚠️ **未测** |
+| **v13.11** | _本批_ | 锁定画线（isLocked 字段 · 锁图标 anchor · 拖动/Delete 守卫 · 右键锁/解锁） | ⚠️ **未测** |
+| **v13.12** | _本批_ | 文字字体大小（fontSize 字段 8~32pt · 工具栏条件 Stepper · 右键改字号 NSAlert） | ⚠️ **未测** |
+| **v13.13** | _本批_ | 椭圆画线（DrawingType 第 7 类 · 工具栏 + 半透明填充 + 椭圆周 hit-test） | ⚠️ **未测** |
+| **v13.14** | _本批_ | 测量工具（DrawingType 第 8 类 · 虚线 + 中点显示价格差/百分比/bar 数标签） | ⚠️ **未测** |
 
 ---
 
@@ -184,13 +188,51 @@
 - [ ] 释放鼠标 → drawings 自动 save 到 SQLite
 - [ ] 拖动距离 < 4 像素 → 视为单击（不触发拖动 · 走选中 / 多选逻辑）
 
+### v13.11 锁定画线
+- [ ] 选中画线 → 右键 → "锁定画线（n 个）" / 全锁时显示 "解锁画线（n 个）" / 混合时显示两选项
+- [ ] 锁定后 anchor **以 SF Symbol lock.fill 图标代替圆点**显示（视觉一眼区分锁定）
+- [ ] 锁定后**拖 anchor 不响应**（findAnchorAt 跳过 locked 画线）
+- [ ] 锁定后**Delete 键不删**（filter !$0.locked · 多选时只删未锁的）
+- [ ] 锁定后右键菜单"删除/编辑文字/编辑字号/应用色/应用线宽/恢复默认"全部 .disabled
+- [ ] **⌘D 复制锁定画线副本不继承锁**（让用户能立即调整副本）
+- [ ] Inspector 浮窗（单选时）显示 lock.fill 图标 + "已锁定" + 操作提示改"右键解锁后可拖动/删除"
+- [ ] 老 JSON（无 isLocked 字段）正常解码 → locked = false
+
+### v13.12 文字字体大小
+- [ ] 工具栏选 .text 工具时 · 工具栏 Stepper "字号 12pt" 显示（默认 12 · 范围 8~32 步进 1）
+- [ ] 选其他工具时 Stepper 隐藏（节省工具栏空间）
+- [ ] 新建文字 → 应用工具栏当前字号（Drawing.fontSize 写入）
+- [ ] 选中 .text 类型 + n=1 + 未锁 → 右键 → "修改字号…"项可见 → 弹 NSAlert 输入 8~32 数字（越界 clamp）
+- [ ] DrawingsOverlayView drawText 用 d.fontSize ?? 12 渲染
+- [ ] 老 JSON（无 fontSize 字段）正常解码 → 用 12 默认
+
+### v13.13 椭圆画线（DrawingType 第 7 类）
+- [ ] 工具栏画线工具组多 1 按钮（SF Symbol "circle"）介于 fibonacci 和 ruler 之间
+- [ ] 选椭圆 → 双点对角 → 渲染**青色椭圆** + 半透明填充
+- [ ] hover 第二点实时虚线椭圆预览
+- [ ] hit-test 点椭圆周 ±8 像素能选中（公式：归一化半径距离 × min(a, b)）
+- [ ] Inspector 显示"椭圆"中文标签
+- [ ] 持久化 SQLite + JSON 导出/导入兼容
+
+### v13.14 测量工具（DrawingType 第 8 类）
+- [ ] 工具栏多 1 按钮（SF Symbol "ruler"）介于 ellipse 和 text 之间
+- [ ] 选测量 → 双点 → 渲染**金色虚线** + 中点标签 "+/-X.XX (+/-X.XX%) · N bar"
+  - 价格差（end.price - start.price）含正负号
+  - 百分比差（priceDiff / startPrice * 100）
+  - bar 数（end.barIndex - start.barIndex）
+- [ ] hover 第二点实时虚线 + 标签预览
+- [ ] hit-test 同 trendLine（点到线段 ±8 像素）
+- [ ] Inspector 显示"测量工具"
+- [ ] 持久化兼容
+
 ---
 
-## 后续 backlog（v13.10+ 未做）
+## 后续 backlog（v13.14+ 未做）
 
-- ❌ 锁定画线（lock 后不可拖 / 不可删 · 适合关键支撑/阻力位）
-- ❌ 文字字体大小 / 透明度自定义
+- ❌ 画线透明度自定义（strokeOpacity 字段）
 - ❌ 画线模板（保存常用 → 一键插入）
+- ❌ 多边形画线（任意 N 点闭合）
+- ❌ Andrew's Pitchfork 画线（3 点定中线 + 上下平行线）
 
 ---
 

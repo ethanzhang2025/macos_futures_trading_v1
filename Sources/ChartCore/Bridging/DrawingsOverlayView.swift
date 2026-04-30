@@ -109,6 +109,8 @@ public struct DrawingsOverlayView: View {
         case .parallelChannel:  drawParallelChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacci:        drawFibonacci(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .text:             drawText(drawing, ctx, size, baseColor, opacity)
+        case .ellipse:          drawEllipse(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .ruler:            drawRuler(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         }
 
         if isSelected, !isPending {
@@ -180,11 +182,51 @@ public struct DrawingsOverlayView: View {
         }
     }
 
+    /// v13.14 测量工具渲染 · 两点定线段（虚线连接）+ 中点标签显示 价格差 / 百分比 / bar 数
+    private func drawRuler(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let s = CGPoint(x: xForBar(d.startPoint.barIndex, size: size), y: yForPrice(d.startPoint.price, size: size))
+        let e = CGPoint(x: xForBar(end.barIndex, size: size), y: yForPrice(end.price, size: size))
+        // 虚线连接（强制虚线 · 与 trendLine 区分 · 无论是否 pending）
+        var path = Path()
+        path.move(to: s)
+        path.addLine(to: e)
+        let rulerDash: [CGFloat] = dash.isEmpty ? [3, 2] : dash
+        ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: rulerDash))
+        // 中点标签（价格差 / 百分比 / bar 数）
+        let startPrice = NSDecimalNumber(decimal: d.startPoint.price).doubleValue
+        let endPrice = NSDecimalNumber(decimal: end.price).doubleValue
+        let priceDiff = endPrice - startPrice
+        let pct = startPrice > 0 ? priceDiff / startPrice * 100 : 0
+        let bars = end.barIndex - d.startPoint.barIndex
+        let label = String(format: "%+.2f (%+.2f%%) · %d bar", priceDiff, pct, bars)
+        let mid = CGPoint(x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 - 10)
+        let text = Text(label)
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .foregroundColor(color.opacity(opacity))
+        ctx.draw(text, at: mid)
+    }
+
+    /// v13.13 椭圆渲染 · 对角两点定外接矩形 · 内接椭圆 · 半透明填充 + 描边
+    private func drawEllipse(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let x1 = xForBar(d.startPoint.barIndex, size: size)
+        let x2 = xForBar(end.barIndex, size: size)
+        let y1 = yForPrice(d.startPoint.price, size: size)
+        let y2 = yForPrice(end.price, size: size)
+        let rect = CGRect(x: min(x1, x2), y: min(y1, y2), width: abs(x2 - x1), height: abs(y2 - y1))
+        let path = Path(ellipseIn: rect)
+        ctx.fill(path, with: .color(color.opacity(0.08 * opacity)))
+        ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+    }
+
     private func drawText(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ opacity: Double) {
         let x = xForBar(d.startPoint.barIndex, size: size)
         let y = yForPrice(d.startPoint.price, size: size)
+        // v13.12 字体大小自定义 · nil 用默认 12
+        let fs = CGFloat(d.fontSize ?? 12)
         let text = Text(d.text ?? "")
-            .font(.system(size: 12, design: .monospaced))
+            .font(.system(size: fs, design: .monospaced))
             .foregroundColor(color.opacity(opacity))
         ctx.draw(text, at: CGPoint(x: x, y: y))
     }
@@ -193,12 +235,24 @@ public struct DrawingsOverlayView: View {
         let s = d.startPoint
         let sx = xForBar(s.barIndex, size: size)
         let sy = yForPrice(s.price, size: size)
-        ctx.fill(Path(ellipseIn: CGRect(x: sx - 4, y: sy - 4, width: 8, height: 8)),
-                 with: .color(color))
+        drawAnchorMarker(at: CGPoint(x: sx, y: sy), in: ctx, color: color, locked: d.locked)
         if let e = d.endPoint {
             let ex = xForBar(e.barIndex, size: size)
             let ey = yForPrice(e.price, size: size)
-            ctx.fill(Path(ellipseIn: CGRect(x: ex - 4, y: ey - 4, width: 8, height: 8)),
+            drawAnchorMarker(at: CGPoint(x: ex, y: ey), in: ctx, color: color, locked: d.locked)
+        }
+    }
+
+    /// v13.11 锁定的 anchor 用小锁图标 · 否则圆点
+    private func drawAnchorMarker(at p: CGPoint, in ctx: GraphicsContext, color: Color, locked: Bool) {
+        if locked {
+            // SF Symbol "lock.fill" 居中绘制
+            let lockText = Text(Image(systemName: "lock.fill"))
+                .font(.system(size: 11))
+                .foregroundColor(color)
+            ctx.draw(lockText, at: p)
+        } else {
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)),
                      with: .color(color))
         }
     }
@@ -221,6 +275,8 @@ public struct DrawingsOverlayView: View {
         case .parallelChannel: return Color(red: 0.96, green: 0.27, blue: 0.27)  // 红
         case .fibonacci:       return Color(red: 1.00, green: 0.55, blue: 0.18)  // 橙
         case .text:            return .white
+        case .ellipse:         return Color(red: 0.18, green: 0.83, blue: 0.74)  // 青（v13.13）
+        case .ruler:           return Color(red: 0.96, green: 0.69, blue: 0.18)  // 金（v13.14）
         }
     }
 

@@ -77,6 +77,8 @@ struct ChartScene: View {
     @State private var currentStrokeColor: Color = Color(red: 1.00, green: 0.78, blue: 0.18)
     /// v13.8 工具栏当前画线线宽（pt · 范围 0.5~5.0 步进 0.5）· 默认 1.5（与渲染层 baseWidth 一致）
     @State private var currentStrokeWidth: Double = 1.5
+    /// v13.12 工具栏当前文字字号（pt · 范围 8~32 步进 1）· 默认 12（与渲染层 default 一致）· 仅 .text 工具激活时显示
+    @State private var currentFontSize: Double = 12
 
     /// M5 持久化：StoreManager 注入 · loadAndStream fast-path 读磁盘缓存 · snapshot/completedBar 异步落库
     @Environment(\.storeManager) private var storeManager
@@ -262,15 +264,17 @@ struct ChartScene: View {
                 .keyboardShortcut("5", modifiers: [.command])
             Button("") { selectedPeriod = .daily }
                 .keyboardShortcut("6", modifiers: [.command])
-            // v13.9 多选 · Delete 批量删除全部 selectedDrawingIDs
+            // v13.9 多选 · Delete 批量删除全部 selectedDrawingIDs · v13.11 跳过锁定的画线
             Button("") {
-                if !selectedDrawingIDs.isEmpty {
-                    drawings.removeAll { selectedDrawingIDs.contains($0.id) }
-                    selectedDrawingIDs.removeAll()
+                let deletable = drawings.filter { selectedDrawingIDs.contains($0.id) && !$0.locked }.map(\.id)
+                if !deletable.isEmpty {
+                    let deletableSet = Set(deletable)
+                    drawings.removeAll { deletableSet.contains($0.id) }
+                    selectedDrawingIDs.subtract(deletableSet)
                 }
             }
             .keyboardShortcut(.delete, modifiers: [])
-            // v13.9 多选 · ⌘D 批量复制全部选中（每条偏移 +20 bar / 5% 价格）
+            // v13.9 多选 · ⌘D 批量复制全部选中（每条偏移 +20 bar / 5% 价格）· v13.11 副本不继承 isLocked（让用户能用）
             Button("") {
                 let toClone = drawings.filter { selectedDrawingIDs.contains($0.id) }
                 if !toClone.isEmpty {
@@ -298,6 +302,8 @@ struct ChartScene: View {
             drawingToolButton(icon: "rectangle", tool: .rectangle, help: "矩形（双点对角）")
             drawingToolButton(icon: "lines.measurement.horizontal", tool: .parallelChannel, help: "平行通道（双点 · 默认 +1.0 偏移）")
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
+            drawingToolButton(icon: "circle", tool: .ellipse, help: "椭圆（双点对角）")
+            drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
             drawingToolButton(icon: "textformat", tool: .text, help: "文字标注（一点）")
             // v13.8 颜色 / 线宽自定义（仅作用于新建 · 已有画线通过右键菜单"应用当前颜色/线宽"修改）
             Divider().frame(height: 16)
@@ -311,6 +317,15 @@ struct ChartScene: View {
                     .frame(width: 24)
             }
             .help("画线线宽 0.5~5.0 pt（新建生效 · 老画线右键应用）")
+            // v13.12 字号 Stepper 仅 .text 工具激活时显示（节省工具栏空间）
+            if activeDrawingTool == .text {
+                Stepper(value: $currentFontSize, in: 8...32, step: 1) {
+                    Text("\(Int(currentFontSize))pt")
+                        .font(.system(size: 10, design: .monospaced))
+                        .frame(width: 32)
+                }
+                .help("文字字号 8~32 pt（新建文字应用 · 老文字右键修改字号）")
+            }
             Divider().frame(height: 16)
             Button { exportDrawings() } label: {
                 Image(systemName: "square.and.arrow.up")
@@ -488,6 +503,7 @@ struct ChartScene: View {
                 selectedDrawingIDs: $selectedDrawingIDs,
                 currentStrokeColor: $currentStrokeColor,
                 currentStrokeWidth: $currentStrokeWidth,
+                currentFontSize: $currentFontSize,
                 initialViewport: RenderViewport(
                     startIndex: max(0, bars.count - 120),
                     visibleCount: 120
@@ -924,6 +940,8 @@ struct ChartContentView: View {
     @Binding var currentStrokeColor: Color
     /// v13.8 工具栏当前线宽 · 同上
     @Binding var currentStrokeWidth: Double
+    /// v13.12 工具栏当前字号 · 新建文字标注应用（仅 .text 工具激活时显示 Stepper）
+    @Binding var currentFontSize: Double
     /// v13.3 hover 跟踪 · 双点画线第二点 hover 预览（虚线）
     @State var hoverDataPoint: DrawingPoint?
     /// v13.10 anchor 拖动目标 · onChanged 第一次落 · 释放清空
@@ -957,6 +975,7 @@ struct ChartContentView: View {
         selectedDrawingIDs: Binding<Set<UUID>>,
         currentStrokeColor: Binding<Color>,
         currentStrokeWidth: Binding<Double>,
+        currentFontSize: Binding<Double>,
         initialViewport: RenderViewport
     ) {
         self.renderer = renderer
@@ -973,6 +992,7 @@ struct ChartContentView: View {
         self._selectedDrawingIDs = selectedDrawingIDs
         self._currentStrokeColor = currentStrokeColor
         self._currentStrokeWidth = currentStrokeWidth
+        self._currentFontSize = currentFontSize
         self._viewport = State(initialValue: initialViewport)
     }
 
@@ -1115,14 +1135,21 @@ struct ChartContentView: View {
                     Text("通道偏移：\(formatPrice(offset))")
                         .foregroundColor(.secondary)
                 }
-                // v13.8 显示色 / 线宽
+                // v13.8 显示色 / 线宽 · v13.11 锁定标志
                 HStack(spacing: 6) {
                     Text("色：\(d.strokeColorHex ?? "默认")")
                     Text("·")
                     Text("宽：\(String(format: "%.1f", d.strokeWidth ?? 1.5))")
+                    if d.locked {
+                        Text("·")
+                        Image(systemName: "lock.fill")
+                        Text("已锁定")
+                    }
                 }
                 .foregroundColor(.secondary)
-                Text("⌘D 复制 · Delete 删除 · 拖动 anchor 改位置 · 右键编辑")
+                Text(d.locked
+                     ? "右键解锁后可拖动/删除"
+                     : "⌘D 复制 · Delete 删除 · 拖动 anchor 改位置 · 右键编辑")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.secondary.opacity(0.7))
                     .padding(.top, 2)
@@ -1144,6 +1171,8 @@ struct ChartContentView: View {
         case .parallelChannel: return "平行通道"
         case .fibonacci:       return "斐波那契"
         case .text:            return "文字标注"
+        case .ellipse:         return "椭圆"
+        case .ruler:           return "测量工具"
         }
     }
 
@@ -1151,41 +1180,71 @@ struct ChartContentView: View {
         String(format: "%.2f", NSDecimalNumber(decimal: p).doubleValue)
     }
 
-    /// v13.5 画线右键上下文菜单 · v13.6 加复制 · v13.9 多选 · v13.8 改颜色/线宽
+    /// v13.5 画线右键上下文菜单 · v13.6 加复制 · v13.9 多选 · v13.8 改颜色/线宽 · v13.11 锁定/解锁
     @ViewBuilder
     private var drawingContextMenu: some View {
         if !selectedDrawingIDs.isEmpty {
             let n = selectedDrawingIDs.count
+            let selected = drawings.filter { selectedDrawingIDs.contains($0.id) }
+            let allLocked = selected.allSatisfy { $0.locked }
+            let anyLocked = selected.contains { $0.locked }
             Button("删除选中画线（\(n) 个）", role: .destructive) {
-                drawings.removeAll { selectedDrawingIDs.contains($0.id) }
-                selectedDrawingIDs.removeAll()
+                let deletableSet = Set(selected.filter { !$0.locked }.map(\.id))
+                drawings.removeAll { deletableSet.contains($0.id) }
+                selectedDrawingIDs.subtract(deletableSet)
             }
+            .disabled(allLocked)
             Button("复制画线（⌘D · \(n) 个）") {
-                let toClone = drawings.filter { selectedDrawingIDs.contains($0.id) }
-                let copies = toClone.map { duplicatedDrawing($0) }
+                let copies = selected.map { duplicatedDrawing($0) }
                 drawings.append(contentsOf: copies)
                 selectedDrawingIDs = Set(copies.map(\.id))
             }
-            // 编辑文字仅当 selected 全部是单条 .text 类型时才有意义
+            // 编辑文字仅当 selected 全部是单条 .text 类型时才有意义 · 锁定时禁用 · v13.12 加改字号
             if n == 1, let id = selectedDrawingIDs.first,
                let drawing = drawings.first(where: { $0.id == id }),
                drawing.type == .text {
                 Button("编辑文字…") {
                     editTextDrawing(drawing)
                 }
+                .disabled(drawing.locked)
+                Button("修改字号…") {
+                    editFontSize(drawing)
+                }
+                .disabled(drawing.locked)
             }
             Divider()
-            // v13.8 应用工具栏当前颜色 / 线宽（批量改）
+            // v13.11 锁定 / 解锁（互斥 · 全锁显示解锁 · 全未锁显示锁定 · 混合显示锁定全部）
+            if allLocked {
+                Button("解锁画线（\(n) 个）") {
+                    setLocked(false, for: selectedDrawingIDs)
+                }
+            } else if anyLocked {
+                Button("锁定全部（\(n) 个 · 含 \(selected.filter(\.locked).count) 已锁）") {
+                    setLocked(true, for: selectedDrawingIDs)
+                }
+                Button("解锁全部（\(n) 个）") {
+                    setLocked(false, for: selectedDrawingIDs)
+                }
+            } else {
+                Button("锁定画线（\(n) 个）") {
+                    setLocked(true, for: selectedDrawingIDs)
+                }
+            }
+            Divider()
+            // v13.8 应用工具栏当前颜色 / 线宽（批量改）· v13.11 锁定时禁用
             Button("应用当前颜色（\(n) 个）") {
                 let hex = Self.hexString(from: currentStrokeColor)
                 applyStrokeColor(hex, to: selectedDrawingIDs)
             }
+            .disabled(allLocked)
             Button("应用当前线宽 \(String(format: "%.1f", currentStrokeWidth)) pt（\(n) 个）") {
                 applyStrokeWidth(currentStrokeWidth, to: selectedDrawingIDs)
             }
+            .disabled(allLocked)
             Button("恢复默认颜色/线宽（\(n) 个）") {
                 resetStrokeStyle(for: selectedDrawingIDs)
             }
+            .disabled(allLocked)
             Divider()
             Button("取消选中") {
                 selectedDrawingIDs.removeAll()
@@ -1193,6 +1252,13 @@ struct ChartContentView: View {
         } else {
             Text("（无选中画线 · 点击画线选中后再右键 · 按住 ⇧ 多选）")
                 .foregroundColor(.secondary)
+        }
+    }
+
+    /// v13.11 批量改 isLocked
+    private func setLocked(_ locked: Bool, for ids: Set<UUID>) {
+        for i in drawings.indices where ids.contains(drawings[i].id) {
+            drawings[i].isLocked = locked ? true : nil
         }
     }
 
@@ -1235,6 +1301,7 @@ struct ChartContentView: View {
     }
 
     /// v13.6 克隆 helper · 偏移 20 bar / 价格区间 5%（避免完全重叠）· v13.8 复制色/线宽 · v13.9 多选用
+    /// v13.11 副本不继承 isLocked · 让用户能立即拖动 / 删除新副本（防误改不应延续到副本）
     private func duplicatedDrawing(_ drawing: Drawing) -> Drawing {
         let barOffset = 20
         let priceSpan = currentPriceRange.upperBound - currentPriceRange.lowerBound
@@ -1250,7 +1317,9 @@ struct ChartContentView: View {
             text: drawing.text,
             channelOffset: drawing.channelOffset,
             strokeColorHex: drawing.strokeColorHex,
-            strokeWidth: drawing.strokeWidth
+            strokeWidth: drawing.strokeWidth,
+            isLocked: nil,
+            fontSize: drawing.fontSize
         )
     }
 
@@ -1269,6 +1338,26 @@ struct ChartContentView: View {
             let newText = textField.stringValue.isEmpty ? "标注" : textField.stringValue
             if let idx = drawings.firstIndex(where: { $0.id == drawing.id }) {
                 drawings[idx].text = newText
+            }
+        }
+    }
+
+    /// v13.12 修改文字字号（NSAlert + NSTextField 输入数字 · 8~32 pt 范围 · 越界保留旧值）
+    private func editFontSize(_ drawing: Drawing) {
+        guard drawing.type == .text else { return }
+        let alert = NSAlert()
+        alert.messageText = "修改字号"
+        alert.informativeText = "输入字号 pt（8~32）："
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 80, height: 24))
+        textField.stringValue = String(Int(drawing.fontSize ?? 12))
+        alert.accessoryView = textField
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "取消")
+        if alert.runModal() == .alertFirstButtonReturn {
+            let raw = Double(textField.stringValue) ?? 12
+            let clamped = max(8, min(32, raw))
+            if let idx = drawings.firstIndex(where: { $0.id == drawing.id }) {
+                drawings[idx].fontSize = clamped
             }
         }
     }
@@ -1340,10 +1429,11 @@ struct ChartContentView: View {
     }
 
     /// v13.10 起点击中已选 drawing 的 anchor 检测（±15 像素）· 仅 selected 的画线参与
+    /// v13.11 锁定的画线跳过（不接受拖动）
     private func findAnchorAt(_ location: CGPoint, in size: CGSize) -> AnchorDragTarget? {
         guard !selectedDrawingIDs.isEmpty else { return nil }
         let threshold: CGFloat = 15
-        for d in drawings.reversed() where selectedDrawingIDs.contains(d.id) {
+        for d in drawings.reversed() where selectedDrawingIDs.contains(d.id) && !d.locked {
             let s = anchorScreenPoint(d.startPoint, in: size)
             if hypot(location.x - s.x, location.y - s.y) < threshold {
                 return AnchorDragTarget(drawingID: d.id, isStart: true)
@@ -1467,6 +1557,27 @@ struct ChartContentView: View {
         case .text:
             let pt = screenPoint(drawing.startPoint)
             return hypot(p.x - pt.x, p.y - pt.y)
+
+        case .ellipse:
+            // v13.13 椭圆 · 点 (px, py) 到椭圆周距离 ≈ |√((px-cx)²/a² + (py-cy)²/b²) - 1| × min(a, b)
+            // 缺陷：在长短轴差异大时不严格 · 但够用（阈值 8 像素 + 用户实测可接受）
+            guard let end = drawing.endPoint else { return .infinity }
+            let s = screenPoint(drawing.startPoint)
+            let e = screenPoint(end)
+            let cx = (s.x + e.x) / 2
+            let cy = (s.y + e.y) / 2
+            let a = abs(e.x - s.x) / 2
+            let b = abs(e.y - s.y) / 2
+            guard a > 0, b > 0 else { return .infinity }
+            let nx = (p.x - cx) / a
+            let ny = (p.y - cy) / b
+            let r = sqrt(nx * nx + ny * ny)
+            return abs(r - 1) * min(a, b)
+
+        case .ruler:
+            // v13.14 测量工具 · 同 trendLine（点到线段距离）
+            guard let end = drawing.endPoint else { return .infinity }
+            return Self.pointToSegmentDistance(p, screenPoint(drawing.startPoint), screenPoint(end))
         }
     }
 
@@ -1499,6 +1610,10 @@ struct ChartContentView: View {
             return Drawing.rectangle(from: firstPoint, to: hoverPoint)
         case .trendLine:
             return Drawing.trendLine(from: firstPoint, to: hoverPoint)
+        case .ellipse:
+            return Drawing.ellipse(from: firstPoint, to: hoverPoint)
+        case .ruler:
+            return Drawing.ruler(from: firstPoint, to: hoverPoint)
         default:
             return nil
         }
@@ -1593,7 +1708,8 @@ struct ChartContentView: View {
                 startPoint: point,
                 text: text,
                 strokeColorHex: Self.hexString(from: currentStrokeColor),
-                strokeWidth: currentStrokeWidth
+                strokeWidth: currentStrokeWidth,
+                fontSize: currentFontSize
             )
             drawings.append(drawing)
         }

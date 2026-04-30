@@ -22,7 +22,12 @@
 | **v12.18** | `f9dd011` | WhImporter UI 入口 | ⚠️ **未测** |
 | **v12.19** | `23b8ff4` | ⌘1-6 周期键盘快捷键 | ⚠️ **未测** |
 | **v13.0** | `a8cc75c` | WP-42 画线工具完整激活 | ⚠️ **未测**（5-7 天大动作） |
-| **v13.1** | `ed8a1c7` | 画线 polish（hit-test/Delete/文字输入） | ⚠️ **未测** |
+| **v13.1** | `ed8a1c7` | 画线 polish（hit-test anchor/Delete/文字 NSAlert） | ⚠️ **未测** |
+| **v13.2** | `5d7bb1a` | SQLiteDrawingStore（M5 持久化 7→8） | ⚠️ **未测**（Linux 单测 12 个全过 · Mac 未跑） |
+| **v13.3** | `5ebea3b` | 双点画线 hover 实时预览 | ⚠️ **未测** |
+| **v13.4** | `553c834` | hit-test 线段任意点击（不只 anchor） | ⚠️ **未测** |
+| **v13.5** | `b9b6bc3` | 右键上下文菜单（删除/编辑/取消） | ⚠️ **未测** |
+| **v13.6** | `5a8fd24` | 复制画线（⌘D）+ Inspector 浮窗 | ⚠️ **未测** |
 
 ---
 
@@ -123,13 +128,38 @@
 
 ---
 
-## v13.0 / v13.1 已知简化（v13.2 后续做）
+## v13.0~v13.6 累积验收章节（已写入 Mac 验收清单.md）
 
-- ❌ hit-test 仅 anchor 点击 · 未做"线段任意点击"hit-test（点击线段中间不响应）
-- ❌ SQLiteDrawingStore 替代 UserDefaults JSON（M5 持久化标准 7/7 → 8/8）
-- ❌ 双点画线第二点 hover 实时预览（pendingDrawing 参数已传 nil）
-- ❌ 画线右键上下文菜单（删除 / 编辑 / 复制 / 颜色等）
-- ❌ 画线编辑 Inspector（修改起终点 / 文字内容 / 颜色 / 线宽）
+### v13.1 hit-test anchor + Delete + 文字 NSAlert
+- 浏览模式点击 anchor ±15 像素 selected · Delete 键删除 · 文字工具单击弹 NSAlert 输入
+
+### v13.2 SQLiteDrawingStore 持久化升级
+- M5 持久化 7→8 store · `drawings.sqlite` · 复合主键 instrument_id+period · UPSERT JSON
+- Linux 单测 12 个全过
+
+### v13.3 双点画线 hover 实时预览
+- onContinuousHover 跟踪 + 虚线半透明跟随第二点 · 4 双点类型支持
+
+### v13.4 hit-test 线段任意点击
+- 阈值 8 像素 · 6 类公式（线段距离 / 水平线 / 矩形 4 边 / 通道双轴 / fib 各档 / text 位置）
+- pointToSegmentDistance 经典投影夹钳
+
+### v13.5 右键上下文菜单
+- 选中画线右键 → 删除（destructive 红）/ 编辑文字（仅 .text）/ 取消选中
+- editTextDrawing 弹 NSAlert 改文字
+
+### v13.6 复制画线 + Inspector 浮窗
+- ⌘D + 右键"复制画线" · 偏移 +20 bar / 价格区间 5% · 自动选中新
+- bottomTrailing Inspector 浮窗：类型中文 / 起终点 / 文字 / 通道偏移 / 操作提示 / 关闭按钮
+
+---
+
+## 后续 backlog（v13.7+ 未做）
+
+- ❌ 拖动 anchor 重新定位（DragGesture on selected anchor 拖动修改 startPoint/endPoint）
+- ❌ 多选画线（按住 ⇧ 多选 + 批量删除）
+- ❌ 画线颜色 / 线宽自定义
+- ❌ 画线导出 / 导入 JSON
 
 ---
 

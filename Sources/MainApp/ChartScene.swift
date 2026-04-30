@@ -362,6 +362,24 @@ struct ChartScene: View {
                 }
             }
             .keyboardShortcut("d", modifiers: [.command])
+            // v13.27 ⌘⇧S 一键保存选中画线为模板（仅 n=1 + 未锁时响应）
+            Button("") {
+                if selectedDrawingIDs.count == 1,
+                   let id = selectedDrawingIDs.first,
+                   let drawing = drawings.first(where: { $0.id == id }),
+                   !drawing.locked {
+                    saveCurrentAsTemplate(drawing)
+                }
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+            // v13.28 ⌘⇧L 一键切换选中画线锁定状态（全锁 → 全解锁 · 否则 → 全锁）
+            Button("") {
+                guard !selectedDrawingIDs.isEmpty else { return }
+                let selected = drawings.filter { selectedDrawingIDs.contains($0.id) }
+                let allLocked = selected.allSatisfy { $0.locked }
+                setLocked(!allLocked, for: selectedDrawingIDs)
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
         }
         .frame(width: 0, height: 0)
         .opacity(0)
@@ -1148,6 +1166,8 @@ struct ChartContentView: View {
     @State var anchorDragTarget: AnchorDragTarget?
     /// v13.10 拖动状态 · 距离 ≥ 4 像素 + anchor 命中后置 true · 释放时 false 视为 tap
     @State var isDraggingAnchor: Bool = false
+    /// v13.30 HUD 显隐切换（⌘⇧H · 截图前暂时隐藏可让画面更干净）· 默认显示
+    @State var showHUD: Bool = true
     @State var viewport: RenderViewport
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
@@ -1329,6 +1349,11 @@ struct ChartContentView: View {
                 viewport = clamp(viewport.pannedSmooth(byBars: 25))
             }
             .keyboardShortcut(.rightArrow, modifiers: [.shift])
+            // v13.30 ⌘⇧H 切换 HUD 显隐（截图前可隐藏）
+            Button("") {
+                showHUD.toggle()
+            }
+            .keyboardShortcut("h", modifiers: [.command, .shift])
         }
         .frame(width: 0, height: 0)
         .opacity(0)
@@ -1357,7 +1382,9 @@ struct ChartContentView: View {
                 selectedIDs: selectedDrawingIDs,
                 pendingDrawing: pendingPreviewDrawing
             )
-            hud
+            if showHUD {
+                hud
+            }
             // v13.0 画线点击捕获层（仅 activeDrawingTool 非 nil 时启用 · 否则点击穿透到主图 gesture）
             if activeDrawingTool != nil {
                 drawingClickCaptureLayer
@@ -1602,10 +1629,24 @@ struct ChartContentView: View {
             Button("导出主图截图（PNG）…") {
                 exportChartScreenshot()
             }
+            Button("复制主图截图到剪贴板") {
+                copyChartScreenshotToClipboard()
+            }
             Divider()
             Text("（按住 ⇧ 多选画线 · 右键画线弹更多操作）")
                 .foregroundColor(.secondary)
         }
+    }
+
+    /// v13.29 主图截图复制到剪贴板（不弹保存对话框 · 直接写 NSPasteboard）
+    @MainActor
+    private func copyChartScreenshotToClipboard() {
+        let renderer = ImageRenderer(content: chartMainArea.frame(width: 1280, height: 720))
+        renderer.scale = 2
+        guard let nsImage = renderer.nsImage else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.writeObjects([nsImage])
     }
 
     /// v13.25 主图截图导出 PNG · ImageRenderer + NSSavePanel · macOS 13+

@@ -18,6 +18,7 @@
 
 import SwiftUI
 import Foundation
+import AppKit
 import UniformTypeIdentifiers
 import Shared
 import StoreCore
@@ -66,6 +67,9 @@ struct WatchlistWindow: View {
     /// v12.4 真行情：合约 ID → SinaQuote 映射 · 周期 fetch 更新 · 空时 fallback MockQuote
     @State private var quotes: [String: SinaQuote] = [:]
     @State private var quoteFetchTask: Task<Void, Never>?
+
+    /// v12.17 文华自选导入预览（NSOpenPanel 选 .txt 解析后 · 用户确认前的 holding 状态）
+    @State private var importPreview: ImportPreview?
 
     @Environment(\.openWindow) private var openWindow
     @Environment(\.storeManager) private var storeManager
@@ -168,6 +172,13 @@ struct WatchlistWindow: View {
                 Text("自选分组").font(.headline)
                 Spacer()
                 Button {
+                    importWatchlistFromFile()
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderless)
+                .help("导入文华自选（.txt）")
+                Button {
                     sheetState = .addGroup
                 } label: {
                     Image(systemName: "plus")
@@ -187,6 +198,20 @@ struct WatchlistWindow: View {
                 }
             }
             .listStyle(.sidebar)
+        }
+        .alert(
+            "导入文华自选",
+            isPresented: importPreviewBinding,
+            presenting: importPreview
+        ) { preview in
+            Button("确认导入", role: .none) {
+                applyImport(preview.parseResult)
+            }
+            Button("取消", role: .cancel) {
+                importPreview = nil
+            }
+        } message: { preview in
+            Text(preview.message)
         }
     }
 
@@ -544,6 +569,54 @@ struct WatchlistWindow: View {
 
     private func clearHover() {
         hoverTarget = nil
+    }
+
+    // MARK: - 文华自选 .txt 导入（v12.17 · WatchlistImporter UI 入口）
+
+    /// 文华自选导入预览数据（NSOpenPanel 选文件 → 解析后展示给用户确认）
+    private struct ImportPreview {
+        let parseResult: WatchlistImportResult
+        let message: String
+    }
+
+    private var importPreviewBinding: Binding<Bool> {
+        Binding(
+            get: { importPreview != nil },
+            set: { if !$0 { importPreview = nil } }
+        )
+    }
+
+    private func importWatchlistFromFile() {
+        let panel = NSOpenPanel()
+        panel.title = "导入文华自选"
+        panel.allowedContentTypes = [.plainText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            let result = WatchlistImporter.parse(text)
+            let groupSummary = result.groups.map { "「\($0.name)」\($0.instrumentIDs.count) 个" }.joined(separator: " / ")
+            importPreview = ImportPreview(
+                parseResult: result,
+                message: "解析到 \(result.groups.count) 个分组 · 共 \(result.totalInstruments) 个合约：\n\(groupSummary)\n\n确认导入将合并到当前自选（同名分组追加去重 / 新分组新建）"
+            )
+        } catch {
+            importPreview = ImportPreview(
+                parseResult: WatchlistImportResult(groups: []),
+                message: "导入失败：\(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func applyImport(_ result: WatchlistImportResult) {
+        guard !result.groups.isEmpty else {
+            importPreview = nil
+            return
+        }
+        _ = WatchlistImporter.merge(result, into: &book)
+        importPreview = nil
     }
 
     // MARK: - 真行情拉取（v12.4 · 5s 周期 · 失败保留旧值 / 首次失败 fallback Mock）

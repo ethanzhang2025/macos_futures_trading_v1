@@ -812,6 +812,8 @@ struct ChartContentView: View {
     @Binding var activeDrawingTool: DrawingType?
     @Binding var pendingDrawingPoint: DrawingPoint?
     @Binding var selectedDrawingID: UUID?
+    /// v13.3 hover 跟踪 · 双点画线第二点 hover 预览（虚线）
+    @State var hoverDataPoint: DrawingPoint?
     @State var viewport: RenderViewport
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
@@ -896,13 +898,14 @@ struct ChartContentView: View {
             // 视觉迭代第 2 项：十字光标 + OHLC 浮窗 + 轴边价格/时间浮标（hover 跟随）
             KLineCrosshairView(bars: bars, viewport: viewport, priceRange: currentPriceRange, period: bars.first?.period ?? .minute15)
             // v13.0 WP-42 画线 overlay 渲染层（在十字光标上 · HUD 下）
+            // v13.3 pendingDrawing 接 pendingDrawingPoint + hoverDataPoint 实时预览第二点（虚线）
             DrawingsOverlayView(
                 bars: bars,
                 viewport: viewport,
                 priceRange: currentPriceRange,
                 drawings: drawings,
                 selectedID: selectedDrawingID,
-                pendingDrawing: nil
+                pendingDrawing: pendingPreviewDrawing
             )
             hud
             // v13.0 画线点击捕获层（仅 activeDrawingTool 非 nil 时启用 · 否则点击穿透到主图 gesture）
@@ -922,10 +925,19 @@ struct ChartContentView: View {
     }
 
     /// 画线点击捕获层（v13.0 · 透明 contentShape · 拦截 onTapGesture · 仅工具激活时存在）
+    /// v13.3 加 onContinuousHover 跟踪 · 双点画线第一点已设时实时预览第二点（虚线）
     private var drawingClickCaptureLayer: some View {
         GeometryReader { geom in
             Color.clear
                 .contentShape(Rectangle())
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active(let location):
+                        hoverDataPoint = screenToDataPoint(location, in: geom.size)
+                    case .ended:
+                        hoverDataPoint = nil
+                    }
+                }
                 .onTapGesture { location in
                     handleDrawingTap(at: location, in: geom.size)
                 }
@@ -970,6 +982,27 @@ struct ChartContentView: View {
             }
         }
         return closestID
+    }
+
+    /// v13.3 双点画线第二点 hover 实时预览 · pendingDrawingPoint + hoverDataPoint → 虚线 Drawing
+    private var pendingPreviewDrawing: Drawing? {
+        guard let firstPoint = pendingDrawingPoint,
+              let hoverPoint = hoverDataPoint,
+              let tool = activeDrawingTool,
+              tool.needsTwoPoints else { return nil }
+        switch tool {
+        case .parallelChannel:
+            let offset = (currentPriceRange.upperBound - currentPriceRange.lowerBound) * Decimal(string: "0.05")!
+            return Drawing.parallelChannel(from: firstPoint, to: hoverPoint, offset: offset)
+        case .fibonacci:
+            return Drawing.fibonacci(from: firstPoint, to: hoverPoint)
+        case .rectangle:
+            return Drawing.rectangle(from: firstPoint, to: hoverPoint)
+        case .trendLine:
+            return Drawing.trendLine(from: firstPoint, to: hoverPoint)
+        default:
+            return nil
+        }
     }
 
     /// 屏幕坐标 → 数据空间锚点（barIndex + price）

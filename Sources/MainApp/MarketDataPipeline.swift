@@ -46,14 +46,18 @@ final class MarketDataPipeline {
         }
     }
 
-    /// 主图可切换的合约清单（spike 硬编码 · 后续 WP-43 接 WatchlistBook UI 替换）
-    /// 4 主连续（RB0/IF0/AU0/CU0）+ 4 active 月份合约（2026-04-29 主力月 · SinaMonthlyContractDemo 验证 K 线端点全支持）
-    /// 月份合约半年后会交割（rb2609 在 2026-09 失效）· 中期做主力月动态计算解决
-    /// 实时报价对小写 + I 字母合约失败（rb2609/i2609/au2606）· priceTopBar preSettle fallback first.close · K 线正常
-    static let supportedContracts: [String] = [
-        "RB0", "IF0", "AU0", "CU0",
-        "rb2609", "i2609", "au2606", "IF2605"
-    ]
+    /// 主图可切换的合约清单（v12.16 动态主力月）
+    /// 4 主连续（RB0/IF0/AU0/CU0）+ 4 active 月份合约（DominantMonthCalculator 按品种规则推断 · 半年自动续期）
+    /// 实测 2026-04-29 主力月：rb2609 / i2609 / au2606 / IF2605（与 SinaMonthlyContractDemo oi 排序吻合）
+    /// 实时报价对小写 + I 字母合约 v12.3 W1 修复后全支持 · K 线端点 v12.6 SinaKLineGranularityDemo 验证 type=1/5/15/30/60 全支持
+    static var supportedContracts: [String] {
+        let mainContinuous = ["RB0", "IF0", "AU0", "CU0"]
+        let activeMonthlyPrefixes = ["rb", "i", "au", "IF"]
+        let activeMonthly = activeMonthlyPrefixes.compactMap {
+            DominantMonthCalculator.dominantContract(prefix: $0)
+        }
+        return mainContinuous + activeMonthly
+    }
 
     /// 主图可切换的周期清单（spike 保守 6 个 · 秒级/周月 spike 阶段不暴露）
     /// Sina API 拉 tick · KLineBuilder 客户端合成任意周期 · UI 仅放主流分钟+日

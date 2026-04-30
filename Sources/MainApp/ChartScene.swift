@@ -273,6 +273,7 @@ struct ChartScene: View {
                 periodLabel: periodLabel,
                 dataSourceLabel: dataSourceLabel,
                 subIndicatorKind: selectedSubIndicator,
+                preSettle: preSettle,
                 initialViewport: RenderViewport(
                     startIndex: max(0, bars.count - 120),
                     visibleCount: 120
@@ -691,6 +692,8 @@ struct ChartContentView: View {
     let periodLabel: String
     let dataSourceLabel: String
     let subIndicatorKind: SubIndicatorKind
+    /// v12.1 真昨结算 · priceTopBar baseline · nil 时 fallback bars.first.close（由 ChartScene 父级注入）
+    let preSettle: Decimal?
     @State var viewport: RenderViewport
     @State var lastFrameMs: Double = 0
     @State var dragStartViewport: RenderViewport?
@@ -705,6 +708,7 @@ struct ChartContentView: View {
         periodLabel: String,
         dataSourceLabel: String,
         subIndicatorKind: SubIndicatorKind,
+        preSettle: Decimal?,
         initialViewport: RenderViewport
     ) {
         self.renderer = renderer
@@ -714,6 +718,7 @@ struct ChartContentView: View {
         self.periodLabel = periodLabel
         self.dataSourceLabel = dataSourceLabel
         self.subIndicatorKind = subIndicatorKind
+        self.preSettle = preSettle
         self._viewport = State(initialValue: initialViewport)
     }
 

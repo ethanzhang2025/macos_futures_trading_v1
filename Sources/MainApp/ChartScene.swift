@@ -10,6 +10,7 @@
 
 import Foundation
 import SwiftUI
+import AppKit
 import Metal
 import Shared
 import DataCore
@@ -234,6 +235,7 @@ struct ChartScene: View {
     // MARK: - 周期键盘快捷键 ⌘1~6（v12.19 · WP-44 · 隐藏 Button + .keyboardShortcut）
 
     /// 隐藏按钮组绑定 ⌘1~6 切到对应周期 · zero-frame + 0 透明度不显示但 SwiftUI 仍处理 shortcut
+    /// v13.1 加 Delete 键删除选中画线
     private var periodShortcuts: some View {
         Group {
             Button("") { selectedPeriod = .minute1 }
@@ -248,6 +250,13 @@ struct ChartScene: View {
                 .keyboardShortcut("5", modifiers: [.command])
             Button("") { selectedPeriod = .daily }
                 .keyboardShortcut("6", modifiers: [.command])
+            Button("") {
+                if let id = selectedDrawingID {
+                    drawings.removeAll { $0.id == id }
+                    selectedDrawingID = nil
+                }
+            }
+            .keyboardShortcut(.delete, modifiers: [])
         }
         .frame(width: 0, height: 0)
         .opacity(0)
@@ -919,6 +928,9 @@ struct ChartContentView: View {
             // v13.0 画线点击捕获层（仅 activeDrawingTool 非 nil 时启用 · 否则点击穿透到主图 gesture）
             if activeDrawingTool != nil {
                 drawingClickCaptureLayer
+            } else if !drawings.isEmpty {
+                // v13.1 浏览模式 hit-test 层（点击 anchor ±15 像素阈值 selected）
+                drawingHitTestLayer
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -938,6 +950,46 @@ struct ChartContentView: View {
                     handleDrawingTap(at: location, in: geom.size)
                 }
         }
+    }
+
+    /// 画线 hit-test 层（v13.1 · 浏览模式 + drawings 非空时启用 · 点击 anchor ±15 像素阈值 selected）
+    private var drawingHitTestLayer: some View {
+        GeometryReader { geom in
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    selectedDrawingID = findDrawingAt(location, in: geom.size)
+                }
+        }
+    }
+
+    /// 找点击位置最近的画线 anchor 点（startPoint / endPoint）· 距离 < 15 像素 selected
+    private func findDrawingAt(_ location: CGPoint, in size: CGSize) -> UUID? {
+        let visibleCount = max(1, viewport.visibleCount)
+        let barWidth = size.width / CGFloat(visibleCount)
+        let xOffset = CGFloat(viewport.startOffset)
+        let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+        let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+        let span = max(0.0001, hi - lo)
+        func screenPoint(_ p: DrawingPoint) -> CGPoint {
+            let x = (CGFloat(p.barIndex - viewport.startIndex) + 0.5 - xOffset) * barWidth
+            let priceD = NSDecimalNumber(decimal: p.price).doubleValue
+            let y = CGFloat((hi - priceD) / span) * size.height
+            return CGPoint(x: x, y: y)
+        }
+        var minDist: CGFloat = 15
+        var closestID: UUID?
+        for d in drawings.reversed() {  // 最近画的在上层 · 优先选
+            let s = screenPoint(d.startPoint)
+            let d1 = hypot(location.x - s.x, location.y - s.y)
+            if d1 < minDist { minDist = d1; closestID = d.id }
+            if let end = d.endPoint {
+                let e = screenPoint(end)
+                let d2 = hypot(location.x - e.x, location.y - e.y)
+                if d2 < minDist { minDist = d2; closestID = d.id }
+            }
+        }
+        return closestID
     }
 
     /// 屏幕坐标 → 数据空间锚点（barIndex + price）
@@ -983,17 +1035,39 @@ struct ChartContentView: View {
             }
         } else {
             // 单点画线：立即完成
-            let drawing: Drawing
             if tool == .horizontalLine {
-                drawing = Drawing.horizontalLine(price: point.price, barIndex: point.barIndex)
+                let drawing = Drawing.horizontalLine(price: point.price, barIndex: point.barIndex)
+                drawings.append(drawing)
+                activeDrawingTool = nil
             } else if tool == .text {
-                drawing = Drawing.text(at: point, content: "标注")
+                // v13.1 弹 NSAlert 让用户输入文字（之前 v13.0 hardcode "标注"）
+                promptTextInput(at: point)
             } else {
-                drawing = Drawing(type: tool, startPoint: point)
+                let drawing = Drawing(type: tool, startPoint: point)
+                drawings.append(drawing)
+                activeDrawingTool = nil
             }
-            drawings.append(drawing)
-            activeDrawingTool = nil
         }
+    }
+
+    /// v13.1 文字标注输入 · NSAlert + NSTextField · 取消则不添加
+    private func promptTextInput(at point: DrawingPoint) {
+        let alert = NSAlert()
+        alert.messageText = "文字标注"
+        alert.informativeText = "输入要在主图标注的文字："
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        textField.stringValue = "标注"
+        alert.accessoryView = textField
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "取消")
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            let raw = textField.stringValue
+            let text = raw.isEmpty ? "标注" : raw
+            let drawing = Drawing.text(at: point, content: text)
+            drawings.append(drawing)
+        }
+        activeDrawingTool = nil
     }
 
     /// 顶部当前价大字号 + 涨跌幅 · 红涨绿跌 · baseline 用 Sina 实时昨结算 preSettle · fallback visible 周期首根

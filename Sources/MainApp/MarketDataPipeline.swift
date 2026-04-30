@@ -23,8 +23,28 @@ final class MarketDataPipeline {
     static let defaultInstrumentID = "RB0"
     static let defaultPeriod: KLinePeriod = .minute15
     static let pollingInterval: TimeInterval = 5.0
-    /// 实盘缓存上限（visibleCount=120 + 留 380 根 pan 空间 · 文华惯例 500-1000）
-    static let cacheMaxBars: Int = 500
+
+    /// 缓存上限按 period 动态（v12.9 · 中国期货每天约 540min 交易 · 让小周期能覆盖更多天 · 大周期合理保留长跨度）
+    /// - 1min: 10000 ≈ 18 个交易日（短线分析）
+    /// - 5min:  5000 ≈ 46 天（中期）
+    /// - 15min: 3000 ≈ 80 天（约 4 个月）
+    /// - 30min: 2000 ≈ 110 天（约 5 个月）
+    /// - 60min: 1500 ≈ 165 天（约 8 个月）
+    /// - daily: 1500 ≈ 6 年（长期）
+    /// - weekly/monthly: 各自合理跨度
+    static func cacheMaxBars(for period: KLinePeriod) -> Int {
+        switch period {
+        case .minute1:  return 10000
+        case .minute5:  return 5000
+        case .minute15: return 3000
+        case .minute30: return 2000
+        case .hour1:    return 1500
+        case .daily:    return 1500
+        case .weekly:   return 500
+        case .monthly:  return 300
+        default:        return 5000
+        }
+    }
 
     /// 主图可切换的合约清单（spike 硬编码 · 后续 WP-43 接 WatchlistBook UI 替换）
     /// 4 主连续（RB0/IF0/AU0/CU0）+ 4 active 月份合约（2026-04-29 主力月 · SinaMonthlyContractDemo 验证 K 线端点全支持）
@@ -64,7 +84,7 @@ final class MarketDataPipeline {
             cache: InMemoryKLineCacheStore(),
             realtime: provider,
             historical: sina,
-            cacheMaxBars: Self.cacheMaxBars
+            cacheMaxBars: Self.cacheMaxBars(for: period)
         )
     }
 

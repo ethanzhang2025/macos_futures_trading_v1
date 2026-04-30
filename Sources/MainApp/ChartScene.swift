@@ -363,12 +363,13 @@ struct ChartScene: View {
             case .completedBar(let k):
                 bars.append(k)
                 await stepIndicators(newBar: k)
-                // M5 持久化：完成的单根 K 线异步 append · maxBars 5000 防无限增长 · 链式串行保 K 线时间序
+                // M5 持久化：完成的单根 K 线异步 append · maxBars 按 period 动态（v12.9）· 链式串行保 K 线时间序
                 if let store = storeManager?.kline {
                     let prev = klineSaveTask
+                    let maxBars = MarketDataPipeline.cacheMaxBars(for: period)
                     klineSaveTask = Task {
                         await prev?.value
-                        try? await store.append([k], instrumentID: instrumentID, period: period, maxBars: 5000)
+                        try? await store.append([k], instrumentID: instrumentID, period: period, maxBars: maxBars)
                     }
                 }
                 // v11.0+1 · evaluator 用 K 线 close 模拟 Tick · 真 Tick Stage B 接 CTP 后替换

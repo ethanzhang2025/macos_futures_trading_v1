@@ -264,6 +264,13 @@ struct ChartScene: View {
                 }
             }
             .keyboardShortcut(.delete, modifiers: [])
+            // v13.6 ⌘D 复制选中画线
+            Button("") {
+                if let id = selectedDrawingID, let d = drawings.first(where: { $0.id == id }) {
+                    duplicateDrawing(d)
+                }
+            }
+            .keyboardShortcut("d", modifiers: [.command])
         }
         .frame(width: 0, height: 0)
         .opacity(0)
@@ -920,21 +927,88 @@ struct ChartContentView: View {
             // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
             priceTopBar
         }
+        .overlay(alignment: .bottomTrailing) {
+            // v13.6 选中画线 Inspector 浮窗（显示类型 / 起终点 / 文字 / 通道偏移）
+            drawingInspector
+        }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
         .contextMenu {
-            // v13.5 选中画线右键菜单（删除 / 编辑文字 / 取消选中）
+            // v13.5 选中画线右键菜单（删除 / 编辑文字 / 取消选中）· v13.6 加复制
             drawingContextMenu
         }
     }
 
-    /// v13.5 画线右键上下文菜单（仅 selectedDrawingID 非 nil 时显示有效项）
+    /// v13.6 选中画线 Inspector 浮窗（仅 selectedDrawingID 非 nil 时显示）
+    @ViewBuilder
+    private var drawingInspector: some View {
+        if let id = selectedDrawingID, let d = drawings.first(where: { $0.id == id }) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(Self.drawingTypeLabel(d.type))
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Button {
+                        selectedDrawingID = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                Text("起：bar \(d.startPoint.barIndex) · 价 \(formatPrice(d.startPoint.price))")
+                    .foregroundColor(.secondary)
+                if let end = d.endPoint {
+                    Text("终：bar \(end.barIndex) · 价 \(formatPrice(end.price))")
+                        .foregroundColor(.secondary)
+                }
+                if let text = d.text {
+                    Text("文字：\(text)")
+                        .foregroundColor(.secondary)
+                }
+                if let offset = d.channelOffset {
+                    Text("通道偏移：\(formatPrice(offset))")
+                        .foregroundColor(.secondary)
+                }
+                Text("⌘D 复制 · Delete 删除 · 右键编辑")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+                    .padding(.top, 2)
+            }
+            .font(.system(size: 11, design: .monospaced))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.65))
+            .cornerRadius(6)
+            .padding(12)
+        }
+    }
+
+    private static func drawingTypeLabel(_ type: DrawingType) -> String {
+        switch type {
+        case .trendLine:       return "趋势线"
+        case .horizontalLine:  return "水平线"
+        case .rectangle:       return "矩形"
+        case .parallelChannel: return "平行通道"
+        case .fibonacci:       return "斐波那契"
+        case .text:            return "文字标注"
+        }
+    }
+
+    private func formatPrice(_ p: Decimal) -> String {
+        String(format: "%.2f", NSDecimalNumber(decimal: p).doubleValue)
+    }
+
+    /// v13.5 画线右键上下文菜单（仅 selectedDrawingID 非 nil 时显示有效项）· v13.6 加复制
     @ViewBuilder
     private var drawingContextMenu: some View {
         if let id = selectedDrawingID, let drawing = drawings.first(where: { $0.id == id }) {
             Button("删除选中画线", role: .destructive) {
                 drawings.removeAll { $0.id == id }
                 selectedDrawingID = nil
+            }
+            Button("复制画线（⌘D）") {
+                duplicateDrawing(drawing)
             }
             if drawing.type == .text {
                 Button("编辑文字…") {
@@ -949,6 +1023,26 @@ struct ChartContentView: View {
             Text("（无选中画线 · 点击画线选中后再右键）")
                 .foregroundColor(.secondary)
         }
+    }
+
+    /// v13.6 复制画线 · 克隆 + 偏移 20 bar / 价格区间 5%（避免完全重叠）
+    private func duplicateDrawing(_ drawing: Drawing) {
+        let barOffset = 20
+        let priceSpan = currentPriceRange.upperBound - currentPriceRange.lowerBound
+        let priceOffset = priceSpan * Decimal(string: "0.05")!
+        let newStart = DrawingPoint(barIndex: drawing.startPoint.barIndex + barOffset, price: drawing.startPoint.price + priceOffset)
+        let newEnd: DrawingPoint? = drawing.endPoint.map {
+            DrawingPoint(barIndex: $0.barIndex + barOffset, price: $0.price + priceOffset)
+        }
+        let copy = Drawing(
+            type: drawing.type,
+            startPoint: newStart,
+            endPoint: newEnd,
+            text: drawing.text,
+            channelOffset: drawing.channelOffset
+        )
+        drawings.append(copy)
+        selectedDrawingID = copy.id
     }
 
     /// v13.5 编辑文字画线内容（弹 NSAlert + NSTextField）

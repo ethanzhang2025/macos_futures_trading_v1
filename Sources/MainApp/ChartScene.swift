@@ -1518,7 +1518,8 @@ struct ChartContentView: View {
                             kind: kind,
                             params: subParamsOverrides[idx] ?? indicatorParams,
                             slotIndex: idx,
-                            onEditParams: { onEditSubSlot(idx) }
+                            onEditParams: { onEditSubSlot(idx) },
+                            chartTheme: chartTheme
                         )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         chartTheme.background

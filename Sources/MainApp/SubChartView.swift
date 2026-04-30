@@ -51,9 +51,7 @@ struct SubChartView: View {
 
     // MARK: 配色（基色单源 · MACD/KDJ 别名指向相同基色，让维护时不漏改）
 
-    static let bgColor       = Color(red: 0.07, green: 0.08, blue: 0.10)   // #11141A 同 K 线 clearColor
-    static let zeroLineColor = Color.white.opacity(0.25)
-    static let kdjGuideColor = Color.white.opacity(0.15)
+    // v15.9 删除 static bgColor / zeroLineColor / kdjGuideColor（改 instance computed 跟随 theme · 见下方主体属性）
 
     static let yellowColor   = Color(red: 1.00, green: 0.78, blue: 0.18)   // 短期/快线（DIF · K）
     static let purpleColor   = Color(red: 0.63, green: 0.42, blue: 0.83)   // 中期/慢线（DEA · D）
@@ -80,12 +78,12 @@ struct SubChartView: View {
     private static let rsiViewMin: CGFloat = 0
     private static let rsiViewMax: CGFloat = 100
     static let rsiLineColor    = yellowColor
-    static let rsiGuideColor   = Color.white.opacity(0.15)
+    // v15.9 rsiGuideColor 改 instance computed
 
     // 成交量配色（涨红跌绿 · 与 K 线一致）
     static let volumeBullColor = bullColor
     static let volumeBearColor = bearColor
-    static let volumeAxisColor = Color.white.opacity(0.15)
+    // v15.9 volumeAxisColor 改 instance computed
 
     let bars: [KLine]
     let viewport: RenderViewport
@@ -97,6 +95,19 @@ struct SubChartView: View {
     let slotIndex: Int
     /// v15.7 用户右键选"本副图参数..."回调 · 父级弹 IndicatorParamsSheet 编辑 override
     let onEditParams: () -> Void
+    /// v15.9 主图主题（影响 background / 网格 / HUD · 副图语义色 yellow/purple/blue/bull/bear 不变）
+    let chartTheme: ChartTheme
+
+    // MARK: - 主题响应的 instance computed 颜色（v15.9 替换原 static 单一深色）
+
+    /// 副图背景（同主图 · 跟主题）
+    var bgColor: Color { chartTheme.background }
+    /// MACD 0 轴线 / KDJ 50 轴线 / 副图通用零线（统一用 gridLine 强一档）
+    var zeroLineColor: Color { chartTheme.gridLine.opacity(2.5) }   // 主题 gridLine 已 0.10 · ×2.5 = 0.25
+    /// KDJ 80/20 参考线 + RSI 70/30 参考线 + Volume 轴 · 用 gridLine 弱档
+    var kdjGuideColor: Color { chartTheme.gridLine }
+    var rsiGuideColor: Color { chartTheme.gridLine }
+    var volumeAxisColor: Color { chartTheme.gridLine }
 
     /// 三槽位（MACD: DIF/DEA/HIST · KDJ: K/D/J）
     /// compute() 末尾一次性 Decimal → Double 桥接 · 拖拽热路径直接读 Double，不再走 NSDecimalNumber
@@ -106,7 +117,7 @@ struct SubChartView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Self.bgColor
+            bgColor
             Canvas { ctx, size in drawChart(ctx, size: size) }
             hud
         }
@@ -217,7 +228,7 @@ struct SubChartView: View {
         .font(.system(size: 11, design: .monospaced))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.black.opacity(0.6))
+        .background(chartTheme.hudBackground)
         .cornerRadius(4)
         .padding(8)
     }
@@ -266,7 +277,7 @@ struct SubChartView: View {
         let yMap: (CGFloat) -> CGFloat = { v in h * (viewMax - v) / span }
 
         for guide in [CGFloat(70), 50, 30] {
-            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: Self.rsiGuideColor)
+            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: rsiGuideColor)
         }
 
         drawLine(seriesA, color: Self.rsiLineColor, ctx: ctx, yMap: yMap,
@@ -288,7 +299,7 @@ struct SubChartView: View {
         let yScale = size.height * 0.9 / CGFloat(maxVolume)
         let yBase = size.height
 
-        drawDashLine(at: yBase - 1, ctx: ctx, width: size.width, color: Self.volumeAxisColor)
+        drawDashLine(at: yBase - 1, ctx: ctx, width: size.width, color: volumeAxisColor)
 
         for i in visibleStart..<visibleEnd {
             guard i < seriesA.count, let v = seriesA[i], i < bars.count else { continue }
@@ -326,7 +337,7 @@ struct SubChartView: View {
         let yCenter = size.height / 2
         let yMap: (CGFloat) -> CGFloat = { yCenter - $0 * yScale }
 
-        drawDashLine(at: yCenter, ctx: ctx, width: size.width, color: Self.zeroLineColor)
+        drawDashLine(at: yCenter, ctx: ctx, width: size.width, color: zeroLineColor)
 
         // 直方图（涨红跌绿）
         for i in visibleStart..<visibleEnd {
@@ -365,7 +376,7 @@ struct SubChartView: View {
         let yMap: (CGFloat) -> CGFloat = { v in h * (viewMax - v) / span }
 
         for guide in [CGFloat(80), 50, 20] {
-            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: Self.kdjGuideColor)
+            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: kdjGuideColor)
         }
 
         drawLine(seriesA, color: Self.kdjKColor, ctx: ctx, yMap: yMap,

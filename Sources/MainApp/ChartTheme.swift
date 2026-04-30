@@ -91,6 +91,14 @@ enum ChartTheme: String, CaseIterable, Identifiable, Codable {
         case .light: return Color(red: 0.10, green: 0.55, blue: 0.30)
         }
     }
+
+    /// HUD 半透明背景（深色主题用黑底 · 浅色主题用白底 · 让 HUD 文字始终对比清晰）
+    var hudBackground: Color {
+        switch self {
+        case .dark:  return Color.black.opacity(0.60)
+        case .light: return Color.white.opacity(0.85)
+        }
+    }
 }
 
 // MARK: - UserDefaults 加载/保存

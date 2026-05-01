@@ -29,8 +29,10 @@ public actor ReplayDriver {
     }
 
     /// 启动循环驱动 · 重复调用会取消旧 task 启动新 task
+    /// v15.16 hotfix #12：cancel 后 await 旧 task value 完全终止再启新 · 防双 task 并发推进（用户快速 stop+start 双击播放）
     public func start() async {
         driveTask?.cancel()
+        await driveTask?.value
         let player = self.player
         let baseInterval = self.baseInterval
         driveTask = Task.detached {

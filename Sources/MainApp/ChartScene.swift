@@ -211,7 +211,7 @@ struct ChartScene: View {
     private static let drawingTemplatesKey = "drawingTemplates.v1"
     /// v13.21 副图偏好持久化（重启保留 · 跨合约/周期共享）
     private static let subIndicatorsKey = "subIndicators.v1"
-    private static let subChartHeightKey = "subChartHeight.v1"
+    // v15.16 hotfix #12：subChartHeightKey 已移到 ChartContentView 内（line 1727）· 此处死代码已删
     /// v13.34 HUD 位置持久化（4 角偏好）
     private static let hudCornerKey = "hudCorner.v1"
 
@@ -477,6 +477,9 @@ struct ChartScene: View {
             currentInstrumentID = id
         }
         .onDisappear {
+            // v15.16 hotfix #12：补 cancel indicatorParamsRecomputeTask + inertiaTask · 之前关窗口后旧 task 仍跑数 ms
+            indicatorParamsRecomputeTask?.cancel()
+            inertiaTask?.cancel()
             Task {
                 await pipeline?.stop()
                 await replayPlayer?.stop()
@@ -489,6 +492,7 @@ struct ChartScene: View {
     }
 
     /// 模式/合约/周期切换前重置：先 stop player → driver → 再 cancel observe（避免 player emit 时 consumer 已退出）
+    /// v15.16 hotfix #12：等 klineSaveTask 完成 · 防新合约 task 链式 await prev 阻塞 UI
     private func resetForNewPipeline() async {
         await pipeline?.stop()
         pipeline = nil
@@ -501,6 +505,9 @@ struct ChartScene: View {
         replayPlayer = nil
         replayAllBars = []
         replay = ReplaySnapshot()
+        // 等旧合约链式落库完成 · 不延续到新合约 task
+        await klineSaveTask?.value
+        klineSaveTask = nil
 
         bars = []
         indicators = []
@@ -1436,6 +1443,9 @@ struct ChartScene: View {
         bars = result.0
         indicators = result.1
         indicatorRunner = ChartIndicatorRunner.prime(bars: result.0, params: indicatorParams)
+        // v15.16 hotfix #12：mock fallback 时同步 periodLabel · 之前 HUD 主标识行显示 "RB0 · — · ..."
+        instrumentLabel = currentInstrumentID
+        periodLabel = selectedPeriod.displayName
         dataSourceLabel = "Sina 不可达 · 已退回 Mock"
     }
 
@@ -1721,6 +1731,8 @@ struct ChartContentView: View {
             }
         }
         .task {
+            // v15.16 hotfix #12：切合约 ChartContentView 重建时重置 · 防 HUD 残留旧 lastFrameMs
+            lastFrameMs = 0
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 let stats = await renderer.lastStats

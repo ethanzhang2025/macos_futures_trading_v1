@@ -47,6 +47,8 @@ private final class ScrollCaptureNSView: NSView {
     var onScroll: ((CGFloat) -> Void)?
     private var monitor: Any?
 
+    /// AppKit 保证 view dealloc 前会先调 viewDidMoveToWindow(window=nil)
+    /// 故卸载逻辑放此处即可 · 不在 deinit 卸载（Swift 6 nonisolated deinit 不能访问 @MainActor 属性）
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let m = monitor {
@@ -66,12 +68,6 @@ private final class ScrollCaptureNSView: NSView {
             }
             self.onScroll?(event.scrollingDeltaY)
             return nil
-        }
-    }
-
-    deinit {
-        if let m = monitor {
-            NSEvent.removeMonitor(m)
         }
     }
 }

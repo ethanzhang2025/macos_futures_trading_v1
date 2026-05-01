@@ -1602,8 +1602,12 @@ struct ChartContentView: View {
     /// v13.20 主图 ↔ 副图可拖分割条 · 4pt 区域捕获 · DragGesture 改 subChartTotalHeight
     /// 拖动方向：向上拖 = 副图变高（dy < 0 → height +=） · 向下拖 = 副图变矮
     /// v15.10 用 chartTheme.gridLine 与副图分割条对齐
+    /// v15.16 hotfix：4pt 全填 gridLine 在浅色下视觉偏黑 · 改 1pt 细线居中 + 透明 padding 保持 4pt hit-test
     private var mainSubDivider: some View {
-        chartTheme.gridLine
+        ZStack {
+            Color.clear
+            chartTheme.gridLine.frame(height: 1)
+        }
             .frame(height: 4)
             .contentShape(Rectangle())
             .onHover { hovering in

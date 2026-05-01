@@ -1,10 +1,11 @@
-// MainApp · 指标参数编辑 Sheet（v15.2 · 自定义 MA/BOLL/MACD/KDJ/RSI 周期）
+// MainApp · 指标参数编辑 Sheet（v15.2 · 自定义 MA/BOLL/MACD/KDJ/RSI 周期 · v15.11/v15.13 扩 CCI/WR/DMI/STOCH/ROC/BIAS 共 9 Section）
 //
 // 设计要点：
-// - 一个 Sheet 编辑全部 5 类参数（用户一次改完所有偏好 · 不分散到 5 个独立窗口）
+// - 一个 Sheet 编辑全部 9 类参数（用户一次改完所有偏好 · 不分散到 9 个独立窗口）
 // - 草稿模式：取消放弃 · 保存写回 @Binding · 父级 onChange 触发持久化 + 重算
 // - 默认还原按钮 · 一键回到 [5,20,60] / [12,26,9] 等出厂值
 // - 范围校验：周期 1~500 · BOLL 倍数 1~5 · 不允许负值
+// - v15.15 polish：Form 包 ScrollView · 9 Section 高度自适应 · 13" Mac 屏 (~800pt 高) 可正常使用
 //
 // 不做：
 // - 不让用户改 MA 条数（固定 3 条 · 简化数据流）
@@ -31,6 +32,8 @@ struct IndicatorParamsSheet: View {
                 .font(.title2).bold()
                 .padding(.bottom, 12)
 
+            // v15.15 polish：9 Section 在 13" Mac 屏（~800pt 高）超出 · 包 ScrollView 可滚动 · sheet 整体高度收 720
+            ScrollView {
             Form {
                 Section("主图均线 MA · 3 条") {
                     HStack {
@@ -180,6 +183,7 @@ struct IndicatorParamsSheet: View {
                 }
             }
             .formStyle(.grouped)
+            } // ScrollView 结束
 
             HStack {
                 Button("还原默认") { draft = .default }
@@ -196,7 +200,7 @@ struct IndicatorParamsSheet: View {
             .padding(.top, 12)
         }
         .padding(20)
-        .frame(width: 540, height: 1080)
+        .frame(width: 540, height: 720)
     }
 
     // MARK: - Binding helper（按 KeyPath 定位 [Int] 数组 + 下标 · 4 类参数共用）

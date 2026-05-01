@@ -238,6 +238,8 @@ struct ChartScene: View {
     }
 
     /// v13.22 加载持久化 viewport · 失败回退到默认（最新 120 根）· bars.count 改变时 clamp 防越界
+    /// v15.16 hotfix #6：visibleCount 不再 clamp 到 barsCount · 否则回放刚加载 1 根 → visibleCount=1
+    /// → 单根 bar 撑满整窗 → 大红块（K 线模式 saved.visibleCount > 0 已 check · barsCount 限制无意义）
     static func loadViewport(instrumentID: String, period: KLinePeriod, barsCount: Int) -> RenderViewport {
         let key = viewportKey(instrumentID: instrumentID, period: period)
         if let data = UserDefaults.standard.data(forKey: key),
@@ -246,7 +248,7 @@ struct ChartScene: View {
             let clampedStart = max(0, min(max(0, barsCount - 1), saved.startIndex))
             return RenderViewport(
                 startIndex: clampedStart,
-                visibleCount: min(saved.visibleCount, max(1, barsCount)),
+                visibleCount: saved.visibleCount,
                 startOffset: saved.startOffset
             )
         }
@@ -1602,11 +1604,13 @@ struct ChartContentView: View {
     /// v13.20 主图 ↔ 副图可拖分割条 · 4pt 区域捕获 · DragGesture 改 subChartTotalHeight
     /// 拖动方向：向上拖 = 副图变高（dy < 0 → height +=） · 向下拖 = 副图变矮
     /// v15.10 用 chartTheme.gridLine 与副图分割条对齐
-    /// v15.16 hotfix：4pt 全填 gridLine 在浅色下视觉偏黑 · 改 1pt 细线居中 + 透明 padding 保持 4pt hit-test
+    /// v15.16 hotfix #6：之前 ZStack { Color.clear; gridLine.frame(1) } 失效（Color.clear layout-neutral
+    /// → ZStack 总高 1pt → 外 frame(4) 把 1pt 拉伸成 4pt 黑横条）· 改 VStack 显式高度 1.5+1+1.5=4
     private var mainSubDivider: some View {
-        ZStack {
-            Color.clear
+        VStack(spacing: 0) {
+            Color.clear.frame(height: 1.5)
             chartTheme.gridLine.frame(height: 1)
+            Color.clear.frame(height: 1.5)
         }
             .frame(height: 4)
             .contentShape(Rectangle())

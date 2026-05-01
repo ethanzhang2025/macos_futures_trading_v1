@@ -1653,13 +1653,14 @@ struct ChartContentView: View {
             // 视觉迭代第 9 项：主图 ↔ 副图分割线 · v13.20 升级为可拖分割条（4pt 高度 · 鼠标 hover 显示 row cursor · 拖动改副图总高度）
             mainSubDivider
             // 副图区 v13.19 多副图 vertical stack · 共享主图 viewport · 总高度 v13.20 用户可拖
-            // 副图之间用 1pt 分割线 · 每个副图右侧占位 60pt 与主图价格轴对齐
+            // 副图之间分隔 v15.16 hotfix #9：与主副图分隔条统一视觉 · chartTheme.background 1pt 同色
+            // 副图自身网格/柱状图有视觉边界 · 1pt 同色让副图自然紧贴 · 不显黑线
             let count = max(1, subIndicatorKinds.count)
             let perSubHeight: CGFloat = subChartTotalHeight / CGFloat(count)
             VStack(spacing: 0) {
                 ForEach(Array(subIndicatorKinds.enumerated()), id: \.element) { idx, kind in
                     if idx > 0 {
-                        chartTheme.gridLine.frame(height: 1)
+                        chartTheme.background.frame(height: 1)
                     }
                     HStack(spacing: 0) {
                         SubChartView(

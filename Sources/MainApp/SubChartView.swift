@@ -25,6 +25,10 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
     case cci     // v15.11 WP-41 v4 · 顺势指标（默认 14 · 单线 · ±100 参考线）
     case wr      // v15.11 WP-41 v4 · 威廉指标（默认 14 · 单线 · 固定 -100~0 视野 · -20/-80 参考）
     case oi      // v15.11 WP-41 v4 · 持仓量（期货特有 · 直读 bars · 直方图 · 类似 Volume）
+    case dmi     // v15.13 WP-41 v4 第二批 · 趋向指标 +DI/-DI 双线（period 默认 14 · 视野自动 · 红 +DI 绿 -DI）
+    case stoch   // v15.13 · Stochastic %K/%D 双线（[14,3] · 视野固定 0~100 · 80/50/20 参考）
+    case roc     // v15.13 · 变动率 % 单线（默认 12 · 上下对称视野 · 0 参考）
+    case bias    // v15.13 · 乖离率 % 单线（默认 6 · 上下对称视野 · 0 参考）
 
     var id: String { rawValue }
 
@@ -39,6 +43,10 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .cci:    return "CCI \(params.cciPeriod)"
         case .wr:     return "WR \(params.wrPeriod)"
         case .oi:     return "持仓量"
+        case .dmi:    return "DMI \(params.dmiPeriod)"
+        case .stoch:  return "STOCH \(params.stochParams[0])/\(params.stochParams[1])"
+        case .roc:    return "ROC \(params.rocPeriod)"
+        case .bias:   return "BIAS \(params.biasPeriod)"
         }
     }
 
@@ -53,6 +61,10 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .cci:    return "CCI"
         case .wr:     return "WR"
         case .oi:     return "持仓量"
+        case .dmi:    return "DMI"
+        case .stoch:  return "STOCH"
+        case .roc:    return "ROC"
+        case .bias:   return "BIAS"
         }
     }
 }
@@ -106,6 +118,20 @@ struct SubChartView: View {
     // WR 视野（-100~0 固定 · -20=超买 / -80=超卖）
     private static let wrViewMin: CGFloat = -100
     private static let wrViewMax: CGFloat = 0
+
+    // v15.13 DMI 配色（+DI 红强 / -DI 绿弱 · 与涨跌色一致）
+    static let dmiPlusColor  = bullColor
+    static let dmiMinusColor = bearColor
+
+    // Stochastic 视野（0~100 固定 · 80/50/20 参考线 · 同 KDJ 但更窄）
+    private static let stochViewMin: CGFloat = 0
+    private static let stochViewMax: CGFloat = 100
+    static let stochKColor = yellowColor   // %K
+    static let stochDColor = purpleColor   // %D
+
+    // ROC / BIAS 单线配色（黄）
+    static let rocLineColor  = yellowColor
+    static let biasLineColor = yellowColor
 
     let bars: [KLine]
     let viewport: RenderViewport
@@ -188,6 +214,14 @@ struct SubChartView: View {
                 return (try? CCI.calculate(kline: series, params: paramsCopy.cciParamsDecimal)) ?? []
             case .wr:
                 return (try? WilliamsR.calculate(kline: series, params: paramsCopy.wrParamsDecimal)) ?? []
+            case .dmi:
+                return (try? DMI.calculate(kline: series, params: paramsCopy.dmiParamsDecimal)) ?? []
+            case .stoch:
+                return (try? Stochastic.calculate(kline: series, params: paramsCopy.stochParamsDecimal)) ?? []
+            case .roc:
+                return (try? ROC.calculate(kline: series, params: paramsCopy.rocParamsDecimal)) ?? []
+            case .bias:
+                return (try? BIAS.calculate(kline: series, params: paramsCopy.biasParamsDecimal)) ?? []
             case .volume, .oi:
                 return []  // 直读 bars · 不走 Indicator 计算
             }
@@ -202,11 +236,21 @@ struct SubChartView: View {
             seriesA = doublesOf(result, name: "K")
             seriesB = doublesOf(result, name: "D")
             seriesC = doublesOf(result, name: "J")
-        case .rsi, .obv, .cci, .wr:
-            // 单线副图：取首个 series（RSI/OBV/CCI/WR 输出名带参数 · 不依赖 name 匹配 · 直接首项）
+        case .rsi, .obv, .cci, .wr, .roc, .bias:
+            // 单线副图：取首个 series（输出名带参数 · 不依赖 name 匹配 · 直接首项）
             let firstSeries = result.first?.values ?? []
             seriesA = firstSeries.map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
             seriesB = []
+            seriesC = []
+        case .dmi:
+            // DMI 输出 [+DI, -DI] · v15.13
+            seriesA = (result.indices.contains(0) ? result[0].values : []).map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
+            seriesB = (result.indices.contains(1) ? result[1].values : []).map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
+            seriesC = []
+        case .stoch:
+            // Stochastic 输出 [%K, %D] · v15.13 · 同 KDJ 双线模式
+            seriesA = (result.indices.contains(0) ? result[0].values : []).map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
+            seriesB = (result.indices.contains(1) ? result[1].values : []).map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
             seriesC = []
         case .volume:
             seriesA = bars.map { Double($0.volume) }  // 直接读 K 线 volume（Int → Double）
@@ -270,6 +314,18 @@ struct SubChartView: View {
                 )
             case .oi:
                 Text("OI \(fmtVolume(aLast))").foregroundColor(Self.oiBarColor)
+            case .dmi:
+                // DMI 双线：+DI 红 / -DI 绿（与涨跌语义一致）· 强弱比较一目了然
+                Text("+DI \(fmt(aLast))").foregroundColor(Self.dmiPlusColor)
+                Text("-DI \(fmt(bLast))").foregroundColor(Self.dmiMinusColor)
+            case .stoch:
+                // Stochastic %K/%D 双线 · 同 KDJ 配色（黄 K / 紫 D）
+                Text("%K \(fmt(aLast))").foregroundColor(Self.stochKColor)
+                Text("%D \(fmt(bLast))").foregroundColor(Self.stochDColor)
+            case .roc:
+                Text("ROC \(fmt(aLast))").foregroundColor(Self.rocLineColor)
+            case .bias:
+                Text("BIAS \(fmt(aLast))").foregroundColor(Self.biasLineColor)
             }
         }
         .font(.system(size: 11, design: .monospaced))
@@ -329,6 +385,26 @@ struct SubChartView: View {
             drawOI(ctx, size: size,
                    visibleStart: visibleStart, visibleEnd: visibleEnd,
                    barWidth: barWidth, xOffset: xOffset)
+        case .dmi:
+            drawDMI(ctx, size: size,
+                    visibleStart: visibleStart, visibleEnd: visibleEnd,
+                    barWidth: barWidth, xOffset: xOffset)
+        case .stoch:
+            drawStoch(ctx, size: size,
+                      visibleStart: visibleStart, visibleEnd: visibleEnd,
+                      barWidth: barWidth, xOffset: xOffset)
+        case .roc:
+            drawAutoLine(seriesA, color: Self.rocLineColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [0])
+        case .bias:
+            drawAutoLine(seriesA, color: Self.biasLineColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [0])
         }
     }
 
@@ -466,6 +542,56 @@ struct SubChartView: View {
             )
             ctx.fill(Path(rect), with: .color(Self.oiBarColor))
         }
+    }
+
+    /// v15.13 DMI：双线 +DI/-DI · visible 内自动撑开（DI 多在 0-50 区间但视野跟随实际值）· 0 参考线（DI 都 ≥0）
+    private func drawDMI(
+        _ ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        // 同 RSI 0~100 视野（DI 通常 ≤ 50 但 0~100 留够余量 · 与可对比指标视觉对齐）
+        let viewMin = Self.rsiViewMin
+        let viewMax = Self.rsiViewMax
+        let span = viewMax - viewMin
+        let h = size.height
+        let yMap: (CGFloat) -> CGFloat = { v in h * (viewMax - v) / span }
+
+        // 25 ADX 阈值参考线（DMI 经典强弱分界 · 弱档）
+        for guide in [CGFloat(50), 25] {
+            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: kdjGuideColor)
+        }
+
+        drawLine(seriesA, color: Self.dmiPlusColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+        drawLine(seriesB, color: Self.dmiMinusColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+    }
+
+    /// v15.13 Stochastic：%K/%D 双线 · 固定 0~100 视野（同 KDJ 但更窄 · KDJ 视野 -20~120 给 J）· 80/50/20 参考
+    private func drawStoch(
+        _ ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        let viewMin = Self.stochViewMin
+        let viewMax = Self.stochViewMax
+        let span = viewMax - viewMin
+        let h = size.height
+        let yMap: (CGFloat) -> CGFloat = { v in h * (viewMax - v) / span }
+
+        for guide in [CGFloat(80), 50, 20] {
+            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: kdjGuideColor)
+        }
+
+        drawLine(seriesA, color: Self.stochKColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+        drawLine(seriesB, color: Self.stochDColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
     }
 
     /// MACD：上下对称 · 零轴居中 · 直方图（涨红跌绿）+ DIF/DEA 双线

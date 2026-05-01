@@ -25,6 +25,14 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
     public var cciPeriod: Int
     /// WR (Williams %R) 周期（默认 14 · v15.11 WP-41 v4 · 值域 -100~0）
     public var wrPeriod: Int
+    /// DMI 周期（默认 14 · v15.13 · 输出 +DI/-DI 双线）
+    public var dmiPeriod: Int
+    /// Stochastic 参数（默认 [14, 3] · v15.13 · [period, smooth] · 输出 %K/%D 双线 · 视野 0~100）
+    public var stochParams: [Int]
+    /// ROC 周期（默认 12 · v15.13 · 单线 · 上下对称视野 · 0 参考线）
+    public var rocPeriod: Int
+    /// BIAS 周期（默认 6 · v15.13 · 单线 · 上下对称视野 · 0 参考线）
+    public var biasPeriod: Int
 
     public init(
         mainMAPeriods: [Int],
@@ -33,7 +41,11 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         kdjParams: [Int],
         rsiPeriod: Int,
         cciPeriod: Int = 14,
-        wrPeriod: Int = 14
+        wrPeriod: Int = 14,
+        dmiPeriod: Int = 14,
+        stochParams: [Int] = [14, 3],
+        rocPeriod: Int = 12,
+        biasPeriod: Int = 6
     ) {
         self.mainMAPeriods = mainMAPeriods
         self.mainBOLLParams = mainBOLLParams
@@ -42,6 +54,10 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.rsiPeriod = rsiPeriod
         self.cciPeriod = cciPeriod
         self.wrPeriod = wrPeriod
+        self.dmiPeriod = dmiPeriod
+        self.stochParams = stochParams
+        self.rocPeriod = rocPeriod
+        self.biasPeriod = biasPeriod
     }
 
     public static let `default` = IndicatorParamsBook(
@@ -51,14 +67,20 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         kdjParams: [9, 3, 3],
         rsiPeriod: 14,
         cciPeriod: 14,
-        wrPeriod: 14
+        wrPeriod: 14,
+        dmiPeriod: 14,
+        stochParams: [14, 3],
+        rocPeriod: 12,
+        biasPeriod: 6
     )
 
-    // MARK: - Codable · v15.11 加 cciPeriod/wrPeriod 字段后兼容旧 JSON（v15.10 之前持久化数据缺字段）
-    // decodeIfPresent fallback 默认值 14 · 让旧用户启动后无感升级 · 不丢已有 MA/BOLL/MACD/KDJ/RSI 偏好
+    // MARK: - Codable · v15.11 加 cciPeriod/wrPeriod · v15.13 加 dmi/stoch/roc/bias 字段
+    // decodeIfPresent fallback 默认值 · 让旧用户启动后无感升级 · 不丢已有偏好
 
     private enum CodingKeys: String, CodingKey {
-        case mainMAPeriods, mainBOLLParams, macdParams, kdjParams, rsiPeriod, cciPeriod, wrPeriod
+        case mainMAPeriods, mainBOLLParams, macdParams, kdjParams, rsiPeriod
+        case cciPeriod, wrPeriod
+        case dmiPeriod, stochParams, rocPeriod, biasPeriod
     }
 
     public init(from decoder: Decoder) throws {
@@ -70,6 +92,10 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.rsiPeriod      = try c.decode(Int.self,   forKey: .rsiPeriod)
         self.cciPeriod      = try c.decodeIfPresent(Int.self, forKey: .cciPeriod) ?? 14
         self.wrPeriod       = try c.decodeIfPresent(Int.self, forKey: .wrPeriod) ?? 14
+        self.dmiPeriod      = try c.decodeIfPresent(Int.self, forKey: .dmiPeriod) ?? 14
+        self.stochParams    = try c.decodeIfPresent([Int].self, forKey: .stochParams) ?? [14, 3]
+        self.rocPeriod      = try c.decodeIfPresent(Int.self, forKey: .rocPeriod) ?? 12
+        self.biasPeriod     = try c.decodeIfPresent(Int.self, forKey: .biasPeriod) ?? 6
     }
 
     // MARK: - Decimal 转换 helper（IndicatorCore.calculate 接受 [Decimal]）
@@ -100,6 +126,22 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
 
     public var wrParamsDecimal: [Decimal] {
         [Decimal(wrPeriod)]
+    }
+
+    public var dmiParamsDecimal: [Decimal] {
+        [Decimal(dmiPeriod)]
+    }
+
+    public var stochParamsDecimal: [Decimal] {
+        stochParams.map { Decimal($0) }
+    }
+
+    public var rocParamsDecimal: [Decimal] {
+        [Decimal(rocPeriod)]
+    }
+
+    public var biasParamsDecimal: [Decimal] {
+        [Decimal(biasPeriod)]
     }
 }
 

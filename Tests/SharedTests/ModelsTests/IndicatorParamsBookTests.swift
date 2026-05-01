@@ -7,7 +7,7 @@ import Foundation
 @Suite("IndicatorParamsBook · 数据契约 + Codable")
 struct IndicatorParamsBookTests {
 
-    @Test("default 出厂值 = 5/20/60 + BOLL 20/2 + MACD 12/26/9 + KDJ 9/3/3 + RSI 14 + CCI 14 + WR 14")
+    @Test("default 出厂值 · v15.13 全字段")
     func defaults() {
         let d = IndicatorParamsBook.default
         #expect(d.mainMAPeriods == [5, 20, 60])
@@ -15,8 +15,47 @@ struct IndicatorParamsBookTests {
         #expect(d.macdParams == [12, 26, 9])
         #expect(d.kdjParams == [9, 3, 3])
         #expect(d.rsiPeriod == 14)
-        #expect(d.cciPeriod == 14)   // v15.11
-        #expect(d.wrPeriod == 14)    // v15.11
+        #expect(d.cciPeriod == 14)        // v15.11
+        #expect(d.wrPeriod == 14)         // v15.11
+        #expect(d.dmiPeriod == 14)        // v15.13
+        #expect(d.stochParams == [14, 3]) // v15.13
+        #expect(d.rocPeriod == 12)        // v15.13
+        #expect(d.biasPeriod == 6)        // v15.13
+    }
+
+    @Test("v15.13 DMI/Stoch/ROC/BIAS Decimal helper")
+    func v1513IndicatorsDecimal() {
+        let d = IndicatorParamsBook.default
+        #expect(d.dmiParamsDecimal == [Decimal(14)])
+        #expect(d.stochParamsDecimal == [Decimal(14), Decimal(3)])
+        #expect(d.rocParamsDecimal == [Decimal(12)])
+        #expect(d.biasParamsDecimal == [Decimal(6)])
+    }
+
+    @Test("v15.13 兼容旧 JSON · 缺 dmi/stoch/roc/bias 字段时各 fallback 默认")
+    func decodeLegacyJSONWithoutV1513Fields() throws {
+        // 模拟 v15.12 之前持久化的 JSON（含 v15.11 cci/wr · 缺 v15.13 4 字段）
+        let legacyJSON = """
+        {
+          "mainMAPeriods": [5, 20, 60],
+          "mainBOLLParams": [20, 2],
+          "macdParams": [12, 26, 9],
+          "kdjParams": [9, 3, 3],
+          "rsiPeriod": 14,
+          "cciPeriod": 20,
+          "wrPeriod": 9
+        }
+        """
+        let data = legacyJSON.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(IndicatorParamsBook.self, from: data)
+        // v15.13 fallback
+        #expect(decoded.dmiPeriod == 14)
+        #expect(decoded.stochParams == [14, 3])
+        #expect(decoded.rocPeriod == 12)
+        #expect(decoded.biasPeriod == 6)
+        // v15.11 字段保留用户值（不被覆盖）
+        #expect(decoded.cciPeriod == 20)
+        #expect(decoded.wrPeriod == 9)
     }
 
     @Test("v15.11 CCI/WR Decimal helper")

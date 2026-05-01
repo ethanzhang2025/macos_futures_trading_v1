@@ -66,6 +66,9 @@ public actor AlertEvaluator {
     private var previousPrices: [String: Decimal] = [:]
     /// 成交量滑动窗口（按 instrumentID）· 仅 volumeSpike 触发时用
     private var volumeWindows: [String: [Int]] = [:]
+    /// 持仓量滑动窗口（按 instrumentID）· 仅 openInterestSpike 触发时用（v15.12 WP-52 v3 · 期货特有）
+    /// Decimal 而非 Int：tick.openInterest 是 Decimal · 与 volumeWindows 区分类型避免精度损失
+    private var oiWindows: [String: [Decimal]] = [:]
     /// 价格时间窗口（按 instrumentID 累积 N 秒内的 (price, timestamp)）
     private var priceWindows: [String: [(price: Decimal, timestamp: Date)]] = [:]
     /// K 线滑动窗口（按 instrumentID + period）· 指标条件预警评估用 · 最大 maxKlineWindow 根
@@ -168,6 +171,8 @@ public actor AlertEvaluator {
 
         // 维护成交量窗口（最大 1000 周期，足够 v1）
         appendVolume(tick.volume, for: tick.instrumentID, capacity: 1000)
+        // 维护持仓量窗口（v15.12 WP-52 v3 · 容量同 volume）
+        appendOI(tick.openInterest, for: tick.instrumentID, capacity: 1000)
         // 维护价格时间窗口（按 timestamp 自动 truncate 到最大需求窗口）
         appendPriceWindow(price: tick.lastPrice, timestamp: now, for: tick.instrumentID, maxSeconds: 3600)
 
@@ -229,6 +234,10 @@ public actor AlertEvaluator {
                 guard let avg = averageVolume(for: tick.instrumentID, lastNBars: windowBars), avg > 0 else { return (false, "") }
                 let ratio = Decimal(tick.volume) / Decimal(avg)
                 return (ratio >= multiple, "成交量 \(tick.volume) 是近 \(windowBars) 期均值 \(avg) 的 \(ratio) 倍（阈值 \(multiple)）")
+            case .openInterestSpike(let multiple, let windowBars):
+                guard let avg = averageOI(for: tick.instrumentID, lastNBars: windowBars), avg > 0 else { return (false, "") }
+                let ratio = tick.openInterest / avg
+                return (ratio >= multiple, "持仓量 \(tick.openInterest) 是近 \(windowBars) 期均值 \(avg) 的 \(ratio) 倍（阈值 \(multiple)）")
             case .priceMoveSpike(let percentThreshold, let windowSeconds):
                 guard let move = priceMovePercent(for: tick.instrumentID, currentPrice: tick.lastPrice, now: now, windowSeconds: windowSeconds) else {
                     return (false, "")
@@ -294,6 +303,24 @@ public actor AlertEvaluator {
         guard n > 0 else { return nil }
         let recent = history.suffix(n)
         return recent.reduce(0, +) / n
+    }
+
+    /// 持仓量滑动窗口维护（v15.12 WP-52 v3 · 与 appendVolume 同模式 · Decimal 类型）
+    private func appendOI(_ oi: Decimal, for instrumentID: String, capacity: Int) {
+        var window = oiWindows[instrumentID] ?? []
+        window.append(oi)
+        if window.count > capacity { window.removeFirst(window.count - capacity) }
+        oiWindows[instrumentID] = window
+    }
+
+    /// 持仓量近 N 期均值（排除当前 tick · 同 averageVolume 语义 · 但用 Decimal 算）
+    private func averageOI(for instrumentID: String, lastNBars: Int) -> Decimal? {
+        guard let window = oiWindows[instrumentID] else { return nil }
+        let history = window.dropLast()
+        let n = min(lastNBars, history.count)
+        guard n > 0 else { return nil }
+        let recent = history.suffix(n)
+        return recent.reduce(Decimal(0), +) / Decimal(n)
     }
 
     private func appendPriceWindow(price: Decimal, timestamp: Date, for instrumentID: String, maxSeconds: TimeInterval) {

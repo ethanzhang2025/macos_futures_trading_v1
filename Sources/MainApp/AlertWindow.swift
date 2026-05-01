@@ -1,4 +1,4 @@
-// MainApp · 预警面板 Scene（WP-52 UI · 8 alerts × 4 status × 6 condition × 5 channel）
+// MainApp · 预警面板 Scene（WP-52 UI · 8 alerts × 4 status × 8 condition × 5 channel · v15.12 持仓量异动）
 //
 // 留待 Mac 切机：UserNotifications channel · NSSound channel（替换对应 LoggingChannel）
 // M5 持久化已接入：alerts 走 SQLiteAlertConfigStore（.task 异步 load · .onChange 异步 save · nil 才 fallback Mock · 空数组合法）
@@ -420,7 +420,7 @@ struct AlertWindow: View {
         case .priceCrossAbove(let p):           return p
         case .priceCrossBelow(let p):           return p
         case .horizontalLineTouched(_, let p):  return p
-        case .volumeSpike, .priceMoveSpike:     return 0
+        case .volumeSpike, .openInterestSpike, .priceMoveSpike:  return 0
         case .indicator:                        return 0
         }
     }
@@ -559,15 +559,16 @@ struct AlertWindow: View {
 
 // MARK: - 添加 / 编辑 预警 Sheet
 
-/// 7 类可编辑 condition（horizontalLineTouched 需 drawingID 选择 · 留 v2）
+/// 8 类可编辑 condition（horizontalLineTouched 需 drawingID 选择 · 留 v2）
 private enum ConditionKind: String, CaseIterable, Identifiable {
-    case priceAbove       = "价格 >"
-    case priceBelow       = "价格 <"
-    case priceCrossAbove  = "上穿"
-    case priceCrossBelow  = "下穿"
-    case volumeSpike      = "成交量异常"
-    case priceMoveSpike   = "价格急动"
-    case indicator        = "指标条件"
+    case priceAbove          = "价格 >"
+    case priceBelow          = "价格 <"
+    case priceCrossAbove     = "上穿"
+    case priceCrossBelow     = "下穿"
+    case volumeSpike         = "成交量异常"
+    case openInterestSpike   = "持仓量异常"
+    case priceMoveSpike      = "价格急动"
+    case indicator           = "指标条件"
     var id: String { rawValue }
 
     static func of(_ c: AlertCondition) -> ConditionKind {
@@ -578,6 +579,7 @@ private enum ConditionKind: String, CaseIterable, Identifiable {
         case .priceCrossBelow:       return .priceCrossBelow
         case .horizontalLineTouched: return .priceAbove   // v2 加 horizontalLine kind 时改
         case .volumeSpike:           return .volumeSpike
+        case .openInterestSpike:     return .openInterestSpike
         case .priceMoveSpike:        return .priceMoveSpike
         case .indicator:             return .indicator
         }
@@ -595,6 +597,9 @@ private struct AlertFormDraft {
     var priceThreshold: Double = 3900
     var volumeMultiple: Double = 3
     var volumeWindowBars: Int = 20
+    // v15.12 WP-52 v3 持仓量异动字段（与 volume 分开 · 显式优于复用避免切换 conditionKind 串值）
+    var oiMultiple: Double = 1.5
+    var oiWindowBars: Int = 20
     var movePercent: Double = 1
     var moveSeconds: Int = 60
 
@@ -630,6 +635,9 @@ private struct AlertFormDraft {
         case .volumeSpike(let m, let n):
             volumeMultiple = NSDecimalNumber(decimal: m).doubleValue
             volumeWindowBars = n
+        case .openInterestSpike(let m, let n):
+            oiMultiple = NSDecimalNumber(decimal: m).doubleValue
+            oiWindowBars = n
         case .priceMoveSpike(let p, let s):
             movePercent = NSDecimalNumber(decimal: p).doubleValue
             moveSeconds = s
@@ -663,6 +671,8 @@ private struct AlertFormDraft {
         case .priceCrossBelow: return .priceCrossBelow(Decimal(priceThreshold))
         case .volumeSpike:
             return .volumeSpike(multiple: Decimal(volumeMultiple), windowBars: volumeWindowBars)
+        case .openInterestSpike:
+            return .openInterestSpike(multiple: Decimal(oiMultiple), windowBars: oiWindowBars)
         case .priceMoveSpike:
             return .priceMoveSpike(percentThreshold: Decimal(movePercent), windowSeconds: moveSeconds)
         case .indicator:
@@ -777,6 +787,16 @@ struct AddOrEditAlertSheet: View {
                     .frame(width: 80)
                 Text("近")
                 TextField("", value: $draft.volumeWindowBars, format: .number)
+                    .frame(width: 60)
+                Text("期均值")
+            }
+        case .openInterestSpike:
+            HStack {
+                Text("倍数 ≥")
+                TextField("", value: $draft.oiMultiple, format: .number)
+                    .frame(width: 80)
+                Text("近")
+                TextField("", value: $draft.oiWindowBars, format: .number)
                     .frame(width: 60)
                 Text("期均值")
             }
@@ -954,6 +974,7 @@ extension AlertCondition {
         case .priceCrossBelow(let p):           return "下穿 \(fmtDecimal(p))"
         case .horizontalLineTouched(_, let p):  return "触线 \(fmtDecimal(p))"
         case .volumeSpike(let m, let n):        return "成交量 ≥ \(fmtDecimal(m))× / \(n)期"
+        case .openInterestSpike(let m, let n):  return "持仓量 ≥ \(fmtDecimal(m))× / \(n)期"
         case .priceMoveSpike(let p, let s):     return "急动 ≥ \(fmtDecimal(p))% / \(s)秒"
         case .indicator(let spec):              return spec.displayDescription
         }

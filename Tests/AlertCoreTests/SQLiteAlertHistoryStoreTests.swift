@@ -63,7 +63,7 @@ struct SQLiteAlertHistoryStoreTests {
         #expect(all[2].triggeredAt == t)
     }
 
-    @Test("AlertCondition JSON 往返（priceAbove + volumeSpike + horizontalLineTouched）")
+    @Test("AlertCondition JSON 往返（含 v15.12 openInterestSpike）")
     func conditionRoundtrip() async throws {
         let store = try makeStore()
         let drawingID = UUID()
@@ -71,6 +71,7 @@ struct SQLiteAlertHistoryStoreTests {
             .priceAbove(3500),
             .priceCrossBelow(3200.5),
             .volumeSpike(multiple: 3, windowBars: 20),
+            .openInterestSpike(multiple: 2, windowBars: 20),  // v15.12 WP-52 v3
             .priceMoveSpike(percentThreshold: 1.5, windowSeconds: 300),
             .horizontalLineTouched(drawingID: drawingID, price: 3500)
         ]
@@ -78,9 +79,9 @@ struct SQLiteAlertHistoryStoreTests {
             try await store.append(makeEntry(condition: c))
         }
         let all = try await store.allHistory()
-        #expect(all.count == 5)
+        #expect(all.count == 6)
         let storedConditions = all.map { $0.conditionSnapshot }
-        // 5 种条件都序列化反序列化成功 → 都在结果集
+        // 6 种条件都序列化反序列化成功 → 都在结果集
         for c in conditions {
             #expect(storedConditions.contains(c))
         }

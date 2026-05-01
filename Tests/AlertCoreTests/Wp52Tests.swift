@@ -8,10 +8,10 @@ import Shared
 
 // MARK: - 测试辅助
 
-private func makeTick(_ instrumentID: String, price: Decimal, volume: Int = 0, time: Date = Date()) -> Tick {
+private func makeTick(_ instrumentID: String, price: Decimal, volume: Int = 0, openInterest: Decimal = 0, time: Date = Date()) -> Tick {
     Tick(
         instrumentID: instrumentID,
-        lastPrice: price, volume: volume, openInterest: 0, turnover: 0,
+        lastPrice: price, volume: volume, openInterest: openInterest, turnover: 0,
         bidPrices: [], askPrices: [], bidVolumes: [], askVolumes: [],
         highestPrice: 0, lowestPrice: 0, openPrice: 0,
         preClosePrice: 0, preSettlementPrice: 0,
@@ -427,6 +427,67 @@ struct EvaluatorAnomalyTests {
         // 第 6 个 tick volume=400 → 是均值 100 的 4 倍 → 触发
         await evaluator.onTick(makeTick("rb2510", price: 3500, volume: 400))
         #expect(try await history.allHistory().count == 1)
+    }
+
+    @Test("v15.12 openInterestSpike：当前 OI 是近 N 期均值的 multiple 倍以上")
+    func openInterestSpike() async throws {
+        let history = InMemoryAlertHistoryStore()
+        let evaluator = AlertEvaluator(history: history)
+        let a = Alert(
+            name: "增仓异动", instrumentID: "rb2510",
+            condition: .openInterestSpike(multiple: 2, windowBars: 5),
+            channels: [], cooldownSeconds: 0
+        )
+        await evaluator.addAlert(a)
+
+        // 喂 5 期均值 1000 的持仓量
+        for _ in 0..<5 {
+            await evaluator.onTick(makeTick("rb2510", price: 3500, openInterest: 1000))
+        }
+        #expect(try await history.allHistory().isEmpty)  // 自身均值无突变
+
+        // 第 6 个 tick OI=2500 → 是均值 1000 的 2.5 倍 ≥ 2 → 触发
+        await evaluator.onTick(makeTick("rb2510", price: 3500, openInterest: 2500))
+        #expect(try await history.allHistory().count == 1)
+    }
+
+    @Test("v15.12 openInterestSpike：低于阈值不触发")
+    func openInterestSpikeBelowThreshold() async throws {
+        let history = InMemoryAlertHistoryStore()
+        let evaluator = AlertEvaluator(history: history)
+        let a = Alert(
+            name: "增仓异动 ≥ 3×", instrumentID: "rb2510",
+            condition: .openInterestSpike(multiple: 3, windowBars: 5),
+            channels: [], cooldownSeconds: 0
+        )
+        await evaluator.addAlert(a)
+
+        for _ in 0..<5 {
+            await evaluator.onTick(makeTick("rb2510", price: 3500, openInterest: 1000))
+        }
+        // 突增 2× < 3× 阈值 → 不触发
+        await evaluator.onTick(makeTick("rb2510", price: 3500, openInterest: 2000))
+        #expect(try await history.allHistory().isEmpty)
+    }
+
+    @Test("v15.12 openInterestSpike：与 volumeSpike 滑动窗口隔离 · 互不影响")
+    func openInterestVolumeIsolation() async throws {
+        let history = InMemoryAlertHistoryStore()
+        let evaluator = AlertEvaluator(history: history)
+        // OI 异动预警（不看 volume）
+        let oiAlert = Alert(
+            name: "OI 突增", instrumentID: "rb2510",
+            condition: .openInterestSpike(multiple: 2, windowBars: 5),
+            channels: [], cooldownSeconds: 0
+        )
+        await evaluator.addAlert(oiAlert)
+
+        // 喂 volume 突增但 OI 平稳 → OI 预警不应触发（验证 oiWindows 与 volumeWindows 隔离）
+        for _ in 0..<5 {
+            await evaluator.onTick(makeTick("rb2510", price: 3500, volume: 100, openInterest: 1000))
+        }
+        await evaluator.onTick(makeTick("rb2510", price: 3500, volume: 5000, openInterest: 1000))
+        #expect(try await history.allHistory().isEmpty)
     }
 
     @Test("priceMoveSpike：windowSeconds 内变化超阈值触发")

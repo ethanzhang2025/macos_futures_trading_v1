@@ -1,5 +1,5 @@
 // WP-52 模块 1 · Alert 数据模型
-// 3 类预警：价格（4 子类）+ 画线（v1 仅水平线）+ 异常（成交量/价格急动）
+// 4 类预警：价格（4 子类）+ 画线（v1 仅水平线）+ 异常（成交量/持仓量/价格急动）+ 指标
 // 数据模型层 · 不引入通知发送逻辑（统一 NotificationChannel 层）· 不实际订阅 Tick（AlertEvaluator 做）
 //
 // 评估逻辑分离：本文件只描述"什么是预警"（数据），AlertEvaluator 决定"如何判断"（行为）
@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// 预警条件 · 6 类（价格 4 + 画线 1 + 异常 2）
+/// 预警条件 · 9 类（价格 4 + 画线 1 + 异常 3 + 指标 1）
 public enum AlertCondition: Sendable, Codable, Equatable, Hashable {
 
     // MARK: - 价格类（4 子类，与 Legacy ConditionalOrder.PriceCondition 同形）
@@ -27,11 +27,16 @@ public enum AlertCondition: Sendable, Codable, Equatable, Hashable {
     /// v1 只支持 horizontalLine 类型；趋势线/矩形/斐波那契等留 v2 接 DrawingGeometry
     case horizontalLineTouched(drawingID: UUID, price: Decimal)
 
-    // MARK: - 异常类（2 子类）
+    // MARK: - 异常类（3 子类）
 
     /// 成交量异常：当前 volume / 近 N 期均值 ≥ multiple
     /// AlertEvaluator 维护滑动窗口
     case volumeSpike(multiple: Decimal, windowBars: Int)
+
+    /// 持仓量异常：当前 OI / 近 N 期均值 ≥ multiple（v15.12 WP-52 v3 · 期货特有）
+    /// 用户场景：突然增仓暗示资金动向（夜盘开盘 / 主力建仓 / 平仓潮）
+    /// 与 volumeSpike 同模式 · 滑动窗口 + 比值阈值 · 走 onTick 路径（Tick.openInterest 直接读）
+    case openInterestSpike(multiple: Decimal, windowBars: Int)
 
     /// 价格急动：windowSeconds 内价格变化绝对值 / 起始价 ≥ percentThreshold
     case priceMoveSpike(percentThreshold: Decimal, windowSeconds: Int)

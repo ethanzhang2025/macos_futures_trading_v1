@@ -1635,8 +1635,15 @@ struct ChartContentView: View {
             HStack(spacing: 0) {
                 chartMainArea
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                KLineAxisView(bars: bars, viewport: viewport, priceRange: currentPriceRange, orientation: .price)
-                    .frame(width: 60)
+                KLineAxisView(
+                    bars: bars,
+                    viewport: viewport,
+                    priceRange: currentPriceRange,
+                    orientation: .price,
+                    axisBackground: chartTheme.background,
+                    axisTextColor: chartTheme.textSecondary
+                )
+                .frame(width: 60)
             }
             // 视觉迭代第 9 项：主图 ↔ 副图分割线 · v13.20 升级为可拖分割条（4pt 高度 · 鼠标 hover 显示 row cursor · 拖动改副图总高度）
             mainSubDivider
@@ -1667,8 +1674,15 @@ struct ChartContentView: View {
                 }
             }
             .frame(height: subChartTotalHeight)
-            KLineAxisView(bars: bars, viewport: viewport, priceRange: currentPriceRange, orientation: .time)
-                .frame(height: 28)
+            KLineAxisView(
+                bars: bars,
+                viewport: viewport,
+                priceRange: currentPriceRange,
+                orientation: .time,
+                axisBackground: chartTheme.background,
+                axisTextColor: chartTheme.textSecondary
+            )
+            .frame(height: 28)
         }
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         .background(viewportShortcuts)
@@ -1766,7 +1780,16 @@ struct ChartContentView: View {
             // 视觉迭代第 1 项：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐
             KLineGridView()
             // 视觉迭代第 2 项：十字光标 + OHLC 浮窗 + 轴边价格/时间浮标（hover 跟随）
-            KLineCrosshairView(bars: bars, viewport: viewport, priceRange: currentPriceRange, period: bars.first?.period ?? .minute15)
+            KLineCrosshairView(
+                bars: bars,
+                viewport: viewport,
+                priceRange: currentPriceRange,
+                period: bars.first?.period ?? .minute15,
+                tooltipBackground: chartTheme.hudBackground,
+                tooltipPrimaryText: chartTheme.textPrimary,
+                tooltipSecondaryText: chartTheme.textSecondary,
+                crosshairLineColor: chartTheme.textSecondary.opacity(0.7)
+            )
             // v13.0 WP-42 画线 overlay 渲染层（在十字光标上 · HUD 下）
             // v13.3 pendingDrawing 接 pendingDrawingPoint + hoverDataPoint 实时预览第二点（虚线）
             DrawingsOverlayView(

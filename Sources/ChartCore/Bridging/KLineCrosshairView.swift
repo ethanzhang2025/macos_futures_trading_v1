@@ -18,6 +18,11 @@ public struct KLineCrosshairView: View {
     public let viewport: RenderViewport
     public let priceRange: ClosedRange<Decimal>
     public let period: KLinePeriod
+    /// v15.x 主题切换支持 · 默认深色保兼容
+    public let tooltipBackground: Color
+    public let tooltipPrimaryText: Color
+    public let tooltipSecondaryText: Color
+    public let crosshairLineColor: Color
 
     @State private var hoverPoint: CGPoint?
 
@@ -38,11 +43,24 @@ public struct KLineCrosshairView: View {
         return f
     }
 
-    public init(bars: [KLine], viewport: RenderViewport, priceRange: ClosedRange<Decimal>, period: KLinePeriod) {
+    public init(
+        bars: [KLine],
+        viewport: RenderViewport,
+        priceRange: ClosedRange<Decimal>,
+        period: KLinePeriod,
+        tooltipBackground: Color = Color.black.opacity(0.85),
+        tooltipPrimaryText: Color = .white,
+        tooltipSecondaryText: Color = Color.white.opacity(0.7),
+        crosshairLineColor: Color = Color.white.opacity(0.5)
+    ) {
         self.bars = bars
         self.viewport = viewport
         self.priceRange = priceRange
         self.period = period
+        self.tooltipBackground = tooltipBackground
+        self.tooltipPrimaryText = tooltipPrimaryText
+        self.tooltipSecondaryText = tooltipSecondaryText
+        self.crosshairLineColor = crosshairLineColor
     }
 
     public var body: some View {
@@ -66,7 +84,10 @@ public struct KLineCrosshairView: View {
                     OHLCTooltip(
                         time: timeFormatter.string(from: info.bar.openTime),
                         bar: info.bar,
-                        cursorPrice: info.cursorPrice
+                        cursorPrice: info.cursorPrice,
+                        backgroundColor: tooltipBackground,
+                        primaryText: tooltipPrimaryText,
+                        secondaryText: tooltipSecondaryText
                     )
                     .position(tooltipPosition(at: pt, in: geom.size))
                 }
@@ -102,7 +123,7 @@ public struct KLineCrosshairView: View {
             p.move(to: CGPoint(x: pt.x, y: 0))
             p.addLine(to: CGPoint(x: pt.x, y: size.height))
         }
-        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        .stroke(crosshairLineColor, style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
         .allowsHitTesting(false)
     }
 
@@ -152,28 +173,31 @@ private struct OHLCTooltip: View {
     let time: String
     let bar: KLine
     let cursorPrice: Decimal
+    let backgroundColor: Color
+    let primaryText: Color
+    let secondaryText: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(time)
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
-            Divider().background(Color.white.opacity(0.2))
-            row(label: "开", value: bar.open, color: .white)
+                .foregroundColor(secondaryText)
+            Divider().background(secondaryText.opacity(0.3))
+            row(label: "开", value: bar.open, color: primaryText)
             row(label: "高", value: bar.high, color: .red)
             row(label: "低", value: bar.low, color: .green)
             row(label: "收", value: bar.close, color: bar.close >= bar.open ? .red : .green)
-            row(label: "量", value: Decimal(bar.volume), color: .gray)
-            Divider().background(Color.white.opacity(0.2))
+            row(label: "量", value: Decimal(bar.volume), color: secondaryText)
+            Divider().background(secondaryText.opacity(0.3))
             row(label: "价位", value: cursorPrice, color: .yellow)
         }
         .padding(8)
         .frame(width: 200, alignment: .leading)
-        .background(Color.black.opacity(0.85))
+        .background(backgroundColor)
         .cornerRadius(6)
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                .stroke(secondaryText.opacity(0.3), lineWidth: 0.5)
         )
         .allowsHitTesting(false)
     }
@@ -182,7 +206,7 @@ private struct OHLCTooltip: View {
         HStack(spacing: 6) {
             Text(label)
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(secondaryText)
                 .frame(width: 28, alignment: .leading)
             Text(value.description)
                 .font(.system(size: 11, design: .monospaced))

@@ -34,22 +34,34 @@ public struct KLineAxisView: View {
     public let viewport: RenderViewport
     public let priceRange: ClosedRange<Decimal>
     public let orientation: Orientation
+    /// v15.x 主题切换支持 · 默认深色保兼容
+    public let axisBackground: Color
+    public let axisTextColor: Color
 
-    public init(bars: [KLine], viewport: RenderViewport, priceRange: ClosedRange<Decimal>, orientation: Orientation) {
+    public init(
+        bars: [KLine],
+        viewport: RenderViewport,
+        priceRange: ClosedRange<Decimal>,
+        orientation: Orientation,
+        axisBackground: Color = Color.black.opacity(0.35),
+        axisTextColor: Color = Color.white.opacity(0.78)
+    ) {
         self.bars = bars
         self.viewport = viewport
         self.priceRange = priceRange
         self.orientation = orientation
+        self.axisBackground = axisBackground
+        self.axisTextColor = axisTextColor
     }
 
     public var body: some View {
         GeometryReader { geom in
             ZStack(alignment: .topLeading) {
-                Color.black.opacity(0.35)
+                axisBackground
                 ForEach(0..<Self.labelCount, id: \.self) { i in
                     Text(label(at: i))
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.78))
+                        .foregroundColor(axisTextColor)
                         .position(position(at: i, in: geom.size))
                 }
                 // 视觉迭代第 7 项：价格轴最新 close 黄色高亮标签（仅 .price 模式）

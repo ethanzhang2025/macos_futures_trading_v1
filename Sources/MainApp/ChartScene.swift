@@ -23,9 +23,10 @@ import TradingCore
 
 // MARK: - v15.x · trackpad / 滚轮 scrollWheel 捕获（双指上下推 = K 线缩放）
 
-/// NSViewRepresentable 包装 NSView 重载 scrollWheel · SwiftUI .background 注入
-/// 解决：SwiftUI 原生不监听 NSEvent.scrollWheel · MagnificationGesture 仅响应捏合
-/// macOS trackpad 双指上下推 / 鼠标滚轮 → NSEvent.scrollWheel · 转 callback 给 SwiftUI 修 viewport
+/// NSViewRepresentable 包装 NSView · 用 NSEvent.addLocalMonitorForEvents 监听 scrollWheel
+/// v15.16 hotfix：原 scrollWheel(with:) override 走 hit-test 链 · .background 在 z-order 后层
+/// 兄弟 SwiftUI 前层 view 收到事件后不 bubble 到兄弟 → 永不触发
+/// 改用 local monitor：按鼠标位置判断是否在 self.bounds 内 · 不依赖 hit-test 链
 fileprivate struct ScrollWheelCaptureView: NSViewRepresentable {
     let onScroll: (CGFloat) -> Void
 
@@ -40,13 +41,38 @@ fileprivate struct ScrollWheelCaptureView: NSViewRepresentable {
     }
 }
 
-/// scrollWheel 捕获 NSView · scrollingDeltaY 单位：trackpad ≈ 5-30 / event · 鼠标滚轮 ≈ 1-3 / event
+/// scrollWheel 捕获 NSView · 通过 NSEvent local monitor 主动监听
+/// scrollingDeltaY 单位：trackpad ≈ 5-30 / event · 鼠标滚轮 ≈ 1-3 / event
 private final class ScrollCaptureNSView: NSView {
     var onScroll: ((CGFloat) -> Void)?
-    override func scrollWheel(with event: NSEvent) {
-        // hasPreciseScrollingDeltas = true 是 trackpad / Magic Mouse · false 是机械滚轮
-        // 两种都用 scrollingDeltaY · 系数在 caller 内统一 0.01
-        onScroll?(event.scrollingDeltaY)
+    private var monitor: Any?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let m = monitor {
+            NSEvent.removeMonitor(m)
+            monitor = nil
+        }
+        guard window != nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self = self,
+                  let win = self.window,
+                  event.window === win else {
+                return event
+            }
+            let pointInView = self.convert(event.locationInWindow, from: nil)
+            guard self.bounds.contains(pointInView) else {
+                return event
+            }
+            self.onScroll?(event.scrollingDeltaY)
+            return nil
+        }
+    }
+
+    deinit {
+        if let m = monitor {
+            NSEvent.removeMonitor(m)
+        }
     }
 }
 

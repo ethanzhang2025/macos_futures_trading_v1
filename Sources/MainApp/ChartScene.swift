@@ -134,6 +134,10 @@ struct ChartScene: View {
     /// v15.8 主图主题（深色 / 浅色）· UserDefaults 全局共享
     @State private var chartTheme: ChartTheme = .dark
     @State private var isChartThemeLoaded: Bool = false
+    /// v15.14 HUD 自定义字段（OHLC / 涨跌 / 成交量 / 持仓量 / 时间 / 调试）· UserDefaults 全局共享
+    @State private var hudFields: HUDFieldsBook = .default
+    @State private var isHUDFieldsLoaded: Bool = false
+    @State private var showHUDFieldsSheet: Bool = false
 
     private static let drawingTemplatesKey = "drawingTemplates.v1"
     /// v13.21 副图偏好持久化（重启保留 · 跨合约/周期共享）
@@ -311,6 +315,13 @@ struct ChartScene: View {
                 }
                 isChartThemeLoaded = true
             }
+            // v15.14 HUD 字段加载（独立守卫 · UserDefaults 不存在 fallback default 仅 .debug）
+            if !isHUDFieldsLoaded {
+                if let book = HUDFieldsStore.load() {
+                    hudFields = book
+                }
+                isHUDFieldsLoaded = true
+            }
         }
         .onChange(of: drawingTemplates) { newValue in
             // v13.16 模板持久化 UserDefaults · 加载守卫避免初始 [] 误覆盖
@@ -359,6 +370,14 @@ struct ChartScene: View {
             // v15.8 主题持久化（颜色 SwiftUI Binding 自动重渲染 · 不需手动 refresh）
             guard isChartThemeLoaded else { return }
             ChartThemeStore.save(newValue)
+        }
+        .onChange(of: hudFields) { newValue in
+            // v15.14 HUD 字段持久化（独立守卫 · UserDefaults JSON）
+            guard isHUDFieldsLoaded else { return }
+            HUDFieldsStore.save(newValue)
+        }
+        .sheet(isPresented: $showHUDFieldsSheet) {
+            HUDFieldsSheet(book: $hudFields)
         }
         .sheet(item: Binding(
             get: { editingSubSlot.map { SubSlotIdentified(slot: $0) } },
@@ -872,6 +891,16 @@ struct ChartScene: View {
             .buttonStyle(.borderless)
             .help("切换 \(chartTheme == .dark ? "浅色" : "深色") 主题")
 
+            // v15.14 · HUD 字段自定义按钮（OHLC / 涨跌 / 成交量 / 持仓量 / 时间 / 调试 全可选）
+            Button {
+                showHUDFieldsSheet = true
+            } label: {
+                Image(systemName: "rectangle.dashed")
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.borderless)
+            .help("HUD 显示字段（OHLC / 成交量 / 持仓量 / 时间 等可选）")
+
             Spacer()
             Text("⌘N 新窗口 · ⌘L 自选 · ⌘T 模拟交易")
                 .foregroundColor(.secondary)
@@ -900,6 +929,7 @@ struct ChartScene: View {
                 subParamsOverrides: subParamsOverrides,
                 onEditSubSlot: { slot in editingSubSlot = slot },
                 chartTheme: chartTheme,
+                hudFields: hudFields,
                 drawings: $drawings,
                 activeDrawingTool: $activeDrawingTool,
                 pendingDrawingPoint: $pendingDrawingPoint,
@@ -1354,6 +1384,8 @@ struct ChartContentView: View {
     let onEditSubSlot: (Int) -> Void
     /// v15.8 主图主题（深色 / 浅色）· 影响背景 / 文字 / 网格 / candle 配色
     let chartTheme: ChartTheme
+    /// v15.14 HUD 自定义字段（按 fields 渲染各可选项）
+    let hudFields: HUDFieldsBook
     /// v13.0 WP-42 画线状态（绑定 ChartScene · 父子双向同步）
     @Binding var drawings: [Drawing]
     @Binding var activeDrawingTool: DrawingType?
@@ -1415,6 +1447,7 @@ struct ChartContentView: View {
         subParamsOverrides: [Int: IndicatorParamsBook],
         onEditSubSlot: @escaping (Int) -> Void,
         chartTheme: ChartTheme,
+        hudFields: HUDFieldsBook,
         drawings: Binding<[Drawing]>,
         activeDrawingTool: Binding<DrawingType?>,
         pendingDrawingPoint: Binding<DrawingPoint?>,
@@ -1439,6 +1472,7 @@ struct ChartContentView: View {
         self.subParamsOverrides = subParamsOverrides
         self.onEditSubSlot = onEditSubSlot
         self.chartTheme = chartTheme
+        self.hudFields = hudFields
         self._drawings = drawings
         self._activeDrawingTool = activeDrawingTool
         self._pendingDrawingPoint = pendingDrawingPoint
@@ -2695,7 +2729,7 @@ struct ChartContentView: View {
 
     var hud: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // 主标识行：合约 + 周期 + 数据源（核心信息 · 醒目）
+            // 主标识行：合约 + 周期 + 数据源（核心信息 · 醒目 · 始终显示不可关）
             Text("\(instrumentLabel) · \(periodLabel) · \(dataSourceLabel)")
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundColor(chartTheme.textPrimary)
@@ -2709,10 +2743,34 @@ struct ChartContentView: View {
                         .foregroundColor(Self.indicatorTextColor(at: idx))
                 }
             }
-            // 视觉迭代第 4 项：调试信息（视野/帧时）淡化 · 字号缩小 + 灰色 · 不抢主信息
-            Text("可见 \(viewport.visibleCount) · 起点 \(viewport.startIndex)/\(bars.count) · 帧 \(String(format: "%.1f", lastFrameMs))ms")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(chartTheme.textSecondary)
+            // v15.14 自定义字段（按 hudFields 渲染 · 用户主动选才显 · 取 visible 末位 K 线）
+            if let lastBar = visibleLastBar {
+                if hudFields.fields.contains(.timestamp) {
+                    Text("时间 \(formatBarTime(lastBar))")
+                }
+                if hudFields.fields.contains(.ohlc) {
+                    Text("O \(fmt(lastBar.open))  H \(fmt(lastBar.high))  L \(fmt(lastBar.low))  C \(fmt(lastBar.close))")
+                }
+                if hudFields.fields.contains(.change) {
+                    let baseline = preSettle ?? bars.first?.close ?? lastBar.close
+                    let diff = lastBar.close - baseline
+                    let pct = baseline != 0 ? (NSDecimalNumber(decimal: diff).doubleValue / NSDecimalNumber(decimal: baseline).doubleValue * 100) : 0
+                    Text("涨跌 \(fmt(diff)) (\(String(format: "%+.2f%%", pct)))")
+                        .foregroundColor(diff >= 0 ? chartTheme.candleBull : chartTheme.candleBear)
+                }
+                if hudFields.fields.contains(.volume) {
+                    Text("量 \(lastBar.volume)")
+                }
+                if hudFields.fields.contains(.openInterest) {
+                    Text("持仓 \(fmt(lastBar.openInterest))")
+                }
+            }
+            // 视觉迭代第 4 项：调试信息（视野/帧时）· v15.14 用户可关 · 默认开
+            if hudFields.fields.contains(.debug) {
+                Text("可见 \(viewport.visibleCount) · 起点 \(viewport.startIndex)/\(bars.count) · 帧 \(String(format: "%.1f", lastFrameMs))ms")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(chartTheme.textSecondary)
+            }
         }
         .font(.system(size: 12, design: .monospaced))
         .foregroundColor(chartTheme.textPrimary)
@@ -2720,6 +2778,30 @@ struct ChartContentView: View {
         .background(chartTheme.hudBackground)
         .cornerRadius(6)
         .padding(12)
+    }
+
+    /// v15.14 visible window 末位 K 线（HUD 自定义字段所有"最新"语义都基于此 · 与画面对齐）
+    private var visibleLastBar: KLine? {
+        let end = min(viewport.startIndex + viewport.visibleCount, bars.count) - 1
+        guard end >= 0, end < bars.count else { return nil }
+        return bars[end]
+    }
+
+    /// v15.14 价格 / OI 数字格式（保 2 位小数）
+    private func fmt(_ d: Decimal) -> String {
+        String(format: "%.2f", NSDecimalNumber(decimal: d).doubleValue)
+    }
+
+    /// v15.14 K 线时间戳格式（按 period 跨度选不同格式 · 与 KLineCrosshairView 风格对齐）
+    private func formatBarTime(_ bar: KLine) -> String {
+        let formatter = DateFormatter()
+        switch bar.period {
+        case .minute1, .minute5, .minute15: formatter.dateFormat = "MM-dd HH:mm"
+        case .minute30, .hour1:             formatter.dateFormat = "yy-MM-dd HH:mm"
+        case .daily, .weekly:               formatter.dateFormat = "yyyy-MM-dd"
+        case .monthly:                      formatter.dateFormat = "yyyy-MM"
+        }
+        return formatter.string(from: bar.timestamp)
     }
 
     /// 与 MetalKLineRenderer.indicatorPalette 同步（黄/紫/蓝/橙/粉 · MA5/MA20/MA60/BOLL-UP/BOLL-DN）

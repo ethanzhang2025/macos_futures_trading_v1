@@ -22,13 +22,21 @@ public struct KLineMetalView: NSViewRepresentable {
 
     /// 深色背景色（Mac 原生终端审美 · #12141A 接近 Xcode dark theme）
     public static let defaultClearColor = MTLClearColorMake(0.07, 0.08, 0.10, 1.0)
+    /// 浅色背景色（v15.x 主题切换 · 与 ChartTheme.light.background 对齐 #F5F6F8）
+    public static let lightClearColor = MTLClearColorMake(0.96, 0.965, 0.972, 1.0)
 
     public let renderer: MetalKLineRenderer
     public let input: KLineRenderInput
+    public let clearColor: MTLClearColor
 
-    public init(renderer: MetalKLineRenderer, input: KLineRenderInput) {
+    public init(
+        renderer: MetalKLineRenderer,
+        input: KLineRenderInput,
+        clearColor: MTLClearColor = defaultClearColor
+    ) {
         self.renderer = renderer
         self.input = input
+        self.clearColor = clearColor
     }
 
     public func makeCoordinator() -> Coordinator {
@@ -41,7 +49,7 @@ public struct KLineMetalView: NSViewRepresentable {
         view.delegate = context.coordinator
         view.colorPixelFormat = .bgra8Unorm
         view.preferredFramesPerSecond = 120  // ProMotion 屏 120Hz · 普通 60Hz · 系统取实际可用上限
-        view.clearColor = Self.defaultClearColor
+        view.clearColor = clearColor
         view.framebufferOnly = true
         view.enableSetNeedsDisplay = false
         view.isPaused = false
@@ -51,6 +59,7 @@ public struct KLineMetalView: NSViewRepresentable {
 
     public func updateNSView(_ nsView: MTKView, context: Context) {
         context.coordinator.currentInput = input
+        nsView.clearColor = clearColor  // v15.x 主题切换时同步更新
     }
 
     @MainActor

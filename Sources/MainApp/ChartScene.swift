@@ -1759,7 +1759,8 @@ struct ChartContentView: View {
         ZStack(alignment: .topLeading) {
             KLineMetalView(
                 renderer: renderer,
-                input: KLineRenderInput(bars: bars, indicators: indicators, viewport: viewport)
+                input: KLineRenderInput(bars: bars, indicators: indicators, viewport: viewport),
+                clearColor: chartTheme.metalClearColor
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // 视觉迭代第 1 项：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐

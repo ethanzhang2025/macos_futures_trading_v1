@@ -101,6 +101,23 @@ enum ChartTheme: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// MARK: - Metal MTLClearColor 桥接（v15.x 主图 K 线 Metal 渲染背景跟主题）
+
+#if canImport(Metal)
+import Metal
+
+extension ChartTheme {
+    /// MTKView.clearColor 用 · 与 background SwiftUI Color 对齐
+    /// 深色 #11141A · 浅色 #F5F6F8（数值与 KLineMetalView.defaultClearColor / lightClearColor 同步）
+    var metalClearColor: MTLClearColor {
+        switch self {
+        case .dark:  return MTLClearColorMake(0.07,  0.08,  0.10,  1.0)
+        case .light: return MTLClearColorMake(0.96,  0.965, 0.972, 1.0)
+        }
+    }
+}
+#endif
+
 // MARK: - UserDefaults 加载/保存
 
 enum ChartThemeStore {

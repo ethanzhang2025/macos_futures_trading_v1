@@ -14,6 +14,7 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import Shared
 
 struct IndicatorParamsSheet: View {
 

@@ -21,6 +21,24 @@ import StoreCore
 import AlertCore
 import TradingCore
 
+// MARK: - file-scope helpers（让 ChartScene + ChartContentView 都能访问 · 避免 cross-struct 访问错误）
+
+/// v13.6 画线类型中文标签 · 多处用（drawingInspector / drawingContextMenu / 模板列表 / 模板命名）
+fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
+    switch type {
+    case .trendLine:       return "趋势线"
+    case .horizontalLine:  return "水平线"
+    case .rectangle:       return "矩形"
+    case .parallelChannel: return "平行通道"
+    case .fibonacci:       return "斐波那契"
+    case .text:            return "文字标注"
+    case .ellipse:         return "椭圆"
+    case .ruler:           return "测量工具"
+    case .pitchfork:       return "Pitchfork"
+    case .polygon:         return "多边形"
+    }
+}
+
 // MARK: - HUD 4 角位置（v13.34 · file scope 让 ChartScene + ChartContentView 都能访问）
 
 enum HUDCorner: String, CaseIterable {
@@ -277,15 +295,13 @@ struct ChartScene: View {
                 }
                 isTemplatesLoaded = true
             }
-            // v13.21 副图偏好首次加载（重启保留 · 多窗口共享）· 仅一次
+            // v13.21 副图选择偏好首次加载（重启保留 · 多窗口共享）· 仅一次
+            // v15.x · 副图高度（subChartTotalHeight）持久化已移到 ChartContentView 内 onAppear/onChange
+            //         避免 cross-struct 访问 @State / 嵌套 enum SubChart（Mac 编译错误）
             if !isSubPrefsLoaded {
                 if let arr = UserDefaults.standard.array(forKey: Self.subIndicatorsKey) as? [String] {
                     let kinds = arr.compactMap { SubIndicatorKind(rawValue: $0) }
                     if !kinds.isEmpty { selectedSubIndicators = Set(kinds) }
-                }
-                let h = UserDefaults.standard.double(forKey: Self.subChartHeightKey)
-                if h >= SubChart.minHeight && h <= SubChart.maxHeight {
-                    subChartTotalHeight = CGFloat(h)
                 }
                 isSubPrefsLoaded = true
             }
@@ -336,11 +352,7 @@ struct ChartScene: View {
             let arr = newValue.map(\.rawValue).sorted()
             UserDefaults.standard.set(arr, forKey: Self.subIndicatorsKey)
         }
-        .onChange(of: subChartTotalHeight) { newValue in
-            // v13.21 副图高度持久化
-            guard isSubPrefsLoaded else { return }
-            UserDefaults.standard.set(Double(newValue), forKey: Self.subChartHeightKey)
-        }
+        // v15.x · 副图高度持久化已移到 ChartContentView 内（避免 cross-struct 访问 @State）
         .onChange(of: hudCorner) { newValue in
             // v13.34 HUD 位置持久化
             guard isHUDPrefLoaded else { return }
@@ -684,7 +696,7 @@ struct ChartScene: View {
                     .foregroundColor(.secondary)
             } else {
                 ForEach(drawingTemplates) { template in
-                    Button("\(template.name) · \(Self.drawingTypeLabel(template.drawing.type))") {
+                    Button("\(template.name) · \(drawingTypeLabel(template.drawing.type))") {
                         let d = instantiateTemplate(template)
                         drawings.append(d)
                         selectedDrawingIDs = [d.id]
@@ -730,13 +742,53 @@ struct ChartScene: View {
         return drawing
     }
 
+    /// v15.x · 在 ChartScene scope 内的画线复制简化版（不依赖 ChartContentView.currentPriceRange）
+    /// 偏移：20 bar + startPoint.price 的 0.5% 作绝对偏移 · 原 ChartContentView 用 priceSpan*5% 更精准
+    /// 当前 keyboardShortcut Button 在 ChartScene 内 · 必须 file scope 函数 · 折衷为用 startPoint 价格基准
+    private func duplicatedDrawing(_ drawing: Drawing) -> Drawing {
+        let barOffset = 20
+        let priceOffset = drawing.startPoint.price * Decimal(string: "0.005")!
+        let newStart = DrawingPoint(barIndex: drawing.startPoint.barIndex + barOffset,
+                                    price: drawing.startPoint.price + priceOffset)
+        let newEnd: DrawingPoint? = drawing.endPoint.map {
+            DrawingPoint(barIndex: $0.barIndex + barOffset, price: $0.price + priceOffset)
+        }
+        let newExtras: [DrawingPoint]? = drawing.extraPoints?.map {
+            DrawingPoint(barIndex: $0.barIndex + barOffset, price: $0.price + priceOffset)
+        }
+        return Drawing(
+            id: UUID(),
+            type: drawing.type,
+            startPoint: newStart,
+            endPoint: newEnd,
+            text: drawing.text,
+            channelOffset: drawing.channelOffset,
+            strokeColorHex: drawing.strokeColorHex,
+            strokeWidth: drawing.strokeWidth,
+            isLocked: nil,
+            fontSize: drawing.fontSize,
+            strokeOpacity: drawing.strokeOpacity,
+            extraPoints: newExtras,
+            isBold: drawing.isBold,
+            isItalic: drawing.isItalic,
+            isUnderline: drawing.isUnderline
+        )
+    }
+
+    /// v15.x · 在 ChartScene scope 内的批量锁定（直接 mutate drawings @State · 与 ChartContentView 同实现）
+    private func setLocked(_ locked: Bool, for ids: Set<UUID>) {
+        for i in drawings.indices where ids.contains(drawings[i].id) {
+            drawings[i].isLocked = locked ? true : nil
+        }
+    }
+
     /// v13.16 保存选中画线为模板 · NSAlert 输入名称
     private func saveCurrentAsTemplate(_ drawing: Drawing) {
         let alert = NSAlert()
         alert.messageText = "保存为模板"
         alert.informativeText = "输入模板名称（已存 \(drawingTemplates.count) 个）："
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
-        let typeName = Self.drawingTypeLabel(drawing.type)
+        let typeName = drawingTypeLabel(drawing.type)
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "MM-dd HH:mm"
         textField.stringValue = "\(typeName) \(dateFmt.string(from: Date()))"
@@ -789,10 +841,10 @@ struct ChartScene: View {
         let drawing = Drawing(
             type: .polygon,
             startPoint: first,
-            extraPoints: pendingExtraPoints,
             strokeColorHex: ChartContentView.hexString(from: currentStrokeColor),
             strokeWidth: currentStrokeWidth,
-            strokeOpacity: ChartContentView.alphaComponent(from: currentStrokeColor)
+            strokeOpacity: ChartContentView.alphaComponent(from: currentStrokeColor),
+            extraPoints: pendingExtraPoints
         )
         drawings.append(drawing)
         pendingDrawingPoint = nil
@@ -1578,6 +1630,17 @@ struct ChartContentView: View {
                 UserDefaults.standard.set(data, forKey: viewportSaveKey)
             }
         }
+        // v15.x · 副图高度 onAppear 加载（从 UserDefaults · 历史 v13.21 此持久化在 ChartScene 内但跨 struct 错 · 本次修到 ChartContentView）
+        .onAppear {
+            let h = UserDefaults.standard.double(forKey: ChartContentView.subChartHeightKey)
+            if h >= SubChart.minHeight && h <= SubChart.maxHeight {
+                subChartTotalHeight = CGFloat(h)
+            }
+        }
+        .onChange(of: subChartTotalHeight) { newValue in
+            // v15.x · 副图高度 onChange 持久化（用户拖分割条改高度即时存）
+            UserDefaults.standard.set(Double(newValue), forKey: ChartContentView.subChartHeightKey)
+        }
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 100_000_000)
@@ -1586,6 +1649,9 @@ struct ChartContentView: View {
             }
         }
     }
+
+    /// v15.x · 副图高度 UserDefaults key（移自 ChartScene · 持久化在本 struct 内）
+    fileprivate static let subChartHeightKey = "subChartHeight.v1"
 
     /// v13.23 viewport 键盘快捷键（仅 keyWindow 响应 · 多窗口隔离）
     /// ⌘= 放大 / ⌘- 缩小 / ⌘0 重置（默认 120 根） / ← 后退 5 / → 前进 5（带 ⇧ 键 25 根加速）
@@ -1721,7 +1787,7 @@ struct ChartContentView: View {
         } else if let id = selectedDrawingIDs.first, let d = drawings.first(where: { $0.id == id }) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(Self.drawingTypeLabel(d.type))
+                    Text(drawingTypeLabel(d.type))
                         .fontWeight(.semibold)
                     Spacer()
                     Button {
@@ -1779,20 +1845,7 @@ struct ChartContentView: View {
         }
     }
 
-    private static func drawingTypeLabel(_ type: DrawingType) -> String {
-        switch type {
-        case .trendLine:       return "趋势线"
-        case .horizontalLine:  return "水平线"
-        case .rectangle:       return "矩形"
-        case .parallelChannel: return "平行通道"
-        case .fibonacci:       return "斐波那契"
-        case .text:            return "文字标注"
-        case .ellipse:         return "椭圆"
-        case .ruler:           return "测量工具"
-        case .pitchfork:       return "Pitchfork"
-        case .polygon:         return "多边形"
-        }
-    }
+    // v15.x · drawingTypeLabel 提到 file scope · ChartContentView 内调用直接用 file 顶部 fileprivate 函数
 
     private func formatPrice(_ p: Decimal) -> String {
         String(format: "%.2f", NSDecimalNumber(decimal: p).doubleValue)
@@ -1983,7 +2036,7 @@ struct ChartContentView: View {
         dateFmt.dateFormat = "yyyy-MM-dd HH:mm"
         var lines: [String] = ["time,open,high,low,close,volume"]
         for bar in slice {
-            let t = dateFmt.string(from: bar.timestamp)
+            let t = dateFmt.string(from: bar.openTime)
             let o = NSDecimalNumber(decimal: bar.open).stringValue
             let h = NSDecimalNumber(decimal: bar.high).stringValue
             let l = NSDecimalNumber(decimal: bar.low).stringValue
@@ -2107,9 +2160,9 @@ struct ChartContentView: View {
         let priceStr = formatPrice(price)
         let nsAlert = NSAlert()
         nsAlert.messageText = "为水平线创建预警"
-        nsAlert.informativeText = "价格触及 \(priceStr) 时预警 · \(currentInstrumentID)"
+        nsAlert.informativeText = "价格触及 \(priceStr) 时预警 · \(instrumentLabel)"
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
-        textField.stringValue = "\(currentInstrumentID) 触及 \(priceStr)"
+        textField.stringValue = "\(instrumentLabel) 触及 \(priceStr)"
         nsAlert.accessoryView = textField
         nsAlert.addButton(withTitle: "创建")
         nsAlert.addButton(withTitle: "取消")
@@ -2117,7 +2170,7 @@ struct ChartContentView: View {
             let name = textField.stringValue.isEmpty ? "水平线预警" : textField.stringValue
             let newAlert = Alert(
                 name: name,
-                instrumentID: currentInstrumentID,
+                instrumentID: instrumentLabel,
                 condition: .horizontalLineTouched(drawingID: drawing.id, price: price)
             )
             // post 给 AlertWindow（自动 alerts.append → onChange save + evaluator sync）
@@ -2599,10 +2652,10 @@ struct ChartContentView: View {
                 type: .pitchfork,
                 startPoint: pendingDrawingPoint!,
                 endPoint: pendingExtraPoints[0],
-                extraPoints: [point],
                 strokeColorHex: Self.hexString(from: currentStrokeColor),
                 strokeWidth: currentStrokeWidth,
-                strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
+                strokeOpacity: Self.alphaComponent(from: currentStrokeColor),
+                extraPoints: [point]
             )
             drawings.append(drawing)
             pendingDrawingPoint = nil
@@ -2796,12 +2849,18 @@ struct ChartContentView: View {
     private func formatBarTime(_ bar: KLine) -> String {
         let formatter = DateFormatter()
         switch bar.period {
-        case .minute1, .minute5, .minute15: formatter.dateFormat = "MM-dd HH:mm"
-        case .minute30, .hour1:             formatter.dateFormat = "yy-MM-dd HH:mm"
-        case .daily, .weekly:               formatter.dateFormat = "yyyy-MM-dd"
-        case .monthly:                      formatter.dateFormat = "yyyy-MM"
+        case .second1, .second3, .second5, .second10, .second15, .second30:
+            formatter.dateFormat = "MM-dd HH:mm:ss"
+        case .minute1, .minute3, .minute5, .minute15:
+            formatter.dateFormat = "MM-dd HH:mm"
+        case .minute30, .hour1, .hour2, .hour4:
+            formatter.dateFormat = "yy-MM-dd HH:mm"
+        case .daily, .weekly:
+            formatter.dateFormat = "yyyy-MM-dd"
+        case .monthly:
+            formatter.dateFormat = "yyyy-MM"
         }
-        return formatter.string(from: bar.timestamp)
+        return formatter.string(from: bar.openTime)
     }
 
     /// 与 MetalKLineRenderer.indicatorPalette 同步（黄/紫/蓝/橙/粉 · MA5/MA20/MA60/BOLL-UP/BOLL-DN）

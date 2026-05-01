@@ -9,6 +9,7 @@
 
 import SwiftUI
 import Foundation
+import Shared
 import AlertCore
 import StoreCore
 

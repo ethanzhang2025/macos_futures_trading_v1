@@ -10,10 +10,15 @@ public final class ContractStore: @unchecked Sendable {
     public init() {}
 
     /// 添加/更新合约
+    /// v15.16 hotfix #11：仅新合约才 append index · 否则重复 upsert（如 hot reload）会让 productIndex / exchangeIndex 累积重复 ID
+    /// 假设合约的 productID/exchange 不会改（罕见 · 若发生需手动 reset · 当前业务范围不处理）
     public func upsert(_ contract: Contract) {
+        let isNew = (contracts[contract.instrumentID] == nil)
         contracts[contract.instrumentID] = contract
-        productIndex[contract.productID, default: []].append(contract.instrumentID)
-        exchangeIndex[contract.exchange, default: []].append(contract.instrumentID)
+        if isNew {
+            productIndex[contract.productID, default: []].append(contract.instrumentID)
+            exchangeIndex[contract.exchange, default: []].append(contract.instrumentID)
+        }
     }
 
     /// 批量加载

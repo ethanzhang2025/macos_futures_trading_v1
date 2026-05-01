@@ -73,7 +73,17 @@ struct TradingWindow: View {
             await loadInitial()
             startObserving()
         }
-        .onDisappear { observeTask?.cancel() }
+        .onDisappear {
+            observeTask?.cancel()
+            // v15.16 hotfix #11：window 关闭时强制 flush 当前 snapshot · 不丢节流尾巴最后一笔
+            // 区别于 saveSnapshotIfNeeded 的 1s 节流 · 这里立即写
+            if let engine {
+                Task {
+                    let snap = await engine.snapshot()
+                    SimulatedTradingStore.save(snap)
+                }
+            }
+        }
     }
 
     // MARK: - 顶部账户摘要

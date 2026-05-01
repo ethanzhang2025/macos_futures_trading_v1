@@ -45,6 +45,9 @@ public actor SimulatedTradingEngine {
     private var equityCurve: [EquityCurvePoint] = []
     /// 资金曲线最大点数（5000 点足够覆盖一日盘中分钟级采样）
     private let maxEquityPoints: Int = 5000
+    /// v15.16 hotfix #11：每合约最近 lastPrice 缓存 · 多合约浮盈正确计算
+    /// 之前 recomputePositionPnL 用 openAvgPrice 当其他 instrument mark · 浮盈丢失
+    private var instrumentLastPrice: [String: Decimal] = [:]
 
     // MARK: - 初始化
 
@@ -364,11 +367,15 @@ public actor SimulatedTradingEngine {
     }
 
     /// 重新计算所有持仓的浮盈 → 汇总到 account.positionPnL
+    /// v15.16 hotfix #11：用 instrumentLastPrice 缓存按合约取 mark · 修多合约浮盈丢失
+    /// 之前用 openAvgPrice 让其他 instrument 浮盈强制为 0 · 同时持仓 ag 多头浮盈 +500 + rb tick 来时 ag 浮盈被覆盖
     private func recomputePositionPnL(lastPrice: Decimal, instrumentID: String, now: Date = Date()) {
+        // 更新当前 instrument 缓存
+        instrumentLastPrice[instrumentID] = lastPrice
         var totalPnL: Decimal = 0
         for pos in positions.values where pos.volume > 0 {
-            // 仅当前 instrument 用 tick lastPrice · 其他持仓保持已有 markPrice（v1 简化为开仓价 → 浮盈 0）
-            let mark: Decimal = (pos.instrumentID == instrumentID) ? lastPrice : pos.openAvgPrice
+            // 优先取该合约缓存价 · fallback 开仓价（首次该合约 tick 未到达时浮盈 = 0 合理）
+            let mark: Decimal = instrumentLastPrice[pos.instrumentID] ?? pos.openAvgPrice
             totalPnL += pos.floatingPnL(currentPrice: mark)
         }
         if account.positionPnL != totalPnL {

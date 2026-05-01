@@ -393,20 +393,22 @@ struct AlertWindow: View {
     }
 
     /// 启动 observe stream · 收 evaluator 真触发 event → UI insert（store.append 已 evaluator 内部完成）
+    /// v15.16 hotfix #11：alerts 查找移入 MainActor.run · 之前在 Task 内直接读 @State 是 Swift 6 严格并发风险
     private func startEvaluatorObserve() {
         guard let evaluator = alertEvaluator, evaluatorObserveTask == nil else { return }
         evaluatorObserveTask = Task {
             for await event in await evaluator.observe() {
-                let entry = AlertHistoryEntry(
-                    alertID: event.alertID,
-                    alertName: event.alertName,
-                    instrumentID: event.instrumentID,
-                    conditionSnapshot: alerts.first(where: { $0.id == event.alertID })?.condition ?? .priceAbove(0),
-                    triggeredAt: event.triggeredAt,
-                    triggerPrice: event.triggerPrice,
-                    message: event.message
-                )
                 await MainActor.run {
+                    let condition = alerts.first(where: { $0.id == event.alertID })?.condition ?? .priceAbove(0)
+                    let entry = AlertHistoryEntry(
+                        alertID: event.alertID,
+                        alertName: event.alertName,
+                        instrumentID: event.instrumentID,
+                        conditionSnapshot: condition,
+                        triggeredAt: event.triggeredAt,
+                        triggerPrice: event.triggerPrice,
+                        message: event.message
+                    )
                     historyEntries.insert(entry, at: 0)
                 }
             }

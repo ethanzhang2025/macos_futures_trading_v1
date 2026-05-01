@@ -8,6 +8,8 @@ public final class KLineBuilder: @unchecked Sendable {
     private var currentBar: KLine?
     private var completedBars: [KLine] = []
     private var lastVolume: Int = 0  // 用于计算增量成交量
+    /// v15.16 hotfix #11：上一个 tradingDay · 跨日重置 lastVolume 防当日首根 K 线 volume=0
+    private var lastTradingDay: String = ""
 
     public init(instrumentID: String, period: KLinePeriod) {
         self.instrumentID = instrumentID
@@ -17,6 +19,12 @@ public final class KLineBuilder: @unchecked Sendable {
     /// 输入一个Tick，返回是否产生了新的完成K线
     public func onTick(_ tick: Tick) -> KLine? {
         guard tick.instrumentID == instrumentID else { return nil }
+
+        // v15.16 hotfix #11：跨日重置 lastVolume（CTP/Sina 每日 volume 从 0 累计 · 不重置则首根 K 线 tickVolume=max(0, 100-50000)=0）
+        if !lastTradingDay.isEmpty && lastTradingDay != tick.tradingDay {
+            lastVolume = 0
+        }
+        lastTradingDay = tick.tradingDay
 
         let barTime = alignTime(tick: tick)
         let tickVolume = max(0, tick.volume - lastVolume)
@@ -65,6 +73,7 @@ public final class KLineBuilder: @unchecked Sendable {
         currentBar = nil
         completedBars.removeAll()
         lastVolume = 0
+        lastTradingDay = ""
     }
 
     // MARK: - Private

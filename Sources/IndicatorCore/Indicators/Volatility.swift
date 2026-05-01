@@ -163,7 +163,8 @@ public enum HV: Indicator {
         var logRet = [Decimal](repeating: 0, count: count)
         for i in 1..<count {
             let prev = kline.closes[i - 1]
-            if prev > 0 {
+            // v15.16 hotfix #11：双向 guard · 防 close=0 时 log(0)=-inf 污染整序列
+            if prev > 0 && kline.closes[i] > 0 {
                 let ratio = NSDecimalNumber(decimal: kline.closes[i] / prev).doubleValue
                 logRet[i] = Decimal(Foundation.log(ratio))
             }
@@ -494,7 +495,8 @@ extension HV: IncrementalIndicator {
     /// - count == period 起算 sd（raw mean + ring reduce variance + sqrt + round8）· hv = round8(sd_round8 * annualScale)
     private static func processStep(state: inout IncrementalState, close: Decimal) -> Decimal? {
         let logRet: Decimal
-        if let pc = state.prevClose, pc > 0 {
+        // v15.16 hotfix #11：双向 guard · 防 close=0 时 log(0)=-inf 污染整序列（与 calculate 同步）
+        if let pc = state.prevClose, pc > 0, close > 0 {
             let ratio = NSDecimalNumber(decimal: close / pc).doubleValue
             logRet = Decimal(Foundation.log(ratio))
         } else {

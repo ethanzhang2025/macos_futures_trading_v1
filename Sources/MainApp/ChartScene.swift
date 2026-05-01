@@ -321,6 +321,8 @@ struct ChartScene: View {
         }
         .onChange(of: selectedSubIndicators) { newValue in
             // 埋点：用户切换副图指标组合（v13.19 多选）· 记最新组合
+            // v15.16 hotfix #11：加 isSubPrefsLoaded 守卫 · 防 onAppear 加载偏好误触发埋点（与下方持久化 onChange 守卫保持一致）
+            guard isSubPrefsLoaded else { return }
             guard let service = analytics else { return }
             let kinds = newValue.map(\.rawValue).sorted().joined(separator: ",")
             Task {
@@ -1711,6 +1713,12 @@ struct ChartContentView: View {
         .onChange(of: subChartTotalHeight) { newValue in
             // v15.x · 副图高度 onChange 持久化（用户拖分割条改高度即时存）
             UserDefaults.standard.set(Double(newValue), forKey: ChartContentView.subChartHeightKey)
+        }
+        .onDisappear {
+            // v15.16 hotfix #11：强制 flush 节流尾巴 · 防最后 1s 内拖动后停手切合约 viewport 不写盘
+            if let data = try? JSONEncoder().encode(viewport) {
+                UserDefaults.standard.set(data, forKey: viewportSaveKey)
+            }
         }
         .task {
             while !Task.isCancelled {

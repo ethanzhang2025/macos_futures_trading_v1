@@ -1604,15 +1604,14 @@ struct ChartContentView: View {
     /// v13.20 主图 ↔ 副图可拖分割条 · 4pt 区域捕获 · DragGesture 改 subChartTotalHeight
     /// 拖动方向：向上拖 = 副图变高（dy < 0 → height +=） · 向下拖 = 副图变矮
     /// v15.10 用 chartTheme.gridLine 与副图分割条对齐
-    /// v15.16 hotfix #6：之前 ZStack { Color.clear; gridLine.frame(1) } 失效（Color.clear layout-neutral
-    /// → ZStack 总高 1pt → 外 frame(4) 把 1pt 拉伸成 4pt 黑横条）· 改 VStack 显式高度 1.5+1+1.5=4
+    /// v15.16 hotfix #7：Color.clear 在 VStack/ZStack 内被 SwiftUI elide → 改 Rectangle().fill(.clear)
+    /// layout-active 占据 4pt · overlay 1pt gridLine 居中 · contentShape 全 4pt 可拖
     private var mainSubDivider: some View {
-        VStack(spacing: 0) {
-            Color.clear.frame(height: 1.5)
-            chartTheme.gridLine.frame(height: 1)
-            Color.clear.frame(height: 1.5)
-        }
+        Rectangle()
+            .fill(Color.clear)
+            .frame(maxWidth: .infinity)
             .frame(height: 4)
+            .overlay(chartTheme.gridLine.frame(height: 1))
             .contentShape(Rectangle())
             .onHover { hovering in
                 // 用 .set() 替代 push/pop · 避免 hovering 多次触发或 view 销毁导致 cursor 栈失衡

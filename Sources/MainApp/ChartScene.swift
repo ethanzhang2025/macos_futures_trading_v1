@@ -21,6 +21,35 @@ import StoreCore
 import AlertCore
 import TradingCore
 
+// MARK: - v15.x · trackpad / 滚轮 scrollWheel 捕获（双指上下推 = K 线缩放）
+
+/// NSViewRepresentable 包装 NSView 重载 scrollWheel · SwiftUI .background 注入
+/// 解决：SwiftUI 原生不监听 NSEvent.scrollWheel · MagnificationGesture 仅响应捏合
+/// macOS trackpad 双指上下推 / 鼠标滚轮 → NSEvent.scrollWheel · 转 callback 给 SwiftUI 修 viewport
+fileprivate struct ScrollWheelCaptureView: NSViewRepresentable {
+    let onScroll: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = ScrollCaptureNSView()
+        view.onScroll = onScroll
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        (view as? ScrollCaptureNSView)?.onScroll = onScroll
+    }
+}
+
+/// scrollWheel 捕获 NSView · scrollingDeltaY 单位：trackpad ≈ 5-30 / event · 鼠标滚轮 ≈ 1-3 / event
+private final class ScrollCaptureNSView: NSView {
+    var onScroll: ((CGFloat) -> Void)?
+    override func scrollWheel(with event: NSEvent) {
+        // hasPreciseScrollingDeltas = true 是 trackpad / Magic Mouse · false 是机械滚轮
+        // 两种都用 scrollingDeltaY · 系数在 caller 内统一 0.01
+        onScroll?(event.scrollingDeltaY)
+    }
+}
+
 // MARK: - file-scope helpers（让 ChartScene + ChartContentView 都能访问 · 避免 cross-struct 访问错误）
 
 /// v13.6 画线类型中文标签 · 多处用（drawingInspector / drawingContextMenu / 模板列表 / 模板命名）
@@ -1748,6 +1777,13 @@ struct ChartContentView: View {
         }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
+        .background(
+            // v15.x · 监听 trackpad 双指上下推 / 鼠标滚轮 scrollWheel 事件 · 转 K 线缩放
+            // .background 注入 NSView · 不影响 SwiftUI hit-testing（其他 gesture 仍正常）
+            ScrollWheelCaptureView { dy in
+                handleScrollWheelZoom(dy)
+            }
+        )
         .contextMenu {
             // v13.5 选中画线右键菜单（删除 / 编辑文字 / 取消选中）· v13.6 加复制
             drawingContextMenu
@@ -2762,6 +2798,18 @@ struct ChartContentView: View {
                 viewport = clamp(base.zoomed(by: factor))
             }
             .onEnded { _ in zoomStartViewport = nil }
+    }
+
+    /// v15.x · trackpad 双指上下推（= scrollWheel 事件）→ K 线缩放
+    /// 双指上推 / 鼠标滚轮上 → deltaY > 0 → 放大（visibleCount 减小 · 看更少根更细节）
+    /// 双指下拉 / 鼠标滚轮下 → deltaY < 0 → 缩小（visibleCount 增大 · 看更多根全貌）
+    /// 系数 0.01：trackpad 单次 deltaY ≈ 5-30 · 折算 5%~30% 缩放 · 平滑跟手
+    fileprivate func handleScrollWheelZoom(_ deltaY: CGFloat) {
+        inertiaTask?.cancel()
+        let factor = 1.0 - Double(deltaY) * 0.01
+        // factor 限幅 [0.5, 2.0] 防单次极端值（罕见 momentum spike）
+        let clampedFactor = max(0.5, min(2.0, factor))
+        viewport = clamp(viewport.zoomed(by: clampedFactor))
     }
 
     var currentPriceRange: ClosedRange<Decimal> {

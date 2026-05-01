@@ -1604,12 +1604,10 @@ struct ChartContentView: View {
     /// v13.20 主图 ↔ 副图可拖分割条 · 4pt 区域捕获 · DragGesture 改 subChartTotalHeight
     /// 拖动方向：向上拖 = 副图变高（dy < 0 → height +=） · 向下拖 = 副图变矮
     /// v15.10 用 chartTheme.gridLine 与副图分割条对齐
-    /// v15.16 hotfix #7：Color.clear 在 VStack/ZStack 内被 SwiftUI elide → 改 Rectangle().fill(.clear)
-    /// layout-active 占据 4pt · overlay 1pt gridLine 居中 · contentShape 全 4pt 可拖
+    /// v15.16 hotfix #8：Rectangle().fill(.clear) 也可能被 SwiftUI elide → 用 chartTheme.background
+    /// 与主图同色（浅色白 / 深色黑）= 视觉上 4pt 是主图背景延伸 · overlay 1pt gridLine 居中显细线
     private var mainSubDivider: some View {
-        Rectangle()
-            .fill(Color.clear)
-            .frame(maxWidth: .infinity)
+        chartTheme.background
             .frame(height: 4)
             .overlay(chartTheme.gridLine.frame(height: 1))
             .contentShape(Rectangle())

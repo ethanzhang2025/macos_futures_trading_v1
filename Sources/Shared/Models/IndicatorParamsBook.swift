@@ -21,19 +21,27 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
     public var kdjParams: [Int]
     /// RSI 周期（默认 14）
     public var rsiPeriod: Int
+    /// CCI 周期（默认 14 · v15.11 WP-41 v4）
+    public var cciPeriod: Int
+    /// WR (Williams %R) 周期（默认 14 · v15.11 WP-41 v4 · 值域 -100~0）
+    public var wrPeriod: Int
 
     public init(
         mainMAPeriods: [Int],
         mainBOLLParams: [Int],
         macdParams: [Int],
         kdjParams: [Int],
-        rsiPeriod: Int
+        rsiPeriod: Int,
+        cciPeriod: Int = 14,
+        wrPeriod: Int = 14
     ) {
         self.mainMAPeriods = mainMAPeriods
         self.mainBOLLParams = mainBOLLParams
         self.macdParams = macdParams
         self.kdjParams = kdjParams
         self.rsiPeriod = rsiPeriod
+        self.cciPeriod = cciPeriod
+        self.wrPeriod = wrPeriod
     }
 
     public static let `default` = IndicatorParamsBook(
@@ -41,8 +49,28 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         mainBOLLParams: [20, 2],
         macdParams: [12, 26, 9],
         kdjParams: [9, 3, 3],
-        rsiPeriod: 14
+        rsiPeriod: 14,
+        cciPeriod: 14,
+        wrPeriod: 14
     )
+
+    // MARK: - Codable · v15.11 加 cciPeriod/wrPeriod 字段后兼容旧 JSON（v15.10 之前持久化数据缺字段）
+    // decodeIfPresent fallback 默认值 14 · 让旧用户启动后无感升级 · 不丢已有 MA/BOLL/MACD/KDJ/RSI 偏好
+
+    private enum CodingKeys: String, CodingKey {
+        case mainMAPeriods, mainBOLLParams, macdParams, kdjParams, rsiPeriod, cciPeriod, wrPeriod
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.mainMAPeriods  = try c.decode([Int].self, forKey: .mainMAPeriods)
+        self.mainBOLLParams = try c.decode([Int].self, forKey: .mainBOLLParams)
+        self.macdParams     = try c.decode([Int].self, forKey: .macdParams)
+        self.kdjParams      = try c.decode([Int].self, forKey: .kdjParams)
+        self.rsiPeriod      = try c.decode(Int.self,   forKey: .rsiPeriod)
+        self.cciPeriod      = try c.decodeIfPresent(Int.self, forKey: .cciPeriod) ?? 14
+        self.wrPeriod       = try c.decodeIfPresent(Int.self, forKey: .wrPeriod) ?? 14
+    }
 
     // MARK: - Decimal 转换 helper（IndicatorCore.calculate 接受 [Decimal]）
 
@@ -64,6 +92,14 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
 
     public var rsiParamsDecimal: [Decimal] {
         [Decimal(rsiPeriod)]
+    }
+
+    public var cciParamsDecimal: [Decimal] {
+        [Decimal(cciPeriod)]
+    }
+
+    public var wrParamsDecimal: [Decimal] {
+        [Decimal(wrPeriod)]
     }
 }
 

@@ -1,11 +1,11 @@
-// MainApp · 副图区（MACD / KDJ · 枚举驱动 · SwiftUI Canvas）
+// MainApp · 副图区（MACD / KDJ / RSI / 成交量 / OBV / CCI / WR / 持仓量 · 枚举驱动 · SwiftUI Canvas）
 //
-// 共用：drawLine（yMap 闭包参数）+ drawDashLine（零轴 / 参考线）
-// 分发：y 范围（MACD 上下对称 / KDJ 固定视野）· 直方图（仅 MACD）· 配色 · HUD 文字
+// 共用：drawLine（yMap 闭包参数）+ drawDashLine（零轴 / 参考线）+ drawAutoLine（上下对称自适应单线）
+// 分发：y 范围（MACD/OBV/CCI 上下对称自适应 · KDJ/RSI/WR 固定视野 · Volume/OI 底基线）· 直方图（MACD/Volume/OI）· 配色 · HUD 文字
 //
 // viewport 共享：父视图传 viewport · 父变即重渲染（SwiftUI 标准）
 // 性能取舍：[Double?] 缓存（compute() 一次性 Decimal → Double 桥接）· 拖拽 60Hz drawChart 不再走 NSDecimalNumber bridge
-// 扩展：加 RSI/DMA/VOL = SubIndicatorKind 加 case + compute()/draw 加分支即可
+// 扩展：加新副图 = SubIndicatorKind 加 case + compute()/draw 加分支即可
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -21,6 +21,10 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
     case kdj
     case rsi
     case volume
+    case obv     // v15.11 WP-41 v4 · 累积量价（无参数 · 单线 · 视野自动）
+    case cci     // v15.11 WP-41 v4 · 顺势指标（默认 14 · 单线 · ±100 参考线）
+    case wr      // v15.11 WP-41 v4 · 威廉指标（默认 14 · 单线 · 固定 -100~0 视野 · -20/-80 参考）
+    case oi      // v15.11 WP-41 v4 · 持仓量（期货特有 · 直读 bars · 直方图 · 类似 Volume）
 
     var id: String { rawValue }
 
@@ -31,6 +35,10 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .kdj:    return "KDJ \(params.kdjParams[0])/\(params.kdjParams[1])/\(params.kdjParams[2])"
         case .rsi:    return "RSI \(params.rsiPeriod)"
         case .volume: return "成交量"
+        case .obv:    return "OBV"
+        case .cci:    return "CCI \(params.cciPeriod)"
+        case .wr:     return "WR \(params.wrPeriod)"
+        case .oi:     return "持仓量"
         }
     }
 
@@ -41,6 +49,10 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .kdj:    return "KDJ"
         case .rsi:    return "RSI"
         case .volume: return "成交量"
+        case .obv:    return "OBV"
+        case .cci:    return "CCI"
+        case .wr:     return "WR"
+        case .oi:     return "持仓量"
         }
     }
 }
@@ -84,6 +96,16 @@ struct SubChartView: View {
     static let volumeBullColor = bullColor
     static let volumeBearColor = bearColor
     // v15.9 volumeAxisColor 改 instance computed
+
+    // v15.11 WP-41 v4 单线指标配色（OBV 用蓝 · CCI/WR 复用 RSI 黄 · 持仓量用紫强调期货特有）
+    static let obvLineColor = blueColor
+    static let cciLineColor = yellowColor
+    static let wrLineColor  = yellowColor
+    static let oiBarColor   = purpleColor
+
+    // WR 视野（-100~0 固定 · -20=超买 / -80=超卖）
+    private static let wrViewMin: CGFloat = -100
+    private static let wrViewMax: CGFloat = 0
 
     let bars: [KLine]
     let viewport: RenderViewport
@@ -160,8 +182,14 @@ struct SubChartView: View {
                 return (try? KDJ.calculate(kline: series, params: paramsCopy.kdjParamsDecimal)) ?? []
             case .rsi:
                 return (try? RSI.calculate(kline: series, params: paramsCopy.rsiParamsDecimal)) ?? []
-            case .volume:
-                return []  // 成交量直接读 bars · 不走 Indicator 计算
+            case .obv:
+                return (try? OBV.calculate(kline: series, params: [])) ?? []
+            case .cci:
+                return (try? CCI.calculate(kline: series, params: paramsCopy.cciParamsDecimal)) ?? []
+            case .wr:
+                return (try? WilliamsR.calculate(kline: series, params: paramsCopy.wrParamsDecimal)) ?? []
+            case .volume, .oi:
+                return []  // 直读 bars · 不走 Indicator 计算
             }
         }.value
 
@@ -174,14 +202,19 @@ struct SubChartView: View {
             seriesA = doublesOf(result, name: "K")
             seriesB = doublesOf(result, name: "D")
             seriesC = doublesOf(result, name: "J")
-        case .rsi:
-            // RSI 14 输出系列名通常就是 "RSI" 或 "RSI14" · 取首个 series
+        case .rsi, .obv, .cci, .wr:
+            // 单线副图：取首个 series（RSI/OBV/CCI/WR 输出名带参数 · 不依赖 name 匹配 · 直接首项）
             let firstSeries = result.first?.values ?? []
             seriesA = firstSeries.map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
             seriesB = []
             seriesC = []
         case .volume:
             seriesA = bars.map { Double($0.volume) }  // 直接读 K 线 volume（Int → Double）
+            seriesB = []
+            seriesC = []
+        case .oi:
+            // 持仓量：bars.openInterest 是 Decimal → Double（KLineSeries.openInterests 是 [Int] 会丢精度 · 直读 bars 走 Decimal）
+            seriesA = bars.map { NSDecimalNumber(decimal: $0.openInterest).doubleValue }
             seriesB = []
             seriesC = []
         }
@@ -223,6 +256,20 @@ struct SubChartView: View {
                         ? (bars[visibleEnd].close >= bars[visibleEnd].open ? Self.volumeBullColor : Self.volumeBearColor)
                         : .secondary
                 )
+            case .obv:
+                Text("OBV \(fmtVolume(aLast))").foregroundColor(Self.obvLineColor)
+            case .cci:
+                // CCI HUD 染色：>100 红 / <-100 绿 / 中间黄（与参考线语义对齐）
+                Text("CCI \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 100 ? Self.bullColor : ($0 <= -100 ? Self.bearColor : Self.cciLineColor) } ?? .secondary
+                )
+            case .wr:
+                // WR HUD 染色：>-20 红（超买）/ <-80 绿（超卖）· 倒置语义注意
+                Text("WR \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= -20 ? Self.bullColor : ($0 <= -80 ? Self.bearColor : Self.wrLineColor) } ?? .secondary
+                )
+            case .oi:
+                Text("OI \(fmtVolume(aLast))").foregroundColor(Self.oiBarColor)
             }
         }
         .font(.system(size: 11, design: .monospaced))
@@ -261,6 +308,27 @@ struct SubChartView: View {
             drawVolume(ctx, size: size,
                        visibleStart: visibleStart, visibleEnd: visibleEnd,
                        barWidth: barWidth, xOffset: xOffset)
+        case .obv:
+            drawAutoLine(seriesA, color: Self.obvLineColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [0])
+        case .cci:
+            drawAutoLine(seriesA, color: Self.cciLineColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [100, 0, -100],
+                         minHalfSpan: 150)
+        case .wr:
+            drawWR(ctx, size: size,
+                   visibleStart: visibleStart, visibleEnd: visibleEnd,
+                   barWidth: barWidth, xOffset: xOffset)
+        case .oi:
+            drawOI(ctx, size: size,
+                   visibleStart: visibleStart, visibleEnd: visibleEnd,
+                   barWidth: barWidth, xOffset: xOffset)
         }
     }
 
@@ -315,6 +383,88 @@ struct SubChartView: View {
             let isUp = bars[i].close >= bars[i].open
             ctx.fill(Path(rect),
                      with: .color(isUp ? Self.volumeBullColor : Self.volumeBearColor))
+        }
+    }
+
+    /// v15.11 通用上下对称自适应单线（OBV / CCI 共用 · 0 居中 · visible 内 max(|v|) 自动撑开 · 多条水平参考线）
+    /// minHalfSpan: 半视野最小值（避免 visible 数据小于参考线时参考线贴边 · 如 CCI 默认 150 让 ±100 参考线明显内收）
+    private func drawAutoLine(
+        _ values: [Double?], color: Color,
+        ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat,
+        guideValues: [CGFloat],
+        minHalfSpan: CGFloat = 0
+    ) {
+        // y 范围：visible 内 |v| 最大 · 与 guideValues 取大 · 与 minHalfSpan 取大 · 留 10% 边距
+        var maxAbs: CGFloat = minHalfSpan
+        for g in guideValues { maxAbs = max(maxAbs, abs(g)) }
+        for i in visibleStart..<visibleEnd where i < values.count {
+            if let v = values[i] { maxAbs = max(maxAbs, abs(CGFloat(v))) }
+        }
+        let yScale = (size.height / 2) * 0.9 / max(0.0001, maxAbs)
+        let yCenter = size.height / 2
+        let yMap: (CGFloat) -> CGFloat = { yCenter - $0 * yScale }
+
+        for g in guideValues {
+            // 0 用 zeroLine（强）· 其他参考线用 guide（弱）· 与 KDJ/RSI 视觉档位对齐
+            let lineColor = (g == 0) ? zeroLineColor : kdjGuideColor
+            drawDashLine(at: yMap(g), ctx: ctx, width: size.width, color: lineColor)
+        }
+
+        drawLine(values, color: color, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+    }
+
+    /// v15.11 WR：固定 -100~0 视野 · -20=超买 / -80=超卖 参考线（与 RSI 70/30 同语义但反向）
+    private func drawWR(
+        _ ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        let viewMin = Self.wrViewMin
+        let viewMax = Self.wrViewMax
+        let span = viewMax - viewMin
+        let h = size.height
+        let yMap: (CGFloat) -> CGFloat = { v in h * (viewMax - v) / span }
+
+        for guide in [CGFloat(-20), -50, -80] {
+            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: rsiGuideColor)
+        }
+
+        drawLine(seriesA, color: Self.wrLineColor, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
+    }
+
+    /// v15.11 持仓量 OI：底部基线 0 · 顶部 visible max · 单色紫（期货特有 · 不分涨跌色 · 与 Volume 区分）
+    private func drawOI(
+        _ ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        var maxOI: Double = 1.0
+        for i in visibleStart..<visibleEnd where i < seriesA.count {
+            if let v = seriesA[i], v > maxOI { maxOI = v }
+        }
+        let yScale = size.height * 0.9 / CGFloat(maxOI)
+        let yBase = size.height
+
+        drawDashLine(at: yBase - 1, ctx: ctx, width: size.width, color: volumeAxisColor)
+
+        for i in visibleStart..<visibleEnd {
+            guard i < seriesA.count, let v = seriesA[i] else { continue }
+            let value = CGFloat(v)
+            let xCenter = (CGFloat(i - visibleStart) + 0.5 - xOffset) * barWidth
+            let height = value * yScale
+            let rect = CGRect(
+                x: xCenter - barWidth * 0.3,
+                y: yBase - height,
+                width: barWidth * 0.6,
+                height: height
+            )
+            ctx.fill(Path(rect), with: .color(Self.oiBarColor))
         }
     }
 

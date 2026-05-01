@@ -7,7 +7,7 @@ import Foundation
 @Suite("IndicatorParamsBook · 数据契约 + Codable")
 struct IndicatorParamsBookTests {
 
-    @Test("default 出厂值 = 5/20/60 + BOLL 20/2 + MACD 12/26/9 + KDJ 9/3/3 + RSI 14")
+    @Test("default 出厂值 = 5/20/60 + BOLL 20/2 + MACD 12/26/9 + KDJ 9/3/3 + RSI 14 + CCI 14 + WR 14")
     func defaults() {
         let d = IndicatorParamsBook.default
         #expect(d.mainMAPeriods == [5, 20, 60])
@@ -15,20 +15,59 @@ struct IndicatorParamsBookTests {
         #expect(d.macdParams == [12, 26, 9])
         #expect(d.kdjParams == [9, 3, 3])
         #expect(d.rsiPeriod == 14)
+        #expect(d.cciPeriod == 14)   // v15.11
+        #expect(d.wrPeriod == 14)    // v15.11
     }
 
-    @Test("Codable JSON 往返")
+    @Test("v15.11 CCI/WR Decimal helper")
+    func cciWrDecimal() {
+        let d = IndicatorParamsBook.default
+        #expect(d.cciParamsDecimal == [Decimal(14)])
+        #expect(d.wrParamsDecimal == [Decimal(14)])
+        var custom = d
+        custom.cciPeriod = 20
+        custom.wrPeriod = 9
+        #expect(custom.cciParamsDecimal == [Decimal(20)])
+        #expect(custom.wrParamsDecimal == [Decimal(9)])
+    }
+
+    @Test("v15.11 兼容旧 JSON · 缺 cciPeriod/wrPeriod 字段时 fallback 14/14")
+    func decodeLegacyJSONWithoutCCIWR() throws {
+        // 模拟 v15.10 之前持久化的 JSON（无 cciPeriod / wrPeriod 字段）· 用户启动 v15.11 应无感
+        let legacyJSON = """
+        {
+          "mainMAPeriods": [5, 20, 60],
+          "mainBOLLParams": [20, 2],
+          "macdParams": [12, 26, 9],
+          "kdjParams": [9, 3, 3],
+          "rsiPeriod": 14
+        }
+        """
+        let data = legacyJSON.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(IndicatorParamsBook.self, from: data)
+        #expect(decoded.cciPeriod == 14)  // fallback
+        #expect(decoded.wrPeriod == 14)   // fallback
+        // 旧字段不能丢
+        #expect(decoded.mainMAPeriods == [5, 20, 60])
+        #expect(decoded.rsiPeriod == 14)
+    }
+
+    @Test("Codable JSON 往返（含 v15.11 CCI/WR 字段）")
     func codableRoundTrip() throws {
         let book = IndicatorParamsBook(
             mainMAPeriods: [7, 33, 99],
             mainBOLLParams: [25, 3],
             macdParams: [10, 22, 8],
             kdjParams: [14, 5, 5],
-            rsiPeriod: 9
+            rsiPeriod: 9,
+            cciPeriod: 20,
+            wrPeriod: 7
         )
         let data = try JSONEncoder().encode(book)
         let decoded = try JSONDecoder().decode(IndicatorParamsBook.self, from: data)
         #expect(decoded == book)
+        #expect(decoded.cciPeriod == 20)
+        #expect(decoded.wrPeriod == 7)
     }
 
     @Test("Decimal 转换 helper · MA 三条独立 [Decimal] 数组")

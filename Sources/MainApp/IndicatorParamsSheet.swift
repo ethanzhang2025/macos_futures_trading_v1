@@ -107,6 +107,29 @@ struct IndicatorParamsSheet: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+
+                // v15.11 WP-41 v4 副图扩 4 类（OBV / CCI / WR / 持仓量）· OBV / 持仓量无参数
+                Section("副图 CCI（顺势指标）") {
+                    HStack {
+                        Text("周期")
+                        TextField("", value: $draft.cciPeriod, format: .number)
+                            .frame(width: 60)
+                    }
+                    Text("默认 14（>+100 超买 / <-100 超卖 阈值固定）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("副图 WR（威廉指标）") {
+                    HStack {
+                        Text("周期")
+                        TextField("", value: $draft.wrPeriod, format: .number)
+                            .frame(width: 60)
+                    }
+                    Text("默认 14（值域 -100~0 · >-20 超买 / <-80 超卖）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .formStyle(.grouped)
 
@@ -125,7 +148,7 @@ struct IndicatorParamsSheet: View {
             .padding(.top, 12)
         }
         .padding(20)
-        .frame(width: 540, height: 680)
+        .frame(width: 540, height: 820)
     }
 
     // MARK: - Binding helper（按 KeyPath 定位 [Int] 数组 + 下标 · 4 类参数共用）
@@ -157,6 +180,8 @@ struct IndicatorParamsSheet: View {
         guard b.macdParams[0] >= 1, b.macdParams[1] > b.macdParams[0], b.macdParams[2] >= 1 else { return false }
         guard b.kdjParams.allSatisfy({ $0 >= 1 && $0 <= 200 }) else { return false }
         guard b.rsiPeriod >= 2 && b.rsiPeriod <= 200 else { return false }
+        guard b.cciPeriod >= 2 && b.cciPeriod <= 200 else { return false }
+        guard b.wrPeriod >= 2 && b.wrPeriod <= 200 else { return false }
         return true
     }
 }

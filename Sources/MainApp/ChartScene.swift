@@ -2782,6 +2782,7 @@ struct ChartContentView: View {
     }
 
     /// 顶部当前价大字号 + 涨跌幅 · 红涨绿跌 · baseline 用 Sina 实时昨结算 preSettle · fallback visible 周期首根
+    /// v15.16 hotfix #10：用户开 HUD .change 时隐藏右侧涨跌副栏（避免与 HUD 视觉重复）· 大字号保留 + 染色保留
     private var priceTopBar: some View {
         HStack(spacing: 10) {
             if let last = bars.last, let first = bars.first {
@@ -2795,13 +2796,15 @@ struct ChartContentView: View {
                 Text(String(format: "%.2f", close))
                     .font(.system(size: 22, weight: .bold, design: .monospaced))
                     .foregroundColor(color)
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("\(isUp ? "▲" : "▼") \(String(format: "%+.2f", diff))")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(color)
-                    Text(String(format: "%+.2f%%", pct))
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(color)
+                if !hudFields.fields.contains(.change) {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("\(isUp ? "▲" : "▼") \(String(format: "%+.2f", diff))")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(color)
+                        Text(String(format: "%+.2f%%", pct))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(color)
+                    }
                 }
             }
         }
@@ -2946,8 +2949,11 @@ struct ChartContentView: View {
     }
 
     /// v15.14 K 线时间戳格式（按 period 跨度选不同格式 · 与 KLineCrosshairView 风格对齐）
+    /// v15.16 hotfix #10：加 zh_CN locale + Asia/Shanghai timeZone（与 KLineCrosshairView 一致 · 防跨时区偏移）
     private func formatBarTime(_ bar: KLine) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
         switch bar.period {
         case .second1, .second3, .second5, .second10, .second15, .second30:
             formatter.dateFormat = "MM-dd HH:mm:ss"

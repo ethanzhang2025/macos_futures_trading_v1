@@ -25,14 +25,15 @@ struct HUDFieldsSheet: View {
             Text("HUD 显示字段")
                 .font(.title2).bold()
                 .padding(.bottom, 4)
-            Text("勾选要在 K 线图左上 HUD 显示的字段（主标识与指标值始终显示）")
+            Text("勾选要在 K 线图角落 HUD 浮窗显示的字段（主标识与指标值始终显示 · 浮窗位置可在工具栏菜单切换 4 角）")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.bottom, 12)
 
             Form {
                 Section("可选字段") {
-                    ForEach(HUDFieldKind.allCases) { kind in
+                    // v15.16 hotfix #10：用 displayOrder 与 HUD 渲染顺序对齐（time/ohlc/change/vol/oi/debug）
+                    ForEach(HUDFieldKind.displayOrder) { kind in
                         Toggle(kind.displayName, isOn: bindingFor(kind))
                     }
                 }
@@ -41,7 +42,6 @@ struct HUDFieldsSheet: View {
                     HStack {
                         Button("全选") { draft.fields = Set(HUDFieldKind.allCases) }
                         Button("全不选") { draft.fields = [] }
-                        Button("仅调试（默认）") { draft.fields = [.debug] }
                     }
                 }
             }

@@ -31,6 +31,12 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
         case .debug:        return "调试信息（可见/起点/帧时）"
         }
     }
+
+    /// v15.16 hotfix #10：HUD 渲染顺序（与 ChartScene.hud 内 if 链顺序一致 · 用户视觉对齐）
+    /// 时间戳放最上 · debug 放最下 · 中间是数据字段
+    public static let displayOrder: [HUDFieldKind] = [
+        .timestamp, .ohlc, .change, .volume, .openInterest, .debug
+    ]
 }
 
 /// HUD 字段偏好（全局 · 跨合约共享）

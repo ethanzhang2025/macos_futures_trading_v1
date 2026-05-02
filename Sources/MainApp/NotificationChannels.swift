@@ -19,12 +19,12 @@ import AlertCore
 
 /// macOS 系统通知通道 · 用 UserNotifications 框架（macOS 11+）
 /// 首次发送会弹权限请求 · 用户拒绝后通知静默不显（NSAlert 提示设置）
-public final class SystemNoticeChannel: NotificationChannel, @unchecked Sendable {
-    public let kind: NotificationChannelKind = .systemNotice
+/// v15.17 hotfix：从 NSLock 改 actor · Swift 6 async context NSLock unavailable
+public actor SystemNoticeChannel: NotificationChannel {
+    public nonisolated let kind: NotificationChannelKind = .systemNotice
 
-    /// 是否已请求过权限（避免每次 send 都请求）
+    /// 是否已请求过权限（避免每次 send 都请求 · actor 自动序列化）
     private var permissionRequested: Bool = false
-    private let lock = NSLock()
 
     public init() {}
 
@@ -49,11 +49,8 @@ public final class SystemNoticeChannel: NotificationChannel, @unchecked Sendable
     }
 
     private func ensurePermission() async {
-        lock.lock()
-        let alreadyRequested = permissionRequested
+        guard !permissionRequested else { return }
         permissionRequested = true
-        lock.unlock()
-        guard !alreadyRequested else { return }
         do {
             _ = try await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .badge])

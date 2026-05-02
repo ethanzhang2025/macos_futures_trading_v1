@@ -1194,6 +1194,7 @@ struct ChartScene: View {
                 indicatorParams: indicatorParams,
                 subParamsOverrides: subParamsOverrides,
                 onEditSubSlot: { slot in editingSubSlot = slot },
+                onClearSubSlot: { slot in subParamsOverrides[slot] = nil },  // v15.17 · 父级清除 override
                 chartTheme: chartTheme,
                 hudFields: hudFields,
                 drawings: $drawings,
@@ -1691,6 +1692,9 @@ struct ChartContentView: View {
     let subParamsOverrides: [Int: IndicatorParamsBook]
     /// v15.7 用户右键副图选"参数..."时回调 · 通知父级 ChartScene 弹 sheet 编辑该 slot
     let onEditSubSlot: (Int) -> Void
+    /// v15.17 用户右键副图选"恢复全局参数"时回调 · 通知父级 ChartScene 清除该 slot override
+    /// 不能在 ChartContentView 内直接 subParamsOverrides[idx] = nil（let 不可变 · 必须父级处理）
+    let onClearSubSlot: (Int) -> Void
     /// v15.8 主图主题（深色 / 浅色）· 影响背景 / 文字 / 网格 / candle 配色
     let chartTheme: ChartTheme
     /// v15.14 HUD 自定义字段（按 fields 渲染各可选项）
@@ -1759,6 +1763,7 @@ struct ChartContentView: View {
         indicatorParams: IndicatorParamsBook,
         subParamsOverrides: [Int: IndicatorParamsBook],
         onEditSubSlot: @escaping (Int) -> Void,
+        onClearSubSlot: @escaping (Int) -> Void,
         chartTheme: ChartTheme,
         hudFields: HUDFieldsBook,
         drawings: Binding<[Drawing]>,
@@ -1784,6 +1789,7 @@ struct ChartContentView: View {
         self.indicatorParams = indicatorParams
         self.subParamsOverrides = subParamsOverrides
         self.onEditSubSlot = onEditSubSlot
+        self.onClearSubSlot = onClearSubSlot
         self.chartTheme = chartTheme
         self.hudFields = hudFields
         self._drawings = drawings
@@ -1879,7 +1885,7 @@ struct ChartContentView: View {
                             slotIndex: idx,
                             onEditParams: { onEditSubSlot(idx) },
                             chartTheme: chartTheme,
-                            onClearOverride: { subParamsOverrides[idx] = nil },  // v15.17 · 一键清除 override
+                            onClearOverride: { onClearSubSlot(idx) },  // v15.17 · 通过父级回调清除（subParamsOverrides 是 let 不可直接改）
                             hasOverride: subParamsOverrides[idx] != nil
                         )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)

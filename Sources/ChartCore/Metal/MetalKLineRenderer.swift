@@ -389,7 +389,7 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
         let xLeft = Float(input.viewport.startIndex) + input.viewport.startOffset
         let xRight = xLeft + Float(input.viewport.visibleCount)
         let priceRange = input.viewport.priceRange ?? derivePriceRange(input: input, visible: visible)
-        var yBottom = Self.float(priceRange.lowerBound)
+        let yBottom = Self.float(priceRange.lowerBound)
         var yTop = Self.float(priceRange.upperBound)
         // v15.16 hotfix #12：caller 传 priceRange.lower == upper（一字板 K · UI 自动跟随）时 ortho 除零 → matrix inf
         // derivePriceRange 内部已 guard（line 404 lo + Decimal(1)）· 但外部传入路径无 guard

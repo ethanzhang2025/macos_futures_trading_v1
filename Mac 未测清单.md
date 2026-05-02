@@ -316,8 +316,114 @@
 ## 后续 backlog（v13.17+ 未做）
 
 - ❌ Pitchfork extraPoints anchor 拖动支持（findAnchorAt 扩展）
-- ❌ 多边形画线（任意 N 点闭合 · 需 Enter/双击/Esc 完成机制）
+- ❌ 多边形画线（任意 N 点闭合 · 需 Enter/双击/Esc 完成机制 · v13.31 已实现）
 - ❌ 画线分组（group 多条画线一起拖动）
+
+---
+
+## v15.0~v15.17 累积验收清单（用户暂停验收切回 Linux 修复期间累积）
+
+### v15.1 WP-52 指标条件预警 UI
+
+- [ ] AlertWindow 加预警时 condition picker 含"指标条件"7 类（v15.12 加 8 类含 .openInterestSpike）
+- [ ] 指标 picker (MA/MACD/KDJ/RSI/BOLL)
+- [ ] 周期 picker（与主图周期独立 · alert spec.period 不依赖打开时主图周期）
+- [ ] 事件 picker (cross above/cross below / above / below)
+- [ ] RSI 阈值 / kPeriod 等参数输入
+
+### v15.2 自定义指标参数 UI
+
+- [ ] 工具栏齿轮按钮入口 → IndicatorParamsSheet
+- [ ] 9 Section（MA / BOLL / MACD / KDJ / RSI / CCI / WR / DMI / Stoch / ROC / BIAS · v15.13 加 4 节）
+- [ ] 改 MA period → 主图 K 线 MA 立即重算（onChange 链式 Task）
+- [ ] 还原默认按钮一键回到出厂值
+- [ ] 关 app 重开参数保留
+
+### v15.3 SimNow 模拟撮合（无 UI · 依赖 v15.4 验）
+
+### v15.4 TradingWindow 交易面板（⌘T）**重点验**
+
+- [ ] 4 Tab：账户摘要 / 下单 / 委托/成交 / 持仓
+- [ ] 下单：方向 + 合约 + 价格 + 手数 + 提交 · 看委托即时入列
+- [ ] 撮合：实盘 tick 来时委托应 fill · 持仓自动建仓
+- [ ] 一键平仓按钮 · 看持仓减少 + 平仓 PnL 累加
+- [ ] 多空双向平仓 · v15.16 hotfix #11 P1-12 多合约浮盈正确（ag + rb 同时持仓 · 各自 markPrice）
+
+### v15.5 资金曲线 + CSV 导出
+
+- [ ] Tab 4 显示资金曲线 Canvas · 实盘 tick 来时曲线点累加
+- [ ] 导出 CSV · NSSavePanel 选位置 · UTF-8 BOM Excel 友好
+- [ ] CSV 内容含 timestamp + balance + positionPnL
+
+### v15.6 SimNow 持久化
+
+- [ ] 关 app 重开 · 模拟账户 + 持仓 + 历史成交保留
+- [ ] "重置账户"按钮回到 100w 初始资金
+- [ ] v15.16 hotfix #11 P1-8 onDisappear flush snapshot · 不丢最后一笔
+- [ ] v15.16 hotfix #13 加 quarterlyPnL 数据契约（暂无 UI · 用 swift test 验）
+
+### v15.7 副图独立指标参数
+
+- [ ] 右键副图"本副图参数（槽位 N）..."
+- [ ] 弹 IndicatorParamsSheet 编辑 override · 仅本 slot 重算
+- [ ] **v15.17 新加**："恢复全局参数（清除本副图 override）"右键菜单项 · 仅有 override 时才显
+- [ ] 关 app 重开 override 保留
+
+### v15.8/9/10 主题切换 **重点验**
+
+- [ ] 工具栏 sun.max / moon 按钮切深色 ↔ 浅色
+- [ ] **v15.17 新加**：⌘⇧D 全局快捷键切主题（任何窗口前台都能切）
+- [ ] 主图 K 线 / 副图 / HUD / Axis / Crosshair / 主副图分隔条 / 副图分隔条 全跟主题（v15.16 hotfix #3-9 修齐）
+- [ ] **v15.17 新加**：sheet/popup/系统色组件跟主题（ChartScene 动态 .preferredColorScheme(chartTheme.colorScheme)）
+- [ ] **v15.17 新加**：6 个次级窗口 (Watchlist/Review/Alert/Journal/Workspace/Trading) 跟主图主题（ChartThemeFollowing ViewModifier）
+- [ ] 切主题瞬间整窗重绘 · 无残留旧主题色块
+- [ ] 关 app 重开主题保留（chartTheme.v1 持久化）
+
+### v15.11 副图扩 OBV / CCI / WR / 持仓量 OI
+
+- [ ] 副图 picker 加 4 类 · 切换看渲染正常
+- [ ] OBV 蓝色累积量价线 · CCI 黄色 ±100 参考 · WR -100~0 倒置 · OI 紫色单色直方图
+
+### v15.12 持仓量异动预警 UI
+
+- [ ] AlertWindow 加预警 kind 含"持仓量异常"
+- [ ] 参数：oiMultiple 1.5 / oiWindowBars 20 默认
+- [ ] 实盘真触发 · 走 channel 通知 + 入历史
+
+### v15.13 副图扩 DMI / Stoch / ROC / BIAS
+
+- [ ] 副图 picker 加 4 类（共 12 类副图）
+- [ ] DMI 0~100 视野（红绿涨跌色 +DI / -DI）· Stoch 0~100 双线 %K/%D · ROC/BIAS 黄色 0 参考
+
+### v15.14 HUD 自定义字段 + v15.16 hotfix #10 polish
+
+- [ ] 工具栏 rectangle.dashed 按钮 → HUDFieldsSheet
+- [ ] 6 类 Toggle：OHLC / 涨跌 / 成交量 / 持仓量 / 时间戳 / 调试（按 displayOrder 顺序）
+- [ ] 4 快捷按钮：全选 / 全不选 / 还原默认（仅调试已删 · v15.16 hotfix #10）
+- [ ] 用户开 .change 时 priceTopBar 涨跌副栏隐藏（互斥可见 · v15.16 hotfix #10）
+- [ ] 关 app 重开偏好保留（hudFields.v1）
+
+### v15.15 IndicatorParamsSheet ScrollView polish
+
+- [ ] sheet 720pt 宽 + 内部 ScrollView · 13" Mac 屏可正常滚 9 Section
+
+### v15.16 K 线 trackpad / 滚轮缩放 + 大量 hotfix
+
+- [ ] trackpad 双指上推 → 放大 / 双指下拉 → 缩小（v15.16 hotfix #1 修 .background → NSEvent local monitor）
+- [ ] 双指捏合 MagnificationGesture 仍正常并存
+- [ ] 浅色主题下整窗一致（hotfix #3-9 主图 Metal clearColor / Axis / Crosshair / 分隔条全跟主题）
+- [ ] 切回放第 1 根 K 线显示在最左 1/120 位置（hotfix #6 修 loadViewport 大红块）
+- [ ] 多窗口 ⌘N 同步：A 改主题 → B 实时跟（hotfix #14 NotificationCenter 同步骨架）
+- [ ] 多合约浮盈：ag 浮盈 +500 + rb tick 来时 ag 浮盈不丢失（hotfix #11 P1-12）
+- [ ] KLine 跨日 lastVolume 重置（hotfix #11 P1-10 · CTP 跨日不丢首根 volume）
+
+### v15.17 真功能补全
+
+- [ ] 预警触发：toast 浮窗（顶部 3 秒自动消失） + 系统通知中心 + 系统声音 Glass 三路冗余（hotfix #16 + v15.17 InAppOverlayChannel）
+- [ ] 回放控制条：Slider 拖拽跳到任意 K 线 · forward.end.fill 跳到末根按钮
+- [ ] 麦语言公式 A%B 大数（如 1e20%3）不静默错（hotfix #16 P1-3 取模溢出）
+- [ ] 文华 .wh 公式批量导入（⌘⇧I · NSOpenPanel · NSAlert 报告）实测 5+ 公式
+- [ ] swift test 验：943/221 全绿（含 quarterlyPnL +3 / HUDFieldsBook +10 / Interpreter +3）
 
 ---
 

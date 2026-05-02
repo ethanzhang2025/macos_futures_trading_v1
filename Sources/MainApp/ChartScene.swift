@@ -1478,6 +1478,13 @@ struct ChartScene: View {
             .buttonStyle(ReplayBarButtonStyle())
             .help("单步前进 1 根")
 
+            // v15.17 · 跳到末根（替代连续点 stepForward 上千次）
+            Button { Task { await onTapJumpToEnd() } } label: {
+                Image(systemName: "forward.end.fill")
+            }
+            .buttonStyle(ReplayBarButtonStyle())
+            .help("跳到末根 K 线")
+
             Divider().frame(height: 18)
 
             Picker("", selection: Binding(
@@ -1585,6 +1592,18 @@ struct ChartScene: View {
             await driver.stop()
             await player.pause()
             await player.stepBackward(count: 1)
+        }
+    }
+
+    /// v15.17 · 跳到末根 K 线（用户想看完整回放结果时常用 · 替代连续点 stepForward 上千次）
+    private func onTapJumpToEnd() async {
+        await withReplay { player, driver in
+            await driver.stop()
+            await player.pause()
+            let total = replay.cursor.totalCount
+            if total > 0 {
+                _ = await player.seek(to: total - 1)
+            }
         }
     }
 

@@ -58,6 +58,30 @@ public struct QuarterlyPnL: Sendable, Codable, Equatable {
     }
 }
 
+// MARK: - 1c. 年度盈亏（v15.17 · 长周期总结 · 日历年聚合）
+
+public struct YearlyPnLBucket: Sendable, Codable, Equatable, Hashable {
+    public let year: Int
+    public let realizedPnL: Decimal
+    public let tradeCount: Int
+
+    public init(year: Int, realizedPnL: Decimal, tradeCount: Int) {
+        self.year = year
+        self.realizedPnL = realizedPnL
+        self.tradeCount = tradeCount
+    }
+}
+
+public struct YearlyPnL: Sendable, Codable, Equatable {
+    public let buckets: [YearlyPnLBucket]   // 按 year 升序
+    public let totalPnL: Decimal
+
+    public init(buckets: [YearlyPnLBucket], totalPnL: Decimal) {
+        self.buckets = buckets
+        self.totalPnL = totalPnL
+    }
+}
+
 // MARK: - 2. 分布直方（单笔盈亏分桶）
 
 public struct PnLDistributionBin: Sendable, Codable, Equatable, Hashable {

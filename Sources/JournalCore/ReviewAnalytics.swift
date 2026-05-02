@@ -67,6 +67,30 @@ public enum ReviewAnalytics {
         return QuarterlyPnL(buckets: buckets, totalPnL: total)
     }
 
+    // MARK: - 1c. 年度盈亏（v15.17 · 长周期总结 · 日历年聚合）
+
+    public static func yearlyPnL(
+        from positions: [ClosedPosition],
+        timeZone: TimeZone = defaultTimeZone
+    ) -> YearlyPnL {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        var byYear: [Int: (pnl: Decimal, count: Int)] = [:]
+
+        for position in positions {
+            let year = calendar.component(.year, from: position.closeTime)
+            var pair = byYear[year] ?? (Decimal(0), 0)
+            pair.pnl += position.realizedPnL
+            pair.count += 1
+            byYear[year] = pair
+        }
+        let buckets = byYear
+            .sorted { $0.key < $1.key }
+            .map { (k, v) in YearlyPnLBucket(year: k, realizedPnL: v.pnl, tradeCount: v.count) }
+        let total = positions.reduce(Decimal(0)) { $0 + $1.realizedPnL }
+        return YearlyPnL(buckets: buckets, totalPnL: total)
+    }
+
     // MARK: - 2. 分布直方
 
     /// - Parameter binSize: 单桶宽度（如 100 = 每桶 100 元盈亏区间）

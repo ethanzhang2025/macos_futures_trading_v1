@@ -245,6 +245,37 @@ struct QuarterlyPnLTests {
     }
 }
 
+// MARK: - 2c. 年度盈亏（v15.17 · 日历年聚合）
+
+@Suite("ReviewAnalytics · 年度盈亏")
+struct YearlyPnLTests {
+
+    @Test("空输入 → 空 buckets, totalPnL = 0")
+    func empty() {
+        let result = ReviewAnalytics.yearlyPnL(from: [])
+        #expect(result.buckets.isEmpty)
+        #expect(result.totalPnL == 0)
+    }
+
+    @Test("跨年聚合 + 排序 + 同年累加")
+    func crossYear() {
+        let positions = [
+            makeClosedPosition(pnl: 100, closeTime: date(2025, 1, 5)),
+            makeClosedPosition(pnl: 200, closeTime: date(2025, 12, 31)),
+            makeClosedPosition(pnl: 300, closeTime: date(2026, 6, 15)),
+            makeClosedPosition(pnl: -50, closeTime: date(2026, 11, 30)),
+        ]
+        let result = ReviewAnalytics.yearlyPnL(from: positions)
+        #expect(result.buckets.count == 2)
+        #expect(result.buckets[0].year == 2025)
+        #expect(result.buckets[0].realizedPnL == 300)
+        #expect(result.buckets[0].tradeCount == 2)
+        #expect(result.buckets[1].year == 2026)
+        #expect(result.buckets[1].realizedPnL == 250)
+        #expect(result.totalPnL == 550)
+    }
+}
+
 // MARK: - 3. 分布直方
 
 @Suite("ReviewAnalytics · 分布直方")

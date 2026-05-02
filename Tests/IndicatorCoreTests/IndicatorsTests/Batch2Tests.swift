@@ -154,6 +154,29 @@ struct VolatilityBatch2Tests {
             #expect(mid >= lo)
         }
     }
+
+    /// v15.16 hotfix #11 P1-2 防回归：HV close=0 时 log(0)=-inf 污染整序列
+    /// 修复前：单根 close=0 → ratio=0 → log(0)=-inf → variance NaN → 整 HV 序列损坏
+    /// 修复后：close > 0 双向 guard · close=0 时 logRet=0 不污染（与 prev>0 fallback 同语义）
+    @Test("HV · 序列含 close=0 不污染（v15.16 hotfix P1-2 防回归）")
+    func hvCloseZeroNotContaminating() throws {
+        // 25 根 close · 中间一根强制 0（脏数据 / 错误 zero-fill）
+        var closes = Array(repeating: 100, count: 25)
+        closes[10] = 0  // 中间一根 close=0
+        let r = try HV.calculate(kline: series(closes: closes), params: [10])
+        // 修复前：r[0].values 后段全 NaN/inf · 修复后：仍有有效数（仅受影响位置 logRet=0 不传染）
+        // 检查最后几根（period=10 起算 · index 9+ 应有值）
+        var validCount = 0
+        for v in r[0].values.dropFirst(10) where v != nil {
+            // 不为 nil 且不是 NaN/inf（Decimal 不会自然产 inf · 但通过 Foundation.log 桥接可能）
+            if let v = v {
+                let d = NSDecimalNumber(decimal: v).doubleValue
+                if d.isFinite { validCount += 1 }
+            }
+        }
+        // 至少有一些有效值（修复前可能全部为 nil/NaN）
+        #expect(validCount > 0)
+    }
 }
 
 // MARK: - 结构

@@ -202,6 +202,8 @@ struct FuturesTerminalApp: App {
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
                     .foregroundColor(.secondary)
+                Divider()
+                ToggleThemeButton()  // v15.17 · ⌘⇧D 全局切主题（任何窗口前台都能切）
             }
             CommandMenu("工具") {
                 ImportFormulaButton()
@@ -298,6 +300,23 @@ private struct OpenReviewButton: View {
     var body: some View {
         Button("复盘工作台") { openWindow(id: "review") }
             .keyboardShortcut("r", modifiers: [.command])
+    }
+}
+
+/// v15.17 · 主菜单"切换主题（深色 / 浅色）"⌘⇧D · 全局快捷键
+/// 直接读写 ChartThemeStore · 通过 UserDefaults.didChangeNotification 让所有窗口实时同步（hotfix #14 已搭好同步骨架）
+private struct ToggleThemeButton: View {
+    @State private var current: ChartTheme = ChartThemeStore.load() ?? .dark
+    var body: some View {
+        Button("切换主题（\(current == .dark ? "→ 浅色" : "→ 深色")）") {
+            let next: ChartTheme = (current == .dark) ? .light : .dark
+            ChartThemeStore.save(next)
+            current = next
+        }
+        .keyboardShortcut("d", modifiers: [.command, .shift])
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            if let t = ChartThemeStore.load(), t != current { current = t }
+        }
     }
 }
 

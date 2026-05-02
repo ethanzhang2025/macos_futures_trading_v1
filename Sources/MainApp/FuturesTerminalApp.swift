@@ -121,8 +121,15 @@ struct FuturesTerminalApp: App {
                 appVersion: Self.bundleAppVersion
             )
         }
+        // v15.17 · WP-52 通知通道接入 · macOS 注册 SystemNoticeChannel + SoundChannel
+        // 之前 dispatcher 创建空 channels · 用户预警仅 console log 不实用
         self.alertEvaluator = manager.map {
-            AlertEvaluator(history: $0.alertHistory, dispatcher: NotificationDispatcher())
+            #if canImport(AppKit) && os(macOS)
+            let dispatcher = NotificationDispatcher(channels: [SystemNoticeChannel(), SoundChannel()])
+            #else
+            let dispatcher = NotificationDispatcher()
+            #endif
+            return AlertEvaluator(history: $0.alertHistory, dispatcher: dispatcher)
         }
         // v15.4 模拟撮合引擎：100w 初始资金 + 4 主力合约注册（async actor 初始化用 Task 异步注册）
         // v15.6 启动加载持久化快照 · 无快照保留默认初始资金 · 注册合约始终运行（合约不入快照 · 启动 hardcoded）

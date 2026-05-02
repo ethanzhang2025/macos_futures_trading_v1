@@ -34,6 +34,9 @@ public struct OCOOrder: Sendable, Identifiable {
     }
 
     /// 检查是否触发，返回触发的委托（如果有）
+    /// v15.16 hotfix #16 doc：gap 行情同 tick 双触发时 stopLoss 优先（保护本金 > 锁利润 · 文华/同花顺标准）
+    /// 边界 case 例：开仓 3500 / 止损 3400 / 止盈 3600 · gap 跳空 tick 3450→3650 同时穿越两边
+    /// 当前选 stopLoss 是有意设计 · 用户期望"风险优先" · 改动需经业务方共识
     public mutating func check(currentPrice: Decimal, previousPrice: Decimal?) -> OrderRequest? {
         guard status == .active else { return nil }
 

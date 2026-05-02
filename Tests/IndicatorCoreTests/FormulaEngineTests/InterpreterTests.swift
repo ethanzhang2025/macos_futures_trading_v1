@@ -106,6 +106,45 @@ struct InterpreterTests {
         #expect(values[0] == 23)
     }
 
+    /// v15.16 hotfix #16 · P1-3：取模 quotient 超 Int.max 时不再静默错（Decimal floor 路径）
+    @Test("取模 · 小数范围内")
+    func testModuloSmall() throws {
+        let results = try run("R:CLOSE%5;")
+        let values = results[0].values
+        // CLOSE[0]=11, 11 % 5 = 1
+        #expect(values[0] == 1)
+        // CLOSE[5]=14, 14 % 5 = 4
+        #expect(values[5] == 4)
+    }
+
+    @Test("取模 · 大数 quotient 超 Int.max（v15.16 hotfix P1-3 防溢出）")
+    func testModuloLarge() throws {
+        // 1e18 / 3 ≈ 3.33e17 远超 Int.max (~9.2e18 实际范围内 · 用更大数测真溢出)
+        // Int.max ≈ 9.22e18 · 用 1e20 / 3 触发 quotient ≈ 3.3e19 超 Int.max
+        // 公式 R:CLOSE*1e20%3 · CLOSE[0]=11 → 11e20 / 3 quotient 超 Int.max
+        let results = try run("R:(CLOSE*100000000000000000000)%3;")
+        let values = results[0].values
+        // 修复前：Int 截断 platform-defined · 结果错（可能负数巨值）
+        // 修复后：Decimal floor 路径正确 · 11×1e20 = 1.1×1e21 · 1.1×1e21 mod 3 应是确定值（不是 NaN/0）
+        // 11 * 10^20 = 1100000000000000000000 (1.1e21)
+        // 1.1e21 / 3 = 3.6666...e20 → floor = 3.66666666666666666666e20（截至 Decimal 8 位精度）
+        // 实际验证仅断言"不为 nil + 在 [0, 3) 范围"
+        guard let v = values[0] else {
+            Issue.record("modulo result should not be nil")
+            return
+        }
+        #expect(v >= 0 && v < 3)
+    }
+
+    @Test("取模 · 负数（quotient 负数 · Decimal .down 截向 0 一致行为）")
+    func testModuloNegative() throws {
+        // -7 % 3 · quotient = -7/3 = -2.333 → floor 截向 0 = -2 → -7 - (-2)*3 = -1
+        let results = try run("R:(CLOSE-18)%3;")  // CLOSE[0]=11 → 11-18=-7 → -7%3
+        let values = results[0].values
+        // 期望 -1（与 Swift / C 标准 truncated modulo 一致 · 不是 Python 的 floor modulo）
+        #expect(values[0] == -1)
+    }
+
     @Test("MACD完整公式")
     func testMACDFormula() throws {
         let source = """

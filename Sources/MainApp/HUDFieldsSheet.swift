@@ -8,6 +8,7 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import Shared
 
 struct HUDFieldsSheet: View {
 

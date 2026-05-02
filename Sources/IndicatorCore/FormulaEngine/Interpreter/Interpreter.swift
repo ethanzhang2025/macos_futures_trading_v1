@@ -135,9 +135,18 @@ public struct Interpreter: Sendable {
         return rounded
     }
 
+    /// v15.16 hotfix #16：quotient 超 Int 范围时 NSDecimalNumber 截断行为是 platform-defined（64-bit Mac 是 Int64.min 巨大反符号）· 整公式静默错
+    /// 修：超 Int.max 走 Decimal floor 路径 · `truncated = quotient.rounded(.down)` 全 Decimal 计算 · 不依赖 Int 转换
     private func moduloDecimal(_ a: Decimal, _ b: Decimal) -> Decimal {
         let quotient = divideDecimal(a, b)
-        let truncated = Decimal(Int(truncating: quotient as NSDecimalNumber))
+        // 范围内走 Int 截断（快路径）· 超界走 Decimal 截断（慢但正确）
+        if quotient >= Decimal(Int.min) && quotient <= Decimal(Int.max) {
+            let truncated = Decimal(Int(truncating: quotient as NSDecimalNumber))
+            return a - truncated * b
+        }
+        var truncated = Decimal()
+        var raw = quotient
+        NSDecimalRound(&truncated, &raw, 0, .down)  // 向 0 截断（floor for positive · ceil for negative）
         return a - truncated * b
     }
 }

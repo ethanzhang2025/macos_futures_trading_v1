@@ -303,6 +303,8 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
     /// 顶点 hash（K 数据 + indicator 数据）· 检测是否需要重建 vertex buffer
     /// 任一变化触发全量重建（K 线 + 全 indicators · 同步刷新 · 简化模型）
     /// PoC 假设：append-only · count + 首末 close + indicator name/count 即视为新数据 · 误判率极低
+    /// v15.16 hotfix #16 doc：bars.count 不变 + 仅修改中间 K（数据修复 / editor 路径 · 实战 onTick 不发生）会缓存命中 stale buffer
+    /// 当前实战路径仅 append-only / 末根更新 · 不暴露此问题 · 完整 hash 需 N×Float 开销 · 不值得
     private func vertexHash(input: KLineRenderInput) -> Int {
         let count = input.bars.count
         let firstClose = input.bars.first.map { Self.float($0.close).bitPattern } ?? 0

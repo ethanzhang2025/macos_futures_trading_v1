@@ -174,6 +174,8 @@ struct ChartScene: View {
     /// v13.9 多选 · 选中的画线集合（高亮 + Delete 批量删除 · ⇧ 加选）
     @State private var selectedDrawingIDs: Set<UUID> = []
     @State private var isDrawingsLoaded: Bool = false  // 守卫：load 完成前的 drawings = [] 不触发 save
+    /// v15.16 hotfix #13：load 是否成功（区别于 load 完成但失败 fallback 空）· 失败时禁 save 防坏档被空覆盖
+    @State private var isDrawingsLoadOK: Bool = false
     /// v13.8 工具栏当前画线颜色 · 新建画线时应用 · 默认黄（与趋势线类型默认色一致）
     @State private var currentStrokeColor: Color = Color(red: 1.00, green: 0.78, blue: 0.18)
     /// v13.8 工具栏当前画线线宽（pt · 范围 0.5~5.0 步进 0.5）· 默认 1.5（与渲染层 baseWidth 一致）
@@ -291,10 +293,20 @@ struct ChartScene: View {
             // v13.0 WP-42 画线状态切合约/周期重载 · 各 (instrumentID, period) 组合独立持久化
             // v13.2 升级 UserDefaults JSON → SQLiteDrawingStore（M5 持久化 8/8）
             isDrawingsLoaded = false
+            isDrawingsLoadOK = false
+            // v15.16 hotfix #13：区分"load 成功 vs load 失败"· 失败时 isDrawingsLoadOK=false 禁 save 防坏档被空覆盖
             if let store = storeManager?.drawings {
-                drawings = (try? await store.load(instrumentID: currentInstrumentID, period: selectedPeriod)) ?? []
+                do {
+                    drawings = try await store.load(instrumentID: currentInstrumentID, period: selectedPeriod)
+                    isDrawingsLoadOK = true
+                } catch {
+                    print("⚠️ DrawingStore load failed for \(currentInstrumentID).\(selectedPeriod): \(error) · 已禁用 save 防坏档被空覆盖 · 重启可重试")
+                    drawings = []
+                    isDrawingsLoadOK = false
+                }
             } else {
                 drawings = []
+                isDrawingsLoadOK = true  // 无 store 时空数组是合法状态
             }
             pendingDrawingPoint = nil
             pendingExtraPoints = []
@@ -336,7 +348,8 @@ struct ChartScene: View {
         .onChange(of: drawings) { newValue in
             // v13.2 WP-42 画线 SQLite 持久化（接 StoreManager.drawings · M5 持久化 8/8）
             // isDrawingsLoaded 守卫：避免初始 [] 误覆盖（同 alerts/trades/history 模式）
-            guard isDrawingsLoaded, let store = storeManager?.drawings else { return }
+            // v15.16 hotfix #13：加 isDrawingsLoadOK 守卫 · load 失败时禁 save 防坏档被空覆盖
+            guard isDrawingsLoaded, isDrawingsLoadOK, let store = storeManager?.drawings else { return }
             let id = currentInstrumentID
             let p = selectedPeriod
             Task { try? await store.save(newValue, instrumentID: id, period: p) }
@@ -1524,7 +1537,11 @@ struct ChartContentView: View {
     /// v13.3 hover 跟踪 · 双点画线第二点 hover 预览（虚线）
     @State var hoverDataPoint: DrawingPoint?
     /// v13.20 副图区总高度 · 用户拖分割条调整 · 范围 80~480pt（默认 160 = subChartHeight 单副图）
-    @State var subChartTotalHeight: CGFloat = SubChart.defaultHeight
+    /// v15.16 hotfix #13：init 时同步 load · 防 ChartContentView 切合约重建时 onAppear 异步加载导致 160→保存值闪烁
+    @State var subChartTotalHeight: CGFloat = {
+        let h = UserDefaults.standard.double(forKey: ChartContentView.subChartHeightKey)
+        return (h >= SubChart.minHeight && h <= SubChart.maxHeight) ? CGFloat(h) : SubChart.defaultHeight
+    }()
     /// v13.20 拖分割条时的起始高度 · onChanged 累加 translation 算新高度
     @State var dragStartSubHeight: CGFloat?
     /// v13.10 anchor 拖动目标 · onChanged 第一次落 · 释放清空

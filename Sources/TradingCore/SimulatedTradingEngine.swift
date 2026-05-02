@@ -360,6 +360,9 @@ public actor SimulatedTradingEngine {
         account.closePnL += pnl
 
         // 减持仓（todayVolume 优先扣 · 清仓后从 dict 删除 · 推 volume=0 快照让 UI 感知清仓）
+        // TODO v15.16 hotfix #13：v2 接 contract.feeStructure 后区分平今 / 平昨 · 上期所平今平昨手续费倒挂
+        // 当前 v1 hardcoded 5 元/手 · 不区分对账户无影响 · 但 OffsetFlag.close（平昨语义）应优先扣 yesterdayVolume
+        // 修法：if request.offsetFlag == .closeToday { todayVolume -= } else { yesterdayVolume -= todayVolume 留 }
         pos.volume -= fillVolume
         pos.todayVolume = max(0, pos.todayVolume - fillVolume)
         positions[key] = (pos.volume == 0) ? nil : pos

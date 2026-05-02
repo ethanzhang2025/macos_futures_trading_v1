@@ -1,5 +1,5 @@
-// WP-19a-7 · StoreManager 单元测试（WP-19a-8 起 7 store）
-// 验证：路径自动创建 / 7 store 文件创建 / 加密 vs 明文 / close 后不可用 / 加密往返 / 错密钥拒绝
+// WP-19a-8 · StoreManager 单元测试（v13.2 起 8 store · drawings + alertConfig 已包含）
+// 验证：路径自动创建 / 8 store 文件创建 / 加密 vs 明文 / close 后不可用 / 加密往返 / 错密钥拒绝
 
 import Testing
 import Foundation
@@ -33,7 +33,7 @@ private let sqliteMagic = Data([
     0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x20, 0x33
 ])
 
-@Suite("WP-19a-7 · StoreManager · 7 store 统一管理器")
+@Suite("WP-19a-8 · StoreManager · 8 store 统一管理器")
 struct StoreManagerTests {
 
     @Test("init 自动创建根目录 · 7 个 .sqlite 文件全部就位")

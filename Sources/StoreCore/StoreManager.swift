@@ -1,10 +1,10 @@
-// WP-19a-7 · 7 store 统一管理器（WP-19a-8 加 alertConfig）
+// WP-19a-8 · 8 store 统一管理器（v13.2 加 drawings · WP-19a-7 起 8 store · alertConfig 已包含）
 // 集中：路径模板 + passphrase 注入 + 生命周期
 //
 // 设计取舍：
 // - struct + 各 store 自隔离 actor（不嵌套 actor · StoreManager 仅做容器）
 // - 文件名固化为 public static 常量（迁移 / 测试 / 备份脚本可引用 · 避免漂移）
-// - passphrase nil/空 → 7 store 全走明文路径（同 SQLiteConnection 行为）
+// - passphrase nil/空 → 8 store 全走明文路径（同 SQLiteConnection 行为）
 // - close() 串行 await（顺序无关 · 多 store 关闭性能不敏感 · 简单优先）
 // - init 失败时已构造的 store SQLite handle 泄漏到进程退出（Swift 6 actor deinit
 //   不能调用 actor-isolated 方法 · UI 启动失败 → 进程退出 → OS 回收 · 可接受）
@@ -20,7 +20,7 @@ import AlertCore
 
 public struct StoreManager: Sendable {
 
-    // MARK: - 7 store 引用
+    // MARK: - 8 store 引用
 
     public let analytics: SQLiteAnalyticsEventStore
     public let kline: SQLiteKLineCacheStore
@@ -62,7 +62,7 @@ public struct StoreManager: Sendable {
 
     // MARK: - 初始化
 
-    /// 打开 7 store · 自动创建 rootDirectory
+    /// 打开 8 store · 自动创建 rootDirectory
     /// - Parameters:
     ///   - rootDirectory: 数据库根目录
     ///   - passphrase: SQLCipher 密钥；nil 或空字符串 = 不加密（行为同原生 SQLite）

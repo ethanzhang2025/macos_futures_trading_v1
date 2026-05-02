@@ -209,6 +209,8 @@ struct ChartScene: View {
     @State private var hudFields: HUDFieldsBook = .default
     @State private var isHUDFieldsLoaded: Bool = false
     @State private var showHUDFieldsSheet: Bool = false
+    /// v15.17 · 副图多选 popover 显示状态（替代之前 Menu+Button · 修复"点一次只能选一个"便利问题）
+    @State private var showSubIndicatorPicker: Bool = false
     /// v15.17 InAppOverlayChannel 接收的预警 toast（3 秒自动消失 · 多个仅显示最新）
     @State private var alertToast: AlertToastInfo?
     @State private var alertToastDismissTask: Task<Void, Never>?
@@ -1098,30 +1100,39 @@ struct ChartScene: View {
             .frame(width: 80)
             .labelsHidden()
 
-            // v13.19 副图多选 · Menu 弹下拉显示 4 个 Toggle（用户可同时选 1~4 个 · vertical stack 显示）
-            Menu {
-                ForEach(SubIndicatorKind.allCases) { k in
-                    Button(action: {
-                        if selectedSubIndicators.contains(k) {
-                            // 至少保留 1 个不允许全部取消（防 UI 空白）
-                            if selectedSubIndicators.count > 1 {
-                                selectedSubIndicators.remove(k)
-                            }
-                        } else {
-                            selectedSubIndicators.insert(k)
-                        }
-                    }) {
-                        Label(k.shortName, systemImage: selectedSubIndicators.contains(k) ? "checkmark.circle.fill" : "circle")
-                    }
-                }
-            } label: {
+            // v13.19 副图多选 + v15.17 · Popover 替代 Menu（修"点一次关一次"便利问题 · 点 popover 内连选不关 · 点空白才关）
+            Button(action: { showSubIndicatorPicker.toggle() }) {
                 let count = selectedSubIndicators.count
                 Text(count == 1 ? selectedSubIndicators.first!.shortName : "副图 \(count)")
                     .frame(maxWidth: .infinity)
             }
-            .menuStyle(.borderlessButton)
+            .buttonStyle(.borderless)
             .frame(width: 90)
-            .help("副图指标多选（至少 1 · 最多 4 · vertical stack 显示）")
+            .help("副图指标多选（至少 1 · 最多 4 · 点空白关闭弹窗）")
+            .popover(isPresented: $showSubIndicatorPicker, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("副图（多选 · 点空白关闭）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Divider()
+                    ForEach(SubIndicatorKind.allCases) { k in
+                        Toggle(k.shortName, isOn: Binding(
+                            get: { selectedSubIndicators.contains(k) },
+                            set: { isOn in
+                                if isOn {
+                                    selectedSubIndicators.insert(k)
+                                } else if selectedSubIndicators.count > 1 {
+                                    // 至少保留 1 个 · 防 UI 空白
+                                    selectedSubIndicators.remove(k)
+                                }
+                            }
+                        ))
+                        .toggleStyle(.checkbox)
+                    }
+                }
+                .padding(12)
+                .frame(width: 180)
+            }
 
             Divider().frame(height: 16)
             drawingTools

@@ -301,6 +301,8 @@ struct ChartScene: View {
         .onReceive(NotificationCenter.default.publisher(for: InAppOverlayChannel.alertNotification)) { note in
             handleAlertToastNotification(note)
         }
+        // v15.17 · 主题动态 colorScheme · sheet/popup/系统色组件跟主图主题切换
+        .preferredColorScheme(chartTheme.colorScheme)
         .background(periodShortcuts)
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         .task(id: PipelineKey(mode: chartMode, instrumentID: currentInstrumentID, period: selectedPeriod)) {

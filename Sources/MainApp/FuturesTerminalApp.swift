@@ -178,13 +178,13 @@ struct FuturesTerminalApp: App {
 
     var body: some Scene {
         // 主图表窗口（默认启动 + Cmd+N 新建多个 · 每窗口独立 renderer / viewport）
+        // v15.17 · 移除全局 .preferredColorScheme(.dark) · ChartScene 内动态 chartTheme.colorScheme · sheet/popup 跟主题
         WindowGroup("K 线图表", id: "chart") {
             ChartScene()
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
                 .environment(\.simulatedTradingEngine, simulatedTradingEngine)
-                .preferredColorScheme(.dark)
         }
         // 视觉迭代第 13 项：显式 defaultSize · 启动时合理大窗 · 不依赖 SwiftUI 默认
         .defaultSize(width: 1280, height: 800)

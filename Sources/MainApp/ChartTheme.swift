@@ -99,6 +99,15 @@ enum ChartTheme: String, CaseIterable, Identifiable, Codable {
         case .light: return Color.white.opacity(0.85)
         }
     }
+
+    /// v15.17 · SwiftUI ColorScheme 桥接 · ChartScene 用 .preferredColorScheme(chartTheme.colorScheme)
+    /// 让 sheet / 系统按钮 / NSPopUpButton 等系统色组件也跟主题切换
+    var colorScheme: ColorScheme {
+        switch self {
+        case .dark:  return .dark
+        case .light: return .light
+        }
+    }
 }
 
 // MARK: - Metal MTLClearColor 桥接（v15.x 主图 K 线 Metal 渲染背景跟主题）

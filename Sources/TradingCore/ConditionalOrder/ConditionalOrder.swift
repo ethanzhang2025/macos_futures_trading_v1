@@ -75,24 +75,30 @@ public struct ConditionalOrder: Sendable, Identifiable {
 }
 
 /// 条件单管理器
+/// v15.17 · @unchecked Sendable + NSLock · 配 Stage B 多 tick 流并发 fanout（同 instrumentID 多源）
+/// Stage A 未激活（仅测试中实例化）· 加锁是 Stage B 接入前的准备
 public final class ConditionalOrderManager: @unchecked Sendable {
     private var orders: [String: ConditionalOrder] = [:]
     private var previousPrices: [String: Decimal] = [:]
+    private let lock = NSLock()
 
     public init() {}
 
     /// 添加条件单
     public func add(_ order: ConditionalOrder) {
+        lock.lock(); defer { lock.unlock() }
         orders[order.id] = order
     }
 
     /// 取消条件单
     public func cancel(_ id: String) {
+        lock.lock(); defer { lock.unlock() }
         orders[id]?.status = .cancelled
     }
 
     /// 暂停所有（断线时）
     public func pauseAll() {
+        lock.lock(); defer { lock.unlock() }
         for id in orders.keys {
             if orders[id]?.status == .active {
                 orders[id]?.status = .paused
@@ -102,6 +108,7 @@ public final class ConditionalOrderManager: @unchecked Sendable {
 
     /// 恢复所有（重连后）
     public func resumeAll() {
+        lock.lock(); defer { lock.unlock() }
         for id in orders.keys {
             if orders[id]?.status == .paused {
                 orders[id]?.status = .active
@@ -111,6 +118,7 @@ public final class ConditionalOrderManager: @unchecked Sendable {
 
     /// 检查Tick是否触发条件单，返回被触发的条件单列表
     public func checkTrigger(instrumentID: String, currentPrice: Decimal) -> [ConditionalOrder] {
+        lock.lock(); defer { lock.unlock() }
         let prevPrice = previousPrices[instrumentID]
         previousPrices[instrumentID] = currentPrice
 
@@ -128,11 +136,13 @@ public final class ConditionalOrderManager: @unchecked Sendable {
 
     /// 获取所有活跃条件单
     public var activeOrders: [ConditionalOrder] {
-        orders.values.filter { $0.status == .active }
+        lock.lock(); defer { lock.unlock() }
+        return orders.values.filter { $0.status == .active }
     }
 
     /// 获取所有条件单
     public var allOrders: [ConditionalOrder] {
-        Array(orders.values)
+        lock.lock(); defer { lock.unlock() }
+        return Array(orders.values)
     }
 }

@@ -362,6 +362,60 @@ struct FloatingPnLTests {
         let account = await engine.currentAccount()
         #expect(account.positionPnL == 1000)
     }
+
+    /// v15.16 hotfix #11 P1-12 防回归：多合约浮盈不互相覆盖
+    /// 之前用 openAvgPrice 当其他 instrument mark · 来 rb tick 时 ag 浮盈被强制为 0 · 静默丢失
+    /// 修复后用 instrumentLastPrice 缓存每合约 markPrice · ag 来 ag tick 缓存 · rb 来 rb tick 缓存 · 各自浮盈累加
+    @Test("多合约浮盈正确累加（v15.16 hotfix P1-12 防回归）")
+    func multiInstrumentFloatingPnL() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContract(makeContract(instrumentID: "rb2501"))
+        await engine.registerContract(makeContract(instrumentID: "ag2506"))
+        // 开 rb 多 1 手 限价 3500 · ag 多 1 手 限价 5200（确保 fill：limit 高于 lastPrice 才 fill 买入）
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 1, instrumentID: "rb2501"))
+        await engine.onTick(makeTick(3500, instrumentID: "rb2501"))
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 5200, volume: 1, instrumentID: "ag2506"))
+        await engine.onTick(makeTick(5000, instrumentID: "ag2506"))   // 5000 < 5200 limit 买单 fill · 成交价 5000
+        // 此时 rb mark=3500 浮盈 0 · ag mark=5000 浮盈 0 · 总 0
+        var acct = await engine.currentAccount()
+        #expect(acct.positionPnL == 0)
+        // ag 涨到 5100 · ag 浮盈 = (5100-5000) × 1 × 10 = 1000
+        await engine.onTick(makeTick(5100, instrumentID: "ag2506"))
+        acct = await engine.currentAccount()
+        #expect(acct.positionPnL == 1000)
+        // rb 涨到 3600 · rb 浮盈 1000 · ag 仍按 5100 浮盈 1000 · 总 2000
+        // 修复前：rb tick 来 ag 用 openAvgPrice=5000 当 mark · ag 浮盈强制 0 · 总只 1000 错
+        // 修复后：ag 缓存 5100 保留 · 总 2000 正确
+        await engine.onTick(makeTick(3600, instrumentID: "rb2501"))
+        acct = await engine.currentAccount()
+        #expect(acct.positionPnL == 2000)
+    }
+
+    /// v15.17 · instrumentLastPrice 持久化测试（snapshot/restore）
+    @Test("snapshot/restore 保留 instrumentLastPrice · 重启后多合约浮盈立刻正确")
+    func instrumentLastPriceSnapshot() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContract(makeContract(instrumentID: "rb2501"))
+        await engine.registerContract(makeContract(instrumentID: "ag2506"))
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 3500, volume: 1, instrumentID: "rb2501"))
+        await engine.onTick(makeTick(3500, instrumentID: "rb2501"))
+        _ = await engine.submitOrder(makeOpenOrder(direction: .buy, price: 5200, volume: 1, instrumentID: "ag2506"))
+        await engine.onTick(makeTick(5000, instrumentID: "ag2506"))   // 成交价 5000
+        await engine.onTick(makeTick(5100, instrumentID: "ag2506"))   // ag 浮盈 1000
+        // snapshot 应含 {rb: 3500, ag: 5100}
+        let snap = await engine.snapshot()
+        #expect(snap.instrumentLastPrice["rb2501"] == 3500)
+        #expect(snap.instrumentLastPrice["ag2506"] == 5100)
+        // 重启：新 engine restore
+        let engine2 = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine2.registerContract(makeContract(instrumentID: "rb2501"))
+        await engine2.registerContract(makeContract(instrumentID: "ag2506"))
+        await engine2.restore(snap)
+        await engine2.onTick(makeTick(3500, instrumentID: "rb2501"))  // 触发 recompute · 用恢复的缓存
+        let acct = await engine2.currentAccount()
+        // ag 缓存 5100 · 浮盈 1000 · rb 浮盈 0 · 总 1000（修复前 0 · 修复后 1000）
+        #expect(acct.positionPnL == 1000)
+    }
 }
 
 // MARK: - 6. 事件流订阅

@@ -120,7 +120,8 @@ public actor SimulatedTradingEngine {
             },
             equityCurve: equityCurve,
             orderRefCounter: orderRefCounter,
-            tradeIDCounter: tradeIDCounter
+            tradeIDCounter: tradeIDCounter,
+            instrumentLastPrice: instrumentLastPrice  // v15.17 · 多合约浮盈缓存持久化
         )
     }
 
@@ -136,6 +137,7 @@ public actor SimulatedTradingEngine {
         equityCurve = snap.equityCurve
         orderRefCounter = snap.orderRefCounter
         tradeIDCounter = snap.tradeIDCounter
+        instrumentLastPrice = snap.instrumentLastPrice  // v15.17 · 重启后多合约浮盈立即正确 · 不等下一次 onTick
     }
 
     /// 重置为初始状态（保留已注册合约 · 重新建 baseline）
@@ -147,6 +149,7 @@ public actor SimulatedTradingEngine {
         equityCurve = [EquityCurvePoint(timestamp: now, balance: initialBalance, positionPnL: 0)]
         orderRefCounter = 0
         tradeIDCounter = 0
+        instrumentLastPrice.removeAll()  // v15.17 · reset 一并清 markPrice 缓存（防错误浮盈）
     }
 
     // MARK: - 事件订阅

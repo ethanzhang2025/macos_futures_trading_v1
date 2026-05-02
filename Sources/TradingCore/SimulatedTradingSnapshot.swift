@@ -20,6 +20,9 @@ public struct SimulatedTradingSnapshot: Sendable, Codable, Equatable {
     public var equityCurve: [EquityCurvePoint]
     public var orderRefCounter: Int
     public var tradeIDCounter: Int
+    /// v15.17 · 每合约最近 markPrice 缓存（hotfix #11 P1-12 多合约浮盈用）
+    /// 持久化让重启后多合约浮盈立刻正确 · 不必等下一次 onTick 才有 mark · decodeIfPresent 兼容旧快照
+    public var instrumentLastPrice: [String: Decimal]
 
     public init(
         account: Account,
@@ -28,7 +31,8 @@ public struct SimulatedTradingSnapshot: Sendable, Codable, Equatable {
         positions: [Position],
         equityCurve: [EquityCurvePoint],
         orderRefCounter: Int,
-        tradeIDCounter: Int
+        tradeIDCounter: Int,
+        instrumentLastPrice: [String: Decimal] = [:]
     ) {
         self.account = account
         self.orders = orders
@@ -37,5 +41,23 @@ public struct SimulatedTradingSnapshot: Sendable, Codable, Equatable {
         self.equityCurve = equityCurve
         self.orderRefCounter = orderRefCounter
         self.tradeIDCounter = tradeIDCounter
+        self.instrumentLastPrice = instrumentLastPrice
+    }
+
+    // v15.17 · 旧快照兼容（v15.6-v15.16 没 instrumentLastPrice 字段）· decodeIfPresent fallback 空字典
+    private enum CodingKeys: String, CodingKey {
+        case account, orders, trades, positions, equityCurve, orderRefCounter, tradeIDCounter, instrumentLastPrice
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.account = try c.decode(Account.self, forKey: .account)
+        self.orders = try c.decode([OrderRecord].self, forKey: .orders)
+        self.trades = try c.decode([TradeRecord].self, forKey: .trades)
+        self.positions = try c.decode([Position].self, forKey: .positions)
+        self.equityCurve = try c.decode([EquityCurvePoint].self, forKey: .equityCurve)
+        self.orderRefCounter = try c.decode(Int.self, forKey: .orderRefCounter)
+        self.tradeIDCounter = try c.decode(Int.self, forKey: .tradeIDCounter)
+        self.instrumentLastPrice = try c.decodeIfPresent([String: Decimal].self, forKey: .instrumentLastPrice) ?? [:]
     }
 }

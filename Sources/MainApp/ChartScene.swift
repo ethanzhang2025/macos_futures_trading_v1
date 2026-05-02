@@ -209,6 +209,9 @@ struct ChartScene: View {
     @State private var hudFields: HUDFieldsBook = .default
     @State private var isHUDFieldsLoaded: Bool = false
     @State private var showHUDFieldsSheet: Bool = false
+    /// v15.17 InAppOverlayChannel 接收的预警 toast（3 秒自动消失 · 多个仅显示最新）
+    @State private var alertToast: AlertToastInfo?
+    @State private var alertToastDismissTask: Task<Void, Never>?
 
     private static let drawingTemplatesKey = "drawingTemplates.v1"
     /// v13.21 副图偏好持久化（重启保留 · 跨合约/周期共享）
@@ -285,6 +288,18 @@ struct ChartScene: View {
             if chartMode == .replay {
                 replayControlBar
             }
+        }
+        .overlay(alignment: .top) {
+            // v15.17 · InAppOverlayChannel 预警 toast（3 秒自动消失）
+            if let toast = alertToast {
+                alertToastView(toast)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, 8)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: alertToast?.id)
+        .onReceive(NotificationCenter.default.publisher(for: InAppOverlayChannel.alertNotification)) { note in
+            handleAlertToastNotification(note)
         }
         .background(periodShortcuts)
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
@@ -547,6 +562,83 @@ struct ChartScene: View {
            list != drawingTemplates {
             drawingTemplates = list
         }
+    }
+
+    /// v15.17 · InAppOverlayChannel toast 信息（NotificationCenter userInfo 解码）
+    struct AlertToastInfo: Equatable {
+        let id: UUID  // 用于 transition 切换识别
+        let alertName: String
+        let instrumentID: String
+        let triggerPrice: Decimal
+        let message: String
+    }
+
+    /// v15.17 · 处理预警 toast 通知（InAppOverlayChannel.alertNotification）
+    private func handleAlertToastNotification(_ note: Notification) {
+        guard let info = note.userInfo,
+              let alertID = info["alertID"] as? UUID,
+              let alertName = info["alertName"] as? String,
+              let instrumentID = info["instrumentID"] as? String,
+              let triggerPrice = info["triggerPrice"] as? Decimal,
+              let message = info["message"] as? String else { return }
+        alertToast = AlertToastInfo(
+            id: alertID,
+            alertName: alertName,
+            instrumentID: instrumentID,
+            triggerPrice: triggerPrice,
+            message: message
+        )
+        // 3 秒自动消失（取消旧 task 防多 toast 提前消失）
+        alertToastDismissTask?.cancel()
+        alertToastDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            alertToast = nil
+        }
+    }
+
+    /// v15.17 · 预警 toast view · 与主题色对齐（hudBackground + textPrimary）
+    @ViewBuilder
+    private func alertToastView(_ toast: AlertToastInfo) -> some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "bell.fill")
+                    .foregroundColor(chartTheme.candleBull)
+                Text(toast.alertName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(chartTheme.textPrimary)
+                Spacer()
+                Button {
+                    alertToast = nil
+                    alertToastDismissTask?.cancel()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(chartTheme.textSecondary)
+                }
+                .buttonStyle(.borderless)
+            }
+            HStack(spacing: 6) {
+                Text("\(toast.instrumentID) @ \(NSDecimalNumber(decimal: toast.triggerPrice).stringValue)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(chartTheme.textSecondary)
+                Spacer()
+            }
+            if !toast.message.isEmpty {
+                Text(toast.message)
+                    .font(.system(size: 11))
+                    .foregroundColor(chartTheme.textSecondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(width: 360)
+        .background(chartTheme.hudBackground)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(chartTheme.candleBull.opacity(0.35), lineWidth: 1)
+        )
     }
 
     /// 模式/合约/周期切换前重置：先 stop player → driver → 再 cancel observe（避免 player emit 时 consumer 已退出）

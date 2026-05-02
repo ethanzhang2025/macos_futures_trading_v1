@@ -5,7 +5,7 @@
 // - macOS 真实通道实现放 MainApp（#if os(macOS) guard）
 // - SystemNoticeChannel：UNUserNotificationCenter（macOS 11+ · 系统通知中心）
 // - SoundChannel：NSSound 系统声音播放（.glass / .ping / .submarine 等）
-// - InAppOverlayChannel：暂不实现（需 SwiftUI overlay 入侵 ChartScene · 留 v15.18+）
+// - InAppOverlayChannel：通过 NotificationCenter post · ChartScene overlay 监听显示 toast（v15.17 完成）
 //
 // 使用：FuturesTerminalApp 启动时 dispatcher.register(SystemNoticeChannel())
 // + dispatcher.register(SoundChannel()) · 用户预警触发 → AlertEvaluator dispatch → 发系统通知 + 播声音
@@ -59,6 +59,33 @@ public final class SystemNoticeChannel: NotificationChannel, @unchecked Sendable
                 .requestAuthorization(options: [.alert, .badge])
         } catch {
             print("⚠️ SystemNoticeChannel permission request failed: \(error)")
+        }
+    }
+}
+
+/// macOS App 内浮窗通道 · 通过 NotificationCenter 转发 · ChartScene overlay 接收显示 toast
+/// 设计：channel 自身不持有 SwiftUI 状态 · 解耦 actor → @MainActor view
+public final class InAppOverlayChannel: NotificationChannel, @unchecked Sendable {
+    public let kind: NotificationChannelKind = .inApp
+
+    /// NotificationCenter 名（ChartScene .onReceive 监听）
+    public static let alertNotification = Notification.Name("FuturesTerminal.alertTriggeredInApp")
+
+    public init() {}
+
+    public func send(_ event: NotificationEvent) async {
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: Self.alertNotification,
+                object: nil,
+                userInfo: [
+                    "alertID": event.alertID,
+                    "alertName": event.alertName,
+                    "instrumentID": event.instrumentID,
+                    "triggerPrice": event.triggerPrice,
+                    "message": event.message
+                ]
+            )
         }
     }
 }

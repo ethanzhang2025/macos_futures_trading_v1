@@ -125,7 +125,11 @@ struct FuturesTerminalApp: App {
         // 之前 dispatcher 创建空 channels · 用户预警仅 console log 不实用
         self.alertEvaluator = manager.map {
             #if canImport(AppKit) && os(macOS)
-            let dispatcher = NotificationDispatcher(channels: [SystemNoticeChannel(), SoundChannel()])
+            let dispatcher = NotificationDispatcher(channels: [
+                InAppOverlayChannel(),
+                SystemNoticeChannel(),
+                SoundChannel()
+            ])
             #else
             let dispatcher = NotificationDispatcher()
             #endif

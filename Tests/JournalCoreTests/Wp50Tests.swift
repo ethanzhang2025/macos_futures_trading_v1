@@ -200,6 +200,51 @@ struct MonthlyPnLTests {
     }
 }
 
+// MARK: - 2b. 季度盈亏（v15.17 · D2 §2 月度/季度总结）
+
+@Suite("ReviewAnalytics · 季度盈亏")
+struct QuarterlyPnLTests {
+
+    @Test("空输入 → 空 buckets, totalPnL = 0")
+    func empty() {
+        let result = ReviewAnalytics.quarterlyPnL(from: [])
+        #expect(result.buckets.isEmpty)
+        #expect(result.totalPnL == 0)
+    }
+
+    @Test("Q1 边界（3月）+ Q2 起点（4月）正确分桶")
+    func quarterBoundary() {
+        let positions = [
+            makeClosedPosition(pnl: 100, closeTime: date(2026, 1, 5)),   // Q1
+            makeClosedPosition(pnl: 200, closeTime: date(2026, 3, 31)),  // Q1
+            makeClosedPosition(pnl: 300, closeTime: date(2026, 4, 1)),   // Q2
+            makeClosedPosition(pnl: 400, closeTime: date(2026, 12, 31)), // Q4
+        ]
+        let result = ReviewAnalytics.quarterlyPnL(from: positions)
+        #expect(result.buckets.count == 3)
+        #expect(result.buckets[0].year == 2026 && result.buckets[0].quarter == 1)
+        #expect(result.buckets[0].realizedPnL == 300)
+        #expect(result.buckets[0].tradeCount == 2)
+        #expect(result.buckets[1].quarter == 2)
+        #expect(result.buckets[1].realizedPnL == 300)
+        #expect(result.buckets[2].quarter == 4)
+        #expect(result.buckets[2].realizedPnL == 400)
+        #expect(result.totalPnL == 1000)
+    }
+
+    @Test("跨年 · 排序按 (year, quarter) 升序")
+    func crossYear() {
+        let positions = [
+            makeClosedPosition(pnl: 100, closeTime: date(2026, 11, 1)),  // 2026 Q4
+            makeClosedPosition(pnl: 200, closeTime: date(2025, 7, 1)),   // 2025 Q3
+        ]
+        let result = ReviewAnalytics.quarterlyPnL(from: positions)
+        #expect(result.buckets.count == 2)
+        #expect(result.buckets[0].year == 2025 && result.buckets[0].quarter == 3)
+        #expect(result.buckets[1].year == 2026 && result.buckets[1].quarter == 4)
+    }
+}
+
 // MARK: - 3. 分布直方
 
 @Suite("ReviewAnalytics · 分布直方")

@@ -38,6 +38,35 @@ public enum ReviewAnalytics {
         return MonthlyPnL(buckets: buckets, totalPnL: total)
     }
 
+    // MARK: - 1b. 季度盈亏（v15.17 · 月度聚合到季度 · D2 §2 月度/季度总结自动生成）
+
+    public static func quarterlyPnL(
+        from positions: [ClosedPosition],
+        timeZone: TimeZone = defaultTimeZone
+    ) -> QuarterlyPnL {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        struct Key: Hashable { let year: Int; let quarter: Int }
+        var byQuarter: [Key: (pnl: Decimal, count: Int)] = [:]
+
+        for position in positions {
+            let c = calendar.dateComponents([.year, .month], from: position.closeTime)
+            let year = c.year ?? 0
+            let month = c.month ?? 1
+            let quarter = (month - 1) / 3 + 1   // 1~3 → Q1, 4~6 → Q2, ...
+            let key = Key(year: year, quarter: quarter)
+            var pair = byQuarter[key] ?? (Decimal(0), 0)
+            pair.pnl += position.realizedPnL
+            pair.count += 1
+            byQuarter[key] = pair
+        }
+        let buckets = byQuarter
+            .sorted { ($0.key.year, $0.key.quarter) < ($1.key.year, $1.key.quarter) }
+            .map { (k, v) in QuarterlyPnLBucket(year: k.year, quarter: k.quarter, realizedPnL: v.pnl, tradeCount: v.count) }
+        let total = positions.reduce(Decimal(0)) { $0 + $1.realizedPnL }
+        return QuarterlyPnL(buckets: buckets, totalPnL: total)
+    }
+
     // MARK: - 2. 分布直方
 
     /// - Parameter binSize: 单桶宽度（如 100 = 每桶 100 元盈亏区间）

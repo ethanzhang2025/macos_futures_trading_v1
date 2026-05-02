@@ -32,6 +32,32 @@ public struct MonthlyPnL: Sendable, Codable, Equatable {
     }
 }
 
+// MARK: - 1b. 季度盈亏（v15.17 · 设计文档 D2 §2 月度/季度总结自动生成 · 月度同模式）
+
+public struct QuarterlyPnLBucket: Sendable, Codable, Equatable, Hashable {
+    public let year: Int
+    public let quarter: Int           // 1~4
+    public let realizedPnL: Decimal
+    public let tradeCount: Int
+
+    public init(year: Int, quarter: Int, realizedPnL: Decimal, tradeCount: Int) {
+        self.year = year
+        self.quarter = quarter
+        self.realizedPnL = realizedPnL
+        self.tradeCount = tradeCount
+    }
+}
+
+public struct QuarterlyPnL: Sendable, Codable, Equatable {
+    public let buckets: [QuarterlyPnLBucket]   // 按 (year, quarter) 升序
+    public let totalPnL: Decimal
+
+    public init(buckets: [QuarterlyPnLBucket], totalPnL: Decimal) {
+        self.buckets = buckets
+        self.totalPnL = totalPnL
+    }
+}
+
 // MARK: - 2. 分布直方（单笔盈亏分桶）
 
 public struct PnLDistributionBin: Sendable, Codable, Equatable, Hashable {

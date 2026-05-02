@@ -143,6 +143,11 @@ struct SubChartView: View {
     let slotIndex: Int
     /// v15.7 用户右键选"本副图参数..."回调 · 父级弹 IndicatorParamsSheet 编辑 override
     let onEditParams: () -> Void
+    /// v15.17 用户右键选"恢复全局参数"回调 · 清除 override · 父级 subParamsOverrides[slot] = nil
+    /// 默认 nil（兼容老 caller · 新调用处必传）
+    var onClearOverride: (() -> Void)? = nil
+    /// v15.17 是否当前 slot 有 override（菜单项显示禁用与否的视觉提示）
+    var hasOverride: Bool = false
     /// v15.9 主图主题（影响 background / 网格 / HUD · 副图语义色 yellow/purple/blue/bull/bear 不变）
     let chartTheme: ChartTheme
 
@@ -175,6 +180,10 @@ struct SubChartView: View {
         .contextMenu {
             // v15.7 右键菜单 · 本副图独立参数（仅本槽位生效）
             Button("本副图参数（槽位 \(slotIndex + 1)）…") { onEditParams() }
+            // v15.17 · 仅当本 slot 有 override 时显示"恢复全局"项 · 一键清除回到全局参数
+            if hasOverride, let onClear = onClearOverride {
+                Button("恢复全局参数（清除本副图 override）") { onClear() }
+            }
         }
     }
 

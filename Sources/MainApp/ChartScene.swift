@@ -1857,7 +1857,9 @@ struct ChartContentView: View {
                             params: subParamsOverrides[idx] ?? indicatorParams,
                             slotIndex: idx,
                             onEditParams: { onEditSubSlot(idx) },
-                            chartTheme: chartTheme
+                            chartTheme: chartTheme,
+                            onClearOverride: { subParamsOverrides[idx] = nil },  // v15.17 · 一键清除 override
+                            hasOverride: subParamsOverrides[idx] != nil
                         )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         chartTheme.background

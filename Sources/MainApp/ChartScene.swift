@@ -1491,7 +1491,8 @@ struct ChartScene: View {
             .frame(width: 240)
             .labelsHidden()
 
-            Spacer()
+            // v15.17 · 进度条 Slider 拖拽 seek（用户跳到任意 K 线 · 替代单步走）
+            replayProgressSlider
 
             Text(progressText)
                 .font(.system(size: 12, design: .monospaced))
@@ -1503,6 +1504,26 @@ struct ChartScene: View {
         .frame(height: 36)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+    }
+
+    /// v15.17 · 回放进度条 Slider · 拖拽 seek
+    /// 范围 [0, totalCount-1] · 拖动时实时调 player.seek · 视觉与按钮 step 操作一致
+    @ViewBuilder
+    private var replayProgressSlider: some View {
+        let total = max(1, replay.cursor.totalCount)
+        let current = max(0, min(replay.cursor.currentIndex, total - 1))
+        Slider(
+            value: Binding(
+                get: { Double(current) },
+                set: { newValue in
+                    let target = Int(newValue.rounded())
+                    Task { await replayPlayer?.seek(to: target) }
+                }
+            ),
+            in: 0...Double(max(0, total - 1))
+        )
+        .frame(minWidth: 200, maxWidth: .infinity)
+        .help("拖拽跳到任意 K 线（也可单步按钮走）")
     }
 
     private var progressText: String {

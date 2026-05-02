@@ -110,6 +110,31 @@ enum ChartTheme: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// MARK: - 跨 Window 主题同步（v15.17 · 让次级窗口 sheet/popup 也跟主图 chartTheme.v1）
+
+/// v15.17 · ViewModifier · 监听 chartTheme.v1 UserDefaults 变化 · 动态 .preferredColorScheme
+/// 用于 AlertWindow / JournalWindow / TradingWindow 等次级窗口 · 不持有 chartTheme @State 也能跟主题
+struct ChartThemeFollowing: ViewModifier {
+    @State private var theme: ChartTheme = ChartThemeStore.load() ?? .dark
+
+    func body(content: Content) -> some View {
+        content
+            .preferredColorScheme(theme.colorScheme)
+            .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+                if let t = ChartThemeStore.load(), t != theme {
+                    theme = t
+                }
+            }
+    }
+}
+
+extension View {
+    /// 简便扩展：`.followingChartTheme()` 让任意 View 跟主图主题切换
+    func followingChartTheme() -> some View {
+        modifier(ChartThemeFollowing())
+    }
+}
+
 // MARK: - Metal MTLClearColor 桥接（v15.x 主图 K 线 Metal 渲染背景跟主题）
 
 #if canImport(Metal)

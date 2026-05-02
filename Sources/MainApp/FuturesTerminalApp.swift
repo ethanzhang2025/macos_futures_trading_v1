@@ -214,7 +214,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
-                .preferredColorScheme(.dark)
+                .followingChartTheme()  // v15.17 · 跟主图 chartTheme.v1 · sheet/popup 一致
         }
         .defaultSize(width: 880, height: 600)
 
@@ -224,7 +224,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
-                .preferredColorScheme(.dark)
+                .followingChartTheme()  // v15.17 · 跟主图 chartTheme.v1 · sheet/popup 一致
         }
         .defaultSize(width: 1280, height: 900)
 
@@ -234,7 +234,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
-                .preferredColorScheme(.dark)
+                .followingChartTheme()  // v15.17 · 跟主图 chartTheme.v1 · sheet/popup 一致
         }
         .defaultSize(width: 920, height: 640)
 
@@ -244,7 +244,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
-                .preferredColorScheme(.dark)
+                .followingChartTheme()  // v15.17 · 跟主图 chartTheme.v1 · sheet/popup 一致
         }
         .defaultSize(width: 1100, height: 720)
 
@@ -254,7 +254,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
-                .preferredColorScheme(.dark)
+                .followingChartTheme()  // v15.17 · 跟主图 chartTheme.v1 · sheet/popup 一致
         }
         .defaultSize(width: 1100, height: 720)
 
@@ -264,7 +264,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.simulatedTradingEngine, simulatedTradingEngine)
-                .preferredColorScheme(.dark)
+                .followingChartTheme()  // v15.17 · 跟主图 chartTheme.v1 · sheet/popup 一致
         }
         .defaultSize(width: 1100, height: 720)
 

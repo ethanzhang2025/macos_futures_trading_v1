@@ -76,4 +76,30 @@ struct KLineBuilderTests {
         #expect(builder.currentKLine == nil)
         #expect(builder.allBars.isEmpty)
     }
+
+    /// v15.16 hotfix #11 P1-10：跨日 lastVolume 重置防回归
+    /// CTP/Sina 每日 volume 从 0 累计 · 不重置则当日首根 K 线 tickVolume = max(0, 100-50000) = 0
+    @Test("跨 tradingDay · lastVolume 自动重置（v15.16 hotfix P1-10 防回归）")
+    func testCrossTradingDayResetsLastVolume() {
+        let builder = KLineBuilder(instrumentID: "rb2501", period: .minute1)
+        // Day 1 收盘 · 累积 lastVolume = 50000
+        _ = builder.onTick(makeTick(price: 3500, volume: 50000, time: "14:59:00", tradingDay: "20250115"))
+        // Day 2 开盘第一根 · volume 从 100 重新累计（CTP 每日归零）
+        let bar = builder.onTick(makeTick(price: 3520, volume: 100, time: "09:00:00", tradingDay: "20250116"))
+        // 修复前：tickVolume = max(0, 100 - 50000) = 0 · 当日首根 K 线 volume=0 错误
+        // 修复后：跨 tradingDay 重置 lastVolume = 0 · tickVolume = 100 - 0 = 100 正确
+        if bar != nil {
+            // Day 1 已 emit · 检查 Day 2 第一根 currentKLine.volume
+        }
+        #expect(builder.currentKLine?.volume == 100)
+    }
+
+    @Test("同 tradingDay 内多笔 tick · volume 增量累加正确（不受跨日逻辑影响）")
+    func testSameDayVolumeAccumulation() {
+        let builder = KLineBuilder(instrumentID: "rb2501", period: .minute1)
+        _ = builder.onTick(makeTick(price: 3500, volume: 100, time: "09:00:00", tradingDay: "20250115"))
+        _ = builder.onTick(makeTick(price: 3505, volume: 250, time: "09:00:30", tradingDay: "20250115"))
+        // 第二笔 tickVolume = 250 - 100 = 150 · 累加到首根 100 + 150 = 250
+        #expect(builder.currentKLine?.volume == 250)
+    }
 }

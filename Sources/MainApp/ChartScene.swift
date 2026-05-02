@@ -407,6 +407,50 @@ struct ChartScene: View {
                 isHUDFieldsLoaded = true
             }
         }
+        // v15.16 hotfix #13：多窗口 UserDefaults 同步（⌘N 开第二窗口时 · A 改 chartTheme.dark → B 实时跟）
+        // 监听 UserDefaults.didChangeNotification · 任意进程内 set 都触发 · 重 load 6 个全局 key
+        // 与当前 @State 比较 · 不同才更新（防 ping-pong：自己 save 不会触发自己 onChange 二次 save）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            // chartTheme
+            if isChartThemeLoaded, let theme = ChartThemeStore.load(), theme != chartTheme {
+                chartTheme = theme
+            }
+            // hudFields
+            if isHUDFieldsLoaded, let book = HUDFieldsStore.load(), book != hudFields {
+                hudFields = book
+            }
+            // hudCorner
+            if isHUDPrefLoaded,
+               let raw = UserDefaults.standard.string(forKey: Self.hudCornerKey),
+               let corner = HUDCorner(rawValue: raw),
+               corner != hudCorner {
+                hudCorner = corner
+            }
+            // indicatorParams + subParamsOverrides（v15.2 + v15.7）
+            if isIndicatorParamsLoaded {
+                if let book = IndicatorParamsStore.load(), book != indicatorParams {
+                    indicatorParams = book
+                }
+                if let ov = SubChartParamsOverridesStore.load(), ov != subParamsOverrides {
+                    subParamsOverrides = ov
+                }
+            }
+            // selectedSubIndicators
+            if isSubPrefsLoaded,
+               let arr = UserDefaults.standard.array(forKey: Self.subIndicatorsKey) as? [String] {
+                let kinds = Set(arr.compactMap { SubIndicatorKind(rawValue: $0) })
+                if !kinds.isEmpty && kinds != selectedSubIndicators {
+                    selectedSubIndicators = kinds
+                }
+            }
+            // drawingTemplates
+            if isTemplatesLoaded,
+               let data = UserDefaults.standard.data(forKey: Self.drawingTemplatesKey),
+               let list = try? JSONDecoder().decode([DrawingTemplate].self, from: data),
+               list != drawingTemplates {
+                drawingTemplates = list
+            }
+        }
         .onChange(of: drawingTemplates) { newValue in
             // v13.16 模板持久化 UserDefaults · 加载守卫避免初始 [] 误覆盖
             guard isTemplatesLoaded else { return }

@@ -182,6 +182,97 @@ struct IndicatorParamsSheet: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+
+                // v15.18 第三批副图（Aroon / STC / ElderRay / Choppiness / ForceIndex）
+                Section("副图 AROON（趋势强度）") {
+                    HStack {
+                        Text("周期")
+                        TextField("", value: $draft.aroonPeriod, format: .number)
+                            .frame(width: 60)
+                    }
+                    Text("默认 14（Up/Down 双线 · 0~100 视野 · 50 参考线）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("副图 STC（Schaff Trend Cycle）") {
+                    HStack {
+                        Text("快线")
+                        TextField("", value: stcParamBinding(0), format: .number)
+                            .frame(width: 60)
+                        Text("慢线").padding(.leading, 12)
+                        TextField("", value: stcParamBinding(1), format: .number)
+                            .frame(width: 60)
+                        Text("周期").padding(.leading, 12)
+                        TextField("", value: stcParamBinding(2), format: .number)
+                            .frame(width: 60)
+                        Text("smooth").padding(.leading, 12)
+                        TextField("", value: stcParamBinding(3), format: .number)
+                            .frame(width: 60)
+                    }
+                    Text("默认 23 / 50 / 10 / 10（5 步复合 · 0~100 视野 · 25/75 阈值）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("副图 ELDER RAY（多空力量）") {
+                    HStack {
+                        Text("周期")
+                        TextField("", value: $draft.elderRayPeriod, format: .number)
+                            .frame(width: 60)
+                    }
+                    Text("默认 13（Bull/Bear 双线 · 0 参考 · 上下对称视野）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("副图 CHOPPINESS（震荡度）") {
+                    HStack {
+                        Text("周期")
+                        TextField("", value: $draft.choppinessPeriod, format: .number)
+                            .frame(width: 60)
+                    }
+                    Text("默认 14（单线 · 0~100 视野 · 61.8/38.2 黄金分割 · 高=震荡 / 低=趋势）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("副图 FORCE INDEX（价量复合）") {
+                    HStack {
+                        Text("周期")
+                        TextField("", value: $draft.forceIndexPeriod, format: .number)
+                            .frame(width: 60)
+                    }
+                    Text("默认 13（单线 · 上下对称视野 · 0 参考 · Alexander Elder）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                // v15.18+ batch13 波动率指标（BBW + ATRP）
+                Section("副图 BBW（布林带宽 %）") {
+                    HStack {
+                        Text("周期")
+                        TextField("", value: bbwParamBinding(0), format: .number)
+                            .frame(width: 60)
+                        Text("倍数").padding(.leading, 12)
+                        TextField("", value: bbwParamBinding(1), format: .number)
+                            .frame(width: 60)
+                    }
+                    Text("默认 20 / 2（与 BOLL 一致 · BBW 极低 = squeeze 即将爆发）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("副图 ATRP（标准化 ATR%）") {
+                    HStack {
+                        Text("周期")
+                        TextField("", value: $draft.atrpPeriod, format: .number)
+                            .frame(width: 60)
+                    }
+                    Text("默认 14（单线 % · 跨品种波动率比较 · ATR / Close × 100）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .formStyle(.grouped)
             } // ScrollView 结束
@@ -222,6 +313,8 @@ struct IndicatorParamsSheet: View {
     private func macdParamBinding(_ i: Int) -> Binding<Int> { arrayBinding(\.macdParams, i) }
     private func kdjParamBinding(_ i: Int) -> Binding<Int> { arrayBinding(\.kdjParams, i) }
     private func stochParamBinding(_ i: Int) -> Binding<Int> { arrayBinding(\.stochParams, i) }
+    private func stcParamBinding(_ i: Int) -> Binding<Int> { arrayBinding(\.stcParams, i) }
+    private func bbwParamBinding(_ i: Int) -> Binding<Int> { arrayBinding(\.bbwParams, i) }
 
     // MARK: - 校验（保存按钮 .disabled(!isValid) · 越界值不会写回 book）
 
@@ -241,6 +334,17 @@ struct IndicatorParamsSheet: View {
               b.stochParams.allSatisfy({ $0 >= 1 && $0 <= 200 }) else { return false }
         guard b.rocPeriod >= 1 && b.rocPeriod <= 200 else { return false }
         guard b.biasPeriod >= 1 && b.biasPeriod <= 200 else { return false }
+        // v15.18+ 7 新指标参数范围（合理区间 · 防用户输入越界值）
+        guard b.aroonPeriod >= 2 && b.aroonPeriod <= 200 else { return false }
+        guard b.stcParams.count == 4,
+              b.stcParams.allSatisfy({ $0 >= 1 && $0 <= 200 }) else { return false }
+        guard b.elderRayPeriod >= 2 && b.elderRayPeriod <= 200 else { return false }
+        guard b.choppinessPeriod >= 2 && b.choppinessPeriod <= 200 else { return false }
+        guard b.forceIndexPeriod >= 1 && b.forceIndexPeriod <= 200 else { return false }
+        guard b.bbwParams.count == 2,
+              b.bbwParams[0] >= 2 && b.bbwParams[0] <= 200,
+              b.bbwParams[1] >= 1 && b.bbwParams[1] <= 5 else { return false }
+        guard b.atrpPeriod >= 1 && b.atrpPeriod <= 500 else { return false }
         return true
     }
 }

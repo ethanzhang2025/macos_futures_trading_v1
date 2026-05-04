@@ -191,11 +191,75 @@ struct ReviewWindow: View {
                 Spacer()
                 Button("导出月报…") { exportMonthlyReport(s) }
                     .help("生成本月 Markdown 复盘报告 · 含全套指标 + 心理标签 + 品种/时段分布")
+                Button("导出全部图…") { exportAllChartCards(s) }
+                    .help("一键导出全部 10 张 chartCard 为 PNG 到选定目录 · 月底归档")
             }
             .padding(.bottom, 4)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
+    }
+
+    /// v15.19 batch47 · 一键导出全部 chartCard 为 PNG 到选定目录（trader 月底归档）
+    @MainActor
+    private func exportAllChartCards(_ s: ReviewSummary) {
+        let panel = NSOpenPanel()
+        panel.title = "选择导出目录"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "导出到这里"
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        let timestamp = dateFmt.string(from: Date())
+
+        // 10 张图 · 与 content() 内 chartCard 顺序一致
+        let cards: [(title: String, view: AnyView)] = [
+            ("月度盈亏", AnyView(monthlyPnLChart(s.monthlyPnL))),
+            ("分布直方", AnyView(pnlDistributionChart(s.pnlDistribution))),
+            ("胜率曲线", AnyView(winRateChart(s.winRateCurve))),
+            ("品种矩阵", AnyView(instrumentMatrixView(s.instrumentMatrix))),
+            ("持仓时间", AnyView(holdingDurationChart(s.holdingDuration))),
+            ("最大回撤", AnyView(maxDrawdownChart(s.maxDrawdown))),
+            ("盈亏比", AnyView(profitLossRatioView(s.profitLossRatio))),
+            ("时段分析", AnyView(sessionPnLChart(s.sessionPnL))),
+            ("连胜连败曲线", AnyView(streakRunChart(s.streakRunPoints))),
+            ("心理风险标签", AnyView(psychTagsChart(s.psychTagCounts)))
+        ]
+
+        var failedCount = 0
+        for (title, content) in cards {
+            let exportable = VStack(alignment: .leading, spacing: 8) {
+                Text(title).font(.headline)
+                content
+            }
+            .padding(20)
+            .background(Color.white)
+            .frame(width: 720, height: 480)
+            let renderer = ImageRenderer(content: exportable)
+            renderer.scale = 2
+            guard let nsImage = renderer.nsImage,
+                  let tiff = nsImage.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiff),
+                  let pngData = bitmap.representation(using: .png, properties: [:]) else {
+                failedCount += 1
+                continue
+            }
+            let url = folder.appendingPathComponent("复盘_\(title)_\(timestamp).png")
+            do {
+                try pngData.write(to: url, options: .atomic)
+            } catch {
+                failedCount += 1
+            }
+        }
+        let success = cards.count - failedCount
+        if failedCount == 0 {
+            Toast.info("导出成功", "已导出 \(success) 张图到 \(folder.lastPathComponent)。")
+        } else {
+            Toast.errorBody("部分导出失败", "成功 \(success) / 失败 \(failedCount) 张 · 检查目录可写权限。")
+        }
     }
 
     /// 月度 Markdown 复盘报告导出（NSSavePanel · 默认本月 · 用户可改文件名带年月）

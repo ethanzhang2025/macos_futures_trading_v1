@@ -81,5 +81,26 @@ struct PreferenceExporterTests {
         #expect(prefixes.contains("featureFlag."))
         #expect(prefixes.contains("indicators.params.v1"))
         #expect(prefixes.contains("chartTheme.v1"))
+        #expect(prefixes.contains("viewState.v1."))   // v15.20 batch60
+    }
+
+    @Test("v15.20 batch60 · viewState.v1 系列 key 进出导出")
+    func viewStateRoundTrip() throws {
+        let suite = "PreferenceExporterTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        defaults.set("month:2026-05", forKey: "viewState.v1.review.dateFilter")
+        defaults.set("changePct", forKey: "viewState.v1.watchlist.sortFieldRaw")
+        defaults.set(true, forKey: "viewState.v1.watchlist.sortAscending")
+
+        let data = PreferenceExporter.export(defaults: defaults)
+        defaults.removePersistentDomain(forName: suite)
+        #expect(defaults.string(forKey: "viewState.v1.review.dateFilter") == nil)
+
+        try PreferenceExporter.import(from: data, defaults: defaults)
+        #expect(defaults.string(forKey: "viewState.v1.review.dateFilter") == "month:2026-05")
+        #expect(defaults.string(forKey: "viewState.v1.watchlist.sortFieldRaw") == "changePct")
+        #expect(defaults.bool(forKey: "viewState.v1.watchlist.sortAscending") == true)
     }
 }

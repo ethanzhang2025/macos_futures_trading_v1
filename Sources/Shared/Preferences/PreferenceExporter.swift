@@ -21,7 +21,8 @@ public enum PreferenceExporter {
         "indicators.subOverrides.v1",  // 副图独立参数
         "subIndicators.v1",         // 副图选择
         "subChartHeight.v1",        // 副图高度
-        "drawingTemplates.v1"       // 画线模板
+        "drawingTemplates.v1",      // 画线模板
+        "viewState.v1."             // v15.20 batch60 · 视图状态（review 区间 / watchlist 排序）
     ]
 
     /// 导出当前 UserDefaults 中匹配前缀的 key/value 为 JSON Data

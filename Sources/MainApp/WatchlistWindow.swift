@@ -75,9 +75,18 @@ struct WatchlistWindow: View {
     /// v15.20 batch55 · 自由粘贴合约 sheet 显隐（文本框 + 分组选择 + 实时解析预览）
     @State private var showQuickPasteSheet: Bool = false
 
-    /// v15.20 batch59 · 排序字段 · 默认 .manual 保持用户拖拽顺序
-    @State private var sortField: WatchlistSortField = .manual
-    @State private var sortAscending: Bool = false   // 默认降序（涨幅榜从高到低 trader 习惯）
+    /// v15.20 batch59 · 排序字段（v15.20 batch60 · @AppStorage 持久化 · 重启保留）
+    /// 默认 .manual 保持用户拖拽顺序 · 反序失败 fallback .manual
+    @AppStorage("viewState.v1.watchlist.sortFieldRaw") private var sortFieldRaw: String = WatchlistSortField.manual.rawValue
+    @AppStorage("viewState.v1.watchlist.sortAscending") private var sortAscending: Bool = false
+
+    /// 解析 sortField · raw 不合法 fallback .manual
+    private var sortField: WatchlistSortField {
+        get { WatchlistSortField(rawValue: sortFieldRaw) ?? .manual }
+    }
+    private func setSortField(_ field: WatchlistSortField) {
+        sortFieldRaw = field.rawValue
+    }
 
     @Environment(\.openWindow) private var openWindow
     @Environment(\.storeManager) private var storeManager
@@ -396,7 +405,7 @@ struct WatchlistWindow: View {
                 if isActive {
                     sortAscending.toggle()
                 } else {
-                    sortField = field
+                    setSortField(field)
                     sortAscending = false   // 默认降序（涨幅榜从高到低）
                 }
             }
@@ -618,7 +627,7 @@ struct WatchlistWindow: View {
     private func moveInstrumentToSlot(_ ref: WatchlistInstrumentRef, targetGroupID: UUID, targetIndex: Int) -> Bool {
         defer { clearHover() }
         // v15.20 batch59 · 用户拖拽重排 → 自动切回 .manual（否则 sort 会立刻覆盖拖拽结果）
-        if sortField != .manual { sortField = .manual }
+        if sortField != .manual { setSortField(.manual) }
         if ref.sourceGroupID == targetGroupID {
             guard let group = book.group(id: targetGroupID),
                   let from = group.instrumentIDs.firstIndex(of: ref.instrumentID),

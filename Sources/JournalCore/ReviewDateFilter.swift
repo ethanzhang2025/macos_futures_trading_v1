@@ -46,6 +46,26 @@ public enum ReviewDateFilter: Hashable, Sendable {
         case .quarter(let q): return "quarter:\(q)"
         }
     }
+
+    /// v15.20 batch60 · 从 rawTag 反解析（UserDefaults / AppStorage 持久化用）· 无效返回 nil
+    public static func fromRawTag(_ tag: String) -> ReviewDateFilter? {
+        switch tag {
+        case "all":          return .all
+        case "last7":        return .last7Days
+        case "last30":       return .last30Days
+        case "currentMonth": return .currentMonth
+        default:
+            if tag.hasPrefix("month:") {
+                let m = String(tag.dropFirst("month:".count))
+                return m.isEmpty ? nil : .month(m)
+            }
+            if tag.hasPrefix("quarter:") {
+                let q = String(tag.dropFirst("quarter:".count))
+                return q.isEmpty ? nil : .quarter(q)
+            }
+            return nil
+        }
+    }
 }
 
 public enum ReviewDateFilterEngine {

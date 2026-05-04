@@ -154,6 +154,26 @@ struct ReviewDateFilterTests {
         #expect(qs == ["2025-Q4", "2026-Q1", "2026-Q2"])
     }
 
+    @Test("v15.20 batch60 · fromRawTag 反解析（持久化往返）")
+    func fromRawTag() {
+        // 全部 6 case · rawTag 往返
+        let allCases: [ReviewDateFilter] = [
+            .all, .last7Days, .last30Days, .currentMonth,
+            .month("2026-05"), .quarter("2026-Q2")
+        ]
+        for filter in allCases {
+            let parsed = ReviewDateFilter.fromRawTag(filter.rawTag)
+            #expect(parsed == filter, "rawTag round-trip 失败：\(filter)")
+        }
+
+        // 边界
+        #expect(ReviewDateFilter.fromRawTag("invalid") == nil)
+        #expect(ReviewDateFilter.fromRawTag("month:") == nil)         // 空 month
+        #expect(ReviewDateFilter.fromRawTag("quarter:") == nil)       // 空 quarter
+        #expect(ReviewDateFilter.fromRawTag("month:2026-12") == .month("2026-12"))
+        #expect(ReviewDateFilter.fromRawTag("quarter:2026-Q3") == .quarter("2026-Q3"))
+    }
+
     @Test("displayName / rawTag 稳定")
     func labels() {
         #expect(ReviewDateFilter.all.displayName == "全部")

@@ -15,12 +15,20 @@ struct ReviewWindow: View {
 
     @State private var summary: ReviewSummary?
     @State private var loadError: String?
-    /// v15.20 batch56 · 区间筛选（替代 v15.19 batch44 selectedMonth: String）
-    /// .all / .last7Days / .last30Days / .currentMonth / .month("yyyy-MM") / .quarter("yyyy-Qn")
-    @State private var dateFilter: ReviewDateFilter = .all
+    /// v15.20 batch60 · 区间筛选持久化（rawTag 字符串 · UserDefaults · 重启保留）
+    /// 默认 "all" · 反解析失败 fallback .all
+    @AppStorage("viewState.v1.review.dateFilter") private var dateFilterRawTag: String = "all"
     /// 全量 closedPositions · 启动一次加载 · 区间切换不重拉数据
     @State private var allPositions: [ClosedPosition] = []
     @State private var totalTradeCount: Int = 0
+
+    /// v15.20 batch60 · 从 AppStorage rawTag 解析（dateFilter 计算属性 · 写入时反序）
+    private var dateFilter: ReviewDateFilter {
+        get { ReviewDateFilter.fromRawTag(dateFilterRawTag) ?? .all }
+    }
+    private func setDateFilter(_ filter: ReviewDateFilter) {
+        dateFilterRawTag = filter.rawTag
+    }
 
     var body: some View {
         Group {
@@ -35,7 +43,7 @@ struct ReviewWindow: View {
         }
         .frame(minWidth: 1024, idealWidth: 1280, minHeight: 720, idealHeight: 900)
         .task { await loadMockReview() }
-        .onChange(of: dateFilter) { _ in recomputeSummary() }
+        .onChange(of: dateFilterRawTag) { _ in recomputeSummary() }
     }
 
     /// 启动加载 · 拉一次 trades + match · 后续仅按 dateFilter 重算 summary
@@ -144,25 +152,25 @@ struct ReviewWindow: View {
             HStack(spacing: 20) {
                 Text("📊 复盘工作台").font(.title2).bold()
                 Divider().frame(height: 24)
-                // v15.20 batch56 · 区间筛选 Menu（替代 v15.19 batch44 月份 Picker · 加 7/30 天 + 当月 + 季度）
+                // v15.20 batch56 · 区间筛选 Menu（v15.20 batch60 · @AppStorage rawTag 持久化）
                 Menu(dateFilter.displayName) {
-                    Button("全部") { dateFilter = .all }
+                    Button("全部") { setDateFilter(.all) }
                     Divider()
-                    Button("近 7 天") { dateFilter = .last7Days }
-                    Button("近 30 天") { dateFilter = .last30Days }
-                    Button("当月") { dateFilter = .currentMonth }
+                    Button("近 7 天") { setDateFilter(.last7Days) }
+                    Button("近 30 天") { setDateFilter(.last30Days) }
+                    Button("当月") { setDateFilter(.currentMonth) }
                     if !availableMonths.isEmpty {
                         Divider()
                         Menu("月份") {
                             ForEach(availableMonths, id: \.self) { m in
-                                Button(m) { dateFilter = .month(m) }
+                                Button(m) { setDateFilter(.month(m)) }
                             }
                         }
                     }
                     if !availableQuarters.isEmpty {
                         Menu("季度") {
                             ForEach(availableQuarters, id: \.self) { q in
-                                Button(q) { dateFilter = .quarter(q) }
+                                Button(q) { setDateFilter(.quarter(q)) }
                             }
                         }
                     }

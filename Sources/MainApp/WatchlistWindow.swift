@@ -109,6 +109,7 @@ struct WatchlistWindow: View {
         }
         .frame(minWidth: 720, idealWidth: 880, minHeight: 480, idealHeight: 600)
         .animation(.easeInOut(duration: 0.22), value: book)
+        .background(groupShortcuts)
         .task {
             // M5 启动加载：store 可用时尝试 load 真数据 · 失败 / 空库时保留 Mock · 加载完成后允许 onChange 自动 save
             // try? await load() 嵌套返回 WatchlistBook?? · 用 ?? nil flatten 成 WatchlistBook? 一次解构即可
@@ -191,6 +192,25 @@ struct WatchlistWindow: View {
     }
 
     // MARK: - 左栏 · 分组列表
+
+    /// v15.21 batch110 · ⌘1-9 切换 sidebar 第 N 个分组（trader 高频切组 · 与 ChartScene ⌘1-6 周期切独立窗口）
+    private var groupShortcuts: some View {
+        Group {
+            ForEach(0..<9, id: \.self) { i in
+                Button("") { selectGroupAtIndex(i) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
+            }
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
+    }
+
+    private func selectGroupAtIndex(_ index: Int) {
+        guard index >= 0, index < book.groups.count else { return }
+        selectedGroupID = book.groups[index].id
+        showAllAggregated = false   // 切到具体分组自动退出聚合视图
+    }
 
     private var sidebar: some View {
         VStack(spacing: 0) {

@@ -76,6 +76,9 @@ struct WatchlistWindow: View {
     @State private var showQuickPasteSheet: Bool = false
     /// v15.21 batch91 · CSV 导入 sheet 预填文本（importWatchlistFromFile 把 .csv 内容塞进去 · 复用 QuickPasteSheet）
     @State private var quickPasteInitialText: String = ""
+    /// v15.21 batch101 · 聚合视图合约搜索（lowercased contains · 不区分大小写 · 空字符串跳过过滤）
+    @State private var aggregatedSearchText: String = ""
+    @FocusState private var isAggregatedSearchFocused: Bool
 
     /// v15.20 batch59 · 排序字段（v15.20 batch60 · @AppStorage 持久化 · 重启保留）
     /// 默认 .manual 保持用户拖拽顺序 · 反序失败 fallback .manual
@@ -381,10 +384,13 @@ struct WatchlistWindow: View {
     }
 
     /// v15.20 batch61 · 聚合视图 detail（跨分组扫盘 · 复用 sortableHeader + 排序状态 · 拖拽与添加禁用）
+    /// v15.21 batch101 · 加搜索框（按合约 ID 模糊筛选 · ⌘F 聚焦）· 大量合约时快速定位
     private var aggregatedInstrumentList: some View {
-        let ids = aggregatedInstrumentIDs
+        let allIDs = aggregatedInstrumentIDs
+        let q = aggregatedSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let filteredIDs = q.isEmpty ? allIDs : allIDs.filter { $0.lowercased().contains(q) }
         let sortedIDs = WatchlistSorter.sort(
-            ids: ids,
+            ids: filteredIDs,
             field: sortField,
             ascending: sortAscending,
             keyForID: keyForInstrument
@@ -394,8 +400,27 @@ struct WatchlistWindow: View {
                 Image(systemName: "chart.bar.fill").foregroundColor(.accentColor)
                 Text("全部 · 跨分组扫盘")
                     .font(.title3).fontWeight(.semibold)
-                Text("· \(ids.count) 合约（去重）")
+                Text("· \(sortedIDs.count)/\(allIDs.count) 合约")
                     .font(.caption).foregroundColor(.secondary)
+                // v15.21 batch101 · 搜索框（⌘F 聚焦 · Esc 清空）
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass").foregroundColor(.secondary).font(.caption)
+                    TextField("搜索合约（⌘F）", text: $aggregatedSearchText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 160)
+                        .focused($isAggregatedSearchFocused)
+                    if !aggregatedSearchText.isEmpty {
+                        Button { aggregatedSearchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary).font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .keyboardShortcut(.escape, modifiers: [])
+                        .help("清空搜索（Esc）")
+                    }
+                }
+                Button("") { isAggregatedSearchFocused = true }
+                    .keyboardShortcut("f", modifiers: .command)
+                    .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
                 Spacer()
                 // v15.20 batch68 · 涨幅/跌幅前 N 一键批量预警（聚合扫盘 + AlertPreset 联动）
                 Menu {

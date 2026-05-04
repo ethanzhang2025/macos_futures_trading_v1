@@ -547,6 +547,7 @@ struct WatchlistWindow: View {
                 .fontWeight(abs(pctValue ?? 0) >= 2 ? .bold : .regular)
                 .foregroundColor(Self.priceColor(pctValue))
                 .frame(width: 80, alignment: .trailing)
+                .help(detailedChangeText(for: id))   // v15.21 batch133 · hover 显示绝对涨跌 + 振幅
             Spacer().frame(width: 16)
             Text(openInterestText(for: id))
                 .font(.system(.body, design: .monospaced))
@@ -727,6 +728,7 @@ struct WatchlistWindow: View {
                 .fontWeight(abs(pctValue ?? 0) >= 2 ? .bold : .regular)
                 .foregroundColor(Self.priceColor(pctValue))
                 .frame(width: 80, alignment: .trailing)
+                .help(detailedChangeText(for: id))   // v15.21 batch133 · hover 显示绝对涨跌 + 振幅
             Spacer().frame(width: 16)
             Text(openInterestText(for: id))
                 .font(.system(.body, design: .monospaced))
@@ -1113,6 +1115,17 @@ struct WatchlistWindow: View {
             return String(format: "%.2f", NSDecimalNumber(decimal: q.lastPrice).doubleValue)
         }
         return MockQuote.price(for: id)
+    }
+
+    /// v15.21 batch133 · row 涨跌幅 hover 提示（绝对涨跌 + 振幅 + 昨结算）· quote 缺失时降级
+    private func detailedChangeText(for id: String) -> String {
+        guard let q = quotes[id] else { return "（无实时数据 · 仅 Mock 价格）" }
+        let abs = NSDecimalNumber(decimal: q.change).doubleValue
+        let amp = q.preSettlement != 0
+            ? NSDecimalNumber(decimal: (q.high - q.low) / q.preSettlement).doubleValue * 100
+            : 0
+        let pre = NSDecimalNumber(decimal: q.preSettlement).doubleValue
+        return String(format: "绝对涨跌：%+.2f · 振幅：%.2f%% · 昨结算：%.2f", abs, amp, pre)
     }
 
     /// v15.19 batch48 · 右键一键创建单个预警预设（联动 AlertPreset + alertAddedFromChart 通知）

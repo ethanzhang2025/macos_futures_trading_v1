@@ -56,7 +56,14 @@ struct ReviewWindow: View {
         }
         .frame(minWidth: 1024, idealWidth: 1280, minHeight: 720, idealHeight: 900)
         .task { await loadMockReview() }
-        .onChange(of: dateFilterRawTag) { _ in recomputeSummary() }
+        .onChange(of: dateFilterRawTag) { _ in
+            recomputeSummary()
+            // v15.21 batch133 · 区间切换 toast 反馈（trader 不知道切了 Picker 数据真的变了 · 显示新区间统计）
+            if let s = summary {
+                Toast.info("区间已切换：\(dateFilter.displayName)",
+                           "闭合 \(s.closedPositions.count) 笔 · 总 PnL ¥\(signedDecimal(s.monthlyPnL.totalPnL))")
+            }
+        }
         .sheet(item: $zoomedCard) { card in
             zoomedCardView(card)
         }

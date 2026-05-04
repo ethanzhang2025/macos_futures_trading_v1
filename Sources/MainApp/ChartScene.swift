@@ -812,6 +812,15 @@ struct ChartScene: View {
                 .keyboardShortcut("5", modifiers: [.command])
             Button("") { selectedPeriod = .daily }
                 .keyboardShortcut("6", modifiers: [.command])
+            // v15.19 batch30 · ⌘⇧M 快捷测距 · 第一次设 anchor · 第二次清空
+            Button("") {
+                if measureAnchor == nil {
+                    measureAnchor = hoverDataPoint
+                } else {
+                    measureAnchor = nil
+                }
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
             // v15.19 batch28 · ⌥1-9 全 9 个常用周期一键切（trader 高频工作流 · 与 ⌘1-6 互补）
             Button("") { selectedPeriod = .minute1 }
                 .keyboardShortcut("1", modifiers: [.option])
@@ -1979,6 +1988,8 @@ struct ChartContentView: View {
     @State var hoverDataPoint: DrawingPoint?
     /// 主图实时尺寸（GeometryReader 抓取 · 供右键"在此价位创建预警"反算价格）
     @State var chartMainAreaSize: CGSize = .zero
+    /// v15.19 batch30 · 快捷测距锚点（⌘⇧M 设 · 再按取消）· 配合 hoverDataPoint 实时显示距离
+    @State var measureAnchor: DrawingPoint?
     /// v13.20 副图区总高度 · 用户拖分割条调整 · 范围 80~480pt（默认 160 = subChartHeight 单副图）
     /// v15.16 hotfix #13：init 时同步 load · 防 ChartContentView 切合约重建时 onAppear 异步加载导致 160→保存值闪烁
     @State var subChartTotalHeight: CGFloat = {
@@ -2311,6 +2322,10 @@ struct ChartContentView: View {
             // v13.6 选中画线 Inspector 浮窗（显示类型 / 起终点 / 文字 / 通道偏移）
             drawingInspector
         }
+        .overlay(alignment: .topLeading) {
+            // v15.19 batch30 · 快捷测距 HUD（⌘⇧M 锚点 → hover 实时距离 + % + bar 数）
+            measurementHUD
+        }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
         .background(
@@ -2343,6 +2358,63 @@ struct ChartContentView: View {
             // v13.5 选中画线右键菜单（删除 / 编辑文字 / 取消选中）· v13.6 加复制
             drawingContextMenu
         }
+    }
+
+    /// v15.19 batch30 · 快捷测距 HUD · ⌘⇧M 设锚点后浮窗实时显示距离 + % + bar 数
+    /// 再按 ⌘⇧M 取消锚点 · HUD 自动消失
+    @ViewBuilder
+    private var measurementHUD: some View {
+        if let anchor = measureAnchor {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("📏 测距").fontWeight(.semibold)
+                    Spacer()
+                    Button { measureAnchor = nil } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(chartTheme.textSecondary)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                if let hover = hoverDataPoint {
+                    let priceDiff = hover.price - anchor.price
+                    let pct: Double = anchor.price > 0
+                        ? NSDecimalNumber(decimal: priceDiff / anchor.price).doubleValue * 100
+                        : 0
+                    let barDiff = hover.barIndex - anchor.barIndex
+                    let arrow = priceDiff >= 0 ? "↑" : "↓"
+                    let priceColor: Color = priceDiff >= 0
+                        ? Color(red: 0.96, green: 0.27, blue: 0.27)
+                        : Color(red: 0.18, green: 0.74, blue: 0.42)
+                    Group {
+                        Text("起 \(formatPrice(anchor.price)) → 现 \(formatPrice(hover.price))")
+                        Text("\(arrow) \(formatPriceDiff(priceDiff)) (\(String(format: "%+.2f%%", pct)))")
+                            .foregroundColor(priceColor)
+                            .fontWeight(.semibold)
+                        Text("跨 \(abs(barDiff)) 根 K 线")
+                            .foregroundColor(chartTheme.textSecondary)
+                    }
+                    .font(.system(size: 11, design: .monospaced))
+                } else {
+                    Text("移动鼠标到目标位置")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(chartTheme.textSecondary)
+                }
+                Text("⌘⇧M 切换 / 关闭")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(chartTheme.textSecondary.opacity(0.7))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(chartTheme.hudBackground)
+            .cornerRadius(6)
+            .padding(12)
+        }
+    }
+
+    /// 测距 helper · 价差格式化（保留小数）
+    private func formatPriceDiff(_ diff: Decimal) -> String {
+        let n = NSDecimalNumber(decimal: diff).doubleValue
+        return String(format: "%+.2f", n)
     }
 
     /// v13.6 选中画线 Inspector 浮窗 · v13.9 多选适配（≥2 显示数量 / 1 显示详情）

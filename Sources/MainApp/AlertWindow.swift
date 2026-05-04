@@ -887,7 +887,8 @@ struct AlertWindow: View {
             // v15.21 batch111 · 复制为 Markdown 表格（不弹保存 · 直接 Pasteboard · trader 贴 IM/邮件）
             Button("复制 Markdown") { copyHistoryAsMarkdown() }
                 .disabled(filteredHistory.isEmpty)
-                .help("把当前筛选窗口的触发历史复制为 Markdown 表格到剪贴板")
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .help("复制当前筛选窗口的触发历史为 Markdown 表格到剪贴板（⌘⇧C）")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

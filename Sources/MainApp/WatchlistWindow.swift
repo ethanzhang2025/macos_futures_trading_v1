@@ -475,6 +475,9 @@ struct WatchlistWindow: View {
         }
         .contextMenu {
             Button("打开主图") { openInstrumentInChart(id) }
+            // v15.21 batch97 · 复制合约代码 / 最新价（与单组 row 一致）
+            Button("复制合约代码 \(id)") { Pasteboard.copy(id) }
+            Button("复制最新价 \(priceText(for: id))") { Pasteboard.copy(priceText(for: id)) }
             Divider()
             Menu("📋 创建预警模板") {
                 ForEach(AlertPreset.allCases) { preset in
@@ -641,6 +644,13 @@ struct WatchlistWindow: View {
         .contextMenu {
             // v15.19 batch48 · 右键一键创建预警模板（联动 AlertPreset · 复用 alertAddedFromChart）
             Button("打开主图") { openInstrumentInChart(id) }
+            // v15.21 batch97 · 复制合约代码 / 最新价（trader 报单 / 截单 高频粘贴）
+            Button("复制合约代码 \(id)") {
+                Pasteboard.copy(id)
+            }
+            Button("复制最新价 \(priceText(for: id))") {
+                Pasteboard.copy(priceText(for: id))
+            }
             Divider()
             Menu("📋 创建预警模板") {
                 ForEach(AlertPreset.allCases) { preset in

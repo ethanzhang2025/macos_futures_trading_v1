@@ -47,6 +47,7 @@ private enum SheetState: Identifiable {
 struct AlertWindow: View {
 
     @State private var alerts: [Alert] = []
+    @State private var alertInstrumentFilter: String = ""   // "" = 全部 · 否则只显示指定合约
     @State private var historyEntries: [AlertHistoryEntry] = []
     @State private var historyWindow: AlertHistoryFilter.Window = .all
     /// 缓存：filteredHistory + summary 一次算多处用 · 避免每次 body re-eval 重算
@@ -279,8 +280,39 @@ struct AlertWindow: View {
 
     // MARK: - 预警列表
 
+    /// 当前 alerts 中出现的全部 instrumentID（升序去重）· 用于 Picker
+    private var availableInstruments: [String] {
+        Array(Set(alerts.map(\.instrumentID))).sorted()
+    }
+
+    /// 应用合约筛选
+    private var filteredAlerts: [Alert] {
+        if alertInstrumentFilter.isEmpty { return alerts }
+        return alerts.filter { $0.instrumentID == alertInstrumentFilter }
+    }
+
     private var alertsList: some View {
         VStack(spacing: 0) {
+            // v15.19 batch42 · 合约筛选 toolbar
+            HStack(spacing: 8) {
+                Text("合约筛选").font(.caption).foregroundColor(.secondary)
+                Picker("", selection: $alertInstrumentFilter) {
+                    Text("全部 (\(alerts.count))").tag("")
+                    ForEach(availableInstruments, id: \.self) { inst in
+                        let count = alerts.lazy.filter { $0.instrumentID == inst }.count
+                        Text("\(inst) (\(count))").tag(inst)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 200)
+                Spacer()
+                Text("当前显示 \(filteredAlerts.count) / \(alerts.count) 条")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+
             HStack(spacing: 8) {
                 Text("名称").frame(maxWidth: .infinity, alignment: .leading)
                 Text("合约").frame(width: 60, alignment: .leading)
@@ -298,7 +330,7 @@ struct AlertWindow: View {
 
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(alerts, id: \.id) { alert in
+                    ForEach(filteredAlerts, id: \.id) { alert in
                         alertRow(alert)
                         Divider()
                     }

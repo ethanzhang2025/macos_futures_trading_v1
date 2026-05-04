@@ -1853,6 +1853,8 @@ struct ChartContentView: View {
     @State var lastViewportSaveTime: Date = .distantPast
     /// v13.3 hover 跟踪 · 双点画线第二点 hover 预览（虚线）
     @State var hoverDataPoint: DrawingPoint?
+    /// v15.18+ batch14 · 主图实时尺寸（GeometryReader 抓取 · 供右键"在此价位创建预警"反算价格）
+    @State var chartMainAreaSize: CGSize = .zero
     /// v13.20 副图区总高度 · 用户拖分割条调整 · 范围 80~480pt（默认 160 = subChartHeight 单副图）
     /// v15.16 hotfix #13：init 时同步 load · 防 ChartContentView 切合约重建时 onAppear 异步加载导致 160→保存值闪烁
     @State var subChartTotalHeight: CGFloat = {
@@ -2194,6 +2196,26 @@ struct ChartContentView: View {
                 handleScrollWheelZoom(dy)
             }
         )
+        // v15.18+ batch14 · 主图始终跟踪 hover 价格（浏览模式右键"在此价位创建预警…"读这个值）
+        // 与 drawingClickCaptureLayer 内部 onContinuousHover 共存 · 双方写入同一 hoverDataPoint · 值相同 · 无竞态
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                guard chartMainAreaSize.width > 0 else { return }
+                hoverDataPoint = screenToDataPoint(location, in: chartMainAreaSize)
+            case .ended:
+                hoverDataPoint = nil
+            }
+        }
+        .background(
+            // v15.18+ batch14 · 抓取主图实时尺寸供 onContinuousHover 反算价格（无 GeometryReader 时 size 默认 zero）
+            GeometryReader { geom in
+                Color.clear.preference(key: ChartMainAreaSizePreferenceKey.self, value: geom.size)
+            }
+        )
+        .onPreferenceChange(ChartMainAreaSizePreferenceKey.self) { newSize in
+            chartMainAreaSize = newSize
+        }
         .contextMenu {
             // v13.5 选中画线右键菜单（删除 / 编辑文字 / 取消选中）· v13.6 加复制
             drawingContextMenu
@@ -2396,6 +2418,13 @@ struct ChartContentView: View {
                 selectedDrawingIDs.removeAll()
             }
         } else {
+            // v15.18+ batch14 · 在 hover 价位一键创建价格预警（trader 高频工作流 · 关键支撑/阻力位扫一眼右键即建）
+            if let hp = hoverDataPoint {
+                Button("在 \(formatPrice(hp.price)) 创建预警…") {
+                    quickCreatePriceAlert(at: hp.price)
+                }
+                Divider()
+            }
             // v13.24 无选中画线 · 显示通用 chart 操作（重置缩放 / 复制可见区 CSV）
             Button("重置缩放（⌘0）") {
                 inertiaTask?.cancel()
@@ -2645,6 +2674,60 @@ struct ChartContentView: View {
             success.addButton(withTitle: "好")
             success.runModal()
         }
+    }
+
+    /// v15.18+ batch14 · 主图右键 hover 价位一键创建价格预警
+    /// - Parameter price: 右键时鼠标 hover 反算的 K 线价格（已经过 OHLC 吸附）
+    /// 弹 NSAlert 让用户：1) 改名字（默认"<合约> 价格预警 <价>"）2) 选条件（≥ / ≤ / 上穿 / 下穿）
+    /// 提交后通过 NotificationCenter 推给 AlertWindow（自动 alerts.append → onChange save + evaluator sync）
+    private func quickCreatePriceAlert(at price: Decimal) {
+        let priceStr = formatPrice(price)
+        let nsAlert = NSAlert()
+        nsAlert.messageText = "在 \(priceStr) 创建价格预警"
+        nsAlert.informativeText = "\(instrumentLabel) · 选择条件 + 命名 · 创建后可在「预警」窗口编辑"
+        // 自定义 accessory：名字 + 条件 popup
+        let container = NSStackView()
+        container.orientation = .vertical
+        container.alignment = .leading
+        container.spacing = 8
+        container.frame = NSRect(x: 0, y: 0, width: 280, height: 64)
+        let nameField = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        nameField.stringValue = "\(instrumentLabel) \(priceStr)"
+        nameField.placeholderString = "预警名字"
+        let kindPopup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 280, height: 26), pullsDown: false)
+        kindPopup.addItems(withTitles: [
+            "价格 ≥ \(priceStr)",
+            "价格 ≤ \(priceStr)",
+            "价格上穿 \(priceStr)",
+            "价格下穿 \(priceStr)"
+        ])
+        container.addArrangedSubview(nameField)
+        container.addArrangedSubview(kindPopup)
+        nsAlert.accessoryView = container
+        nsAlert.addButton(withTitle: "创建")
+        nsAlert.addButton(withTitle: "取消")
+        guard nsAlert.runModal() == .alertFirstButtonReturn else { return }
+        let condition: AlertCondition
+        switch kindPopup.indexOfSelectedItem {
+        case 0: condition = .priceAbove(price)
+        case 1: condition = .priceBelow(price)
+        case 2: condition = .priceCrossAbove(price)
+        case 3: condition = .priceCrossBelow(price)
+        default: condition = .priceAbove(price)
+        }
+        let name = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newAlert = Alert(
+            name: name.isEmpty ? "\(instrumentLabel) \(priceStr)" : name,
+            instrumentID: instrumentLabel,
+            condition: condition
+        )
+        NotificationCenter.default.post(name: .alertAddedFromChart, object: newAlert)
+        // 反馈提示（trader 多次连续创建时不弹弹窗 · 改用一次轻量提示）
+        let success = NSAlert()
+        success.messageText = "预警已创建"
+        success.informativeText = "可在「预警」窗口（⌘1）编辑 / 暂停 / 删除。"
+        success.addButton(withTitle: "好")
+        success.runModal()
     }
 
     /// v13.12 修改文字字号（NSAlert + NSTextField 输入数字 · 8~32 pt 范围 · 越界保留旧值）
@@ -3417,6 +3500,14 @@ struct ChartContentView: View {
 /// - prime(bars:) 用 history 全量初始化（一次 O(N)）
 /// - step(newBar:) 推进所有 state · 返回 series 末尾追加新值（每步 O(N) 主要来自 BOLL stddev）
 /// - 单调递增 append（barEmitted / completedBar）调 step · seek/重建走全量 prime
+/// v15.18+ batch14 · 主图尺寸 PreferenceKey（GeometryReader 上行至 .onPreferenceChange 拿到 CGSize）
+fileprivate struct ChartMainAreaSizePreferenceKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+
 fileprivate struct ChartIndicatorRunner {
     /// N 条 MA 的增量 state（按 params.mainMAPeriods 顺序 · 默认 [5, 20, 60] = 3 条）
     var maStates: [MA.IncrementalState]

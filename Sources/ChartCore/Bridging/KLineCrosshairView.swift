@@ -86,6 +86,7 @@ public struct KLineCrosshairView: View {
                         bar: info.bar,
                         cursorPrice: info.cursorPrice,
                         prevClose: info.prevClose,
+                        volumeRatio: info.volumeRatio,
                         backgroundColor: tooltipBackground,
                         primaryText: tooltipPrimaryText,
                         secondaryText: tooltipSecondaryText
@@ -103,6 +104,8 @@ public struct KLineCrosshairView: View {
         let cursorPrice: Decimal
         /// v15.18 · 前一根 close（用于计算涨跌幅 / 振幅）· 第一根为 nil
         let prevClose: Decimal?
+        /// v15.20 batch67 · 量比 = 当根 vol / 前 5 根 vol 平均（trader 看放量/缩量）· 不足 1 根 nil
+        let volumeRatio: Double?
     }
 
     private func computeBarInfo(at pt: CGPoint, in size: CGSize) -> BarInfo? {
@@ -112,12 +115,21 @@ public struct KLineCrosshairView: View {
         guard barIndex >= 0, barIndex < bars.count else { return nil }
         let bar = bars[barIndex]
         let prevClose: Decimal? = barIndex > 0 ? bars[barIndex - 1].close : nil
+        // v15.20 batch67 · 量比（前 5 根均值 · 不足时退化）
+        let priorStart = max(0, barIndex - 5)
+        let prior = bars[priorStart..<barIndex]
+        let volumeRatio: Double? = {
+            guard !prior.isEmpty else { return nil }
+            let avg = Double(prior.map(\.volume).reduce(0, +)) / Double(prior.count)
+            guard avg > 0 else { return nil }
+            return Double(bar.volume) / avg
+        }()
         // y → price · 顶 0 = upperBound · 底 1 = lowerBound
         let lo = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
         let hi = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
         let yRatio = 1.0 - max(0, min(1, Double(pt.y / size.height)))
         let priceDouble = lo + (hi - lo) * yRatio
-        return BarInfo(bar: bar, cursorPrice: Decimal(priceDouble), prevClose: prevClose)
+        return BarInfo(bar: bar, cursorPrice: Decimal(priceDouble), prevClose: prevClose, volumeRatio: volumeRatio)
     }
 
     private func crosshairLines(at pt: CGPoint, in size: CGSize) -> some View {
@@ -158,9 +170,10 @@ public struct KLineCrosshairView: View {
     }
 
     /// 浮窗位置：默认鼠标右下偏移 · 接边翻转
+    /// v15.20 batch67 · width 200→210 / height 130→160（加 量比 + 持仓 两 row）
     private func tooltipPosition(at pt: CGPoint, in size: CGSize) -> CGPoint {
-        let tooltipWidth: CGFloat = 200
-        let tooltipHeight: CGFloat = 130
+        let tooltipWidth: CGFloat = 210
+        let tooltipHeight: CGFloat = 160
         let dx: CGFloat = pt.x + 12 + tooltipWidth / 2 < size.width
             ? tooltipWidth / 2 + 12
             : -tooltipWidth / 2 - 12
@@ -179,6 +192,8 @@ private struct OHLCTooltip: View {
     let cursorPrice: Decimal
     /// v15.18 · 前一根 close（计算涨跌幅 / 振幅）· nil 时省略
     let prevClose: Decimal?
+    /// v15.20 batch67 · 量比（vs 前 5 根均值）
+    let volumeRatio: Double?
     let backgroundColor: Color
     let primaryText: Color
     let secondaryText: Color
@@ -194,6 +209,12 @@ private struct OHLCTooltip: View {
             row(label: "低", value: bar.low, color: .green)
             row(label: "收", value: bar.close, color: bar.close >= bar.open ? .red : .green)
             row(label: "量", value: Decimal(bar.volume), color: secondaryText)
+            // v15.20 batch67 · 量比 + 持仓量（trader 看放缩量 / OI 趋势）
+            if let ratio = volumeRatio {
+                let ratioColor: Color = ratio >= 1.5 ? .red : (ratio < 0.7 ? .green : secondaryText)
+                rawTextRow(label: "量比", text: String(format: "%.2f", ratio), color: ratioColor)
+            }
+            row(label: "持仓", value: bar.openInterest, color: secondaryText)
             // v15.18 · 涨跌幅 / 振幅（trader 实用 · 需 prevClose）
             if let pc = prevClose, pc > 0 {
                 Divider().background(secondaryText.opacity(0.3))
@@ -207,7 +228,7 @@ private struct OHLCTooltip: View {
             row(label: "价位", value: cursorPrice, color: .yellow)
         }
         .padding(8)
-        .frame(width: 200, alignment: .leading)
+        .frame(width: 210, alignment: .leading)
         .background(backgroundColor)
         .cornerRadius(6)
         .overlay(
@@ -234,7 +255,12 @@ private struct OHLCTooltip: View {
         let d = NSDecimalNumber(decimal: value).doubleValue
         let sign = d >= 0 ? "+" : ""
         let text = String(format: "\(sign)%.2f%%", d)
-        return HStack(spacing: 6) {
+        return rawTextRow(label: label, text: text, color: color)
+    }
+
+    /// v15.20 batch67 · 通用文本 row（量比等非 Decimal 数据）
+    private func rawTextRow(label: String, text: String, color: Color) -> some View {
+        HStack(spacing: 6) {
             Text(label)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(secondaryText)

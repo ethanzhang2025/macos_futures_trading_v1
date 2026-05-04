@@ -48,6 +48,7 @@ struct AlertWindow: View {
 
     @State private var alerts: [Alert] = []
     @State private var historyEntries: [AlertHistoryEntry] = []
+    @State private var historyWindow: AlertHistoryFilter.Window = .all
     @State private var selectedTab: AlertTab = .list
     @State private var sheetState: SheetState?
     @State private var consoleLog: [String] = []
@@ -444,32 +445,28 @@ struct AlertWindow: View {
 
     // MARK: - 触发历史列表
 
+    /// 当前窗口筛选后的触发历史
+    private var filteredHistory: [AlertHistoryEntry] {
+        AlertHistoryFilter.apply(historyEntries, window: historyWindow)
+    }
+
+    /// 当前筛选下的统计摘要（按合约 / 按条件类型）
+    private var historySummary: AlertHistoryStatistics.Summary {
+        AlertHistoryStatistics.summarize(filteredHistory)
+    }
+
     private var historyList: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text("时间").frame(width: 150, alignment: .leading)
-                Text("预警").frame(maxWidth: .infinity, alignment: .leading)
-                Text("合约").frame(width: 60, alignment: .leading)
-                Text("触发价").frame(width: 80, alignment: .trailing)
-                Text("条件").frame(width: 200, alignment: .leading)
-                Spacer().frame(width: 8)
-                Button("导出 CSV…") { exportHistoryCSV() }
-                    .disabled(historyEntries.isEmpty)
-                    .keyboardShortcut("e", modifiers: [.command, .shift])
-                    .help("导出全部触发历史为 CSV（trader 报税 / 复盘归档）· ⌘⇧E")
-            }
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color.secondary.opacity(0.06))
+            historyToolbar
+            if !filteredHistory.isEmpty { historySummaryStrip }
+            historyTableHeader
 
-            if historyEntries.isEmpty {
-                emptyState(icon: "clock.arrow.circlepath", text: "暂无触发历史")
+            if filteredHistory.isEmpty {
+                emptyState(icon: "clock.arrow.circlepath", text: "当前窗口无触发历史")
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(historyEntries, id: \.id) { entry in
+                        ForEach(filteredHistory, id: \.id) { entry in
                             historyRow(entry)
                             Divider()
                         }
@@ -477,6 +474,78 @@ struct AlertWindow: View {
                 }
             }
         }
+    }
+
+    /// 时间窗口 segmented + 导出（trader 模式分析入口）
+    private var historyToolbar: some View {
+        HStack(spacing: 12) {
+            Picker("", selection: $historyWindow) {
+                ForEach(AlertHistoryFilter.Window.allCases) { w in
+                    Text(w.rawValue).tag(w)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 360)
+
+            Spacer()
+            Text("共 \(filteredHistory.count) 条 · 全量 \(historyEntries.count)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+            Button("导出 CSV…") { exportHistoryCSV() }
+                .disabled(filteredHistory.isEmpty)
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .help("导出当前筛选窗口的触发历史为 CSV · ⌘⇧E")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    /// 分组统计 strip（按合约 + 按条件类型 · trader 一眼看自己触发模式）
+    private var historySummaryStrip: some View {
+        let s = historySummary
+        return HStack(spacing: 16) {
+            if !s.byInstrument.isEmpty {
+                summaryGroup(label: "合约", chips: s.byInstrument.prefix(5).map { ($0.key, $0.count) })
+            }
+            if !s.byKind.isEmpty {
+                summaryGroup(label: "类型", chips: s.byKind.prefix(6).map { ($0.key.rawValue, $0.count) })
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+    }
+
+    private func summaryGroup(label: String, chips: [(String, Int)]) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.caption).foregroundColor(.secondary)
+            ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
+                HStack(spacing: 3) {
+                    Text(chip.0).font(.caption)
+                    Text("\(chip.1)").font(.caption.bold())
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.14))
+                .cornerRadius(4)
+            }
+        }
+    }
+
+    private var historyTableHeader: some View {
+        HStack(spacing: 8) {
+            Text("时间").frame(width: 150, alignment: .leading)
+            Text("预警").frame(maxWidth: .infinity, alignment: .leading)
+            Text("合约").frame(width: 60, alignment: .leading)
+            Text("触发价").frame(width: 80, alignment: .trailing)
+            Text("条件").frame(width: 200, alignment: .leading)
+        }
+        .font(.system(size: 11, design: .monospaced))
+        .foregroundColor(.secondary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color.secondary.opacity(0.06))
     }
 
     /// AlertHistory CSV 导出（NSSavePanel · UTF-8 BOM · trader 报税 / 复盘归档）
@@ -489,12 +558,13 @@ struct AlertWindow: View {
         dateFmt.dateFormat = "yyyyMMdd_HHmm"
         panel.nameFieldStringValue = "alert_history_\(dateFmt.string(from: Date())).csv"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let data = AlertHistoryCSVExporter.exportData(historyEntries)
+        let entriesToExport = filteredHistory
+        let data = AlertHistoryCSVExporter.exportData(entriesToExport)
         do {
             try data.write(to: url, options: .atomic)
             let success = NSAlert()
             success.messageText = "导出成功"
-            success.informativeText = "已导出 \(historyEntries.count) 条触发历史到 \(url.lastPathComponent)。"
+            success.informativeText = "已导出 \(entriesToExport.count) 条触发历史（窗口：\(historyWindow.rawValue)）到 \(url.lastPathComponent)。"
             success.addButton(withTitle: "好")
             success.runModal()
         } catch {

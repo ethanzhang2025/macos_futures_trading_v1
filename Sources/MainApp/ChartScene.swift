@@ -2371,6 +2371,11 @@ struct ChartContentView: View {
                 presentToggleNotice("HUD：\(showHUD ? "显示" : "隐藏")")
             }
             .keyboardShortcut("h", modifiers: [.command, .shift])
+            // v15.21 batch103 · ⌘P 主图截图保存 PNG / ⌘⇧P 复制截图到剪贴板（trader 截图流畅 · 不进 contextMenu）
+            Button("") { exportChartScreenshot() }
+                .keyboardShortcut("p", modifiers: [.command])
+            Button("") { copyChartScreenshotToClipboard() }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
         }
         .frame(width: 0, height: 0)
         .opacity(0)
@@ -2678,6 +2683,8 @@ struct ChartContentView: View {
             ]),
             ("主题 / 截图", [
                 ("⌘⇧D", "切换深色 / 浅色主题"),
+                ("⌘P", "导出主图截图 PNG"),
+                ("⌘⇧P", "复制主图截图到剪贴板"),
             ]),
             ("帮助", [
                 ("⌘/", "切换本浮窗"),
@@ -3197,10 +3204,10 @@ struct ChartContentView: View {
             Button("复制可见区 OHLC（Markdown 表格）") {
                 copyVisibleBarsAsMarkdown()
             }
-            Button("导出主图截图（PNG）…") {
+            Button("导出主图截图（PNG · ⌘P）…") {
                 exportChartScreenshot()
             }
-            Button("复制主图截图到剪贴板") {
+            Button("复制主图截图到剪贴板（⌘⇧P）") {
                 copyChartScreenshotToClipboard()
             }
             Divider()

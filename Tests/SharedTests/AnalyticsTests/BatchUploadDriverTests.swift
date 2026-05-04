@@ -172,6 +172,56 @@ struct BatchUploadDriverRetryTests {
     }
 }
 
+@Suite("BatchUploadDriver · setEnabled hot-reload（v15.18）")
+struct BatchUploadDriverEnabledTests {
+
+    @Test("默认 enabled=true · tick 正常上报")
+    func defaultEnabled() async throws {
+        let store = InMemoryAnalyticsEventStore()
+        let client = StubBatchUploadClient()
+        _ = try await store.append(AnalyticsEvent(
+            userID: "u", deviceID: "d", eventName: .appLaunch, eventTimestampMs: 1
+        ))
+        let driver = BatchUploadDriver(store: store, client: client, batchSize: 10, timeTriggerMs: 0)
+        #expect(await driver.enabledStatus() == true)
+        await driver.tickNow()
+        #expect(try await store.queryPending(limit: 0).count == 0)   // 已上报
+    }
+
+    @Test("setEnabled(false) · 后续 tick 静默 skip · 事件继续累积")
+    func disabledSkipsTick() async throws {
+        let store = InMemoryAnalyticsEventStore()
+        let client = StubBatchUploadClient()
+        _ = try await store.append(AnalyticsEvent(
+            userID: "u", deviceID: "d", eventName: .appLaunch, eventTimestampMs: 1
+        ))
+        let driver = BatchUploadDriver(store: store, client: client, batchSize: 10, timeTriggerMs: 0)
+        await driver.setEnabled(false)
+        await driver.tickNow()
+        let snap = await driver.snapshot()
+        #expect(snap.attempts == 0)   // 没尝试上报
+        #expect(try await store.queryPending(limit: 0).count == 1)   // 累积
+    }
+
+    @Test("setEnabled(true) 后恢复 · 下个 tick 一次性 flush 累积")
+    func reEnableFlushesAccumulated() async throws {
+        let store = InMemoryAnalyticsEventStore()
+        let client = StubBatchUploadClient()
+        for _ in 0..<3 {
+            _ = try await store.append(AnalyticsEvent(
+                userID: "u", deviceID: "d", eventName: .appLaunch, eventTimestampMs: 1
+            ))
+        }
+        let driver = BatchUploadDriver(store: store, client: client, batchSize: 10, timeTriggerMs: 0)
+        await driver.setEnabled(false)
+        await driver.tickNow()
+        #expect(try await store.queryPending(limit: 0).count == 3)
+        await driver.setEnabled(true)
+        await driver.tickNow()
+        #expect(try await store.queryPending(limit: 0).count == 0)
+    }
+}
+
 @Suite("BatchUploadDriver · onFailure callback（v15.18）")
 struct BatchUploadDriverFailureCallbackTests {
 

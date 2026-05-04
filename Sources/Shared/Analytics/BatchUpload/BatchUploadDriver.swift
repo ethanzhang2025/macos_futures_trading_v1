@@ -42,6 +42,9 @@ public actor BatchUploadDriver {
     private var failures: Int = 0
     /// v15.18 · 连续失败次数（成功时清零 · onFailure 可决定 N 连败时降级）
     private var consecutiveFailures: Int = 0
+    /// v15.18 · hot-reload 开关（用户 Settings 切埋点关闭时立即停 tick · 不需重启）
+    /// task 仍跑 · 只是 tick 时静默 skip · 重新 enable 后下个 poll 周期立即恢复
+    private var isEnabled: Bool = true
 
     // MARK: - 初始化
 
@@ -111,7 +114,9 @@ public actor BatchUploadDriver {
     }
 
     /// 单次 tick · 双阈值判断 · 上报 + markUploaded · 失败不标记下轮重试
+    /// v15.18 · isEnabled=false 时 skip（hot-reload 用户切埋点开关立即生效）
     private func tickOnce(forceUpload: Bool = false) async {
+        guard isEnabled else { return }
         let pending: [AnalyticsEvent]
         do {
             pending = try await store.queryPending(limit: batchSize)
@@ -151,4 +156,14 @@ public actor BatchUploadDriver {
 
     /// v15.18 · 当前连续失败次数（caller 决定降级阈值）
     public func consecutiveFailureCount() -> Int { consecutiveFailures }
+
+    /// v15.18 · hot-reload 启用 / 停用 driver tick（task 仍在但 skip 上报）
+    /// false → 后续 tick 静默 skip（pending 事件继续累积）
+    /// true  → 下个 poll 周期立即恢复 · 一次性 flush 累积事件
+    public func setEnabled(_ enabled: Bool) {
+        isEnabled = enabled
+    }
+
+    /// v15.18 · 内省 enabled 状态
+    public func enabledStatus() -> Bool { isEnabled }
 }

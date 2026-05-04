@@ -237,6 +237,17 @@ struct FuturesTerminalApp: App {
         self.batchUploadDriver = driver
         if let driver {
             Task { await driver.start() }
+            // v15.18 · UserDefaults didChange 监听 · 切埋点开关时立即 hot-reload driver.setEnabled
+            // 不存 token · App 生命周期与 NotificationCenter 同长（避免 deinit 复杂）
+            NotificationCenter.default.addObserver(
+                forName: UserDefaults.didChangeNotification,
+                object: nil,
+                queue: .main
+            ) { _ in
+                let enabled = UserDefaults.standard.object(forKey: "featureFlag.analytics.enabled") as? Bool
+                    ?? FeatureFlag.analyticsEnabled.defaultValue
+                Task { await driver.setEnabled(enabled) }
+            }
         }
         // v15.18 · WP-133a session_start/end wire（didBecomeActive 触发首次 session_start · 3 分钟规则跨启动）
         // App.init 后 NSApplication 主循环开始 · 首个 didBecomeActive 通知会触发 sessionStart

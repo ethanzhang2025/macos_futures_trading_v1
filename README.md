@@ -14,12 +14,13 @@ macos_futures_trading_v1/
 ├── Sources/                      # 8 Core 业务模块
 │   ├── Shared/                   # 跨端共用模型 / 协议 / 工具
 │   ├── DataCore/                 # Tick / K 线 / 合约 / 数据源协议
-│   ├── IndicatorCore/            # 60+ 指标（v15.19 · IndicatorRegistry · BBW/ATRP UI 收尾）+ 麦语言底层函数 ~97% 兼容
-│   ├── ChartCore/                # Metal 图表渲染管线 · 画线 OHLC 吸附 · 模板 JSON 导入导出（v15.19）
-│   ├── JournalCore/              # 交易日志 + 复盘分析（v15.19 加连胜连败 streak 心理预警）
-│   ├── AlertCore/                # 条件预警（v15.19 加 Donchian 突破 priceBreakoutHigh/Low）
+│   ├── IndicatorCore/            # 60+ 指标（v15.19 · IndicatorRegistry · 7 新指标参数全 UI · BBW/ATRP/Aroon/STC/ElderRay/Choppiness/ForceIndex）+ 麦语言底层函数 ~97% 兼容
+│   ├── ChartCore/                # Metal 图表渲染管线 · 画线 OHLC 吸附 · 模板 JSON 导入导出 · ⌥1-9 切周期 · ⌘⇧M 测距 · 缩放快捷栏（v15.19）
+│   ├── JournalCore/              # 交易日志 + 复盘分析（v15.19 · streak 连胜连败 / EmotionAutoTagger 心理标签 / MonthlyReportGenerator Markdown 月报）
+│   ├── AlertCore/                # 条件预警（v15.19 · Donchian 突破 / AlertHistory CSV 导出 / 时间窗口 + 分组统计 / 24h 触发分布 / 6 类一键模板）
 │   ├── ReplayCore/               # K 线回放
-│   └── WorkspaceCore/            # 工作区模板 + 自选
+│   └── WorkspaceCore/            # 工作区模板 + 自选 · 涨跌幅渐变染色（v15.19）
+│   └── Shared/Indicators/        # VolumeProfile · trader 找支撑阻力区（v15.19 batch25）
 ├── Tests/                        # 对应 8 个 testTarget 骨架（Swift Testing）
 ├── Docs/
 │   └── architecture/

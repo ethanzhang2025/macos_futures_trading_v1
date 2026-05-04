@@ -347,6 +347,7 @@ struct FuturesTerminalApp: App {
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
             SettingsContentView()
+                .environment(\.analytics, analytics)   // v15.18 · 隐私 tab 显示 events stats
         }
     }
 }

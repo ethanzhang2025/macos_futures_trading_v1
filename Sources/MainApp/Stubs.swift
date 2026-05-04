@@ -89,6 +89,9 @@ private struct GeneralSettingsTab: View {
 private struct PrivacySettingsTab: View {
 
     @AppStorage("featureFlag.analytics.enabled") private var analyticsOn: Bool = FeatureFlag.analyticsEnabled.defaultValue
+    @Environment(\.analytics) private var analytics
+    @State private var totalEvents: Int = 0
+    @State private var pendingEvents: Int = 0
 
     var body: some View {
         Form {
@@ -105,9 +108,41 @@ private struct PrivacySettingsTab: View {
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
             }
+
+            // v15.18 · 透明度：让用户看到已记录 / 待上报事件数（增强信任 · D1 §4 隐私体验）
+            Section {
+                LabeledContent("本地已记录") {
+                    Text("\(totalEvents) 条")
+                        .font(.system(size: 12, design: .monospaced))
+                }
+                LabeledContent("待上报") {
+                    Text("\(pendingEvents) 条")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(pendingEvents > 0 ? .orange : .secondary)
+                }
+            } header: {
+                Text("数据透明度").font(.headline)
+            } footer: {
+                Text("后端 WP-80 就绪后 · driver 每 5min 自动批量上报 · 失败重试")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding(.vertical, 8)
+        .task {
+            await refreshStats()
+        }
+    }
+
+    private func refreshStats() async {
+        guard let svc = analytics else { return }
+        let total = (try? await svc.storeCount()) ?? 0
+        let pending = (try? await svc.queryPending(limit: 0).count) ?? 0
+        await MainActor.run {
+            totalEvents = total
+            pendingEvents = pending
+        }
     }
 }
 

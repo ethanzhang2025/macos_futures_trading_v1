@@ -922,7 +922,14 @@ struct WatchlistWindow: View {
 
     private func addInstrument(_ id: String, to groupID: UUID) {
         guard let trimmed = id.trimmedOrNil?.uppercased() else { return }
+        // v15.21 batch134 · 添加合约 toast 反馈（已存在 / 已加入 两态 · 与 batch131 跨窗口 add 一致）
+        guard let group = book.group(id: groupID) else { return }
+        if group.instrumentIDs.contains(trimmed) {
+            Toast.info("已存在", "\(trimmed) 已在「\(group.name)」")
+            return
+        }
         book.addInstrument(trimmed, to: groupID)
+        Toast.info("已添加", "\(trimmed) → 「\(group.name)」")
     }
 
     private func removeInstruments(_ ids: Set<String>, from groupID: UUID) {

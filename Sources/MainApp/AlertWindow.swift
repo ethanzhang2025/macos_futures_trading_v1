@@ -619,6 +619,8 @@ struct AlertWindow: View {
     private func deleteAlert(_ a: Alert) {
         alerts.removeAll { $0.id == a.id }
         selectedAlertIDs.remove(a.id)
+        // v15.21 batch134 · 删除反馈 toast（trader 不可逆操作 · 至少有视觉确认）
+        Toast.info("已删除预警", "\(a.name) · \(a.instrumentID)")
     }
 
     // MARK: - v15.20 batch57 · 批量操作（走 AlertBatchOperator 纯函数）
@@ -632,8 +634,13 @@ struct AlertWindow: View {
     }
 
     private func batchDeleteSelected() {
+        let count = selectedAlertIDs.count
         alerts = AlertBatchOperator.delete(ids: selectedAlertIDs, in: alerts)
         selectedAlertIDs.removeAll()
+        // v15.21 batch134 · 批量删除反馈 toast
+        if count > 0 {
+            Toast.info("已批量删除", "\(count) 条预警已删除")
+        }
     }
 
     private func batchDuplicateSelected() {

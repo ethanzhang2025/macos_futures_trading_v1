@@ -80,8 +80,9 @@ struct WatchlistWindow: View {
     @AppStorage("viewState.v1.watchlist.sortFieldRaw") private var sortFieldRaw: String = WatchlistSortField.manual.rawValue
     @AppStorage("viewState.v1.watchlist.sortAscending") private var sortAscending: Bool = false
 
-    /// v15.20 batch61 · 跨分组聚合视图（trader 涨幅榜扫盘 · 不用切分组找涨幅大的）
-    @State private var showAllAggregated: Bool = false
+    /// v15.20 batch61/76 · 跨分组聚合视图（trader 涨幅榜扫盘 · 不用切分组找涨幅大的）
+    /// v15.20 batch76 · @AppStorage 持久化（重启保留 · trader 习惯使用聚合扫盘）
+    @AppStorage("viewState.v1.watchlist.showAllAggregated") private var showAllAggregated: Bool = false
 
     /// 解析 sortField · raw 不合法 fallback .manual（写入用 setSortField）
     private var sortField: WatchlistSortField {

@@ -2326,6 +2326,10 @@ struct ChartContentView: View {
             // v15.19 batch30 · 快捷测距 HUD（⌘⇧M 锚点 → hover 实时距离 + % + bar 数）
             measurementHUD
         }
+        .overlay(alignment: .bottomLeading) {
+            // v15.19 batch33 · 缩放快捷栏（鼠标 / 触屏用户友好 · 与 ⌘0/⌘=/⌘- 互补）
+            zoomControls
+        }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
         .background(
@@ -2358,6 +2362,38 @@ struct ChartContentView: View {
             // v13.5 选中画线右键菜单（删除 / 编辑文字 / 取消选中）· v13.6 加复制
             drawingContextMenu
         }
+    }
+
+    /// v15.19 batch33 · 缩放快捷栏（左下角浮按钮 · 鼠标 / 触屏用户友好）· 与 ⌘0/⌘=/⌘- 互补
+    private var zoomControls: some View {
+        HStack(spacing: 6) {
+            Button {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.zoomed(by: 0.7))
+            } label: {
+                Image(systemName: "plus.magnifyingglass").frame(width: 24, height: 24)
+            }
+            .help("放大（⌘=）")
+            Button {
+                inertiaTask?.cancel()
+                viewport = clamp(viewport.zoomed(by: 1.4))
+            } label: {
+                Image(systemName: "minus.magnifyingglass").frame(width: 24, height: 24)
+            }
+            .help("缩小（⌘-）")
+            Button {
+                inertiaTask?.cancel()
+                viewport = RenderViewport(startIndex: max(0, bars.count - 120), visibleCount: 120)
+            } label: {
+                Image(systemName: "arrow.counterclockwise").frame(width: 24, height: 24)
+            }
+            .help("重置缩放（⌘0）")
+        }
+        .buttonStyle(.borderless)
+        .padding(6)
+        .background(chartTheme.hudBackground)
+        .cornerRadius(6)
+        .padding(12)
     }
 
     /// v15.19 batch30 · 快捷测距 HUD · ⌘⇧M 设锚点后浮窗实时显示距离 + % + bar 数

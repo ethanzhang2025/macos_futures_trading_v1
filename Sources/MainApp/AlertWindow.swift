@@ -393,6 +393,21 @@ struct AlertWindow: View {
                     Button("重置冷却") { batchResetCooldownSelected() }
                         .buttonStyle(.borderless)
                         .help("清 lastTriggeredAt · triggered 回 active · 立即可再触发")
+                    // v15.21 batch127 · 批量改通道 + 改 cooldown（trader 实战：开盘前/关键时段统一调整）
+                    Menu("批量通道") {
+                        Button("仅 inApp（静音盘中）")    { batchSetChannelsSelected([.inApp]) }
+                        Button("inApp + 系统通知")       { batchSetChannelsSelected([.inApp, .systemNotice]) }
+                        Button("inApp + 声音")          { batchSetChannelsSelected([.inApp, .sound]) }
+                        Button("全通道（关键 alert）")    { batchSetChannelsSelected(Set(NotificationChannelKind.allCases)) }
+                    }
+                    .help("批量替换选中预警的通道（覆盖式 · 不合并）")
+                    Menu("批量 cooldown") {
+                        Button("30 秒（高频）")  { batchSetCooldownSelected(30) }
+                        Button("60 秒（默认）")  { batchSetCooldownSelected(60) }
+                        Button("5 分钟（趋势）") { batchSetCooldownSelected(300) }
+                        Button("30 分钟（长波段）") { batchSetCooldownSelected(1800) }
+                    }
+                    .help("批量调整选中预警的 cooldown 秒数")
                     Button("批量删除") { batchDeleteSelected() }
                         .buttonStyle(.borderless)
                         .foregroundColor(.red)
@@ -618,6 +633,15 @@ struct AlertWindow: View {
         let result = AlertBatchOperator.duplicate(ids: selectedAlertIDs, in: alerts)
         alerts = result.alerts
         selectedAlertIDs = result.newIDs    // 自动跳到新副本以便后续操作
+    }
+
+    /// v15.21 batch127 · 批量改通道 / cooldown（走 AlertBatchOperator · UI 走 toolbar Menu）
+    private func batchSetChannelsSelected(_ channels: Set<NotificationChannelKind>) {
+        alerts = AlertBatchOperator.setChannels(ids: selectedAlertIDs, channels: channels, in: alerts)
+    }
+
+    private func batchSetCooldownSelected(_ seconds: Int) {
+        alerts = AlertBatchOperator.setCooldown(ids: selectedAlertIDs, seconds: seconds, in: alerts)
     }
 
     private func batchResetCooldownSelected() {

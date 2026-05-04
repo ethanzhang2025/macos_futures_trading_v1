@@ -79,4 +79,34 @@ public enum AlertBatchOperator {
         }
         return (result, newIDs)
     }
+
+    /// v15.21 batch127 · 批量改通道（trader 想统一改成"仅 inApp"避免噪音 / 关键 alert 改"全通道"）
+    /// channels 全替换 · 不合并（trader 期望"覆盖"语义）· 不影响其他字段
+    public static func setChannels(
+        ids: Set<UUID>,
+        channels: Set<NotificationChannelKind>,
+        in alerts: [Alert]
+    ) -> [Alert] {
+        alerts.map { a in
+            guard ids.contains(a.id) else { return a }
+            var copy = a
+            copy.channels = channels
+            return copy
+        }
+    }
+
+    /// v15.21 batch127 · 批量改 cooldown（trader 想统一调整冷却 · 如开盘前全转长冷却防误触发）
+    /// 负数 / 异常值由 UI 校验 · 这里照单全收
+    public static func setCooldown(
+        ids: Set<UUID>,
+        seconds: Int,
+        in alerts: [Alert]
+    ) -> [Alert] {
+        alerts.map { a in
+            guard ids.contains(a.id) else { return a }
+            var copy = a
+            copy.cooldownSeconds = TimeInterval(seconds)
+            return copy
+        }
+    }
 }

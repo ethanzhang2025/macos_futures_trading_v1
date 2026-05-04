@@ -136,4 +136,27 @@ struct AlertBatchOperatorTests {
         #expect(dupR.alerts == [a])
         #expect(dupR.newIDs.isEmpty)
     }
+
+    @Test("v15.21 batch127 · setChannels 覆盖式替换 · 不影响其他字段")
+    func setChannels() {
+        let a = make(name: "a", status: .active)
+        let b = make(name: "b", status: .paused)
+        let result = AlertBatchOperator.setChannels(
+            ids: [a.id], channels: [.inApp, .systemNotice], in: [a, b]
+        )
+        #expect(result[0].channels == [.inApp, .systemNotice])
+        #expect(result[0].status == .active)        // 状态未动
+        #expect(result[1].channels == [.inApp])     // 未选中不动 · 仍是 default
+    }
+
+    @Test("v15.21 batch127 · setCooldown 全替换 · 不影响其他字段")
+    func setCooldown() {
+        let a = make(name: "a", status: .active)
+        let b = make(name: "b", status: .paused)
+        let result = AlertBatchOperator.setCooldown(ids: [a.id, b.id], seconds: 300, in: [a, b])
+        #expect(result[0].cooldownSeconds == 300)
+        #expect(result[1].cooldownSeconds == 300)
+        #expect(result[0].status == .active)
+        #expect(result[1].status == .paused)
+    }
 }

@@ -49,6 +49,9 @@ struct AlertWindow: View {
     @State private var alerts: [Alert] = []
     @State private var historyEntries: [AlertHistoryEntry] = []
     @State private var historyWindow: AlertHistoryFilter.Window = .all
+    /// 缓存：filteredHistory + summary 一次算多处用 · 避免每次 body re-eval 重算
+    @State private var filteredHistory: [AlertHistoryEntry] = []
+    @State private var historySummary = AlertHistoryStatistics.Summary(total: 0, byInstrument: [], byKind: [], byHour: [:])
     @State private var selectedTab: AlertTab = .list
     @State private var sheetState: SheetState?
     @State private var consoleLog: [String] = []
@@ -96,7 +99,10 @@ struct AlertWindow: View {
             // v11.0+1 · evaluator wiring：alerts 加载后全部 addAlert · 启动 observe 监听真实触发
             await syncAlertsToEvaluator(newValue: alerts, oldValue: [])
             startEvaluatorObserve()
+            recomputeHistoryCache()
         }
+        .onChange(of: historyEntries) { _ in recomputeHistoryCache() }
+        .onChange(of: historyWindow) { _ in recomputeHistoryCache() }
         .onChange(of: alerts) { newValue in
             // M5 自动持久化：每次 alerts 变化异步 save（add/edit/delete/toggle/markTriggered 都覆盖）
             guard isLoaded, let store = storeManager?.alertConfig else { return }
@@ -496,14 +502,11 @@ struct AlertWindow: View {
 
     // MARK: - 触发历史列表
 
-    /// 当前窗口筛选后的触发历史
-    private var filteredHistory: [AlertHistoryEntry] {
-        AlertHistoryFilter.apply(historyEntries, window: historyWindow)
-    }
-
-    /// 当前筛选下的统计摘要（按合约 / 按条件类型）
-    private var historySummary: AlertHistoryStatistics.Summary {
-        AlertHistoryStatistics.summarize(filteredHistory)
+    /// 重算 filteredHistory + historySummary（historyEntries 或 historyWindow 变时调用）
+    private func recomputeHistoryCache() {
+        let filtered = AlertHistoryFilter.apply(historyEntries, window: historyWindow)
+        filteredHistory = filtered
+        historySummary = AlertHistoryStatistics.summarize(filtered)
     }
 
     private var historyList: some View {
@@ -654,18 +657,10 @@ struct AlertWindow: View {
         let data = AlertHistoryCSVExporter.exportData(entriesToExport)
         do {
             try data.write(to: url, options: .atomic)
-            let success = NSAlert()
-            success.messageText = "导出成功"
-            success.informativeText = "已导出 \(entriesToExport.count) 条触发历史（窗口：\(historyWindow.rawValue)）到 \(url.lastPathComponent)。"
-            success.addButton(withTitle: "好")
-            success.runModal()
+            Toast.info("导出成功",
+                       "已导出 \(entriesToExport.count) 条触发历史（窗口：\(historyWindow.rawValue)）到 \(url.lastPathComponent)。")
         } catch {
-            let err = NSAlert()
-            err.messageText = "导出失败"
-            err.informativeText = error.localizedDescription
-            err.alertStyle = .warning
-            err.addButton(withTitle: "好")
-            err.runModal()
+            Toast.error("导出失败", error)
         }
     }
 

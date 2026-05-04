@@ -50,7 +50,9 @@ struct ReviewWindow: View {
                 sessionPnL: ReviewAnalytics.sessionPnL(from: closed),
                 streak: ReviewAnalytics.streakMetrics(from: closed),
                 riskAdjusted: ReviewAnalytics.riskAdjustedMetrics(from: closed),
-                profitability: ReviewAnalytics.profitabilityMetrics(from: closed)
+                profitability: ReviewAnalytics.profitabilityMetrics(from: closed),
+                streakRunPoints: Self.computeStreakRunPoints(from: closed),
+                psychTagCounts: Self.computePsychTagCounts(from: closed)
             )
         }.value
         summary = result
@@ -98,12 +100,12 @@ struct ReviewWindow: View {
                     // v15.19 batch27 · streak 累积曲线（trader 看交易心理时间线 · 哪段连胜哪段连败）
                     chartCard("连胜连败曲线",
                               subtitle: "Streak · 最长连胜 \(s.streak.maxWinningStreak) / 最长连败 \(s.streak.maxLosingStreak)") {
-                        streakRunChart(s.closedPositions)
+                        streakRunChart(s.streakRunPoints)
                     }
                     // v15.19 batch27 · 心理标签命中分布（基于 EmotionAutoTagger.tagAll）
                     chartCard("心理风险标签",
                               subtitle: "EmotionAutoTagger · 6 类自动建议") {
-                        psychTagsChart(s.closedPositions)
+                        psychTagsChart(s.psychTagCounts)
                     }
                 }
                 .padding(16)
@@ -167,18 +169,10 @@ struct ReviewWindow: View {
         )
         do {
             try md.data(using: .utf8)?.write(to: url, options: .atomic)
-            let success = NSAlert()
-            success.messageText = "导出成功"
-            success.informativeText = "已生成 \(year) 年 \(month) 月复盘报告到 \(url.lastPathComponent)。"
-            success.addButton(withTitle: "好")
-            success.runModal()
+            Toast.info("导出成功",
+                       "已生成 \(year) 年 \(month) 月复盘报告到 \(url.lastPathComponent)。")
         } catch {
-            let err = NSAlert()
-            err.messageText = "导出失败"
-            err.informativeText = error.localizedDescription
-            err.alertStyle = .warning
-            err.addButton(withTitle: "好")
-            err.runModal()
+            Toast.error("导出失败", error)
         }
     }
 
@@ -354,9 +348,39 @@ struct ReviewWindow: View {
         .chartYAxis { Self.axisIntegerY() }
     }
 
-    /// v15.19 batch27 · 连胜连败累积曲线（横轴=第 N 笔 · 纵轴=signed run · 正连胜上 / 负连败下）
-    private func streakRunChart(_ positions: [ClosedPosition]) -> some View {
-        // 与 ReviewAnalytics.streakMetrics 同 sign-run 模式 · 平交易跳过
+    /// v15.19 batch27 · 连胜连败累积曲线（读取 ReviewSummary 缓存 · body 不重算）
+    private func streakRunChart(_ points: [(idx: Int, run: Int)]) -> some View {
+        Chart {
+            ForEach(points.indices, id: \.self) { i in
+                LineMark(
+                    x: .value("笔数", points[i].idx),
+                    y: .value("Run", points[i].run)
+                )
+                .foregroundStyle(Color.blue)
+            }
+            RuleMark(y: .value("0 轴", 0))
+                .foregroundStyle(Color.secondary.opacity(0.3))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        }
+        .chartXAxis { Self.axisCategoryX() }
+    }
+
+    /// v15.19 batch27 · 心理风险标签命中分布（读取缓存 · body 不重算）
+    private func psychTagsChart(_ entries: [(tag: EmotionAutoTagger.Tag, count: Int)]) -> some View {
+        Chart {
+            ForEach(entries.indices, id: \.self) { i in
+                BarMark(
+                    x: .value("标签", entries[i].tag.displayName),
+                    y: .value("命中", entries[i].count)
+                )
+                .foregroundStyle(Color.orange.opacity(0.7))
+            }
+        }
+        .chartXAxis { Self.axisCategoryX() }
+    }
+
+    /// 一次性预算 · loadMockReview 调用 · 与 streakMetrics 同 sign-run 模式
+    fileprivate static func computeStreakRunPoints(from positions: [ClosedPosition]) -> [(idx: Int, run: Int)] {
         let sorted = positions.sorted { $0.closeTime < $1.closeTime }
         var run = 0
         var prevWin: Bool? = nil
@@ -372,40 +396,18 @@ struct ReviewWindow: View {
             points.append((idx, run))
             prevWin = isWin
         }
-        return Chart {
-            ForEach(points.indices, id: \.self) { i in
-                LineMark(
-                    x: .value("笔数", points[i].idx),
-                    y: .value("Run", points[i].run)
-                )
-                .foregroundStyle(Color.blue)
-            }
-            RuleMark(y: .value("0 轴", 0))
-                .foregroundStyle(Color.secondary.opacity(0.3))
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-        }
-        .chartXAxis { Self.axisCategoryX() }
+        return points
     }
 
-    /// v15.19 batch27 · 心理风险标签命中分布（柱状 · 6 类）
-    private func psychTagsChart(_ positions: [ClosedPosition]) -> some View {
+    /// 一次性预算 · 6 类标签命中计数（保留全部 6 类便于柱状对齐 · 0 也展示）
+    fileprivate static func computePsychTagCounts(from positions: [ClosedPosition]) -> [(tag: EmotionAutoTagger.Tag, count: Int)] {
         var counts: [EmotionAutoTagger.Tag: Int] = [:]
         for (_, tags) in EmotionAutoTagger.tagAll(positions) {
             for t in tags { counts[t, default: 0] += 1 }
         }
-        let entries = EmotionAutoTagger.Tag.allCases.map { tag in
+        return EmotionAutoTagger.Tag.allCases.map { tag in
             (tag: tag, count: counts[tag] ?? 0)
         }
-        return Chart {
-            ForEach(entries.indices, id: \.self) { i in
-                BarMark(
-                    x: .value("标签", entries[i].tag.displayName),
-                    y: .value("命中", entries[i].count)
-                )
-                .foregroundStyle(Color.orange.opacity(0.7))
-            }
-        }
-        .chartXAxis { Self.axisCategoryX() }
     }
 
     /// 时段分析 · 5 段 · 涨红跌绿
@@ -590,6 +592,9 @@ private struct ReviewSummary {
     let streak: ReviewAnalytics.StreakMetrics
     let riskAdjusted: ReviewAnalytics.RiskAdjustedMetrics
     let profitability: ReviewAnalytics.ProfitabilityMetrics
+    /// 累积缓存 · 防 chartCard 每次 body re-eval 重算（10K 持仓时显著）
+    let streakRunPoints: [(idx: Int, run: Int)]
+    let psychTagCounts: [(tag: EmotionAutoTagger.Tag, count: Int)]
 }
 
 // MARK: - Mock Trades 生成器（v1 演示 · M5 替换为 JournalStore 真数据）

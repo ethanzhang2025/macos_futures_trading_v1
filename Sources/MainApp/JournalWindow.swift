@@ -941,16 +941,15 @@ private struct JournalEditorSheet: View {
         self.tagsByTradeID = map
     }
 
-    /// 当前选中 tradeIDs 对应建议标签（去重 · 按枚举顺序稳定）
+    /// 当前选中 tradeIDs 对应建议标签（按枚举顺序稳定 · O(N) 单遍）
     private var suggestedTags: [EmotionAutoTagger.Tag] {
         var seen = Set<EmotionAutoTagger.Tag>()
-        var ordered: [EmotionAutoTagger.Tag] = []
         for tid in draft.tradeIDs {
-            for tag in tagsByTradeID[tid] ?? [] where seen.insert(tag).inserted {
-                ordered.append(tag)
+            for tag in tagsByTradeID[tid] ?? [] {
+                seen.insert(tag)
             }
         }
-        return EmotionAutoTagger.Tag.allCases.filter { ordered.contains($0) }
+        return EmotionAutoTagger.Tag.allCases.filter { seen.contains($0) }
     }
 
     var body: some View {

@@ -821,25 +821,11 @@ struct ChartScene: View {
                 }
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
-            // v15.19 batch36 · ⌘End / ⌘→ 跳到最新 K 线（保持 visibleCount · 仅滚到最右）· trader 复盘场景
-            Button("") {
-                inertiaTask?.cancel()
-                let visible = max(1, viewport.visibleCount)
-                viewport = RenderViewport(
-                    startIndex: max(0, bars.count - visible),
-                    visibleCount: visible
-                )
-            }
-            .keyboardShortcut(.end, modifiers: [.command])
-            Button("") {
-                inertiaTask?.cancel()
-                let visible = max(1, viewport.visibleCount)
-                viewport = RenderViewport(
-                    startIndex: max(0, bars.count - visible),
-                    visibleCount: visible
-                )
-            }
-            .keyboardShortcut(.rightArrow, modifiers: [.command])
+            // v15.19 batch36 · ⌘End / ⌘→ 跳到最新 K 线（保持 visibleCount · 仅滚到最右）
+            Button("", action: jumpToLatestBar)
+                .keyboardShortcut(.end, modifiers: [.command])
+            Button("", action: jumpToLatestBar)
+                .keyboardShortcut(.rightArrow, modifiers: [.command])
             // v15.19 batch28 · ⌥1-9 全 9 个常用周期一键切（trader 高频工作流 · 与 ⌘1-6 互补）
             Button("") { selectedPeriod = .minute1 }
                 .keyboardShortcut("1", modifiers: [.option])
@@ -1199,18 +1185,10 @@ struct ChartScene: View {
         do {
             let data = try DrawingTemplateExporter.export(drawingTemplates)
             try data.write(to: url, options: .atomic)
-            let success = NSAlert()
-            success.messageText = "导出成功"
-            success.informativeText = "已导出 \(drawingTemplates.count) 个模板到 \(url.lastPathComponent)。"
-            success.addButton(withTitle: "好")
-            success.runModal()
+            Toast.info("导出成功",
+                       "已导出 \(drawingTemplates.count) 个模板到 \(url.lastPathComponent)。")
         } catch {
-            let err = NSAlert()
-            err.messageText = "导出失败"
-            err.informativeText = error.localizedDescription
-            err.alertStyle = .warning
-            err.addButton(withTitle: "好")
-            err.runModal()
+            Toast.error("导出失败", error)
         }
     }
 
@@ -1226,12 +1204,7 @@ struct ChartScene: View {
         do {
             data = try Data(contentsOf: url)
         } catch {
-            let err = NSAlert()
-            err.messageText = "读取失败"
-            err.informativeText = error.localizedDescription
-            err.alertStyle = .warning
-            err.addButton(withTitle: "好")
-            err.runModal()
+            Toast.error("读取失败", error)
             return
         }
         // 让用户选合并模式 · 默认合并（保留已有 · 添加新）· 高级用户可选替换
@@ -1252,30 +1225,18 @@ struct ChartScene: View {
             let merged = try DrawingTemplateExporter.import(from: data, into: drawingTemplates, mode: mode)
             let added = merged.count - (mode == .append ? drawingTemplates.count : 0)
             drawingTemplates = merged
-            let success = NSAlert()
-            success.messageText = "导入成功"
+            let body: String
             switch mode {
-            case .append:
-                success.informativeText = "新增 \(max(0, added)) 个模板（共 \(merged.count) 个）。"
-            case .replace:
-                success.informativeText = "已替换为 \(merged.count) 个模板。"
+            case .append:  body = "新增 \(max(0, added)) 个模板（共 \(merged.count) 个）。"
+            case .replace: body = "已替换为 \(merged.count) 个模板。"
             }
-            success.addButton(withTitle: "好")
-            success.runModal()
+            Toast.info("导入成功", body)
+        } catch DrawingTemplateExporter.ImportError.invalidJSON {
+            Toast.errorBody("导入失败", "文件不是有效的画线模板 JSON。")
+        } catch DrawingTemplateExporter.ImportError.unsupportedVersion(let v) {
+            Toast.errorBody("导入失败", "不支持的版本 \(v)（当前仅支持 v1）。")
         } catch {
-            let err = NSAlert()
-            err.messageText = "导入失败"
-            switch error {
-            case DrawingTemplateExporter.ImportError.invalidJSON:
-                err.informativeText = "文件不是有效的画线模板 JSON。"
-            case DrawingTemplateExporter.ImportError.unsupportedVersion(let v):
-                err.informativeText = "不支持的版本 \(v)（当前仅支持 v1）。"
-            default:
-                err.informativeText = error.localizedDescription
-            }
-            err.alertStyle = .warning
-            err.addButton(withTitle: "好")
-            err.runModal()
+            Toast.error("导入失败", error)
         }
     }
 
@@ -2418,6 +2379,16 @@ struct ChartContentView: View {
             }
             .allowsHitTesting(false)
         }
+    }
+
+    /// 跳到最新 K 线（保持 visibleCount · 滚到最右）· ⌘End / ⌘→ 共用
+    private func jumpToLatestBar() {
+        inertiaTask?.cancel()
+        let visible = max(1, viewport.visibleCount)
+        viewport = RenderViewport(
+            startIndex: max(0, bars.count - visible),
+            visibleCount: visible
+        )
     }
 
     /// v15.19 batch33 · 缩放快捷栏（左下角浮按钮 · 鼠标 / 触屏用户友好）· 与 ⌘0/⌘=/⌘- 互补

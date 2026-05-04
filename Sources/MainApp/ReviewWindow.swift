@@ -254,6 +254,16 @@ struct ReviewWindow: View {
                 Button("导出全部图…") { exportAllChartCards(s) }
                     .help("一键导出全部 10 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E）")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
+                // v15.21 batch114 · ⌘R 重新加载复盘数据（trader 实时数据更新或纠错重算）
+                Button {
+                    summary = nil
+                    Task { await loadMockReview() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .keyboardShortcut("r", modifiers: [.command])
+                .help("重新加载复盘数据（⌘R）· 重算所有指标")
             }
             .padding(.bottom, 4)
         }

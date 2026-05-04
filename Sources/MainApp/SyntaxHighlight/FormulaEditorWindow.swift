@@ -83,6 +83,56 @@ public struct FormulaEditorWindow: View {
         }
     }
 
+    // MARK: - 内置示例（v15.22 batch8 · trader 学习参考 · 标准指标实现）
+
+    private struct BuiltinExample {
+        let name: String
+        let description: String
+        let text: String
+    }
+
+    private static let builtinExamples: [BuiltinExample] = [
+        BuiltinExample(name: "MACD（标准）", description: "经典 MACD · DIF/DEA/MACD 三线 · 红柱涨绿柱跌", text: """
+        {MACD · 移动平均收敛发散指标}
+        DIF:=EMA(CLOSE,12)-EMA(CLOSE,26);
+        DEA:=EMA(DIF,9);
+        MACD:(DIF-DEA)*2,COLORRED,LINETHICK2;
+        """),
+        BuiltinExample(name: "KDJ（标准）", description: "随机指标 K/D/J 三线 · 9 周期", text: """
+        {KDJ · 随机指标}
+        RSV:=(CLOSE-LLV(LOW,9))/(HHV(HIGH,9)-LLV(LOW,9))*100;
+        K:SMA(RSV,3,1);
+        D:SMA(K,3,1);
+        J:3*K-2*D;
+        """),
+        BuiltinExample(name: "RSI（6/12/24）", description: "相对强弱指标三周期 · 50 中轴", text: """
+        {RSI · 相对强弱指标}
+        LC:=REF(CLOSE,1);
+        RSI6:SMA(MAX(CLOSE-LC,0),6,1)/SMA(ABS(CLOSE-LC),6,1)*100;
+        RSI12:SMA(MAX(CLOSE-LC,0),12,1)/SMA(ABS(CLOSE-LC),12,1)*100;
+        RSI24:SMA(MAX(CLOSE-LC,0),24,1)/SMA(ABS(CLOSE-LC),24,1)*100;
+        """),
+        BuiltinExample(name: "BOLL（布林带）", description: "布林带 20 周期 ±2 倍标准差", text: """
+        {BOLL · 布林带}
+        MID:MA(CLOSE,20);
+        UPPER:MID+2*STD(CLOSE,20);
+        LOWER:MID-2*STD(CLOSE,20);
+        """),
+        BuiltinExample(name: "MA 多周期", description: "5/10/20/60 多均线", text: """
+        {MA · 多周期均线}
+        MA5:MA(CLOSE,5),COLORYELLOW;
+        MA10:MA(CLOSE,10),COLORMAGENTA;
+        MA20:MA(CLOSE,20),COLORWHITE;
+        MA60:MA(CLOSE,60),COLORGREEN;
+        """),
+        BuiltinExample(name: "突破信号", description: "20 日新高 + 量能放大 1.5 倍", text: """
+        {突破信号 · 价新高 + 量能放大}
+        BREAK:=CROSS(CLOSE,REF(HHV(HIGH,20),1));
+        VOLUP:=VOLUME>REF(VOLUME,1)*1.5;
+        SIGNAL:BREAK AND VOLUP,COLORRED,LINETHICK2;
+        """),
+    ]
+
     // MARK: - 片段库（@AppStorage JSON 持久化）
 
     private struct Snippet: Codable, Equatable, Sendable {
@@ -153,6 +203,19 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("b", modifiers: [.command])
             .help("用 IndicatorCore Lexer + Parser 验证公式 · 错误显示行列（⌘B）")
+            // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
+            Menu {
+                ForEach(Self.builtinExamples, id: \.name) { ex in
+                    Button(ex.name) {
+                        sourceText = ex.text
+                        statusMessage = "已加载示例：\(ex.name)"
+                    }
+                    .help(ex.description)
+                }
+            } label: {
+                Label("示例", systemImage: "books.vertical.fill")
+            }
+            .help("加载内置标准公式示例（MACD / KDJ / RSI / BOLL 等）")
             // v15.22 batch7 · 片段库 Menu（保存当前 / 加载已存 · trader 自定义模板）
             Menu {
                 Button("💾 保存当前为片段…") {

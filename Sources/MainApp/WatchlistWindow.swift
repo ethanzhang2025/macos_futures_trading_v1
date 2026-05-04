@@ -72,6 +72,9 @@ struct WatchlistWindow: View {
     /// v12.17 文华自选导入预览（NSOpenPanel 选 .txt 解析后 · 用户确认前的 holding 状态）
     @State private var importPreview: ImportPreview?
 
+    /// v15.20 batch55 · 自由粘贴合约 sheet 显隐（文本框 + 分组选择 + 实时解析预览）
+    @State private var showQuickPasteSheet: Bool = false
+
     @Environment(\.openWindow) private var openWindow
     @Environment(\.storeManager) private var storeManager
 
@@ -180,6 +183,14 @@ struct WatchlistWindow: View {
                 .buttonStyle(.borderless)
                 .help("导入文华自选（.txt）")
                 Button {
+                    showQuickPasteSheet = true
+                } label: {
+                    Image(systemName: "doc.on.clipboard")
+                }
+                .buttonStyle(.borderless)
+                .help("快速粘贴合约（⌘⇧V · 任意分隔符）")
+                .keyboardShortcut("v", modifiers: [.command, .shift])
+                Button {
                     sheetState = .addGroup
                 } label: {
                     Image(systemName: "plus")
@@ -213,6 +224,32 @@ struct WatchlistWindow: View {
             }
         } message: { preview in
             Text(preview.message)
+        }
+        .sheet(isPresented: $showQuickPasteSheet) {
+            QuickPasteSheet(
+                groups: book.groups,
+                defaultGroupID: selectedGroupID ?? book.groups.first?.id,
+                onSubmit: applyQuickPaste
+            )
+        }
+    }
+
+    /// v15.20 batch55 · 把粘贴文本解析后追加到目标分组（不存在则新建）
+    private func applyQuickPaste(_ text: String, _ targetGroupID: UUID?, _ newGroupName: String?) {
+        let ids = QuickPasteParser.parse(text)
+        guard !ids.isEmpty else { return }
+        let groupID: UUID
+        if let target = targetGroupID,
+           book.groups.contains(where: { $0.id == target }) {
+            groupID = target
+        } else {
+            let name = newGroupName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let resolvedName = (name?.isEmpty ?? true) ? "粘贴导入" : name!
+            let newGroup = book.addGroup(name: resolvedName, now: Date())
+            groupID = newGroup.id
+        }
+        for id in ids {
+            _ = book.addInstrument(id, to: groupID, now: Date())
         }
     }
 
@@ -860,6 +897,102 @@ private struct InstrumentIDSheet: View {
         }
         .padding(20)
         .frame(width: 380, height: 280)
+    }
+}
+
+// MARK: - Sheet · 快速粘贴合约（v15.20 batch55 · QuickPasteParser 入口）
+
+private struct QuickPasteSheet: View {
+
+    let groups: [Watchlist]
+    let defaultGroupID: UUID?
+    /// (粘贴文本, 选中分组 ID 或 nil 代表新建, 新建分组名 nil 代表用默认 "粘贴导入")
+    let onSubmit: (String, UUID?, String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String = ""
+    @State private var targetGroupID: UUID?
+    @State private var createNewGroup: Bool = false
+    @State private var newGroupName: String = ""
+
+    init(
+        groups: [Watchlist],
+        defaultGroupID: UUID?,
+        onSubmit: @escaping (String, UUID?, String?) -> Void
+    ) {
+        self.groups = groups
+        self.defaultGroupID = defaultGroupID
+        self.onSubmit = onSubmit
+        self._targetGroupID = State(initialValue: defaultGroupID)
+        self._createNewGroup = State(initialValue: groups.isEmpty)
+    }
+
+    /// 实时解析预览（前 8 个 + 计数）· 输入空时空数组
+    private var parsedPreview: [String] {
+        QuickPasteParser.parse(text)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("快速粘贴合约").font(.title2).bold()
+            Text("支持任意分隔符：换行 / 空格 / 逗号（中英）/ 分号 / 顿号 / Tab · 行尾 # 注释剥离 · 数字自动过滤")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            TextEditor(text: $text)
+                .font(.system(size: 13, design: .monospaced))
+                .frame(height: 160)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.gray.opacity(0.4), lineWidth: 1))
+
+            // 实时解析预览
+            HStack(spacing: 6) {
+                Text("解析：").foregroundColor(.secondary).font(.caption)
+                if parsedPreview.isEmpty {
+                    Text("（空 · 输入或粘贴合约代码）").foregroundColor(.secondary).font(.caption)
+                } else {
+                    Text("\(parsedPreview.count) 个 · ").font(.caption)
+                    Text(parsedPreview.prefix(8).joined(separator: ", "))
+                        .font(.system(size: 11, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if parsedPreview.count > 8 {
+                        Text("…").foregroundColor(.secondary).font(.caption)
+                    }
+                }
+            }
+
+            Form {
+                Toggle("新建分组（不勾则追加到现有分组）", isOn: $createNewGroup)
+                    .disabled(groups.isEmpty)
+                if createNewGroup {
+                    TextField("新分组名（留空 → 粘贴导入）", text: $newGroupName)
+                        .textFieldStyle(.roundedBorder)
+                } else {
+                    Picker("目标分组", selection: $targetGroupID) {
+                        ForEach(groups) { g in
+                            Text(g.name).tag(Optional(g.id))
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("确认添加 (\(parsedPreview.count) 个)") {
+                    let groupID: UUID? = createNewGroup ? nil : targetGroupID
+                    let groupName: String? = createNewGroup ? newGroupName : nil
+                    onSubmit(text, groupID, groupName)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(parsedPreview.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 520, height: 480)
     }
 }
 

@@ -289,4 +289,83 @@ public enum ReviewAnalytics {
         default:                         return .other
         }
     }
+
+    // MARK: - 9. 复合风险调整指标（v15.18 · v2 范围 · 夏普 / Sortino / Calmar）
+    //
+    // 全部按"日 PnL"序列计算（按 closeTime 日聚合）· 年化系数默认 252（A 股期货交易日近似）
+    // 输入空 / 单点 / 标准差 0 时返回 0（不抛 · 调用方 UI 视情况降级）
+
+    /// 风险调整指标聚合
+    public struct RiskAdjustedMetrics: Sendable, Codable, Equatable {
+        public let sharpeRatio: Double           // 年化夏普 = mean / std × √252
+        public let sortinoRatio: Double          // 年化 Sortino = mean / downsideStd × √252
+        public let calmarRatio: Double           // 年化收益 / |最大回撤|
+        public let recoveryFactor: Double        // 总收益 / |最大回撤|
+        public let dailyMean: Double             // 日均收益
+        public let dailyStdDev: Double           // 日波动
+        public let dailyDownsideStdDev: Double   // 日下行波动
+        public let tradingDays: Int              // 有交易的日历天数
+    }
+
+    public static func riskAdjustedMetrics(
+        from positions: [ClosedPosition],
+        annualizationFactor: Double = 252,
+        timeZone: TimeZone = defaultTimeZone
+    ) -> RiskAdjustedMetrics {
+        guard !positions.isEmpty else {
+            return RiskAdjustedMetrics(
+                sharpeRatio: 0, sortinoRatio: 0, calmarRatio: 0, recoveryFactor: 0,
+                dailyMean: 0, dailyStdDev: 0, dailyDownsideStdDev: 0, tradingDays: 0
+            )
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        // 按日聚合 PnL（key = yyyy-MM-dd 起始时间）
+        var byDay: [Date: Decimal] = [:]
+        for p in positions {
+            let day = calendar.startOfDay(for: p.closeTime)
+            byDay[day, default: 0] += p.realizedPnL
+        }
+        let dailyDecimals = byDay.values
+        let daily = dailyDecimals.map { NSDecimalNumber(decimal: $0).doubleValue }
+        let n = daily.count
+        guard n > 0 else {
+            return RiskAdjustedMetrics(
+                sharpeRatio: 0, sortinoRatio: 0, calmarRatio: 0, recoveryFactor: 0,
+                dailyMean: 0, dailyStdDev: 0, dailyDownsideStdDev: 0, tradingDays: 0
+            )
+        }
+        let mean = daily.reduce(0, +) / Double(n)
+        let variance: Double = n > 1
+            ? daily.map { pow($0 - mean, 2) }.reduce(0, +) / Double(n - 1)
+            : 0
+        let std = variance.squareRoot()
+        let downsideSquares = daily.filter { $0 < mean }.map { pow($0 - mean, 2) }
+        let downsideVar = downsideSquares.isEmpty ? 0 : downsideSquares.reduce(0, +) / Double(downsideSquares.count)
+        let downsideStd = downsideVar.squareRoot()
+
+        let annualMultiplier = annualizationFactor.squareRoot()
+        let sharpe = std > 0 ? (mean / std) * annualMultiplier : 0
+        let sortino = downsideStd > 0 ? (mean / downsideStd) * annualMultiplier : 0
+
+        // Calmar / Recovery 借用现有 maxDrawdownCurve
+        let dd = maxDrawdownCurve(from: positions).maxDrawdown
+        let ddAbs = abs(NSDecimalNumber(decimal: dd).doubleValue)
+        let totalPnL = daily.reduce(0, +)
+        let annualPnL = totalPnL * (annualizationFactor / Double(n))
+        let calmar = ddAbs > 0 ? annualPnL / ddAbs : 0
+        let recovery = ddAbs > 0 ? totalPnL / ddAbs : 0
+
+        return RiskAdjustedMetrics(
+            sharpeRatio: sharpe,
+            sortinoRatio: sortino,
+            calmarRatio: calmar,
+            recoveryFactor: recovery,
+            dailyMean: mean,
+            dailyStdDev: std,
+            dailyDownsideStdDev: downsideStd,
+            tradingDays: n
+        )
+    }
 }

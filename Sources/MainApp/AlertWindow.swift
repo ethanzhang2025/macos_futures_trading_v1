@@ -423,11 +423,20 @@ struct AlertWindow: View {
                     Button("全不选") { selectedAlertIDs.subtract(filteredAlerts.map(\.id)) }
                         .buttonStyle(.borderless)
                         .font(.caption)
+                        .help("全部取消选中（⌘⇧A）")
                 } else {
                     Button("全选") { selectedAlertIDs.formUnion(filteredAlerts.map(\.id)) }
                         .buttonStyle(.borderless)
                         .font(.caption)
+                        .help("全选当前显示的预警（⌘A）")
                 }
+                // v15.21 batch99 · ⌘A 全选 / ⌘⇧A 全不选 · 不可见快捷键 · trader 批量操作前快速选齐
+                Button("") { selectedAlertIDs.formUnion(filteredAlerts.map(\.id)) }
+                    .keyboardShortcut("a", modifiers: .command)
+                    .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+                Button("") { selectedAlertIDs.subtract(filteredAlerts.map(\.id)) }
+                    .keyboardShortcut("a", modifiers: [.command, .shift])
+                    .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
                 Text("当前显示 \(filteredAlerts.count) / \(alerts.count) 条")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)

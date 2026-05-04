@@ -693,12 +693,15 @@ struct WatchlistWindow: View {
     }
 
     private var footerHint: some View {
-        HStack {
-            Text("双击合约打开主图 · 含主连续 + 活跃月份合约 · 实时报价对小写/I 字母合约部分降级（K 线正常）")
+        HStack(spacing: 12) {
+            Text("双击合约打开主图 · 含主连续 + 活跃月份合约")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()
+            // v15.20 batch78 · 状态汇总：分组数 / 合约总数 / 已染色统计
+            statusSummary
             if !selectedInstruments.isEmpty {
+                Divider().frame(height: 12)
                 Text("已选 \(selectedInstruments.count) 个 · 右键移除")
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -706,6 +709,31 @@ struct WatchlistWindow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+    }
+
+    /// v15.20 batch78 · 自选状态汇总（分组数 / 合约总数 / 涨跌平统计 · trader 全局快览）
+    private var statusSummary: some View {
+        let totalGroups = book.groups.count
+        let totalUnique = book.allInstrumentIDsDeduped.count
+        let pcts = book.allInstrumentIDsDeduped.compactMap { parseChangePct(changePctText(for: $0)) }
+        let upCount = pcts.filter { $0 > 0 }.count
+        let downCount = pcts.filter { $0 < 0 }.count
+        return HStack(spacing: 8) {
+            Text("\(totalGroups) 组")
+                .font(.caption2).foregroundColor(.secondary)
+            Text("·").foregroundColor(.secondary)
+            Text("\(totalUnique) 合约（去重）")
+                .font(.caption2).foregroundColor(.secondary)
+            if !pcts.isEmpty {
+                Text("·").foregroundColor(.secondary)
+                Text("涨 \(upCount)")
+                    .font(.caption2).foregroundColor(Self.priceColor(0.5))   // 红
+                Text("/")
+                    .font(.caption2).foregroundColor(.secondary)
+                Text("跌 \(downCount)")
+                    .font(.caption2).foregroundColor(Self.priceColor(-0.5))  // 绿
+            }
+        }
     }
 
     private func emptyState(icon: String, title: String, hint: String) -> some View {

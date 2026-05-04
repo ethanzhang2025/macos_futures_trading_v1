@@ -50,6 +50,8 @@ struct AlertWindow: View {
     @State private var alertInstrumentFilter: String = ""   // "" = 全部 · 否则只显示指定合约
     /// v15.20 batch57 · 多选批量操作 · alertRow checkbox 状态 · 走 AlertBatchOperator 纯函数
     @State private var selectedAlertIDs: Set<UUID> = []
+    /// v15.20 batch62 · 历史 row 展开 · 显示完整触发详情
+    @State private var expandedHistoryID: UUID?
     @State private var historyEntries: [AlertHistoryEntry] = []
     @State private var historyWindow: AlertHistoryFilter.Window = .all
     @State private var historySearchText: String = ""   // v15.19 batch46 · 按预警名搜索
@@ -784,23 +786,124 @@ struct AlertWindow: View {
     }
 
     private func historyRow(_ e: AlertHistoryEntry) -> some View {
-        HStack(spacing: 8) {
-            Text(Self.timeFormatter.string(from: e.triggeredAt))
-                .frame(width: 150, alignment: .leading)
-                .foregroundColor(.secondary)
-            Text(e.alertName).frame(maxWidth: .infinity, alignment: .leading)
-            Text(e.instrumentID).frame(width: 60, alignment: .leading)
-            Text(fmtDecimal(e.triggerPrice))
-                .frame(width: 80, alignment: .trailing)
-                .foregroundColor(.red.opacity(0.8))
-            Text(e.conditionSnapshot.displayDescription)
-                .frame(width: 200, alignment: .leading)
-                .foregroundColor(.secondary)
+        let isExpanded = expandedHistoryID == e.id
+        return VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .foregroundColor(.secondary)
+                    .frame(width: 12)
+                Text(Self.timeFormatter.string(from: e.triggeredAt))
+                    .frame(width: 138, alignment: .leading)
+                    .foregroundColor(.secondary)
+                Text(e.alertName).frame(maxWidth: .infinity, alignment: .leading)
+                Text(e.instrumentID).frame(width: 60, alignment: .leading)
+                Text(fmtDecimal(e.triggerPrice))
+                    .frame(width: 80, alignment: .trailing)
+                    .foregroundColor(.red.opacity(0.8))
+                Text(e.conditionSnapshot.displayDescription)
+                    .frame(width: 200, alignment: .leading)
+                    .foregroundColor(.secondary)
+            }
+            .font(.system(size: 12, design: .monospaced))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                expandedHistoryID = isExpanded ? nil : e.id
+            }
+            if isExpanded {
+                historyExpandedDetail(e)
+            }
         }
-        .font(.system(size: 12, design: .monospaced))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
+
+    /// v15.20 batch62 · 历史 row 展开详情面板（trader 复盘触发时刻完整信息）
+    @ViewBuilder
+    private func historyExpandedDetail(_ e: AlertHistoryEntry) -> some View {
+        let relativeAge = Self.relativeAgeFormatter.localizedString(for: e.triggeredAt, relativeTo: Date())
+        let alertStillExists = alerts.contains { $0.id == e.alertID }
+        let currentAlertStatus = alerts.first { $0.id == e.alertID }?.status
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 24) {
+                detailColumn("触发时间", value: Self.timeFormatter.string(from: e.triggeredAt) + " (\(relativeAge))")
+                detailColumn("触发价格", value: fmtDecimal(e.triggerPrice), bold: true, color: .red.opacity(0.85))
+                detailColumn("合约", value: e.instrumentID)
+                Spacer()
+            }
+            HStack(alignment: .top, spacing: 24) {
+                detailColumn("完整条件", value: e.conditionSnapshot.displayDescription)
+                detailColumn("预警当前状态", value: currentAlertStatus.map(statusLabel) ?? "已删除", color: alertStillExists ? .primary : .orange)
+                Spacer()
+            }
+            if !e.message.isEmpty {
+                Text("说明：\(e.message)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack(spacing: 8) {
+                Button("复制详情") { copyHistoryDetail(e) }
+                    .buttonStyle(.borderless)
+                    .help("把完整触发信息复制到剪贴板（IM/邮件分享）")
+                if alertStillExists {
+                    Button("跳到预警列表") {
+                        selectedTab = .list
+                        selectedAlertIDs = [e.alertID]
+                        alertInstrumentFilter = ""
+                    }
+                    .buttonStyle(.borderless)
+                    .help("切到预警 Tab · 选中并清除合约筛选以确保可见")
+                }
+                Spacer()
+                Button("收起") { expandedHistoryID = nil }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal, 32)
+        .padding(.vertical, 10)
+        .background(Color.accentColor.opacity(0.07))
+    }
+
+    private func detailColumn(_ label: String, value: String, bold: Bool = false, color: Color = .primary) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundColor(.secondary)
+            Text(value)
+                .font(.system(size: 12, design: .monospaced))
+                .fontWeight(bold ? .semibold : .regular)
+                .foregroundColor(color)
+        }
+    }
+
+    private func statusLabel(_ s: AlertStatus) -> String {
+        switch s {
+        case .active:    return "活跃"
+        case .triggered: return "已触发（冷却中）"
+        case .paused:    return "已暂停"
+        case .cancelled: return "已取消"
+        }
+    }
+
+    private func copyHistoryDetail(_ e: AlertHistoryEntry) {
+        let lines: [String] = [
+            "🔔 \(e.alertName)",
+            "时间：\(Self.timeFormatter.string(from: e.triggeredAt))",
+            "合约：\(e.instrumentID)",
+            "价格：\(fmtDecimal(e.triggerPrice))",
+            "条件：\(e.conditionSnapshot.displayDescription)",
+            "说明：\(e.message)"
+        ]
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(lines.joined(separator: "\n"), forType: .string)
+    }
+
+    private static let relativeAgeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateTimeStyle = .named
+        return f
+    }()
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()

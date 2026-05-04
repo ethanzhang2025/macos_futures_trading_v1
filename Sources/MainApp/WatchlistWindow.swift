@@ -511,8 +511,12 @@ struct WatchlistWindow: View {
                 emptyState(
                     icon: "tray",
                     title: "分组为空",
-                    hint: "点击右上「添加合约」开始 · 或从左侧拖入"
+                    hint: "点击右上「添加合约」· 双击此处 · 或从左侧拖入"
                 )
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    sheetState = .addInstrument(groupID: group.id, groupName: group.name)
+                }
             } else {
                 List(selection: $selectedInstruments) {
                     ForEach(Array(sortedInstrumentIDs(for: group).enumerated()), id: \.element) { index, id in
@@ -671,6 +675,11 @@ struct WatchlistWindow: View {
                 return moveInstrumentToSlot(ref, targetGroupID: groupID, targetIndex: count)
             } isTargeted: { isOver in
                 updateHover(.instrumentSlot(groupID: groupID, beforeIndex: count), active: isOver)
+            }
+            // v15.21 batch88 · 双击末尾空白区 → 添加合约 sheet（trader 流畅工作流 · ⌘⇧I 快捷键互补）
+            .onTapGesture(count: 2) {
+                guard let group = book.group(id: groupID) else { return }
+                sheetState = .addInstrument(groupID: groupID, groupName: group.name)
             }
             .listRowSeparator(.hidden)
     }

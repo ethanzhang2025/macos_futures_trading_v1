@@ -826,6 +826,9 @@ struct ChartScene: View {
                 .keyboardShortcut(.end, modifiers: [.command])
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.rightArrow, modifiers: [.command])
+            // v15.19 batch51 · ⌘. 切换副图显隐（专注主图分析时清屏 · 与 ⌘⇧H HUD toggle 风格一致）
+            Button("") { showSubCharts.toggle() }
+                .keyboardShortcut(".", modifiers: [.command])
             // v15.19 batch28 · ⌥1-9 全 9 个常用周期一键切（trader 高频工作流 · 与 ⌘1-6 互补）
             Button("") { selectedPeriod = .minute1 }
                 .keyboardShortcut("1", modifiers: [.option])
@@ -2048,6 +2051,8 @@ struct ChartContentView: View {
     @State var chartMainAreaSize: CGSize = .zero
     /// v15.19 batch30 · 快捷测距锚点（⌘⇧M 设 · 再按取消）· 配合 hoverDataPoint 实时显示距离
     @State var measureAnchor: DrawingPoint?
+    /// v15.19 batch51 · 副图显隐切换（⌘. · 默认显示）· trader 专注主图分析时清屏
+    @State var showSubCharts: Bool = true
     /// v13.20 副图区总高度 · 用户拖分割条调整 · 范围 80~480pt（默认 160 = subChartHeight 单副图）
     /// v15.16 hotfix #13：init 时同步 load · 防 ChartContentView 切合约重建时 onAppear 异步加载导致 160→保存值闪烁
     @State var subChartTotalHeight: CGFloat = {
@@ -2193,38 +2198,38 @@ struct ChartContentView: View {
                 )
                 .frame(width: 60)
             }
-            // 视觉迭代第 9 项：主图 ↔ 副图分割线 · v13.20 升级为可拖分割条（4pt 高度 · 鼠标 hover 显示 row cursor · 拖动改副图总高度）
-            mainSubDivider
-            // 副图区 v13.19 多副图 vertical stack · 共享主图 viewport · 总高度 v13.20 用户可拖
-            // 副图之间分隔 v15.16 hotfix #9：与主副图分隔条统一视觉 · chartTheme.background 1pt 同色
-            // 副图自身网格/柱状图有视觉边界 · 1pt 同色让副图自然紧贴 · 不显黑线
-            let count = max(1, subIndicatorKinds.count)
-            let perSubHeight: CGFloat = subChartTotalHeight / CGFloat(count)
-            VStack(spacing: 0) {
-                ForEach(Array(subIndicatorKinds.enumerated()), id: \.element) { idx, kind in
-                    if idx > 0 {
-                        chartTheme.background.frame(height: 1)
+            if showSubCharts {
+                // 视觉迭代第 9 项：主图 ↔ 副图分割线 · v13.20 升级为可拖分割条（4pt 高度 · 鼠标 hover 显示 row cursor · 拖动改副图总高度）
+                mainSubDivider
+                // 副图区 v13.19 多副图 vertical stack · 共享主图 viewport · 总高度 v13.20 用户可拖
+                let count = max(1, subIndicatorKinds.count)
+                let perSubHeight: CGFloat = subChartTotalHeight / CGFloat(count)
+                VStack(spacing: 0) {
+                    ForEach(Array(subIndicatorKinds.enumerated()), id: \.element) { idx, kind in
+                        if idx > 0 {
+                            chartTheme.background.frame(height: 1)
+                        }
+                        HStack(spacing: 0) {
+                            SubChartView(
+                                bars: bars,
+                                viewport: viewport,
+                                kind: kind,
+                                params: subParamsOverrides[idx] ?? indicatorParams,
+                                slotIndex: idx,
+                                onEditParams: { onEditSubSlot(idx) },
+                                chartTheme: chartTheme,
+                                onClearOverride: { onClearSubSlot(idx) },
+                                hasOverride: subParamsOverrides[idx] != nil
+                            )
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            chartTheme.background
+                                .frame(width: 60)
+                        }
+                        .frame(height: perSubHeight)
                     }
-                    HStack(spacing: 0) {
-                        SubChartView(
-                            bars: bars,
-                            viewport: viewport,
-                            kind: kind,
-                            params: subParamsOverrides[idx] ?? indicatorParams,
-                            slotIndex: idx,
-                            onEditParams: { onEditSubSlot(idx) },
-                            chartTheme: chartTheme,
-                            onClearOverride: { onClearSubSlot(idx) },  // v15.17 · 通过父级回调清除（subParamsOverrides 是 let 不可直接改）
-                            hasOverride: subParamsOverrides[idx] != nil
-                        )
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        chartTheme.background
-                            .frame(width: 60)
-                    }
-                    .frame(height: perSubHeight)
                 }
+                .frame(height: subChartTotalHeight)
             }
-            .frame(height: subChartTotalHeight)
             KLineAxisView(
                 bars: bars,
                 viewport: viewport,

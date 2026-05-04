@@ -675,6 +675,12 @@ struct ChartScene: View {
                         .foregroundColor(chartTheme.textSecondary)
                         .lineLimit(2)
                     Spacer()
+                    // v15.18 · actionURL 存在时显示"查看详情"链接（外链跳浏览器）
+                    if let urlStr = banner.actionURL, let url = URL(string: urlStr) {
+                        Link("查看详情", destination: url)
+                            .font(.system(size: 11))
+                            .foregroundColor(accent)
+                    }
                 }
             }
         }

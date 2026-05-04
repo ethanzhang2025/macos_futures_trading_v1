@@ -26,6 +26,8 @@ public struct FormulaEditorWindow: View {
     /// v15.22 batch5 · 编译验证结果（nil = 未验证 / "" = 通过 / 否则错误信息）
     @State private var compileResult: String? = nil
     @State private var compileSucceeded: Bool = false
+    /// v15.22 batch6 · 错误位置 marker · 编辑器内红色背景标注 · 用户改动后清空
+    @State private var errorMarker: CodeErrorMarker? = nil
 
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
@@ -37,8 +39,13 @@ public struct FormulaEditorWindow: View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            MaiLangCodeView(text: $sourceText, scheme: scheme)
+            MaiLangCodeView(text: $sourceText, scheme: scheme, errorMarker: errorMarker)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onChange(of: sourceText) { _ in
+                    // v15.22 batch6 · 用户改动后清错误标注（防陈旧 marker 误导）
+                    if errorMarker != nil { errorMarker = nil }
+                    if compileResult != nil { compileResult = nil }
+                }
             Divider()
             statusBar
         }
@@ -178,18 +185,22 @@ public struct FormulaEditorWindow: View {
             _ = try parser.parse()
             compileSucceeded = true
             compileResult = "✓ 编译通过 · \(tokens.count - 1) tokens"   // -1 排除 .eof
+            errorMarker = nil
             statusMessage = "编译验证通过"
         } catch let err as LexerError {
             compileSucceeded = false
             compileResult = "Lexer 错误：第 \(err.line) 行第 \(err.column) 列 · \(err.message)"
+            errorMarker = CodeErrorMarker(line: err.line, column: err.column, length: 1)
             statusMessage = compileResult ?? ""
         } catch let err as ParserError {
             compileSucceeded = false
             compileResult = "Parser 错误：第 \(err.line) 行第 \(err.column) 列 · \(err.message)"
+            errorMarker = CodeErrorMarker(line: err.line, column: err.column, length: 1)
             statusMessage = compileResult ?? ""
         } catch {
             compileSucceeded = false
             compileResult = "未知错误：\(error.localizedDescription)"
+            errorMarker = nil
             statusMessage = compileResult ?? ""
         }
     }

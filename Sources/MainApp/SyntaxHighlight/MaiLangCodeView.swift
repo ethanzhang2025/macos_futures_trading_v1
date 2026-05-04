@@ -6,16 +6,29 @@ import SwiftUI
 import AppKit
 import Shared
 
+/// 编辑器错误标注（行/列 1-based · length token 长度）· v15.22 batch6
+public struct CodeErrorMarker: Equatable, Sendable {
+    public let line: Int      // 1-based
+    public let column: Int    // 1-based
+    public let length: Int    // 错误 token 长度（默认 1）
+    public init(line: Int, column: Int, length: Int = 1) {
+        self.line = line; self.column = column; self.length = length
+    }
+}
+
 /// SwiftUI 麦语言代码编辑器 · 实时 syntax 高亮 + 双 binding 同步
 public struct MaiLangCodeView: NSViewRepresentable {
     @Binding var text: String
     let scheme: SyntaxColorScheme
     let fontSize: CGFloat
+    let errorMarker: CodeErrorMarker?
 
-    public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark, fontSize: CGFloat = 13) {
+    public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark,
+                fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil) {
         self._text = text
         self.scheme = scheme
         self.fontSize = fontSize
+        self.errorMarker = errorMarker
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -101,6 +114,14 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 storage.addAttribute(.foregroundColor, value: color, range: safeRange)
             }
         }
+        // v15.22 batch6 · 错误位置红色背景标注（编译失败后定位）
+        if let marker = errorMarker,
+           let errRange = lineColumnToRange(marker, in: source) {
+            let safe = NSIntersectionRange(errRange, fullRange)
+            if safe.length > 0 {
+                storage.addAttribute(.backgroundColor, value: NSColor.systemRed.withAlphaComponent(0.35), range: safe)
+            }
+        }
         storage.endEditing()
         // 恢复 cursor / selection（避免高亮触发跳到首字符）
         if savedRange.location <= fullRange.length {
@@ -110,6 +131,28 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
     private func nsColor(_ rgb: SyntaxRGB) -> NSColor {
         NSColor(red: CGFloat(rgb.r), green: CGFloat(rgb.g), blue: CGFloat(rgb.b), alpha: 1)
+    }
+
+    /// v15.22 batch6 · 行/列（1-based）→ NSRange UTF-16 偏移 · 越界返回 nil
+    private func lineColumnToRange(_ marker: CodeErrorMarker, in source: String) -> NSRange? {
+        let ns = source as NSString
+        let length = ns.length
+        var currentLine = 1
+        var lineStart = 0
+        var i = 0
+        while i < length && currentLine < marker.line {
+            if ns.character(at: i) == 0x0A {  // '\n'
+                currentLine += 1
+                lineStart = i + 1
+            }
+            i += 1
+        }
+        guard currentLine == marker.line else { return nil }
+        let col = max(1, marker.column)
+        let location = lineStart + col - 1
+        guard location < length else { return nil }
+        let len = max(1, marker.length)
+        return NSRange(location: location, length: min(len, length - location))
     }
 }
 #endif

@@ -1,9 +1,10 @@
 // MainApp · 预警面板 Scene（WP-52 UI · 8 alerts × 4 status × 8 condition × 5 channel · v15.12 持仓量异动）
 //
-// 留待 Mac 切机：UserNotifications channel · NSSound channel（替换对应 LoggingChannel）
+// v15.17 完成：NotificationChannels.swift 提供 SystemNoticeChannel + SoundChannel + InAppOverlayChannel macOS 实现
+// FuturesTerminalApp 注入 dispatcher · 用户预警真触发 toast + 系统通知 + Glass 声音三通道
 // M5 持久化已接入：alerts 走 SQLiteAlertConfigStore（.task 异步 load · .onChange 异步 save · nil 才 fallback Mock · 空数组合法）
 //                  history 走 SQLiteAlertHistoryStore（.task 异步 load · 空库 fallback Mock · evaluator 接入后写库）
-// 留待 M5：AlertEvaluator onTick 实接 · 真实触发后 store.append → UI 自动刷新（监听机制）
+// 留待 M5+：AlertEvaluator onTick 实接 · 真实触发后 store.append → UI 自动刷新（监听机制）
 
 #if canImport(SwiftUI) && os(macOS)
 

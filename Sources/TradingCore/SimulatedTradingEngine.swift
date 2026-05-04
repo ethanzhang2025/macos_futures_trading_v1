@@ -362,12 +362,22 @@ public actor SimulatedTradingEngine {
         let pnl = priceDiff * Decimal(fillVolume) * Decimal(pos.volumeMultiple)
         account.closePnL += pnl
 
-        // 减持仓（todayVolume 优先扣 · 清仓后从 dict 删除 · 推 volume=0 快照让 UI 感知清仓）
-        // TODO v15.16 hotfix #13：v2 接 contract.feeStructure 后区分平今 / 平昨 · 上期所平今平昨手续费倒挂
-        // 当前 v1 hardcoded 5 元/手 · 不区分对账户无影响 · 但 OffsetFlag.close（平昨语义）应优先扣 yesterdayVolume
-        // 修法：if request.offsetFlag == .closeToday { todayVolume -= } else { yesterdayVolume -= todayVolume 留 }
+        // 减持仓 · v15.18 按 OffsetFlag 区分平今/平昨方向
+        // - closeToday：优先扣 todayVolume（CTP 语义 · 上期所平今手续费高于平昨）
+        // - close / closeYesterday：优先扣 yesterdayVolume（保留 todayVolume 避免被动平今）
+        // 手续费区分留 v2 接 contract.feeStructure（当前 hardcoded 5 元/手不区分对账户余额无影响）
+        let yesterdayVolume = pos.volume - pos.todayVolume
+        let newToday: Int
+        if record.offsetFlag == .closeToday {
+            newToday = max(0, pos.todayVolume - fillVolume)
+        } else {
+            // close / closeYesterday / forceClose · 优先扣昨仓 · 不够再扣今仓
+            let consumeYesterday = min(yesterdayVolume, fillVolume)
+            let consumeToday = fillVolume - consumeYesterday
+            newToday = max(0, pos.todayVolume - consumeToday)
+        }
         pos.volume -= fillVolume
-        pos.todayVolume = max(0, pos.todayVolume - fillVolume)
+        pos.todayVolume = newToday
         positions[key] = (pos.volume == 0) ? nil : pos
         broadcast(.positionChanged(pos), now: now)
     }

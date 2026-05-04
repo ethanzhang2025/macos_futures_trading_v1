@@ -686,3 +686,93 @@ struct SimulatedTradingStoreTests {
         #expect(SimulatedTradingStore.load(defaults: defaults) == nil)
     }
 }
+
+// MARK: - v15.18 · 平今 / 平昨 OffsetFlag 区分（CTP 语义）
+
+@Suite("SimulatedTradingEngine · 平今 / 平昨 OffsetFlag 区分（v15.18）")
+struct CloseOffsetTests {
+
+    /// 构造一个 today=3 / yesterday=2 / volume=5 的多头仓位 snapshot
+    private func snapWithLongPosition(today: Int, total: Int, instrumentID: String = "rb2501") -> SimulatedTradingSnapshot {
+        let pos = Position(
+            instrumentID: instrumentID, direction: .long,
+            volume: total, todayVolume: today,
+            avgPrice: 3500, openAvgPrice: 3500,
+            preSettlementPrice: 3500,
+            margin: Decimal(total * 3500 * 10) * Decimal(string: "0.10")!,
+            volumeMultiple: 10
+        )
+        let marginAmt = Decimal(total * 3500 * 10) * Decimal(string: "0.10")!
+        let acct = Account(
+            preBalance: 1_000_000, deposit: 0, withdraw: 0,
+            closePnL: 0, positionPnL: 0, commission: 0,
+            margin: marginAmt
+        )
+        return SimulatedTradingSnapshot(
+            account: acct, orders: [], trades: [], positions: [pos],
+            equityCurve: [], orderRefCounter: 0, tradeIDCounter: 0
+        )
+    }
+
+    @Test("close（普通平仓）· 优先扣 yesterday · today 不变（CTP 默认行为 · 防被动平今）")
+    func closeFirstConsumesYesterday() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContracts([makeContract()])
+        await engine.restore(snapWithLongPosition(today: 3, total: 5))
+        // close 卖 2 手 · 应优先扣 yesterday(2) · today 仍 = 3
+        let req = OrderRequest(
+            instrumentID: "rb2501", direction: .sell, offsetFlag: .close,
+            priceType: .limitPrice, price: 3600, volume: 2
+        )
+        let (orderRef, rej) = await engine.submitOrder(req)
+        #expect(rej == nil)
+        await engine.onTick(makeTick(3600))
+        let s = await engine.snapshot()
+        let pos = s.positions.first(where: { $0.direction == .long })
+        #expect(pos?.volume == 3)
+        #expect(pos?.todayVolume == 3)         // today 不变
+        #expect(pos?.yesterdayVolume == 0)     // yesterday 全平
+        #expect(!orderRef.isEmpty)
+    }
+
+    @Test("closeToday · 优先扣 today · yesterday 不变（CTP 平今手续费高时用户主动选）")
+    func closeTodayConsumesToday() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContracts([makeContract()])
+        await engine.restore(snapWithLongPosition(today: 3, total: 5))
+        // closeToday 卖 2 手 · 应优先扣 today(3) → today=1 · yesterday 仍 = 2
+        let req = OrderRequest(
+            instrumentID: "rb2501", direction: .sell, offsetFlag: .closeToday,
+            priceType: .limitPrice, price: 3600, volume: 2
+        )
+        let (orderRef, rej) = await engine.submitOrder(req)
+        #expect(rej == nil)
+        await engine.onTick(makeTick(3600))
+        let s = await engine.snapshot()
+        let pos = s.positions.first(where: { $0.direction == .long })
+        #expect(pos?.volume == 3)
+        #expect(pos?.todayVolume == 1)         // today 扣 2
+        #expect(pos?.yesterdayVolume == 2)     // yesterday 不变
+        #expect(!orderRef.isEmpty)
+    }
+
+    @Test("close 平超 yesterday · 余量再扣 today（顺序 yesterday→today · 不强吃 today 全部）")
+    func closeOverflowsYesterdayThenToday() async {
+        let engine = SimulatedTradingEngine(initialBalance: 1_000_000)
+        await engine.registerContracts([makeContract()])
+        await engine.restore(snapWithLongPosition(today: 3, total: 5))
+        // close 卖 4 手 · yesterday=2 全平 + today -2 = 1
+        let req = OrderRequest(
+            instrumentID: "rb2501", direction: .sell, offsetFlag: .close,
+            priceType: .limitPrice, price: 3600, volume: 4
+        )
+        let (_, rej) = await engine.submitOrder(req)
+        #expect(rej == nil)
+        await engine.onTick(makeTick(3600))
+        let s = await engine.snapshot()
+        let pos = s.positions.first(where: { $0.direction == .long })
+        #expect(pos?.volume == 1)
+        #expect(pos?.todayVolume == 1)         // today 3 - (4-2) = 1
+        #expect(pos?.yesterdayVolume == 0)
+    }
+}

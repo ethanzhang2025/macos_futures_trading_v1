@@ -2869,14 +2869,16 @@ struct ChartContentView: View {
                 // marker：高点 marker 上方（y - 8）· 低点 marker 下方（y + 8）
                 let isHigh = swing.kind == .high
                 let markerY = isHigh ? y - 12 : y + 12
-                Image(systemName: isHigh ? "triangle.fill" : "triangle.fill")
+                // v15.21 batch89 · 配色与 chartTheme 集成（深色主题适配 · 与 K 线 candleBull/Bear 一致）
+                let swingColor = isHigh ? chartTheme.candleBull : chartTheme.candleBear
+                Image(systemName: "triangle.fill")
                     .rotationEffect(.degrees(isHigh ? 0 : 180))
-                    .foregroundColor(isHigh ? Color.red.opacity(0.85) : Color.green.opacity(0.85))
+                    .foregroundColor(swingColor.opacity(0.85))
                     .font(.system(size: 8))
                     .position(x: x, y: markerY)
                 Text(formatPrice(swing.price))
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(isHigh ? Color.red : Color.green)
+                    .foregroundColor(swingColor)
                     .padding(.horizontal, 2)
                     .background(chartTheme.hudBackground.opacity(0.85))
                     .cornerRadius(2)

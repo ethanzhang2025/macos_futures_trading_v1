@@ -227,6 +227,16 @@ struct JournalWindow: View {
             .keyboardShortcut("m", modifiers: [.command, .shift])
             .help("导入交割单 CSV（⌘⇧M · 文华 / 通用格式）")
 
+            // v15.18 · 闭合持仓 CSV 导出（trader 报税 / 复盘归档）
+            Button {
+                presentExportPanel()
+            } label: {
+                Label("导出", systemImage: "square.and.arrow.up")
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .help("导出闭合持仓 CSV（⌘⇧E · 含 BOM · Excel 中文友好）")
+            .disabled(trades.isEmpty)
+
             Text("commit 4/4 · WP-53 收官")
                 .font(.caption2)
                 .foregroundColor(.green)
@@ -562,6 +572,36 @@ struct JournalWindow: View {
         importURL = url
         importFormat = .wenhua
         parseImport()
+    }
+
+    /// v15.18 · 闭合持仓 CSV 导出（trader 报税 / 复盘归档）
+    /// 走 PositionMatcher.match → ClosedPositionCSVExporter → NSSavePanel
+    private func presentExportPanel() {
+        let (closed, _) = PositionMatcher.match(trades: trades)
+        guard !closed.isEmpty else {
+            let alert = NSAlert()
+            alert.messageText = "无可导出闭合持仓"
+            alert.informativeText = "当前 trades 全部为开仓 / 未配对 · 至少需有一对开+平才能生成"
+            alert.runModal()
+            return
+        }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.title = "导出闭合持仓 CSV"
+        panel.prompt = "导出"
+        let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        panel.nameFieldStringValue = "闭合持仓-\(dateStr).csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data = ClosedPositionCSVExporter.exportData(closed)
+        do {
+            try data.write(to: url)
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "导出失败"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .critical
+            alert.runModal()
+        }
     }
 
     private func parseImport() {

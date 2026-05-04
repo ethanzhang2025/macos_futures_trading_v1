@@ -22,7 +22,11 @@ public struct FormulaEditorWindow: View {
         """
 
     @AppStorage("viewState.v1.formulaEditor.schemeRaw") private var schemeRaw: String = "dark"
+    /// v15.22 batch7 · 片段库 · 用户自定义公式模板（JSON 持久化 · 跨会话保留）
+    @AppStorage("viewState.v1.formulaEditor.snippets") private var snippetsJSON: String = ""
     @State private var statusMessage: String = "未保存修改"
+    @State private var showSnippetSaveSheet: Bool = false
+    @State private var newSnippetName: String = ""
     /// v15.22 batch5 · 编译验证结果（nil = 未验证 / "" = 通过 / 否则错误信息）
     @State private var compileResult: String? = nil
     @State private var compileSucceeded: Bool = false
@@ -50,6 +54,68 @@ public struct FormulaEditorWindow: View {
             statusBar
         }
         .frame(minWidth: 720, idealWidth: 920, minHeight: 480, idealHeight: 640)
+        // v15.22 batch7 · 保存片段 sheet · 输入名后追加到 @AppStorage 列表
+        .sheet(isPresented: $showSnippetSaveSheet) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("保存为片段").font(.title2).bold()
+                Text("输入片段名（已存在同名将覆盖）").font(.caption).foregroundColor(.secondary)
+                TextField("例如：MACD 标准 / 我的均线突破", text: $newSnippetName)
+                    .textFieldStyle(.roundedBorder)
+                Text("片段长度：\(sourceText.count) 字符 · \(textStats(sourceText).lines) 行")
+                    .font(.caption).foregroundColor(.secondary)
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button("取消") { showSnippetSaveSheet = false }.keyboardShortcut(.cancelAction)
+                    Button("保存") {
+                        let trimmed = newSnippetName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        saveSnippet(name: trimmed, text: sourceText)
+                        showSnippetSaveSheet = false
+                        statusMessage = "已保存片段：\(trimmed)"
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(newSnippetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(20)
+            .frame(width: 380, height: 200)
+        }
+    }
+
+    // MARK: - 片段库（@AppStorage JSON 持久化）
+
+    private struct Snippet: Codable, Equatable, Sendable {
+        let name: String
+        let text: String
+    }
+
+    private func loadSnippets() -> [Snippet] {
+        guard !snippetsJSON.isEmpty,
+              let data = snippetsJSON.data(using: .utf8),
+              let arr = try? JSONDecoder().decode([Snippet].self, from: data) else {
+            return []
+        }
+        return arr
+    }
+
+    private func saveSnippet(name: String, text: String) {
+        var snippets = loadSnippets()
+        snippets.removeAll { $0.name == name }   // 同名覆盖
+        snippets.append(Snippet(name: name, text: text))
+        if let data = try? JSONEncoder().encode(snippets),
+           let str = String(data: data, encoding: .utf8) {
+            snippetsJSON = str
+        }
+    }
+
+    private func deleteSnippet(_ name: String) {
+        var snippets = loadSnippets()
+        snippets.removeAll { $0.name == name }
+        if let data = try? JSONEncoder().encode(snippets),
+           let str = String(data: data, encoding: .utf8) {
+            snippetsJSON = str
+        }
     }
 
     @ViewBuilder
@@ -87,6 +153,35 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("b", modifiers: [.command])
             .help("用 IndicatorCore Lexer + Parser 验证公式 · 错误显示行列（⌘B）")
+            // v15.22 batch7 · 片段库 Menu（保存当前 / 加载已存 · trader 自定义模板）
+            Menu {
+                Button("💾 保存当前为片段…") {
+                    newSnippetName = ""
+                    showSnippetSaveSheet = true
+                }
+                .disabled(sourceText.isEmpty)
+                Divider()
+                let snippets = loadSnippets()
+                if snippets.isEmpty {
+                    Text("（暂无片段）")
+                } else {
+                    ForEach(snippets, id: \.name) { snip in
+                        Button(snip.name) { sourceText = snip.text; statusMessage = "已加载片段：\(snip.name)" }
+                    }
+                    Divider()
+                    Menu("🗑️ 删除片段") {
+                        ForEach(snippets, id: \.name) { snip in
+                            Button(snip.name, role: .destructive) {
+                                deleteSnippet(snip.name)
+                                statusMessage = "已删除片段：\(snip.name)"
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("片段库", systemImage: "books.vertical")
+            }
+            .help("保存当前公式为命名片段 / 加载已存片段（@AppStorage 持久化）")
             Spacer()
             // 主题切换
             Picker("主题", selection: $schemeRaw) {

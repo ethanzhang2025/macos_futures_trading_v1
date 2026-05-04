@@ -5,6 +5,7 @@
 import SwiftUI
 import AppKit
 import Shared
+import IndicatorCore
 
 public struct FormulaEditorWindow: View {
 
@@ -22,6 +23,9 @@ public struct FormulaEditorWindow: View {
 
     @AppStorage("viewState.v1.formulaEditor.schemeRaw") private var schemeRaw: String = "dark"
     @State private var statusMessage: String = "未保存修改"
+    /// v15.22 batch5 · 编译验证结果（nil = 未验证 / "" = 通过 / 否则错误信息）
+    @State private var compileResult: String? = nil
+    @State private var compileSucceeded: Bool = false
 
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
@@ -68,6 +72,14 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("c", modifiers: [.command, .shift])
             .help("复制全部公式到剪贴板（⌘⇧C）")
+            // v15.22 batch5 · 编译验证（⌘B · 走 IndicatorCore Lexer + Parser · 第一个错误精确定位）
+            Button {
+                compileNow()
+            } label: {
+                Label("编译验证", systemImage: "checkmark.shield")
+            }
+            .keyboardShortcut("b", modifiers: [.command])
+            .help("用 IndicatorCore Lexer + Parser 验证公式 · 错误显示行列（⌘B）")
             Spacer()
             // 主题切换
             Picker("主题", selection: $schemeRaw) {
@@ -93,6 +105,16 @@ public struct FormulaEditorWindow: View {
             // token 数（与 highlighter 同源）
             let tokenCount = MaiLangSyntaxHighlighter.tokenize(sourceText).count
             Text("token \(tokenCount)").font(.caption).foregroundColor(.secondary)
+            // v15.22 batch5 · 编译状态 chip
+            if let result = compileResult {
+                Image(systemName: compileSucceeded ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                    .foregroundColor(compileSucceeded ? .green : .red)
+                Text(result)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(compileSucceeded ? .green : .red)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             Spacer()
             Text(statusMessage)
                 .font(.system(size: 11, design: .monospaced))
@@ -140,6 +162,36 @@ public struct FormulaEditorWindow: View {
     private func copyAllToPasteboard() {
         Pasteboard.copy(sourceText)
         statusMessage = "已复制 \(sourceText.count) 字符到剪贴板"
+    }
+
+    /// v15.22 batch5 · 编译验证 · 走 IndicatorCore Lexer + Parser · 第一个错误精确定位
+    private func compileNow() {
+        guard !sourceText.isEmpty else {
+            compileResult = "公式为空"
+            compileSucceeded = false
+            return
+        }
+        do {
+            var lexer = Lexer(source: sourceText)
+            let tokens = try lexer.tokenize()
+            var parser = Parser(tokens: tokens)
+            _ = try parser.parse()
+            compileSucceeded = true
+            compileResult = "✓ 编译通过 · \(tokens.count - 1) tokens"   // -1 排除 .eof
+            statusMessage = "编译验证通过"
+        } catch let err as LexerError {
+            compileSucceeded = false
+            compileResult = "Lexer 错误：第 \(err.line) 行第 \(err.column) 列 · \(err.message)"
+            statusMessage = compileResult ?? ""
+        } catch let err as ParserError {
+            compileSucceeded = false
+            compileResult = "Parser 错误：第 \(err.line) 行第 \(err.column) 列 · \(err.message)"
+            statusMessage = compileResult ?? ""
+        } catch {
+            compileSucceeded = false
+            compileResult = "未知错误：\(error.localizedDescription)"
+            statusMessage = compileResult ?? ""
+        }
     }
 
     private func textStats(_ s: String) -> (chars: Int, lines: Int) {

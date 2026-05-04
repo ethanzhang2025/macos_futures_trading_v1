@@ -47,6 +47,8 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
     public var bbwParams: [Int]
     /// ATRP 周期（默认 14 · v15.18+ batch13 · 单线 · 0 基线 · % 单位）
     public var atrpPeriod: Int
+    /// Swing High/Low lookback（默认 5 · v15.20 batch85 · 前后窗口大小 · 越大越稳）
+    public var swingLookback: Int
 
     public init(
         mainMAPeriods: [Int],
@@ -66,7 +68,8 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         choppinessPeriod: Int = 14,
         forceIndexPeriod: Int = 13,
         bbwParams: [Int] = [20, 2],
-        atrpPeriod: Int = 14
+        atrpPeriod: Int = 14,
+        swingLookback: Int = 5
     ) {
         self.mainMAPeriods = mainMAPeriods
         self.mainBOLLParams = mainBOLLParams
@@ -86,6 +89,7 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.forceIndexPeriod = forceIndexPeriod
         self.bbwParams = bbwParams
         self.atrpPeriod = atrpPeriod
+        self.swingLookback = swingLookback
     }
 
     public static let `default` = IndicatorParamsBook(
@@ -106,7 +110,8 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         choppinessPeriod: 14,
         forceIndexPeriod: 13,
         bbwParams: [20, 2],
-        atrpPeriod: 14
+        atrpPeriod: 14,
+        swingLookback: 5
     )
 
     // MARK: - Codable · v15.11 加 cciPeriod/wrPeriod · v15.13 加 dmi/stoch/roc/bias 字段
@@ -118,6 +123,7 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         case dmiPeriod, stochParams, rocPeriod, biasPeriod
         case aroonPeriod, stcParams, elderRayPeriod, choppinessPeriod, forceIndexPeriod
         case bbwParams, atrpPeriod
+        case swingLookback
     }
 
     public init(from decoder: Decoder) throws {
@@ -142,6 +148,8 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         // v15.18+ batch13 · BBW / ATRP（旧用户启动 fallback 默认）
         self.bbwParams        = try c.decodeIfPresent([Int].self, forKey: .bbwParams) ?? [20, 2]
         self.atrpPeriod       = try c.decodeIfPresent(Int.self, forKey: .atrpPeriod) ?? 14
+        // v15.20 batch85 · Swing lookback（旧用户启动 fallback 5）
+        self.swingLookback    = try c.decodeIfPresent(Int.self, forKey: .swingLookback) ?? 5
     }
 
     // MARK: - Decimal 转换 helper（IndicatorCore.calculate 接受 [Decimal]）

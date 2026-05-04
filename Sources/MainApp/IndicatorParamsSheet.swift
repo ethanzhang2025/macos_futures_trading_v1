@@ -123,6 +123,10 @@ struct IndicatorParamsSheet: View {
                 paramSection("副图 ATRP（标准化 ATR%）", subtitle: "默认 14（单线 % · 跨品种波动率比较 · ATR / Close × 100）") {
                     paramField("周期", $draft.atrpPeriod)
                 }
+
+                paramSection("主图 Swing 标注（v15.20 batch82 · ⌘⇧W）", subtitle: "默认 5（前后窗口大小 · 越大识别越稳 · 越小越多 swing）") {
+                    paramField("lookback", $draft.swingLookback)
+                }
             }
             .formStyle(.grouped)
             } // ScrollView 结束
@@ -219,6 +223,8 @@ struct IndicatorParamsSheet: View {
               b.bbwParams[0] >= 2 && b.bbwParams[0] <= 200,
               b.bbwParams[1] >= 1 && b.bbwParams[1] <= 5 else { return false }
         guard b.atrpPeriod >= 1 && b.atrpPeriod <= 500 else { return false }
+        // v15.20 batch85 · Swing lookback 范围（1~50 · 太大遮蔽全局趋势）
+        guard b.swingLookback >= 1 && b.swingLookback <= 50 else { return false }
         return true
     }
 }

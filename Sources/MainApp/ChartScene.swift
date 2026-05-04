@@ -2852,7 +2852,8 @@ struct ChartContentView: View {
     @ViewBuilder
     private var swingPointsOverlay: some View {
         let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
-        let swings = SwingPointsDetector.detect(bars, lookback: 5)
+        let lookback = max(1, indicatorParams.swingLookback)
+        let swings = SwingPointsDetector.detect(bars, lookback: lookback)
             .filter { $0.barIndex >= viewport.startIndex && $0.barIndex < visibleEnd }
         GeometryReader { geom in
             let visibleCount = max(1, viewport.visibleCount)

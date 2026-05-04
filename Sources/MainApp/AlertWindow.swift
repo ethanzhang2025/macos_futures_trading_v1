@@ -83,6 +83,9 @@ struct AlertWindow: View {
 
     /// v15.21 batch93 · 历史 tab 搜索框聚焦（⌘F 触发 · trader 高频快搜）
     @FocusState private var isHistorySearchFocused: Bool
+    /// v15.21 batch95 · 列表 tab 搜索框（按预警名 / 合约 / 条件描述模糊匹配）
+    @State private var alertSearchText: String = ""
+    @FocusState private var isAlertSearchFocused: Bool
 
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
@@ -306,9 +309,18 @@ struct AlertWindow: View {
         Array(Set(alerts.map(\.instrumentID))).sorted()
     }
 
-    /// 应用合约筛选 + v15.20 batch69 排序
+    /// 应用合约筛选 + v15.20 batch69 排序 + v15.21 batch95 搜索
     private var filteredAlerts: [Alert] {
-        let scoped = alertInstrumentFilter.isEmpty ? alerts : alerts.filter { $0.instrumentID == alertInstrumentFilter }
+        var scoped = alertInstrumentFilter.isEmpty ? alerts : alerts.filter { $0.instrumentID == alertInstrumentFilter }
+        // batch95 · 名/合约/条件描述 模糊匹配（不区分大小写 · 空字符串跳过过滤）
+        let q = alertSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !q.isEmpty {
+            scoped = scoped.filter {
+                $0.name.lowercased().contains(q)
+                    || $0.instrumentID.lowercased().contains(q)
+                    || $0.condition.displayDescription.lowercased().contains(q)
+            }
+        }
         return AlertSorter.sort(scoped, field: alertSortField, ascending: alertSortAscending)
     }
 
@@ -331,8 +343,29 @@ struct AlertWindow: View {
 
     private var alertsList: some View {
         VStack(spacing: 0) {
-            // v15.19 batch42 · 合约筛选 + v15.20 batch57 · 批量操作 toolbar
+            // v15.19 batch42 · 合约筛选 + v15.20 batch57 · 批量操作 toolbar · v15.21 batch95 加搜索框
             HStack(spacing: 8) {
+                // v15.21 batch95 · 搜索框（按预警名 / 合约 / 条件描述 模糊匹配 · ⌘F 聚焦 · Esc 清空）
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass").foregroundColor(.secondary).font(.caption)
+                    TextField("搜索预警（⌘F）", text: $alertSearchText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 180)
+                        .focused($isAlertSearchFocused)
+                    if !alertSearchText.isEmpty {
+                        Button { alertSearchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary).font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .keyboardShortcut(.escape, modifiers: [])
+                        .help("清空搜索（Esc）")
+                    }
+                }
+                Button("") { isAlertSearchFocused = true }
+                    .keyboardShortcut("f", modifiers: .command)
+                    .opacity(0)
+                    .frame(width: 0, height: 0)
+                    .accessibilityHidden(true)
                 Text("合约筛选").font(.caption).foregroundColor(.secondary)
                 Picker("", selection: $alertInstrumentFilter) {
                     Text("全部 (\(alerts.count))").tag("")

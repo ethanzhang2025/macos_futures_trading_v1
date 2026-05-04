@@ -50,6 +50,16 @@ struct AlertWindow: View {
     @State private var alertInstrumentFilter: String = ""   // "" = 全部 · 否则只显示指定合约
     /// v15.20 batch57 · 多选批量操作 · alertRow checkbox 状态 · 走 AlertBatchOperator 纯函数
     @State private var selectedAlertIDs: Set<UUID> = []
+    /// v15.20 batch69 · 列表排序（@AppStorage 持久化 · 重启保留 · 默认 .manual 创建顺序）
+    @AppStorage("viewState.v1.alert.sortFieldRaw") private var alertSortFieldRaw: String = AlertSortField.manual.rawValue
+    @AppStorage("viewState.v1.alert.sortAscending") private var alertSortAscending: Bool = true
+
+    private var alertSortField: AlertSortField {
+        AlertSortField(rawValue: alertSortFieldRaw) ?? .manual
+    }
+    private func setAlertSortField(_ field: AlertSortField) {
+        alertSortFieldRaw = field.rawValue
+    }
     /// v15.20 batch62 · 历史 row 展开 · 显示完整触发详情
     @State private var expandedHistoryID: UUID?
     @State private var historyEntries: [AlertHistoryEntry] = []
@@ -287,10 +297,10 @@ struct AlertWindow: View {
         Array(Set(alerts.map(\.instrumentID))).sorted()
     }
 
-    /// 应用合约筛选
+    /// 应用合约筛选 + v15.20 batch69 排序
     private var filteredAlerts: [Alert] {
-        if alertInstrumentFilter.isEmpty { return alerts }
-        return alerts.filter { $0.instrumentID == alertInstrumentFilter }
+        let scoped = alertInstrumentFilter.isEmpty ? alerts : alerts.filter { $0.instrumentID == alertInstrumentFilter }
+        return AlertSorter.sort(scoped, field: alertSortField, ascending: alertSortAscending)
     }
 
     private var alertsList: some View {
@@ -329,6 +339,24 @@ struct AlertWindow: View {
                         .buttonStyle(.borderless)
                 }
                 Spacer()
+                // v15.20 batch69 · 排序 Menu（持久化 · 同字段切升降）
+                Menu {
+                    ForEach(AlertSortField.allCases, id: \.rawValue) { field in
+                        Button(action: {
+                            if alertSortField == field { alertSortAscending.toggle() }
+                            else { setAlertSortField(field); alertSortAscending = true }
+                        }) {
+                            let arrow = alertSortField == field ? (alertSortAscending ? " ↑" : " ↓") : ""
+                            Text(field.displayName + arrow)
+                        }
+                    }
+                } label: {
+                    let arrow = alertSortAscending ? "↑" : "↓"
+                    Label("排序 \(alertSortField.displayName) \(alertSortField == .manual ? "" : arrow)",
+                          systemImage: "arrow.up.arrow.down")
+                        .font(.caption)
+                }
+                .help("按字段排序 · 同字段再选切升降序")
                 if filteredAlerts.allSatisfy({ selectedAlertIDs.contains($0.id) }) && !filteredAlerts.isEmpty {
                     Button("全不选") { selectedAlertIDs.subtract(filteredAlerts.map(\.id)) }
                         .buttonStyle(.borderless)

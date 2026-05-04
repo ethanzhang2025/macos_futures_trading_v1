@@ -15,9 +15,10 @@ struct ReviewWindow: View {
 
     @State private var summary: ReviewSummary?
     @State private var loadError: String?
-    /// v15.19 batch44 · 月份筛选 · "" = 全部 · 否则 "yyyy-MM" · 改值后重算 summary
-    @State private var selectedMonth: String = ""
-    /// 全量 closedPositions · 启动一次加载 · 月份切换不重拉数据
+    /// v15.20 batch56 · 区间筛选（替代 v15.19 batch44 selectedMonth: String）
+    /// .all / .last7Days / .last30Days / .currentMonth / .month("yyyy-MM") / .quarter("yyyy-Qn")
+    @State private var dateFilter: ReviewDateFilter = .all
+    /// 全量 closedPositions · 启动一次加载 · 区间切换不重拉数据
     @State private var allPositions: [ClosedPosition] = []
     @State private var totalTradeCount: Int = 0
 
@@ -34,10 +35,10 @@ struct ReviewWindow: View {
         }
         .frame(minWidth: 1024, idealWidth: 1280, minHeight: 720, idealHeight: 900)
         .task { await loadMockReview() }
-        .onChange(of: selectedMonth) { _ in recomputeSummary() }
+        .onChange(of: dateFilter) { _ in recomputeSummary() }
     }
 
-    /// 启动加载 · 拉一次 trades + match · 后续仅按 selectedMonth 重算 summary
+    /// 启动加载 · 拉一次 trades + match · 后续仅按 dateFilter 重算 summary
     private func loadMockReview() async {
         let (trades, closed) = await Task.detached(priority: .userInitiated) {
             let t = MockReviewTrades.generate(pairCount: 50)
@@ -50,10 +51,10 @@ struct ReviewWindow: View {
         recomputeSummary()
     }
 
-    /// 按 selectedMonth 过滤 + 重算 summary（同步 · MainActor · 0 IO）
+    /// 按 dateFilter 过滤 + 重算 summary（同步 · MainActor · 0 IO）
     @MainActor
     private func recomputeSummary() {
-        let filtered = filterByMonth(allPositions, monthString: selectedMonth)
+        let filtered = ReviewDateFilterEngine.filter(allPositions, by: dateFilter)
         summary = ReviewSummary(
             tradeCount: totalTradeCount,
             closedPositions: filtered,
@@ -73,26 +74,14 @@ struct ReviewWindow: View {
         )
     }
 
-    /// 月份过滤 · "" = 全部 · 否则按 yyyy-MM 字符串匹配
-    private func filterByMonth(_ positions: [ClosedPosition], monthString: String) -> [ClosedPosition] {
-        guard !monthString.isEmpty else { return positions }
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM"
-        fmt.timeZone = cal.timeZone
-        return positions.filter { fmt.string(from: $0.closeTime) == monthString }
+    /// 当前 positions 涵盖的所有月份（升序）· 用于 Picker 选项 · 委托 Engine
+    private var availableMonths: [String] {
+        ReviewDateFilterEngine.availableMonths(allPositions)
     }
 
-    /// 当前 positions 涵盖的所有月份（升序）· 用于 Picker 选项
-    private var availableMonths: [String] {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM"
-        fmt.timeZone = cal.timeZone
-        let months = Set(allPositions.map { fmt.string(from: $0.closeTime) })
-        return months.sorted()
+    /// 当前 positions 涵盖的所有季度（升序）· v15.20 batch56
+    private var availableQuarters: [String] {
+        ReviewDateFilterEngine.availableQuarters(allPositions)
     }
 
     @ViewBuilder
@@ -155,16 +144,31 @@ struct ReviewWindow: View {
             HStack(spacing: 20) {
                 Text("📊 复盘工作台").font(.title2).bold()
                 Divider().frame(height: 24)
-                // v15.19 batch44 · 月份筛选 Picker（全部 / yyyy-MM 历史月份）
-                Picker("", selection: $selectedMonth) {
-                    Text("全部").tag("")
-                    ForEach(availableMonths, id: \.self) { m in
-                        Text(m).tag(m)
+                // v15.20 batch56 · 区间筛选 Menu（替代 v15.19 batch44 月份 Picker · 加 7/30 天 + 当月 + 季度）
+                Menu(dateFilter.displayName) {
+                    Button("全部") { dateFilter = .all }
+                    Divider()
+                    Button("近 7 天") { dateFilter = .last7Days }
+                    Button("近 30 天") { dateFilter = .last30Days }
+                    Button("当月") { dateFilter = .currentMonth }
+                    if !availableMonths.isEmpty {
+                        Divider()
+                        Menu("月份") {
+                            ForEach(availableMonths, id: \.self) { m in
+                                Button(m) { dateFilter = .month(m) }
+                            }
+                        }
+                    }
+                    if !availableQuarters.isEmpty {
+                        Menu("季度") {
+                            ForEach(availableQuarters, id: \.self) { q in
+                                Button(q) { dateFilter = .quarter(q) }
+                            }
+                        }
                     }
                 }
-                .labelsHidden()
                 .frame(width: 110)
-                .help("按月份筛选 · 默认全部")
+                .help("筛选复盘区间 · 全部 / 7 天 / 30 天 / 当月 / 月份 / 季度")
                 stat("成交", "\(s.tradeCount) 笔")
                 stat("闭合", "\(s.closedPositions.count) 笔")
                 stat("总 PnL", "¥\(signedDecimal(s.monthlyPnL.totalPnL))")

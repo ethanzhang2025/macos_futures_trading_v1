@@ -154,17 +154,22 @@ struct FuturesTerminalApp: App {
         }
         // v15.17 · WP-52 通知通道接入 · macOS 注册 SystemNoticeChannel + SoundChannel
         // v15.18 · 按 FeatureFlag 决定启用的 channels（系统通知 / 声音 用户可关）
-        // 同步读 UserDefaults（feature flag 本地 override 路径）· 默认值与 FeatureFlag.defaultValue 一致
+        // v15.18 · alertCenter 主开关 · 关闭时整个 evaluator 不启动（dispatcher 空 channels · evaluator 不评估）
         self.alertEvaluator = manager.map {
-            #if canImport(AppKit) && os(macOS)
             let defaults = UserDefaults.standard
-            let sysOn = defaults.object(forKey: "featureFlag.alert.systemNotification") as? Bool
-                ?? FeatureFlag.alertSystemNotification.defaultValue
-            let soundOn = defaults.object(forKey: "featureFlag.alert.sound") as? Bool
-                ?? FeatureFlag.alertSound.defaultValue
-            var channels: [any NotificationChannel] = [InAppOverlayChannel()]
-            if sysOn { channels.append(SystemNoticeChannel()) }
-            if soundOn { channels.append(SoundChannel()) }
+            let centerOn = defaults.object(forKey: "featureFlag.alert.center") as? Bool
+                ?? FeatureFlag.alertCenter.defaultValue
+            #if canImport(AppKit) && os(macOS)
+            var channels: [any NotificationChannel] = []
+            if centerOn {
+                channels.append(InAppOverlayChannel())
+                let sysOn = defaults.object(forKey: "featureFlag.alert.systemNotification") as? Bool
+                    ?? FeatureFlag.alertSystemNotification.defaultValue
+                let soundOn = defaults.object(forKey: "featureFlag.alert.sound") as? Bool
+                    ?? FeatureFlag.alertSound.defaultValue
+                if sysOn { channels.append(SystemNoticeChannel()) }
+                if soundOn { channels.append(SoundChannel()) }
+            }
             let dispatcher = NotificationDispatcher(channels: channels)
             #else
             let dispatcher = NotificationDispatcher()

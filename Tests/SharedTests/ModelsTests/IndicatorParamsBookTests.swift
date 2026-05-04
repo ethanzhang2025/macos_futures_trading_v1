@@ -32,6 +32,42 @@ struct IndicatorParamsBookTests {
         #expect(d.biasParamsDecimal == [Decimal(6)])
     }
 
+    @Test("v15.21 batch120 · default 含 swingLookback/swingMinSpacing 默认 5/0")
+    func v1521SwingDefaults() {
+        let d = IndicatorParamsBook.default
+        #expect(d.swingLookback == 5)
+        #expect(d.swingMinSpacing == 0)
+    }
+
+    @Test("v15.21 batch120 · 兼容旧 JSON · 缺 swingLookback/swingMinSpacing 时 fallback 5/0")
+    func decodeLegacyJSONWithoutSwingFields() throws {
+        // 模拟 v15.20 之前持久化的 JSON · v15.20 batch85 加 swingLookback · v15.21 batch106 加 swingMinSpacing
+        let legacyJSON = """
+        {
+          "mainMAPeriods": [5, 20, 60],
+          "mainBOLLParams": [20, 2],
+          "macdParams": [12, 26, 9],
+          "kdjParams": [9, 3, 3],
+          "rsiPeriod": 14
+        }
+        """
+        let data = legacyJSON.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(IndicatorParamsBook.self, from: data)
+        #expect(decoded.swingLookback == 5)     // fallback
+        #expect(decoded.swingMinSpacing == 0)   // fallback
+    }
+
+    @Test("v15.21 batch120 · swingMinSpacing round-trip 持久化")
+    func swingMinSpacingRoundTrip() throws {
+        var book = IndicatorParamsBook.default
+        book.swingLookback = 8
+        book.swingMinSpacing = 12
+        let encoded = try JSONEncoder().encode(book)
+        let decoded = try JSONDecoder().decode(IndicatorParamsBook.self, from: encoded)
+        #expect(decoded.swingLookback == 8)
+        #expect(decoded.swingMinSpacing == 12)
+    }
+
     @Test("v15.13 兼容旧 JSON · 缺 dmi/stoch/roc/bias 字段时各 fallback 默认")
     func decodeLegacyJSONWithoutV1513Fields() throws {
         // 模拟 v15.12 之前持久化的 JSON（含 v15.11 cci/wr · 缺 v15.13 4 字段）

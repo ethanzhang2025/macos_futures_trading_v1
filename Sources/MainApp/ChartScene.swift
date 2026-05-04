@@ -2734,14 +2734,19 @@ struct ChartContentView: View {
                 let anchorPos = measurePointToScreen(anchor, geomSize: geom.size, barWidth: barWidth, xOffset: xOffset, hi: hi, span: span)
                 let endPos = endpoint.map { measurePointToScreen($0, geomSize: geom.size, barWidth: barWidth, xOffset: xOffset, hi: hi, span: span) }
 
-                // 起点 marker（绿色环 + 中心点）
+                // 起点 marker（绿色环 + 中心点）+ 价位标签
                 Circle()
                     .strokeBorder(Color.green, lineWidth: 2)
                     .background(Circle().fill(Color.white.opacity(0.85)))
                     .frame(width: 12, height: 12)
                     .position(anchorPos)
+                measureLabel(
+                    text: "起 \(formatPrice(anchor.price))",
+                    color: .green,
+                    at: CGPoint(x: anchorPos.x + 14, y: anchorPos.y - 14)
+                )
 
-                if let endPos {
+                if let endPos, let end = endpoint {
                     // 中间连接虚线
                     Path { p in
                         p.move(to: anchorPos)
@@ -2752,16 +2757,39 @@ struct ChartContentView: View {
                         style: StrokeStyle(lineWidth: 1.2, dash: [5, 3])
                     )
 
-                    // 终点 marker（锁定红色实心 / 跟随蓝色环）
+                    // 终点 marker（锁定红色实心 / 跟随蓝色环）+ 距离标签
                     Circle()
                         .fill(isLocked ? Color.red : Color.clear)
                         .overlay(Circle().strokeBorder(isLocked ? Color.red : Color.blue, lineWidth: 2))
                         .frame(width: 12, height: 12)
                         .position(endPos)
+                    let priceDiff = end.price - anchor.price
+                    let pct: Double = anchor.price > 0
+                        ? NSDecimalNumber(decimal: priceDiff / anchor.price).doubleValue * 100
+                        : 0
+                    let arrow = priceDiff >= 0 ? "↑" : "↓"
+                    measureLabel(
+                        text: "\(formatPrice(end.price))  \(arrow) \(String(format: "%+.2f%%", pct))",
+                        color: isLocked ? .red : .blue,
+                        at: CGPoint(x: endPos.x + 14, y: endPos.y - 14)
+                    )
                 }
             }
             .allowsHitTesting(false)
         }
+    }
+
+    /// v15.20 batch75 · 测距 marker 旁价位/距离文本标签（与 marker 同色 · hudBackground 衬底防 K 线吞噬）
+    @ViewBuilder
+    private func measureLabel(text: String, color: Color, at position: CGPoint) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .foregroundColor(color)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(chartTheme.hudBackground.opacity(0.92))
+            .cornerRadius(3)
+            .position(position)
     }
 
     /// v15.20 batch66 · DrawingPoint → 屏幕坐标（与 hitTest 用同一坐标系 · 价格越高 y 越小）

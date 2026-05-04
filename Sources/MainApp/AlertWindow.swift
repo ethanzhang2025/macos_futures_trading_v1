@@ -50,6 +50,7 @@ struct AlertWindow: View {
     @State private var alertInstrumentFilter: String = ""   // "" = 全部 · 否则只显示指定合约
     @State private var historyEntries: [AlertHistoryEntry] = []
     @State private var historyWindow: AlertHistoryFilter.Window = .all
+    @State private var historySearchText: String = ""   // v15.19 batch46 · 按预警名搜索
     /// 缓存：filteredHistory + summary 一次算多处用 · 避免每次 body re-eval 重算
     @State private var filteredHistory: [AlertHistoryEntry] = []
     @State private var historySummary = AlertHistoryStatistics.Summary(total: 0, byInstrument: [], byKind: [], byHour: [:])
@@ -104,6 +105,7 @@ struct AlertWindow: View {
         }
         .onChange(of: historyEntries) { _ in recomputeHistoryCache() }
         .onChange(of: historyWindow) { _ in recomputeHistoryCache() }
+        .onChange(of: historySearchText) { _ in recomputeHistoryCache() }
         .onChange(of: alerts) { newValue in
             // M5 自动持久化：每次 alerts 变化异步 save（add/edit/delete/toggle/markTriggered 都覆盖）
             guard isLoaded, let store = storeManager?.alertConfig else { return }
@@ -534,9 +536,16 @@ struct AlertWindow: View {
 
     // MARK: - 触发历史列表
 
-    /// 重算 filteredHistory + historySummary（historyEntries 或 historyWindow 变时调用）
+    /// 重算 filteredHistory + historySummary（historyEntries / historyWindow / historySearchText 变时调用）
     private func recomputeHistoryCache() {
-        let filtered = AlertHistoryFilter.apply(historyEntries, window: historyWindow)
+        var filtered = AlertHistoryFilter.apply(historyEntries, window: historyWindow)
+        let search = historySearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !search.isEmpty {
+            filtered = filtered.filter {
+                $0.alertName.localizedCaseInsensitiveContains(search)
+                    || $0.instrumentID.localizedCaseInsensitiveContains(search)
+            }
+        }
         filteredHistory = filtered
         historySummary = AlertHistoryStatistics.summarize(filtered)
     }
@@ -603,7 +612,7 @@ struct AlertWindow: View {
         return active ? Color.orange.opacity(0.85) : Color.blue.opacity(0.65)
     }
 
-    /// 时间窗口 segmented + 导出（trader 模式分析入口）
+    /// 时间窗口 segmented + 搜索 + 导出（trader 模式分析入口）
     private var historyToolbar: some View {
         HStack(spacing: 12) {
             Picker("", selection: $historyWindow) {
@@ -614,6 +623,20 @@ struct AlertWindow: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(maxWidth: 360)
+
+            // v15.19 batch46 · 搜索框（按预警名 / 合约名 · 不区分大小写）
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass").foregroundColor(.secondary).font(.caption)
+                TextField("搜索预警名 / 合约", text: $historySearchText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 160)
+                if !historySearchText.isEmpty {
+                    Button { historySearchText = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundColor(.secondary).font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
 
             Spacer()
             Text("共 \(filteredHistory.count) 条 · 全量 \(historyEntries.count)")

@@ -821,6 +821,25 @@ struct ChartScene: View {
                 }
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
+            // v15.19 batch36 · ⌘End / ⌘→ 跳到最新 K 线（保持 visibleCount · 仅滚到最右）· trader 复盘场景
+            Button("") {
+                inertiaTask?.cancel()
+                let visible = max(1, viewport.visibleCount)
+                viewport = RenderViewport(
+                    startIndex: max(0, bars.count - visible),
+                    visibleCount: visible
+                )
+            }
+            .keyboardShortcut(.end, modifiers: [.command])
+            Button("") {
+                inertiaTask?.cancel()
+                let visible = max(1, viewport.visibleCount)
+                viewport = RenderViewport(
+                    startIndex: max(0, bars.count - visible),
+                    visibleCount: visible
+                )
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [.command])
             // v15.19 batch28 · ⌥1-9 全 9 个常用周期一键切（trader 高频工作流 · 与 ⌘1-6 互补）
             Button("") { selectedPeriod = .minute1 }
                 .keyboardShortcut("1", modifiers: [.option])

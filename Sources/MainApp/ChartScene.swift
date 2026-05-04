@@ -835,7 +835,10 @@ struct ChartScene: View {
             Button("") { showShortcutsHelp.toggle() }
                 .keyboardShortcut("/", modifiers: [.command])
             // v15.20 batch82 · ⌘⇧W 切换 swing high/low 标注（趋势可视化 · 默认关）
-            Button("") { showSwingPoints.toggle() }
+            Button("") {
+                showSwingPoints.toggle()
+                presentToggleNotice("Swing 标注：\(showSwingPoints ? "显示" : "隐藏")")
+            }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
             // v15.19 batch36 · ⌘End / ⌘→ 跳到最新 K 线（保持 visibleCount · 仅滚到最右）
             Button("", action: jumpToLatestBar)
@@ -843,10 +846,17 @@ struct ChartScene: View {
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.rightArrow, modifiers: [.command])
             // v15.19 batch51 · ⌘. 切换副图显隐（专注主图分析时清屏 · 与 ⌘⇧H HUD toggle 风格一致）
-            Button("") { showSubCharts.toggle() }
+            // v15.20 batch84 加 toast 反馈
+            Button("") {
+                showSubCharts.toggle()
+                presentToggleNotice("副图：\(showSubCharts ? "显示" : "隐藏")")
+            }
                 .keyboardShortcut(".", modifiers: [.command])
             // v15.19 batch52 · ⌘\ 切换画线 overlay 显隐（专注裸 K 线 · 不删画线 · 仅暂时隐藏）
-            Button("") { showDrawings.toggle() }
+            Button("") {
+                showDrawings.toggle()
+                presentToggleNotice("画线：\(showDrawings ? "显示" : "隐藏")")
+            }
                 .keyboardShortcut("\\", modifiers: [.command])
             // v15.19 batch28 · ⌥1-9 全 9 个常用周期一键切（trader 高频工作流 · 与 ⌘1-6 互补）
             Button("") { selectedPeriod = .minute1 }
@@ -2077,6 +2087,10 @@ struct ChartContentView: View {
     /// v15.20 batch82 · swing high/low 标注显隐（⌘⇧W 切换 · 默认关 · @AppStorage 持久化）
     @AppStorage("viewState.v1.chart.showSwingPoints") private var showSwingPoints: Bool = false
 
+    /// v15.20 batch84 · 显隐切换瞬态提示（trader 直觉反馈：刚按了 ⌘. ⌘\ 等切换什么）
+    @State private var toggleNotice: String?
+    @State private var toggleNoticeTask: Task<Void, Never>?
+
     /// v15.19 batch30 · 快捷测距锚点（⌘⇧M 设 · 再按取消）· 配合 hoverDataPoint 实时显示距离
     @State var measureAnchor: DrawingPoint?
     /// v15.19 batch51 · 副图显隐切换（⌘. · 默认显示）· trader 专注主图分析时清屏
@@ -2351,9 +2365,10 @@ struct ChartContentView: View {
                 viewport = clamp(viewport.pannedSmooth(byBars: 25))
             }
             .keyboardShortcut(.rightArrow, modifiers: [.shift])
-            // v13.30 ⌘⇧H 切换 HUD 显隐（截图前可隐藏）
+            // v13.30 ⌘⇧H 切换 HUD 显隐（截图前可隐藏）· v15.20 batch84 · 加 toast 反馈
             Button("") {
                 showHUD.toggle()
+                presentToggleNotice("HUD：\(showHUD ? "显示" : "隐藏")")
             }
             .keyboardShortcut("h", modifiers: [.command, .shift])
         }
@@ -2441,6 +2456,20 @@ struct ChartContentView: View {
         .overlay {
             // v15.20 batch74 · 快捷键提示浮窗（⌘/ 切换 · 居中半透明覆盖）
             if showShortcutsHelp { shortcutsHelpOverlay }
+        }
+        .overlay(alignment: .bottom) {
+            // v15.20 batch84 · 显隐切换瞬态提示（1s auto fade · 不阻断操作）
+            if let notice = toggleNotice {
+                Text(notice)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.75))
+                    .cornerRadius(8)
+                    .padding(.bottom, 32)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+            }
         }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
@@ -2795,6 +2824,18 @@ struct ChartContentView: View {
             .background(chartTheme.hudBackground.opacity(0.92))
             .cornerRadius(3)
             .position(position)
+    }
+
+    /// v15.20 batch84 · 显示瞬态切换提示（1s auto fade · 重复调用 cancel 旧 task 不闪烁）
+    @MainActor
+    private func presentToggleNotice(_ text: String) {
+        toggleNoticeTask?.cancel()
+        withAnimation { toggleNotice = text }
+        toggleNoticeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation { toggleNotice = nil }
+        }
     }
 
     /// v15.20 batch66 · DrawingPoint → 屏幕坐标（与 hitTest 用同一坐标系 · 价格越高 y 越小）

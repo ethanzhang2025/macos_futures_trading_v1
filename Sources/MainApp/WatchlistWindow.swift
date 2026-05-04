@@ -340,8 +340,12 @@ struct WatchlistWindow: View {
         .contentShape(Rectangle())
         .background(hoverTarget == .group(group.id) ? Color.accentColor.opacity(0.18) : Color.clear)
         .tag(group.id as UUID?)
+        // v15.21 batch102 · 双击 sidebar groupRow → 直接重命名（trader 高频操作 · 与右键菜单互补）
+        .onTapGesture(count: 2) {
+            sheetState = .renameGroup(group)
+        }
         .contextMenu {
-            Button("重命名") {
+            Button("重命名（双击也行）") {
                 sheetState = .renameGroup(group)
             }
             Divider()

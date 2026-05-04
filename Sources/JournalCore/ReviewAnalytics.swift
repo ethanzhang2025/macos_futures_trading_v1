@@ -374,6 +374,53 @@ public enum ReviewAnalytics {
         )
     }
 
+    // MARK: - 11. 连胜连败 Streak（v15.19+ batch17 · trader 连败心理预警必备）
+    //
+    // 算法：按 closeTime 升序遍历 ClosedPosition · 走 sign-run · 平交易（PnL=0）跳过不算
+    // 提供 maxWinningStreak / maxLosingStreak（绝对值）+ currentStreak（带符号 · 正连胜负连败）
+    // 与 ReviewAnalytics 现有指标同模式 · 测试覆盖 8+ 场景
+
+    public struct StreakMetrics: Sendable, Codable, Equatable {
+        public let maxWinningStreak: Int        // 历史最长连胜 N 笔
+        public let maxLosingStreak: Int         // 历史最长连败 N 笔（绝对值 · 不带负号）
+        public let currentStreak: Int           // 当前 · 正=连胜 N · 负=连败 N · 0=无交易/全平
+        public let currentStreakIsWinning: Bool // currentStreak > 0
+        public let switchCount: Int             // 胜→败 / 败→胜 切换次数（趋势稳定性参考）
+        public let totalDecisiveTrades: Int     // 计入统计的非平交易数（PnL ≠ 0）
+    }
+
+    public static func streakMetrics(from positions: [ClosedPosition]) -> StreakMetrics {
+        let sorted = positions.sorted { $0.closeTime < $1.closeTime }
+        var maxWin = 0
+        var maxLoss = 0          // 负值（min）· 末了取绝对
+        var run = 0              // 带符号
+        var switches = 0
+        var prevWasWin: Bool? = nil
+        var decisive = 0
+        for p in sorted {
+            let pnl = p.realizedPnL
+            if pnl == 0 { continue }   // 平交易不计入 streak（trader 视角无情绪冲击）
+            let isWin = pnl > 0
+            decisive += 1
+            if let prev = prevWasWin, prev != isWin {
+                switches += 1
+                run = 0
+            }
+            run += isWin ? 1 : -1
+            if run > maxWin { maxWin = run }
+            if run < maxLoss { maxLoss = run }
+            prevWasWin = isWin
+        }
+        return StreakMetrics(
+            maxWinningStreak: maxWin,
+            maxLosingStreak: -maxLoss,
+            currentStreak: run,
+            currentStreakIsWinning: run > 0,
+            switchCount: switches,
+            totalDecisiveTrades: decisive
+        )
+    }
+
     public static func riskAdjustedMetrics(
         from positions: [ClosedPosition],
         annualizationFactor: Double = 252,

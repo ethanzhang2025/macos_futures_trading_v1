@@ -224,13 +224,6 @@ struct ReviewWindow: View {
                 stat("最长连败", "\(s.streak.maxLosingStreak) 笔")
                 stat("当前", currentStreakLabel(s.streak))
                 Spacer()
-                // v15.21 batch92 · 批量导出全部 10 chartCard PNG（trader 月底复盘一次发邮件/wiki）
-                Button {
-                    exportAllChartCardsPNG(s)
-                } label: {
-                    Label("导出全部 PNG", systemImage: "square.and.arrow.down.on.square")
-                }
-                .help("把当前 10 张图全部导出为 PNG 到选定文件夹（一次完成 · trader 月底批量复盘）")
                 Text("v1 mock · 待 M5 接 JournalStore 真数据")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
@@ -390,72 +383,6 @@ struct ReviewWindow: View {
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(8)
         chart
-    }
-
-    /// v15.21 batch92 · 批量导出全部 10 chartCard PNG 到选定文件夹（trader 月底复盘一次发邮件/wiki）
-    @MainActor
-    private func exportAllChartCardsPNG(_ s: ReviewSummary) {
-        let panel = NSOpenPanel()
-        panel.title = "选择 PNG 输出文件夹"
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let dir = panel.url else { return }
-
-        let dateFmt = DateFormatter()
-        dateFmt.dateFormat = "yyyyMMdd_HHmm"
-        let stamp = dateFmt.string(from: Date())
-        let cards: [(String, String, AnyView)] = [
-            ("月度盈亏", "MonthlyPnL · \(s.monthlyPnL.buckets.count) 月跨度",
-             AnyView(monthlyPnLChart(s.monthlyPnL))),
-            ("分布直方", "PnLDistribution · 盈\(s.pnlDistribution.positiveCount)/亏\(s.pnlDistribution.negativeCount)",
-             AnyView(pnlDistributionChart(s.pnlDistribution))),
-            ("胜率曲线", "WinRateCurve · 终值 \(pct(s.winRateCurve.finalWinRate))",
-             AnyView(winRateChart(s.winRateCurve))),
-            ("品种矩阵", "InstrumentMatrix · \(s.instrumentMatrix.cells.count) 合约",
-             AnyView(instrumentMatrixView(s.instrumentMatrix))),
-            ("持仓时间", "中位 \(durationLabel(s.holdingDuration.medianSeconds))",
-             AnyView(holdingDurationChart(s.holdingDuration))),
-            ("最大回撤", "MaxDrawdown · ¥-\(decimal(s.maxDrawdown.maxDrawdown))",
-             AnyView(maxDrawdownChart(s.maxDrawdown))),
-            ("盈亏比", "ProfitLossRatio · \(decimal(s.profitLossRatio.ratio))",
-             AnyView(profitLossRatioView(s.profitLossRatio))),
-            ("时段分析", "SessionPnL · \(s.sessionPnL.buckets.count) 段",
-             AnyView(sessionPnLChart(s.sessionPnL))),
-            ("连胜连败曲线", "Streak · 最长连胜 \(s.streak.maxWinningStreak) / 最长连败 \(s.streak.maxLosingStreak)",
-             AnyView(streakRunChart(s.streakRunPoints))),
-            ("心理风险标签", "EmotionAutoTagger · 6 类自动建议",
-             AnyView(psychTagsChart(s.psychTagCounts))),
-        ]
-
-        var ok = 0
-        var failed: [String] = []
-        for (title, subtitle, view) in cards {
-            let exportable = VStack(alignment: .leading, spacing: 8) {
-                Text(title).font(.headline)
-                Text(subtitle).font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
-                view
-            }
-            .padding(20)
-            .background(Color.white)
-            guard let pngData = PNGRenderer.render(exportable, width: 720, height: 480) else {
-                failed.append(title); continue
-            }
-            let url = dir.appendingPathComponent("\(title)_\(stamp).png")
-            do {
-                try pngData.write(to: url, options: .atomic)
-                ok += 1
-            } catch {
-                failed.append(title)
-            }
-        }
-
-        if failed.isEmpty {
-            Toast.info("批量导出成功", "已导出 \(ok) 张 PNG 到 \(dir.lastPathComponent)。")
-        } else {
-            Toast.errorBody("部分导出失败", "成功 \(ok) 张 · 失败 \(failed.count) 张：\(failed.joined(separator: "/"))")
-        }
     }
 
     /// v15.19 batch41 · 单 chartCard PNG 导出（trader 分享单图）

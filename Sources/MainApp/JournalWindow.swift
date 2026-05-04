@@ -918,6 +918,8 @@ private struct JournalEditorSheet: View {
     let editing: TradeJournal?
     let trades: [Trade]
     let onSave: (TradeJournal) -> Void
+    /// 关联成交 → EmotionAutoTagger 建议标签（PositionMatcher 配对一次 · sheet 生命期内复用）
+    private let tagsByTradeID: [UUID: [EmotionAutoTagger.Tag]]
 
     @Environment(\.dismiss) private var dismiss
     @State private var draft: JournalDraft
@@ -929,6 +931,26 @@ private struct JournalEditorSheet: View {
         self.onSave = onSave
         self._draft = State(initialValue: JournalDraft(from: editing))
         self._tradesExpanded = State(initialValue: editing?.tradeIDs.isEmpty == false)
+        // 预算一次 · 后续 body 重渲只查 dict
+        let (closed, _) = PositionMatcher.match(trades: trades)
+        var map: [UUID: [EmotionAutoTagger.Tag]] = [:]
+        for (pos, tags) in EmotionAutoTagger.tagAll(closed) where !tags.isEmpty {
+            map[pos.openTradeID] = tags
+            map[pos.closeTradeID] = tags
+        }
+        self.tagsByTradeID = map
+    }
+
+    /// 当前选中 tradeIDs 对应建议标签（去重 · 按枚举顺序稳定）
+    private var suggestedTags: [EmotionAutoTagger.Tag] {
+        var seen = Set<EmotionAutoTagger.Tag>()
+        var ordered: [EmotionAutoTagger.Tag] = []
+        for tid in draft.tradeIDs {
+            for tag in tagsByTradeID[tid] ?? [] where seen.insert(tag).inserted {
+                ordered.append(tag)
+            }
+        }
+        return EmotionAutoTagger.Tag.allCases.filter { ordered.contains($0) }
     }
 
     var body: some View {
@@ -958,6 +980,31 @@ private struct JournalEditorSheet: View {
                     Picker("偏差", selection: $draft.deviation) {
                         ForEach(JournalDeviation.allCases, id: \.self) { d in
                             Text(d.displayName).tag(d)
+                        }
+                    }
+                }
+
+                // 自动建议（基于关联成交的 streak / avgWin/avgLoss / 持仓时长 → 6 类心理风险标签）
+                if !suggestedTags.isEmpty {
+                    Section("🤖 自动建议（基于关联成交的心理风险分析）") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                ForEach(suggestedTags, id: \.self) { tag in
+                                    Text(tag.displayName)
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Color.orange.opacity(0.18))
+                                        .cornerRadius(4)
+                                }
+                                Spacer()
+                                Button("一键采纳") { draft.adopt(suggestedTags) }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                            }
+                            Text("采纳后 → 标签合并 + 情绪自动设为：\(suggestedTags[0].suggestedEmotion.displayName)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
@@ -1041,6 +1088,16 @@ private struct JournalDraft {
     var lesson: String
     var tagsString: String
     var tradeIDs: Set<UUID>
+
+    /// 一键采纳建议（合并标签 + 用首个建议覆盖 emotion · 不存在则不动）
+    mutating func adopt(_ tags: [EmotionAutoTagger.Tag]) {
+        guard !tags.isEmpty else { return }
+        let existing = Set(tagsString.split(whereSeparator: \.isWhitespace).map(String.init))
+        let merged = existing.union(tags.map(\.displayName))
+        tagsString = merged.sorted().joined(separator: " ")
+        // 首个建议决定 emotion · 后续建议忽略（用户可手动改 picker）
+        emotion = tags[0].suggestedEmotion
+    }
 
     init(from editing: TradeJournal?) {
         if let j = editing {

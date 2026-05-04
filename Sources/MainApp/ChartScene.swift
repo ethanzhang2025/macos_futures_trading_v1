@@ -812,12 +812,19 @@ struct ChartScene: View {
                 .keyboardShortcut("5", modifiers: [.command])
             Button("") { selectedPeriod = .daily }
                 .keyboardShortcut("6", modifiers: [.command])
-            // v15.19 batch30 · ⌘⇧M 快捷测距 · 第一次设 anchor · 第二次清空
+            // v15.19 batch30 + v15.20 batch63 · ⌘⇧M 测距三态：
+            // ① 无锚点 → 设起点 anchor（进入 follow 模式 · HUD 跟随 hover 实时）
+            // ② 有 anchor 无 final → 固定 final = hover（HUD 锁定 · 双锚点视觉）
+            // ③ 有 anchor 有 final → 全清退出测距
             Button("") {
                 if measureAnchor == nil {
                     measureAnchor = hoverDataPoint
+                    measureFinal = nil
+                } else if measureFinal == nil {
+                    measureFinal = hoverDataPoint
                 } else {
                     measureAnchor = nil
+                    measureFinal = nil
                 }
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
@@ -2052,6 +2059,9 @@ struct ChartContentView: View {
     @State var hoverDataPoint: DrawingPoint?
     /// 主图实时尺寸（GeometryReader 抓取 · 供右键"在此价位创建预警"反算价格）
     @State var chartMainAreaSize: CGSize = .zero
+    /// v15.20 batch63 · 测距固定终点（双锚点 · ⌘⇧M 第二次按下时固定）
+    @State private var measureFinal: DrawingPoint?
+
     /// v15.19 batch30 · 快捷测距锚点（⌘⇧M 设 · 再按取消）· 配合 hoverDataPoint 实时显示距离
     @State var measureAnchor: DrawingPoint?
     /// v15.19 batch51 · 副图显隐切换（⌘. · 默认显示）· trader 专注主图分析时清屏
@@ -2597,33 +2607,43 @@ struct ChartContentView: View {
         .padding(12)
     }
 
-    /// v15.19 batch30 · 快捷测距 HUD · ⌘⇧M 设锚点后浮窗实时显示距离 + % + bar 数
-    /// 再按 ⌘⇧M 取消锚点 · HUD 自动消失
+    /// v15.19 batch30 + v15.20 batch63 · 测距 HUD（三态）
+    /// ① 仅 anchor → follow hover 实时
+    /// ② anchor + final → 固定双锚点（不再受 hover 影响）
+    /// ③ 全清 → HUD 隐藏
     @ViewBuilder
     private var measurementHUD: some View {
         if let anchor = measureAnchor {
+            // 终点优先：final 已固定 → 用 final · 否则用 hover follow
+            let endpoint: DrawingPoint? = measureFinal ?? hoverDataPoint
+            let isLocked = measureFinal != nil
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text("📏 测距").fontWeight(.semibold)
+                    Text(isLocked ? "📏 测距 · 已锁定" : "📏 测距 · 跟随")
+                        .fontWeight(.semibold)
+                        .foregroundColor(isLocked ? chartTheme.candleBull : chartTheme.textPrimary)
                     Spacer()
-                    Button { measureAnchor = nil } label: {
+                    Button {
+                        measureAnchor = nil
+                        measureFinal = nil
+                    } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(chartTheme.textSecondary)
                     }
                     .buttonStyle(.borderless)
                 }
-                if let hover = hoverDataPoint {
-                    let priceDiff = hover.price - anchor.price
+                if let end = endpoint {
+                    let priceDiff = end.price - anchor.price
                     let pct: Double = anchor.price > 0
                         ? NSDecimalNumber(decimal: priceDiff / anchor.price).doubleValue * 100
                         : 0
-                    let barDiff = hover.barIndex - anchor.barIndex
+                    let barDiff = end.barIndex - anchor.barIndex
                     let arrow = priceDiff >= 0 ? "↑" : "↓"
                     let priceColor: Color = priceDiff >= 0
                         ? Color(red: 0.96, green: 0.27, blue: 0.27)
                         : Color(red: 0.18, green: 0.74, blue: 0.42)
                     Group {
-                        Text("起 \(formatPrice(anchor.price)) → 现 \(formatPrice(hover.price))")
+                        Text("起 \(formatPrice(anchor.price)) → \(isLocked ? "终" : "现") \(formatPrice(end.price))")
                         Text("\(arrow) \(formatPriceDiff(priceDiff)) (\(String(format: "%+.2f%%", pct)))")
                             .foregroundColor(priceColor)
                             .fontWeight(.semibold)
@@ -2636,7 +2656,7 @@ struct ChartContentView: View {
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(chartTheme.textSecondary)
                 }
-                Text("⌘⇧M 切换 / 关闭")
+                Text(isLocked ? "⌘⇧M 退出 · 重设需先退出" : "⌘⇧M 锁定终点 · 再按退出")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(chartTheme.textSecondary.opacity(0.7))
             }

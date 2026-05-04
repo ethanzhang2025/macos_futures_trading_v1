@@ -3160,6 +3160,11 @@ struct ChartContentView: View {
                 }
                 // v15.21 batch96 · 复制 hover 落在的 K 线 OHLC 完整数据（trader 截一根关键 bar 给同事 / 笔记）
                 if hp.barIndex >= 0 && hp.barIndex < bars.count {
+                    let bar = bars[hp.barIndex]
+                    // v15.21 batch100 · 复制 hover K 线时间戳（trader 标关键时间点 · 写笔记/盘后复盘）
+                    Button("复制 hover 时间 \(formatBarTime(bar.openTime))") {
+                        Pasteboard.copy(formatBarTime(bar.openTime))
+                    }
                     Button("复制本根 K 线 OHLC") {
                         copyBarOHLC(at: hp.barIndex)
                     }
@@ -3237,6 +3242,13 @@ struct ChartContentView: View {
         panel.nameFieldStringValue = "chart_\(instrumentLabel)_\(periodLabel)_\(dateFmt.string(from: Date())).png"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? pngData.write(to: url)
+    }
+
+    /// v15.21 batch100 · K 线 openTime 标准化文本（"yyyy-MM-dd HH:mm"）· 复用于 hover 时间复制 / OHLC 行
+    private func formatBarTime(_ date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd HH:mm"
+        return fmt.string(from: date)
     }
 
     /// v15.21 batch96 · 复制 hover 落在的单根 K 线 OHLC 完整数据（标准化文本 · 适合 IM/邮件粘贴）

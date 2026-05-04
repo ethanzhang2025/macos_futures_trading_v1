@@ -828,6 +828,9 @@ struct ChartScene: View {
                 }
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
+            // v15.20 batch70 · ⌘⇧X 复制测距详情到剪贴板（trader IM 分享测距结果）
+            Button("", action: copyMeasurementToPasteboard)
+                .keyboardShortcut("x", modifiers: [.command, .shift])
             // v15.19 batch36 · ⌘End / ⌘→ 跳到最新 K 线（保持 visibleCount · 仅滚到最右）
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.end, modifiers: [.command])
@@ -2565,6 +2568,33 @@ struct ChartContentView: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(formatPrice(price), forType: .string)
+    }
+
+    /// v15.20 batch70 · 复制测距详情到剪贴板（IM/邮件分享 · 含起终点 + 跨度 + 涨跌幅）
+    /// 状态机：仅 anchor → 复制起点 + hover 实时（如果 hover 在）
+    /// anchor + final → 复制双锚点完整详情（最常用）
+    /// 都没设 → 静默 no-op
+    @MainActor
+    private func copyMeasurementToPasteboard() {
+        guard let anchor = measureAnchor else { return }
+        let endpoint: DrawingPoint? = measureFinal ?? hoverDataPoint
+        guard let end = endpoint else { return }
+        let priceDiff = end.price - anchor.price
+        let pct: Double = anchor.price > 0
+            ? NSDecimalNumber(decimal: priceDiff / anchor.price).doubleValue * 100
+            : 0
+        let barDiff = end.barIndex - anchor.barIndex
+        let arrow = priceDiff >= 0 ? "↑" : "↓"
+        let lines: [String] = [
+            "📏 \(currentInstrumentID) \(selectedPeriod.rawValue) 测距",
+            "起：\(formatPrice(anchor.price))",
+            "终：\(formatPrice(end.price))",
+            "\(arrow) \(formatPriceDiff(priceDiff)) (\(String(format: "%+.2f%%", pct)))",
+            "跨 \(abs(barDiff)) 根 K 线"
+        ]
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(lines.joined(separator: "\n"), forType: .string)
     }
 
     /// 跳到最新 K 线（保持 visibleCount · 滚到最右）· ⌘End / ⌘→ 共用

@@ -1052,14 +1052,15 @@ struct AlertWindow: View {
             .onTapGesture {
                 expandedHistoryID = isExpanded ? nil : e.id
             }
-            // v15.20 batch77 · 历史 row 右键 contextMenu（复盘效率 · 与 batch62 alert row 同模式）
+            // v15.20 batch77 · 历史 row 右键 contextMenu · v15.21 batch132 · 复制项收成 Menu
             .contextMenu {
-                Button("复制详情") { copyHistoryDetail(e) }
-                Button("复制时间戳") { copyHistoryTimestamp(e) }
-                // v15.21 batch122 · 复制本条一行紧凑文本（IM 单条快速分享）
-                Button("复制本条一行") {
-                    let line = "\(Self.timeFormatter.string(from: e.triggeredAt)) | \(e.alertName) | \(e.instrumentID) @ \(fmtDecimal(e.triggerPrice)) | \(e.conditionSnapshot.displayDescription)"
-                    Pasteboard.copy(line)
+                Menu("📋 复制") {
+                    Button("详情") { copyHistoryDetail(e) }
+                    Button("时间戳") { copyHistoryTimestamp(e) }
+                    Button("本条一行（紧凑）") {
+                        let line = "\(Self.timeFormatter.string(from: e.triggeredAt)) | \(e.alertName) | \(e.instrumentID) @ \(fmtDecimal(e.triggerPrice)) | \(e.conditionSnapshot.displayDescription)"
+                        Pasteboard.copy(line)
+                    }
                 }
                 if alertStillExists {
                     Button("跳到对应预警") {
@@ -1068,7 +1069,6 @@ struct AlertWindow: View {
                         alertInstrumentFilter = ""
                     }
                 }
-                Divider()
                 Button(isExpanded ? "收起详情" : "展开详情") {
                     expandedHistoryID = isExpanded ? nil : e.id
                 }

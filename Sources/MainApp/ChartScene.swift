@@ -3201,26 +3201,26 @@ struct ChartContentView: View {
                 Button("复制 hover 价 \(formatPrice(hp.price))") {
                     copyPriceToPasteboard(hp.price)
                 }
-                // v15.21 batch96 · 复制 hover 落在的 K 线 OHLC 完整数据（trader 截一根关键 bar 给同事 / 笔记）
+                // v15.21 batch132 · hover 复制相关收成 Menu（原 5 项扁平 → 1 Menu · 减视觉干扰）
                 if hp.barIndex >= 0 && hp.barIndex < bars.count {
                     let bar = bars[hp.barIndex]
-                    // v15.21 batch100 · 复制 hover K 线时间戳（trader 标关键时间点 · 写笔记/盘后复盘）
-                    Button("复制 hover 时间 \(formatBarTime(bar.openTime))") {
-                        Pasteboard.copy(formatBarTime(bar.openTime))
-                    }
-                    // v15.21 batch113 · 复制 Unix 时间戳（trader 写量化脚本 / 回测 epoch 秒）
-                    Button("复制 hover Unix 时间戳（\(Int(bar.openTime.timeIntervalSince1970))）") {
-                        Pasteboard.copy(String(Int(bar.openTime.timeIntervalSince1970)))
-                    }
-                    Button("复制本根 K 线 OHLC") {
-                        copyBarOHLC(at: hp.barIndex)
-                    }
-                    // v15.21 batch112 · 复制 hover 周边 N 根 K 线 Markdown（trader 复盘关键区段 · 突破前后）
-                    Menu("复制周边 K 线（Markdown）") {
-                        Button("前 5 根") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 5, after: 0) }
-                        Button("后 5 根") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 0, after: 5) }
-                        Button("前后各 5 根（共 11）") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 5, after: 5) }
-                        Button("前后各 10 根（共 21）") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 10, after: 10) }
+                    Menu("📋 复制 hover K 线信息") {
+                        Button("时间 \(formatBarTime(bar.openTime))") {
+                            Pasteboard.copy(formatBarTime(bar.openTime))
+                        }
+                        Button("Unix 时间戳 \(Int(bar.openTime.timeIntervalSince1970))") {
+                            Pasteboard.copy(String(Int(bar.openTime.timeIntervalSince1970)))
+                        }
+                        Button("本根 OHLC（4 行结构化）") {
+                            copyBarOHLC(at: hp.barIndex)
+                        }
+                        Divider()
+                        Menu("周边 K 线（Markdown 表格）") {
+                            Button("前 5 根") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 5, after: 0) }
+                            Button("后 5 根") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 0, after: 5) }
+                            Button("前后各 5 根（共 11）") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 5, after: 5) }
+                            Button("前后各 10 根（共 21）") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 10, after: 10) }
+                        }
                     }
                 }
                 Divider()

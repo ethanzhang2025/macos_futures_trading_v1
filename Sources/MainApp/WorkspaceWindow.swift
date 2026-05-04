@@ -205,14 +205,21 @@ struct WorkspaceWindow: View {
                 .buttonStyle(.borderless)
                 .help("导出 JSON · 当前 \(book.templates.count) 个模板")
                 .disabled(book.templates.isEmpty)
-                Button {
-                    sheetState = .addTemplate
+                Menu {
+                    Button("空白模板…") { sheetState = .addTemplate }
+                        .keyboardShortcut("k", modifiers: [.command, .shift])
+                    Divider()
+                    Text("📋 场景预设（trader 一键）").font(.caption).foregroundColor(.secondary)
+                    ForEach(WorkspaceScenePreset.allCases) { preset in
+                        Button(preset.displayName) { addPresetTemplate(preset) }
+                            .help(preset.helpText)
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
-                .buttonStyle(.borderless)
-                .help("添加模板（⌘⇧K）")
-                .keyboardShortcut("k", modifiers: [.command, .shift])
+                .menuStyle(.borderlessButton)
+                .frame(maxWidth: 28)
+                .help("添加模板 / 场景预设")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -579,6 +586,15 @@ struct WorkspaceWindow: View {
     private func addTemplate(name: String, kind: WorkspaceTemplate.Kind) {
         guard let trimmed = name.trimmedOrNil else { return }
         let template = book.addTemplate(name: trimmed, kind: kind)
+        selectedTemplateID = template.id
+    }
+
+    /// v15.19 batch38 · 一键场景预设新建（盯盘 / 复盘 / 训练 / 盘前 / 盘后）
+    private func addPresetTemplate(_ preset: WorkspaceScenePreset) {
+        let preset = preset.makeTemplate()
+        let template = book.addTemplate(
+            name: preset.name, kind: preset.kind, windows: preset.windows
+        )
         selectedTemplateID = template.id
     }
 

@@ -3939,8 +3939,8 @@ struct ChartContentView: View {
         guard let last = visibleLastBar else { return nil }
         let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count) - 1
         let priorStart = max(0, visibleEnd - 5)
-        let prior = bars[priorStart..<max(priorStart, visibleEnd)]
-        guard prior.count >= 1 else { return nil }
+        let prior = bars[priorStart..<visibleEnd]   // priorStart ≤ visibleEnd 由上一行保证
+        guard !prior.isEmpty else { return nil }
         let avg = Double(prior.map(\.volume).reduce(0, +)) / Double(prior.count)
         guard avg > 0 else { return nil }
         return Double(last.volume) / avg

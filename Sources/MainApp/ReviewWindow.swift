@@ -32,9 +32,9 @@ struct ReviewWindow: View {
         let content: AnyView
     }
 
-    /// v15.20 batch60 · 从 AppStorage rawTag 解析（dateFilter 计算属性 · 写入时反序）
+    /// v15.20 batch60 · 从 AppStorage rawTag 解析（dateFilter 计算属性 · 写入用 setDateFilter）
     private var dateFilter: ReviewDateFilter {
-        get { ReviewDateFilter.fromRawTag(dateFilterRawTag) ?? .all }
+        ReviewDateFilter.fromRawTag(dateFilterRawTag) ?? .all
     }
     private func setDateFilter(_ filter: ReviewDateFilter) {
         dateFilterRawTag = filter.rawTag

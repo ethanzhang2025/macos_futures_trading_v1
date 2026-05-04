@@ -83,9 +83,9 @@ struct WatchlistWindow: View {
     /// v15.20 batch61 · 跨分组聚合视图（trader 涨幅榜扫盘 · 不用切分组找涨幅大的）
     @State private var showAllAggregated: Bool = false
 
-    /// 解析 sortField · raw 不合法 fallback .manual
+    /// 解析 sortField · raw 不合法 fallback .manual（写入用 setSortField）
     private var sortField: WatchlistSortField {
-        get { WatchlistSortField(rawValue: sortFieldRaw) ?? .manual }
+        WatchlistSortField(rawValue: sortFieldRaw) ?? .manual
     }
     private func setSortField(_ field: WatchlistSortField) {
         sortFieldRaw = field.rawValue
@@ -266,8 +266,8 @@ struct WatchlistWindow: View {
            book.groups.contains(where: { $0.id == target }) {
             groupID = target
         } else {
-            let name = newGroupName?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let resolvedName = (name?.isEmpty ?? true) ? "粘贴导入" : name!
+            let trimmed = newGroupName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let resolvedName = trimmed.isEmpty ? "粘贴导入" : trimmed
             let newGroup = book.addGroup(name: resolvedName, now: Date())
             groupID = newGroup.id
         }

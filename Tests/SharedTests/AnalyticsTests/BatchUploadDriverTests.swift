@@ -172,6 +172,71 @@ struct BatchUploadDriverRetryTests {
     }
 }
 
+@Suite("BatchUploadDriver · onFailure callback（v15.18）")
+struct BatchUploadDriverFailureCallbackTests {
+
+    /// 失败计数 actor（@Sendable closure 共享状态）
+    private actor FailureCounter {
+        var count: Int = 0
+        var lastConsecutive: Int = 0
+        func record(consecutive: Int) {
+            count += 1
+            lastConsecutive = consecutive
+        }
+    }
+
+    @Test("upload 失败 · onFailure 被调用 · 携带连续失败次数")
+    func failureCallbackInvoked() async throws {
+        let store = InMemoryAnalyticsEventStore()
+        let client = StubBatchUploadClient(mode: .alwaysFail("test"))
+        _ = try await store.append(AnalyticsEvent(
+            userID: "u", deviceID: "d", eventName: .appLaunch, eventTimestampMs: 1
+        ))
+
+        let counter = FailureCounter()
+        let driver = BatchUploadDriver(
+            store: store, client: client,
+            batchSize: 10, timeTriggerMs: 0, pollIntervalSec: 30,
+            onFailure: { consec, _, _ in
+                await counter.record(consecutive: consec)
+            }
+        )
+        await driver.tickNow()
+        // 给 callback Task 执行机会
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        let cnt = await counter.count
+        let lastConsec = await counter.lastConsecutive
+        #expect(cnt == 1)
+        #expect(lastConsec == 1)
+        #expect(await driver.consecutiveFailureCount() == 1)
+    }
+
+    @Test("连续 3 次失败 · onFailure 累计到 3 · 成功一次后清零")
+    func consecutiveFailuresThenReset() async throws {
+        let store = InMemoryAnalyticsEventStore()
+        let client = StubBatchUploadClient(mode: .alwaysFail("test"))
+        _ = try await store.append(AnalyticsEvent(
+            userID: "u", deviceID: "d", eventName: .appLaunch, eventTimestampMs: 1
+        ))
+
+        let counter = FailureCounter()
+        let driver = BatchUploadDriver(
+            store: store, client: client,
+            batchSize: 10, timeTriggerMs: 0, pollIntervalSec: 30,
+            onFailure: { consec, _, _ in await counter.record(consecutive: consec) }
+        )
+        for _ in 0..<3 { await driver.tickNow() }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        #expect(await counter.lastConsecutive == 3)
+        #expect(await driver.consecutiveFailureCount() == 3)
+
+        // 切回 success · 一次成功后 consecutive 清零
+        await client.setMode(.success)
+        await driver.tickNow()
+        #expect(await driver.consecutiveFailureCount() == 0)
+    }
+}
+
 @Suite("BatchUploadDriver · 生命周期")
 struct BatchUploadDriverLifecycleTests {
 

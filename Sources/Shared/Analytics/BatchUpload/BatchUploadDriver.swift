@@ -26,6 +26,11 @@ public actor BatchUploadDriver {
     private let now: @Sendable () -> Date
     private let sleep: @Sendable (UInt64) async throws -> Void
 
+    // v15.18 · 失败回调（caller 监听 · 可用于 emit banner / 上报监控）
+    /// (failureCount, batchSize, error) → Void
+    public typealias FailureCallback = @Sendable (Int, Int, Error) async -> Void
+    private let onFailure: FailureCallback?
+
     // MARK: - 状态
 
     private var pollTask: Task<Void, Never>?
@@ -35,6 +40,8 @@ public actor BatchUploadDriver {
     private var attempts: Int = 0
     private var successes: Int = 0
     private var failures: Int = 0
+    /// v15.18 · 连续失败次数（成功时清零 · onFailure 可决定 N 连败时降级）
+    private var consecutiveFailures: Int = 0
 
     // MARK: - 初始化
 
@@ -45,7 +52,8 @@ public actor BatchUploadDriver {
         timeTriggerMs: Int64 = 5 * 60 * 1000,
         pollIntervalSec: UInt64 = 30,
         now: @escaping @Sendable () -> Date = { Date() },
-        sleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }
+        sleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) },
+        onFailure: FailureCallback? = nil
     ) {
         self.store = store
         self.client = client
@@ -54,6 +62,7 @@ public actor BatchUploadDriver {
         self.pollIntervalSec = pollIntervalSec
         self.now = now
         self.sleep = sleep
+        self.onFailure = onFailure
     }
 
     // MARK: - 生命周期
@@ -122,9 +131,17 @@ public actor BatchUploadDriver {
             try await client.upload(pending)
             try await store.markUploaded(ids: pending.map(\.id))
             successes += 1
+            consecutiveFailures = 0
         } catch {
             failures += 1
+            consecutiveFailures += 1
             // 不 markUploaded · 下轮 queryPending 仍返回这些事件 · 自然重试
+            // v15.18 · 触发 onFailure callback（caller 可 emit banner 或上报监控）
+            if let cb = onFailure {
+                let consec = consecutiveFailures
+                let count = pending.count
+                Task { await cb(consec, count, error) }
+            }
         }
     }
 
@@ -133,4 +150,7 @@ public actor BatchUploadDriver {
     public func snapshot() -> (attempts: Int, successes: Int, failures: Int, lastAttemptMs: Int64) {
         (attempts, successes, failures, lastUploadAttemptMs)
     }
+
+    /// v15.18 · 当前连续失败次数（caller 决定降级阈值）
+    public func consecutiveFailureCount() -> Int { consecutiveFailures }
 }

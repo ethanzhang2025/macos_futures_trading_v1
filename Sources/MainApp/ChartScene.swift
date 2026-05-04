@@ -11,6 +11,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import Metal
 import Shared
 import DataCore
@@ -1022,7 +1023,18 @@ struct ChartScene: View {
                     saveCurrentAsTemplate(drawing)
                 }
             }
+            // v15.18+ batch15 · 画线模板 JSON 导出 / 导入（跨设备同步 · 与 PreferenceExporter 同模式）
+            Divider()
             if !drawingTemplates.isEmpty {
+                Button("导出全部模板为 JSON…") {
+                    exportDrawingTemplates()
+                }
+            }
+            Button("从 JSON 导入模板…") {
+                importDrawingTemplates()
+            }
+            if !drawingTemplates.isEmpty {
+                Divider()
                 Button("删除全部模板（\(drawingTemplates.count) 个）", role: .destructive) {
                     confirmDeleteAllTemplates()
                 }
@@ -1124,6 +1136,99 @@ struct ChartScene: View {
         alert.addButton(withTitle: "取消")
         if alert.runModal() == .alertFirstButtonReturn {
             drawingTemplates.removeAll()
+        }
+    }
+
+    /// v15.18+ batch15 · 画线模板 JSON 导出（NSSavePanel · trader 跨设备同步个人画线风格）
+    @MainActor
+    private func exportDrawingTemplates() {
+        let panel = NSSavePanel()
+        panel.title = "导出画线模板"
+        panel.allowedContentTypes = [.json]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        panel.nameFieldStringValue = "drawing_templates_\(dateFmt.string(from: Date())).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try DrawingTemplateExporter.export(drawingTemplates)
+            try data.write(to: url, options: .atomic)
+            let success = NSAlert()
+            success.messageText = "导出成功"
+            success.informativeText = "已导出 \(drawingTemplates.count) 个模板到 \(url.lastPathComponent)。"
+            success.addButton(withTitle: "好")
+            success.runModal()
+        } catch {
+            let err = NSAlert()
+            err.messageText = "导出失败"
+            err.informativeText = error.localizedDescription
+            err.alertStyle = .warning
+            err.addButton(withTitle: "好")
+            err.runModal()
+        }
+    }
+
+    /// v15.18+ batch15 · 画线模板 JSON 导入（NSOpenPanel · 默认合并模式 · 同 id 跳过防覆盖 · 用户可改替换模式）
+    @MainActor
+    private func importDrawingTemplates() {
+        let panel = NSOpenPanel()
+        panel.title = "导入画线模板"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            let err = NSAlert()
+            err.messageText = "读取失败"
+            err.informativeText = error.localizedDescription
+            err.alertStyle = .warning
+            err.addButton(withTitle: "好")
+            err.runModal()
+            return
+        }
+        // 让用户选合并模式 · 默认合并（保留已有 · 添加新）· 高级用户可选替换
+        let modeAlert = NSAlert()
+        modeAlert.messageText = "导入模板"
+        modeAlert.informativeText = "选择合并模式：\n· 合并：保留已有模板 · 添加新模板（同 id 跳过）\n· 替换：清空已有 · 全用导入版"
+        modeAlert.addButton(withTitle: "合并")
+        modeAlert.addButton(withTitle: "替换")
+        modeAlert.addButton(withTitle: "取消")
+        let response = modeAlert.runModal()
+        let mode: DrawingTemplateExporter.ImportMode
+        switch response {
+        case .alertFirstButtonReturn:  mode = .append
+        case .alertSecondButtonReturn: mode = .replace
+        default: return
+        }
+        do {
+            let merged = try DrawingTemplateExporter.import(from: data, into: drawingTemplates, mode: mode)
+            let added = merged.count - (mode == .append ? drawingTemplates.count : 0)
+            drawingTemplates = merged
+            let success = NSAlert()
+            success.messageText = "导入成功"
+            switch mode {
+            case .append:
+                success.informativeText = "新增 \(max(0, added)) 个模板（共 \(merged.count) 个）。"
+            case .replace:
+                success.informativeText = "已替换为 \(merged.count) 个模板。"
+            }
+            success.addButton(withTitle: "好")
+            success.runModal()
+        } catch {
+            let err = NSAlert()
+            err.messageText = "导入失败"
+            switch error {
+            case DrawingTemplateExporter.ImportError.invalidJSON:
+                err.informativeText = "文件不是有效的画线模板 JSON。"
+            case DrawingTemplateExporter.ImportError.unsupportedVersion(let v):
+                err.informativeText = "不支持的版本 \(v)（当前仅支持 v1）。"
+            default:
+                err.informativeText = error.localizedDescription
+            }
+            err.alertStyle = .warning
+            err.addButton(withTitle: "好")
+            err.runModal()
         }
     }
 

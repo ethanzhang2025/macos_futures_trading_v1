@@ -2398,6 +2398,8 @@ struct ChartContentView: View {
                 // v13.1 浏览模式 hit-test 层（点击 anchor ±15 像素阈值 selected）
                 drawingHitTestLayer
             }
+            // v15.20 batch66 · 测距双锚点视觉 marker（在 K 线层之上 · 不拦截 hover）
+            measurementMarkers
         }
         .overlay(alignment: .topTrailing) {
             // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
@@ -2605,6 +2607,62 @@ struct ChartContentView: View {
         .background(chartTheme.hudBackground)
         .cornerRadius(6)
         .padding(12)
+    }
+
+    /// v15.20 batch66 · 测距双锚点视觉 marker（trader 直观看测距范围 · 配合 batch63 三态 HUD）
+    /// anchor 始终绿色实心 · endpoint 锁定红色 / 跟随蓝色 · 中间虚线连接
+    @ViewBuilder
+    private var measurementMarkers: some View {
+        if let anchor = measureAnchor {
+            let endpoint: DrawingPoint? = measureFinal ?? hoverDataPoint
+            let isLocked = measureFinal != nil
+            GeometryReader { geom in
+                let visibleCount = max(1, viewport.visibleCount)
+                let barWidth = geom.size.width / CGFloat(visibleCount)
+                let xOffset = CGFloat(viewport.startOffset)
+                let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+                let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+                let span = max(0.0001, hi - lo)
+
+                let anchorPos = measurePointToScreen(anchor, geomSize: geom.size, barWidth: barWidth, xOffset: xOffset, hi: hi, span: span)
+                let endPos = endpoint.map { measurePointToScreen($0, geomSize: geom.size, barWidth: barWidth, xOffset: xOffset, hi: hi, span: span) }
+
+                // 起点 marker（绿色环 + 中心点）
+                Circle()
+                    .strokeBorder(Color.green, lineWidth: 2)
+                    .background(Circle().fill(Color.white.opacity(0.85)))
+                    .frame(width: 12, height: 12)
+                    .position(anchorPos)
+
+                if let endPos {
+                    // 中间连接虚线
+                    Path { p in
+                        p.move(to: anchorPos)
+                        p.addLine(to: endPos)
+                    }
+                    .stroke(
+                        isLocked ? Color.green.opacity(0.7) : Color.blue.opacity(0.55),
+                        style: StrokeStyle(lineWidth: 1.2, dash: [5, 3])
+                    )
+
+                    // 终点 marker（锁定红色实心 / 跟随蓝色环）
+                    Circle()
+                        .fill(isLocked ? Color.red : Color.clear)
+                        .overlay(Circle().strokeBorder(isLocked ? Color.red : Color.blue, lineWidth: 2))
+                        .frame(width: 12, height: 12)
+                        .position(endPos)
+                }
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// v15.20 batch66 · DrawingPoint → 屏幕坐标（与 hitTest 用同一坐标系 · 价格越高 y 越小）
+    private func measurePointToScreen(_ pt: DrawingPoint, geomSize: CGSize, barWidth: CGFloat, xOffset: CGFloat, hi: Double, span: Double) -> CGPoint {
+        let x = (CGFloat(pt.barIndex - viewport.startIndex) + 0.5 - xOffset) * barWidth
+        let priceD = NSDecimalNumber(decimal: pt.price).doubleValue
+        let y = CGFloat((hi - priceD) / span) * geomSize.height
+        return CGPoint(x: x, y: y)
     }
 
     /// v15.19 batch30 + v15.20 batch63 · 测距 HUD（三态）

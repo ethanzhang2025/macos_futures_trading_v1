@@ -831,6 +831,9 @@ struct ChartScene: View {
             // v15.20 batch70 · ⌘⇧X 复制测距详情到剪贴板（trader IM 分享测距结果）
             Button("", action: copyMeasurementToPasteboard)
                 .keyboardShortcut("x", modifiers: [.command, .shift])
+            // v15.20 batch74 · ⌘/ 切换快捷键提示浮窗（trader 不记快捷键时随时查询）
+            Button("") { showShortcutsHelp.toggle() }
+                .keyboardShortcut("/", modifiers: [.command])
             // v15.19 batch36 · ⌘End / ⌘→ 跳到最新 K 线（保持 visibleCount · 仅滚到最右）
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.end, modifiers: [.command])
@@ -2065,6 +2068,9 @@ struct ChartContentView: View {
     /// v15.20 batch63 · 测距固定终点（双锚点 · ⌘⇧M 第二次按下时固定）
     @State private var measureFinal: DrawingPoint?
 
+    /// v15.20 batch74 · 快捷键提示浮窗显隐（⌘/ 切换）
+    @State private var showShortcutsHelp: Bool = false
+
     /// v15.19 batch30 · 快捷测距锚点（⌘⇧M 设 · 再按取消）· 配合 hoverDataPoint 实时显示距离
     @State var measureAnchor: DrawingPoint?
     /// v15.19 batch51 · 副图显隐切换（⌘. · 默认显示）· trader 专注主图分析时清屏
@@ -2424,6 +2430,10 @@ struct ChartContentView: View {
             // v15.19 batch43 · hover 价距 visible 高/低 % HUD（trader 评估当前位置 · priceTopBar 下方）
             hoverPositionHUD
         }
+        .overlay {
+            // v15.20 batch74 · 快捷键提示浮窗（⌘/ 切换 · 居中半透明覆盖）
+            if showShortcutsHelp { shortcutsHelpOverlay }
+        }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
         .background(
@@ -2605,6 +2615,73 @@ struct ChartContentView: View {
             startIndex: max(0, bars.count - visible),
             visibleCount: visible
         )
+    }
+
+    /// v15.20 batch74 · 主图快捷键提示浮窗（⌘/ 切换 · trader 不记快捷键时随时查询）
+    /// 居中半透明覆盖 · 6 大类分组：周期 / 视口 / 测距 / 显隐 / 主题 / 工作流
+    @ViewBuilder
+    private var shortcutsHelpOverlay: some View {
+        let groups: [(String, [(String, String)])] = [
+            ("周期切换", [
+                ("⌘1-6", "主图周期 1m/5m/15m/30m/1h/D"),
+                ("⌥1-9", "全 9 周期 1/3/5/15/30/60/4h/D/W"),
+            ]),
+            ("视口操作", [
+                ("⌘= / ⌘-", "缩放放大 / 缩小"),
+                ("⌘0", "重置缩放（最近 120 根）"),
+                ("← / →", "平移 5 根 K 线"),
+                ("⇧← / ⇧→", "平移 25 根 K 线"),
+                ("⌘End / ⌘→", "跳到最新 K 线"),
+            ]),
+            ("测距分析", [
+                ("⌘⇧M", "测距三态 起 → 终 → 退出"),
+                ("⌘⇧X", "复制测距详情到剪贴板"),
+            ]),
+            ("显隐切换", [
+                ("⌘.", "副图显隐"),
+                ("⌘\\", "画线 overlay 显隐"),
+                ("⌘⇧H", "HUD 显隐"),
+            ]),
+            ("主题 / 截图", [
+                ("⌘⇧D", "切换深色 / 浅色主题"),
+            ]),
+            ("帮助", [
+                ("⌘/", "切换本浮窗"),
+            ]),
+        ]
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("⌨️ 快捷键").font(.title3).bold()
+                Spacer()
+                Button { showShortcutsHelp = false } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
+            }
+            Divider()
+            ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
+                Text(group.0).font(.headline)
+                ForEach(Array(group.1.enumerated()), id: \.offset) { _, pair in
+                    HStack(spacing: 16) {
+                        Text(pair.0)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(.accentColor)
+                            .frame(width: 110, alignment: .leading)
+                        Text(pair.1)
+                            .font(.system(size: 12))
+                    }
+                }
+            }
+            Divider()
+            Text("⌘/ 关闭")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(20)
+        .frame(width: 480)
+        .background(chartTheme.hudBackground)
+        .cornerRadius(8)
+        .shadow(radius: 12)
     }
 
     /// v15.19 batch33 · 缩放快捷栏（左下角浮按钮 · 鼠标 / 触屏用户友好）· 与 ⌘0/⌘=/⌘- 互补

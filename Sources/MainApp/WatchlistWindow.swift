@@ -344,6 +344,7 @@ struct WatchlistWindow: View {
 
     private func instrumentRow(id: String, index: Int, groupID: UUID) -> some View {
         let change = changePctText(for: id)
+        let pctValue = parseChangePct(change)
         return HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.5))
@@ -354,11 +355,13 @@ struct WatchlistWindow: View {
                 .frame(width: 100, alignment: .leading)
             Text(priceText(for: id))
                 .font(.system(.body, design: .monospaced))
+                .foregroundColor(Self.priceColor(pctValue))
                 .frame(width: 90, alignment: .trailing)
             Spacer().frame(width: 16)
             Text(change)
                 .font(.system(.body, design: .monospaced))
-                .foregroundColor(change.hasPrefix("-") ? .green : .red)
+                .fontWeight(abs(pctValue ?? 0) >= 2 ? .bold : .regular)
+                .foregroundColor(Self.priceColor(pctValue))
                 .frame(width: 80, alignment: .trailing)
             Spacer().frame(width: 16)
             Text(openInterestText(for: id))
@@ -655,6 +658,25 @@ struct WatchlistWindow: View {
             return String(format: "%+.2f%%", pct)
         }
         return MockQuote.changePct(for: id)
+    }
+
+    /// 解析涨跌幅文本 → 百分点（"+1.23%" → 1.23）· "—" / 不可解析 → nil
+    private func parseChangePct(_ text: String) -> Double? {
+        let t = text.replacingOccurrences(of: "%", with: "")
+        return Double(t)
+    }
+
+    /// 涨跌幅渐变染色（trader 一眼扫盘）· 中国期货习惯：涨红 / 跌绿
+    /// |Δ| ≤ 0.5%：primary 不染 · ≤ 1%：浅 · ≤ 2%：标准 · > 2%：深
+    static func priceColor(_ pct: Double?) -> Color {
+        guard let p = pct else { return .secondary }
+        let abs = Swift.abs(p)
+        if abs < 0.5 { return .primary }
+        let isUp = p > 0
+        // 颜色台阶（与中国期货软件一致 · 涨红跌绿）
+        if abs >= 2 { return isUp ? Color(red: 0.85, green: 0.10, blue: 0.10) : Color(red: 0.05, green: 0.55, blue: 0.20) }
+        if abs >= 1 { return isUp ? Color(red: 0.92, green: 0.30, blue: 0.30) : Color(red: 0.20, green: 0.65, blue: 0.30) }
+        return isUp ? Color(red: 0.96, green: 0.55, blue: 0.45) : Color(red: 0.50, green: 0.75, blue: 0.45)
     }
 
     /// 持仓量文本 · ≥1M 用 M / ≥1K 用 K · 真值 fallback Mock

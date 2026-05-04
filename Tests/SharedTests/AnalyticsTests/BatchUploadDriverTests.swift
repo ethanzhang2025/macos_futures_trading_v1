@@ -226,7 +226,11 @@ struct BatchUploadDriverFailureCallbackTests {
             onFailure: { consec, _, _ in await counter.record(consecutive: consec) }
         )
         for _ in 0..<3 { await driver.tickNow() }
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        // 轮询等待 callback 到达（fire-and-forget Task · 不可靠 sleep · 最多 1s）
+        for _ in 0..<20 {
+            if await counter.lastConsecutive == 3 { break }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
         #expect(await counter.lastConsecutive == 3)
         #expect(await driver.consecutiveFailureCount() == 3)
 

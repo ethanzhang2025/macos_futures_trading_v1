@@ -382,6 +382,17 @@ struct WatchlistWindow: View {
                 Text("· \(ids.count) 合约（去重）")
                     .font(.caption).foregroundColor(.secondary)
                 Spacer()
+                // v15.20 batch68 · 涨幅/跌幅前 N 一键批量预警（聚合扫盘 + AlertPreset 联动）
+                Menu {
+                    Button("涨幅前 5 → 涨停预警")  { batchAlertTopMovers(topN: 5,  ascending: false, preset: .limitUp) }
+                    Button("涨幅前 10 → 涨停预警") { batchAlertTopMovers(topN: 10, ascending: false, preset: .limitUp) }
+                    Divider()
+                    Button("跌幅前 5 → 跌停预警")  { batchAlertTopMovers(topN: 5,  ascending: true,  preset: .limitDown) }
+                    Button("跌幅前 10 → 跌停预警") { batchAlertTopMovers(topN: 10, ascending: true,  preset: .limitDown) }
+                } label: {
+                    Label("批量预警", systemImage: "bell.badge")
+                }
+                .help("按涨跌幅排序后取前 N · 一键创建涨/跌停预警 · 默认 paused 防触发风暴")
                 Button("退出聚合视图") { showAllAggregated = false }
                     .buttonStyle(.borderless)
                     .help("回到分组视图")
@@ -918,6 +929,26 @@ struct WatchlistWindow: View {
         let alerts = AlertPreset.makeAlerts(AlertPreset.allCases, instrumentID: instrumentID, lastPrice: lastPrice)
         for a in alerts {
             NotificationCenter.default.post(name: .alertAddedFromChart, object: a)
+        }
+    }
+
+    /// v15.20 batch68 · 涨幅/跌幅前 N 一键批量预警（聚合扫盘 + AlertPreset 联动）
+    /// - 按涨跌幅排序（沿用 WatchlistSorter）取前 N · 给每个合约创建一条 preset 预警
+    /// - 通过 NotificationCenter.alertAddedFromChart 投递到 AlertWindow（AlertWindow.append 自动 evaluator sync）
+    /// - 没有有效涨跌幅数据的合约自动跳过（nil key 排末尾 · 取前 N 时已过滤）
+    @MainActor
+    private func batchAlertTopMovers(topN: Int, ascending: Bool, preset: AlertPreset) {
+        let sortedIDs = WatchlistSorter.sort(
+            ids: aggregatedInstrumentIDs,
+            field: .changePct,
+            ascending: ascending,
+            keyForID: { id in parseChangePct(changePctText(for: id)) }
+        )
+        // 跳过 nil 涨跌幅（数据未拉到的）· 真实涨跌幅排序的前 N
+        let valid = sortedIDs.filter { parseChangePct(changePctText(for: $0)) != nil }
+        let target = Array(valid.prefix(topN))
+        for id in target {
+            createAlertPreset(preset, instrumentID: id)
         }
     }
 

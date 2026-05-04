@@ -545,6 +545,11 @@ struct WatchlistWindow: View {
             // v15.21 batch97 · 复制合约代码 / 最新价（与单组 row 一致）
             Button("复制合约代码 \(id)") { Pasteboard.copy(id) }
             Button("复制最新价 \(priceText(for: id))") { Pasteboard.copy(priceText(for: id)) }
+            // v15.21 batch115 · 复制行所有信息（与单组 row 一致）
+            Button("复制行所有信息") {
+                let line = "\(id)  \(priceText(for: id))  \(changePctText(for: id))  持仓\(openInterestText(for: id))"
+                Pasteboard.copy(line)
+            }
             Divider()
             Menu("📋 创建预警模板") {
                 ForEach(AlertPreset.allCases) { preset in
@@ -717,6 +722,11 @@ struct WatchlistWindow: View {
             }
             Button("复制最新价 \(priceText(for: id))") {
                 Pasteboard.copy(priceText(for: id))
+            }
+            // v15.21 batch115 · 复制行所有信息（合约 + 价 + 涨跌 + 持仓 · 一行文本 · trader 截行情发邮件）
+            Button("复制行所有信息") {
+                let line = "\(id)  \(priceText(for: id))  \(changePctText(for: id))  持仓\(openInterestText(for: id))"
+                Pasteboard.copy(line)
             }
             Divider()
             Menu("📋 创建预警模板") {

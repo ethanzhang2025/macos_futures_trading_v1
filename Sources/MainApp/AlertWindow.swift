@@ -879,6 +879,10 @@ struct AlertWindow: View {
                 .disabled(filteredHistory.isEmpty)
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .help("导出当前筛选窗口的触发历史为 CSV · ⌘⇧E")
+            // v15.21 batch111 · 复制为 Markdown 表格（不弹保存 · 直接 Pasteboard · trader 贴 IM/邮件）
+            Button("复制 Markdown") { copyHistoryAsMarkdown() }
+                .disabled(filteredHistory.isEmpty)
+                .help("把当前筛选窗口的触发历史复制为 Markdown 表格到剪贴板")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -929,6 +933,25 @@ struct AlertWindow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Color.secondary.opacity(0.06))
+    }
+
+    /// v15.21 batch111 · 复制当前筛选窗口的触发历史为 Markdown 表格（直接 Pasteboard · 不弹保存）
+    @MainActor
+    private func copyHistoryAsMarkdown() {
+        let entries = filteredHistory
+        guard !entries.isEmpty else { return }
+        var lines: [String] = []
+        lines.append("| 时间 | 预警 | 合约 | 触发价 | 条件 | 通道 |")
+        lines.append("|---|---|---|---|---|---|")
+        for e in entries {
+            let t = Self.timeFormatter.string(from: e.triggeredAt)
+            let price = fmtDecimal(e.triggerPrice)
+            let condition = e.conditionSnapshot.displayDescription
+            let channels = e.channelsTriggered.map(\.shortLabel).sorted().joined(separator: "·")
+            lines.append("| \(t) | \(e.alertName) | \(e.instrumentID) | \(price) | \(condition) | \(channels) |")
+        }
+        Pasteboard.copy(lines.joined(separator: "\n"))
+        Toast.info("已复制", "\(entries.count) 条触发历史 → Markdown 表格已在剪贴板。")
     }
 
     /// AlertHistory CSV 导出（NSSavePanel · UTF-8 BOM · trader 报税 / 复盘归档）

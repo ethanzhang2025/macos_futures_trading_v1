@@ -829,6 +829,9 @@ struct ChartScene: View {
             // v15.19 batch51 · ⌘. 切换副图显隐（专注主图分析时清屏 · 与 ⌘⇧H HUD toggle 风格一致）
             Button("") { showSubCharts.toggle() }
                 .keyboardShortcut(".", modifiers: [.command])
+            // v15.19 batch52 · ⌘\ 切换画线 overlay 显隐（专注裸 K 线 · 不删画线 · 仅暂时隐藏）
+            Button("") { showDrawings.toggle() }
+                .keyboardShortcut("\\", modifiers: [.command])
             // v15.19 batch28 · ⌥1-9 全 9 个常用周期一键切（trader 高频工作流 · 与 ⌘1-6 互补）
             Button("") { selectedPeriod = .minute1 }
                 .keyboardShortcut("1", modifiers: [.option])
@@ -2053,6 +2056,8 @@ struct ChartContentView: View {
     @State var measureAnchor: DrawingPoint?
     /// v15.19 batch51 · 副图显隐切换（⌘. · 默认显示）· trader 专注主图分析时清屏
     @State var showSubCharts: Bool = true
+    /// v15.19 batch52 · 画线 overlay 显隐切换（⌘\ · 默认显示）· trader 看裸 K 线时隐藏所有画线
+    @State var showDrawings: Bool = true
     /// v13.20 副图区总高度 · 用户拖分割条调整 · 范围 80~480pt（默认 160 = subChartHeight 单副图）
     /// v15.16 hotfix #13：init 时同步 load · 防 ChartContentView 切合约重建时 onAppear 异步加载导致 160→保存值闪烁
     @State var subChartTotalHeight: CGFloat = {
@@ -2360,15 +2365,18 @@ struct ChartContentView: View {
             todaysOpenLine
             // v13.0 WP-42 画线 overlay 渲染层（在十字光标上 · HUD 下）
             // v13.3 pendingDrawing 接 pendingDrawingPoint + hoverDataPoint 实时预览第二点（虚线）
-            DrawingsOverlayView(
-                bars: bars,
-                viewport: viewport,
-                priceRange: currentPriceRange,
-                drawings: drawings,
-                selectedIDs: selectedDrawingIDs,
-                pendingDrawing: pendingPreviewDrawing,
-                textDefaultColor: chartTheme.textPrimary
-            )
+            // v15.19 batch52 · showDrawings false 时隐藏 overlay（专注裸 K 线分析）
+            if showDrawings {
+                DrawingsOverlayView(
+                    bars: bars,
+                    viewport: viewport,
+                    priceRange: currentPriceRange,
+                    drawings: drawings,
+                    selectedIDs: selectedDrawingIDs,
+                    pendingDrawing: pendingPreviewDrawing,
+                    textDefaultColor: chartTheme.textPrimary
+                )
+            }
             // v13.34 HUD 显示在 4 角之一（用户偏好 · UserDefaults 持久化）· 默认左上
             if showHUD {
                 hudCornerOverlay

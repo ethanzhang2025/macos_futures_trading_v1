@@ -3207,6 +3207,12 @@ struct ChartContentView: View {
                 }
                 Divider()
             }
+            // v15.21 batch129 · 跨窗口联动 · 看本合约预警（与 batch128 watchlist 一致）
+            Button("查看本合约预警（\(currentInstrumentID)）") {
+                NotificationCenter.default.post(name: .alertWindowFilterToInstrument, object: currentInstrumentID)
+                openWindow(id: "alert")
+            }
+            Divider()
             // v13.24 无选中画线 · 显示通用 chart 操作（重置缩放 / 复制可见区 CSV）
             Button("重置缩放（⌘0）") {
                 inertiaTask?.cancel()

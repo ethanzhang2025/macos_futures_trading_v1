@@ -462,9 +462,7 @@ struct AlertWindow: View {
 
     /// v15.20 batch73 · 复制 alert 名到剪贴板
     private func copyAlertName(_ a: Alert) {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(a.name, forType: .string)
+        Pasteboard.copy(a.name)
     }
 
     @ViewBuilder
@@ -906,9 +904,7 @@ struct AlertWindow: View {
 
     /// v15.20 batch77 · 复制单条历史的时间戳（IM 同步触发时刻）
     private func copyHistoryTimestamp(_ e: AlertHistoryEntry) {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(Self.timeFormatter.string(from: e.triggeredAt), forType: .string)
+        Pasteboard.copy(Self.timeFormatter.string(from: e.triggeredAt))
     }
 
     /// v15.20 batch62 · 历史 row 展开详情面板（trader 复盘触发时刻完整信息）
@@ -987,9 +983,7 @@ struct AlertWindow: View {
             "条件：\(e.conditionSnapshot.displayDescription)",
             "说明：\(e.message)"
         ]
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(lines.joined(separator: "\n"), forType: .string)
+        Pasteboard.copy(lines.joined(separator: "\n"))
     }
 
     private static let relativeAgeFormatter: RelativeDateTimeFormatter = {

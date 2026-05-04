@@ -2575,9 +2575,7 @@ struct ChartContentView: View {
     /// v15.19 batch45 · 复制价格到剪贴板（trader 与 IM/邮件分享便捷）
     @MainActor
     private func copyPriceToPasteboard(_ price: Decimal) {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(formatPrice(price), forType: .string)
+        Pasteboard.copy(formatPrice(price))
     }
 
     /// v15.20 batch70 · 复制测距详情到剪贴板（IM/邮件分享 · 含起终点 + 跨度 + 涨跌幅）
@@ -2602,9 +2600,7 @@ struct ChartContentView: View {
             "\(arrow) \(formatPriceDiff(priceDiff)) (\(String(format: "%+.2f%%", pct)))",
             "跨 \(abs(barDiff)) 根 K 线"
         ]
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(lines.joined(separator: "\n"), forType: .string)
+        Pasteboard.copy(lines.joined(separator: "\n"))
     }
 
     /// 跳到最新 K 线（保持 visibleCount · 滚到最右）· ⌘End / ⌘→ 共用
@@ -3123,9 +3119,7 @@ struct ChartContentView: View {
         let renderer = ImageRenderer(content: chartMainArea.frame(width: 1280, height: 720))
         renderer.scale = 2
         guard let nsImage = renderer.nsImage else { return }
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.writeObjects([nsImage])
+        Pasteboard.copy(nsImage)
     }
 
     /// v13.25 主图截图导出 PNG · ImageRenderer + NSSavePanel · macOS 13+
@@ -3162,10 +3156,7 @@ struct ChartContentView: View {
             let c = NSDecimalNumber(decimal: bar.close).stringValue
             lines.append("\(t),\(o),\(h),\(l),\(c),\(bar.volume)")
         }
-        let csv = lines.joined(separator: "\n")
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(csv, forType: .string)
+        Pasteboard.copy(lines.joined(separator: "\n"))
     }
 
     /// v13.11 批量改 isLocked

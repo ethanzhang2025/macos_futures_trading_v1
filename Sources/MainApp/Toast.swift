@@ -1,8 +1,10 @@
-// MainApp · 统一 NSAlert toast helper + PNGRenderer 渲染工具（导出 / 操作反馈通用）
+// MainApp · 统一 NSAlert toast helper + PNGRenderer 渲染工具 + Pasteboard 复制工具
 //
 // 设计取舍：
 // - Toast：@MainActor enum · 静态方法 · 替代各处重复 NSAlert 模板 · 视觉一致
 // - PNGRenderer：抽 ImageRenderer + tiff/bitmap/png 4 行套路 · 截图导出 3 个 callsite 共用
+// - Pasteboard：抽 NSPasteboard.general + clearContents + setString/writeObjects 套路
+//   v15.20 simplify v2 · 6 处字符串 + 1 处图片 callsite 共用（AlertWindow / ChartScene）
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -38,6 +40,25 @@ enum Toast {
         a.alertStyle = .warning
         a.addButton(withTitle: "好")
         a.runModal()
+    }
+}
+
+/// 系统剪贴板复制工具（IM/邮件分享 · 价位 / 测距详情 / 预警名 / 历史详情 / 截图 共用）
+/// v15.20 simplify v2 · 抽 `NSPasteboard.general + clearContents + setString/writeObjects` 三行套路
+@MainActor
+enum Pasteboard {
+    /// 复制文本到系统剪贴板（覆盖既有内容）
+    static func copy(_ text: String) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+    }
+
+    /// 复制图片到系统剪贴板（覆盖既有内容 · 走 writeObjects 而非 setData）
+    static func copy(_ image: NSImage) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.writeObjects([image])
     }
 }
 

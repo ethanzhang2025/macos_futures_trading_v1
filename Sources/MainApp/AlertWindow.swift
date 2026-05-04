@@ -989,9 +989,11 @@ struct AlertWindow: View {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .foregroundColor(.secondary)
                     .frame(width: 12)
+                // v15.21 batch122 · 时间字段 hover 显示完整含秒 + Unix timestamp（trader 精确到秒看触发时刻）
                 Text(Self.timeFormatter.string(from: e.triggeredAt))
                     .frame(width: 138, alignment: .leading)
                     .foregroundColor(.secondary)
+                    .help("Unix 时间戳：\(Int(e.triggeredAt.timeIntervalSince1970))（已含秒级精度）")
                 Text(e.alertName).frame(maxWidth: .infinity, alignment: .leading)
                 Text(e.instrumentID).frame(width: 60, alignment: .leading)
                 Text(fmtDecimal(e.triggerPrice))
@@ -1000,6 +1002,11 @@ struct AlertWindow: View {
                 Text(e.conditionSnapshot.displayDescription)
                     .frame(width: 200, alignment: .leading)
                     .foregroundColor(.secondary)
+                // v15.21 batch122 · 末尾加触发距今 age（与 alert row batch80 一致 · trader 看历史新旧度）
+                Text(Self.compactAge(from: e.triggeredAt))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 36, alignment: .trailing)
             }
             .font(.system(size: 12, design: .monospaced))
             .padding(.horizontal, 16)
@@ -1012,6 +1019,11 @@ struct AlertWindow: View {
             .contextMenu {
                 Button("复制详情") { copyHistoryDetail(e) }
                 Button("复制时间戳") { copyHistoryTimestamp(e) }
+                // v15.21 batch122 · 复制本条一行紧凑文本（IM 单条快速分享）
+                Button("复制本条一行") {
+                    let line = "\(Self.timeFormatter.string(from: e.triggeredAt)) | \(e.alertName) | \(e.instrumentID) @ \(fmtDecimal(e.triggerPrice)) | \(e.conditionSnapshot.displayDescription)"
+                    Pasteboard.copy(line)
+                }
                 if alertStillExists {
                     Button("跳到对应预警") {
                         selectedTab = .list

@@ -2775,33 +2775,37 @@ struct ChartContentView: View {
                 let anchorPos = measurePointToScreen(anchor, geomSize: geom.size, barWidth: barWidth, xOffset: xOffset, hi: hi, span: span)
                 let endPos = endpoint.map { measurePointToScreen($0, geomSize: geom.size, barWidth: barWidth, xOffset: xOffset, hi: hi, span: span) }
 
-                // 起点 marker（绿色环 + 中心点）+ 价位标签
+                // 起点 marker（candleBear 起色 · 中国跌色作起点 · 与 batch94 HUD 配色一致）+ 价位标签
+                // v15.21 batch121 · marker 配色 chartTheme 化（跟随 trader 自定义涨跌色）
+                let anchorColor = chartTheme.candleBear
                 Circle()
-                    .strokeBorder(Color.green, lineWidth: 2)
-                    .background(Circle().fill(Color.white.opacity(0.85)))
+                    .strokeBorder(anchorColor, lineWidth: 2)
+                    .background(Circle().fill(chartTheme.background.opacity(0.85)))
                     .frame(width: 12, height: 12)
                     .position(anchorPos)
                 measureLabel(
                     text: "起 \(formatPrice(anchor.price))",
-                    color: .green,
+                    color: anchorColor,
                     at: CGPoint(x: anchorPos.x + 14, y: anchorPos.y - 14)
                 )
 
                 if let endPos, let end = endpoint {
+                    // 终点色：locked 时 candleBull（红 · 锁定 = 终点确定）· following 时 textSecondary（中性 · 仍跟随）
+                    let endColor: Color = isLocked ? chartTheme.candleBull : chartTheme.textSecondary
                     // 中间连接虚线
                     Path { p in
                         p.move(to: anchorPos)
                         p.addLine(to: endPos)
                     }
                     .stroke(
-                        isLocked ? Color.green.opacity(0.7) : Color.blue.opacity(0.55),
+                        endColor.opacity(0.6),
                         style: StrokeStyle(lineWidth: 1.2, dash: [5, 3])
                     )
 
-                    // 终点 marker（锁定红色实心 / 跟随蓝色环）+ 距离标签
+                    // 终点 marker（locked 实心 / following 空心环）+ 距离标签
                     Circle()
-                        .fill(isLocked ? Color.red : Color.clear)
-                        .overlay(Circle().strokeBorder(isLocked ? Color.red : Color.blue, lineWidth: 2))
+                        .fill(isLocked ? endColor : Color.clear)
+                        .overlay(Circle().strokeBorder(endColor, lineWidth: 2))
                         .frame(width: 12, height: 12)
                         .position(endPos)
                     let priceDiff = end.price - anchor.price
@@ -2811,7 +2815,7 @@ struct ChartContentView: View {
                     let arrow = priceDiff >= 0 ? "↑" : "↓"
                     measureLabel(
                         text: "\(formatPrice(end.price))  \(arrow) \(String(format: "%+.2f%%", pct))",
-                        color: isLocked ? .red : .blue,
+                        color: endColor,
                         at: CGPoint(x: endPos.x + 14, y: endPos.y - 14)
                     )
                 }
@@ -3221,6 +3225,10 @@ struct ChartContentView: View {
             Button("复制可见区时间范围") {
                 copyVisibleTimeRange()
             }
+            // v15.21 batch121 · 复制可见区统计（最高/最低/均价/振幅/涨跌幅 · 一行文本）
+            Button("复制可见区 stat（高低均/振幅/涨跌）") {
+                copyVisibleStat()
+            }
             Button("导出主图截图（PNG · ⌘P）…") {
                 exportChartScreenshot()
             }
@@ -3273,6 +3281,30 @@ struct ChartContentView: View {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd HH:mm"
         return fmt.string(from: date)
+    }
+
+    /// v15.21 batch121 · 复制可见区统计 · 一行紧凑文本（trader 截盘评论高频）
+    /// 高/低/均价（OHLC 全部 bar 平均收盘）/振幅 %（高-低）/涨跌幅 %（首开 → 末收）
+    private func copyVisibleStat() {
+        let endIdx = min(bars.count, viewport.startIndex + viewport.visibleCount)
+        let startIdx = max(0, viewport.startIndex)
+        guard startIdx < endIdx else { return }
+        let slice = bars[startIdx..<endIdx]
+        let high = slice.map(\.high).max() ?? 0
+        let low = slice.map(\.low).min() ?? 0
+        let firstOpen = slice.first?.open ?? 0
+        let lastClose = slice.last?.close ?? 0
+        let avgClose: Decimal = {
+            let sum = slice.map(\.close).reduce(Decimal(0), +)
+            return slice.isEmpty ? 0 : sum / Decimal(slice.count)
+        }()
+        let amplitudePct: Double = {
+            guard low > 0 else { return 0 }
+            return NSDecimalNumber(decimal: (high - low) / low).doubleValue * 100
+        }()
+        let changePctText = OHLCMarkdownExporter.formatChangePercent(open: firstOpen, close: lastClose)
+        let line = "高 \(formatPrice(high)) / 低 \(formatPrice(low)) / 均 \(formatPrice(avgClose)) · 振幅 \(String(format: "%.2f%%", amplitudePct)) · 涨跌 \(changePctText)（共 \(endIdx - startIdx) 根）"
+        Pasteboard.copy(line)
     }
 
     /// v15.21 batch119 · 复制可见区起始 - 结束时间范围（trader 标关注区间 · IM 群讨论）

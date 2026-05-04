@@ -224,8 +224,8 @@ struct IndicatorParamsSheet: View {
               b.bbwParams[0] >= 2 && b.bbwParams[0] <= 200,
               b.bbwParams[1] >= 1 && b.bbwParams[1] <= 5 else { return false }
         guard b.atrpPeriod >= 1 && b.atrpPeriod <= 500 else { return false }
-        // v15.20 batch85 · Swing lookback 范围（1~50 · 太大遮蔽全局趋势）
-        guard b.swingLookback >= 1 && b.swingLookback <= 50 else { return false }
+        // v15.20 batch85 · Swing lookback 范围 · v15.21 batch121 放宽 1~50 → 1~100（趋势 trader 大波段需求）
+        guard b.swingLookback >= 1 && b.swingLookback <= 100 else { return false }
         // v15.21 batch106 · Swing minSpacing 范围（0~100 · 0=不过滤 · 默认 0）
         guard b.swingMinSpacing >= 0 && b.swingMinSpacing <= 100 else { return false }
         return true

@@ -81,6 +81,9 @@ struct AlertWindow: View {
     /// v11.0+1 · evaluator observe stream 监听任务 · onDisappear cancel
     @State private var evaluatorObserveTask: Task<Void, Never>?
 
+    /// v15.21 batch93 · 历史 tab 搜索框聚焦（⌘F 触发 · trader 高频快搜）
+    @FocusState private var isHistorySearchFocused: Bool
+
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
     @Environment(\.alertEvaluator) private var alertEvaluator
@@ -800,19 +803,28 @@ struct AlertWindow: View {
             .labelsHidden()
             .frame(maxWidth: 360)
 
-            // v15.19 batch46 · 搜索框（按预警名 / 合约名 · 不区分大小写）
+            // v15.19 batch46 · 搜索框（按预警名 / 合约名 · 不区分大小写）· v15.21 batch93 加 ⌘F 聚焦
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass").foregroundColor(.secondary).font(.caption)
-                TextField("搜索预警名 / 合约", text: $historySearchText)
+                TextField("搜索预警名 / 合约（⌘F）", text: $historySearchText)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 160)
+                    .frame(width: 180)
+                    .focused($isHistorySearchFocused)
                 if !historySearchText.isEmpty {
                     Button { historySearchText = "" } label: {
                         Image(systemName: "xmark.circle.fill").foregroundColor(.secondary).font(.caption)
                     }
                     .buttonStyle(.borderless)
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .help("清空搜索（Esc）")
                 }
             }
+            // v15.21 batch93 · ⌘F 聚焦搜索框（视觉零占用 · 仅快捷键拦截）
+            Button("") { isHistorySearchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
 
             Spacer()
             Text("共 \(filteredHistory.count) 条 · 全量 \(historyEntries.count)")

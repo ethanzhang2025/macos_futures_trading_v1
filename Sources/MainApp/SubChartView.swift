@@ -38,6 +38,8 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
     // v15.18+ batch13 · 波动率 squeeze + 跨品种比较
     case bbw         // Bollinger Bandwidth · 单线 · 0 基线 · 视野 visible max · % 单位
     case atrp        // ATR% · 单线 · 0 基线 · 视野 visible max · % 单位
+    // v15.19 batch25 · 成交量分布（trader 支撑阻力区分析）
+    case volumeProfile  // 横轴 = 价格 bin · 纵轴 = 累计成交量 · visible 范围内分桶
 
     var id: String { rawValue }
 
@@ -63,6 +65,7 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .forceIndex:  return "FI \(params.forceIndexPeriod)"
         case .bbw:         return "BBW \(params.bbwParams[0])/\(params.bbwParams[1])"
         case .atrp:        return "ATRP \(params.atrpPeriod)"
+        case .volumeProfile: return "成交量分布"
         }
     }
 
@@ -88,6 +91,7 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .forceIndex:  return "FI"
         case .bbw:         return "BBW"
         case .atrp:        return "ATRP"
+        case .volumeProfile: return "VP"
         }
     }
 }
@@ -190,6 +194,8 @@ struct SubChartView: View {
     @State private var seriesA: [Double?] = []
     @State private var seriesB: [Double?] = []
     @State private var seriesC: [Double?] = []
+    /// VolumeProfile 副图专用 bins · 其他副图为空
+    @State private var profileBins: [VolumeProfile.Bin] = []
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -270,7 +276,7 @@ struct SubChartView: View {
                 return (try? BollingerBandwidth.calculate(kline: series, params: paramsCopy.bbwParamsDecimal)) ?? []
             case .atrp:
                 return (try? ATRPercent.calculate(kline: series, params: paramsCopy.atrpParamsDecimal)) ?? []
-            case .volume, .oi:
+            case .volume, .oi, .volumeProfile:
                 return []  // 直读 bars · 不走 Indicator 计算
             }
         }.value
@@ -317,6 +323,12 @@ struct SubChartView: View {
         case .oi:
             // 持仓量：bars.openInterest 是 Decimal → Double（KLineSeries.openInterests 是 [Int] 会丢精度 · 直读 bars 走 Decimal）
             seriesA = bars.map { NSDecimalNumber(decimal: $0.openInterest).doubleValue }
+            seriesB = []
+            seriesC = []
+        case .volumeProfile:
+            // 全量 bars 计算 VP（trader 视角"永久价格分布" · 不随视口变化）· bin=24
+            profileBins = VolumeProfile.compute(bars: bars, binCount: 24)
+            seriesA = profileBins.map { Optional($0.volume) }
             seriesB = []
             seriesC = []
         }
@@ -409,6 +421,16 @@ struct SubChartView: View {
             // BBW（squeeze 信号）/ ATRP（跨品种波动率）· 单位 %
             case .bbw, .atrp:
                 Text("\(kind.shortName) \(fmt(aLast))%").foregroundColor(Self.yellowColor)
+            // v15.19 batch25 · Volume Profile · HUD 显示峰值 bin 价格区间（trader 一眼看支撑阻力位）
+            case .volumeProfile:
+                if let peak = profileBins.max(by: { $0.volume < $1.volume }) {
+                    let priceLow = NSDecimalNumber(decimal: peak.priceLow).doubleValue
+                    let priceHigh = NSDecimalNumber(decimal: peak.priceHigh).doubleValue
+                    Text("VP 峰值 \(String(format: "%.2f", priceLow))-\(String(format: "%.2f", priceHigh))")
+                        .foregroundColor(Self.purpleColor)
+                } else {
+                    Text("VP 加载中").foregroundColor(.secondary)
+                }
             }
         }
         .font(.system(size: 11, design: .monospaced))
@@ -525,6 +547,30 @@ struct SubChartView: View {
                              ctx: ctx, size: size,
                              visibleStart: visibleStart, visibleEnd: visibleEnd,
                              barWidth: barWidth, xOffset: xOffset)
+        // v15.19 batch25 · Volume Profile · 水平柱状（y=价格 bin · x=累计成交量 · 从左生长）
+        case .volumeProfile:
+            drawVolumeProfile(ctx, size: size)
+        }
+    }
+
+    /// v15.19 batch25 · Volume Profile · 水平柱状渲染（trader 找支撑阻力区直观）
+    /// y 轴：价格（高价在上 · 低价在下）· x 轴：累计成交量从左生长 · 峰值 bin 染深紫
+    private func drawVolumeProfile(_ ctx: GraphicsContext, size: CGSize) {
+        guard !profileBins.isEmpty else { return }
+        let n = profileBins.count
+        let maxVol = profileBins.map(\.volume).max() ?? 1
+        guard maxVol > 0 else { return }
+        let binHeight = size.height / CGFloat(n)
+        let xScale = size.width * 0.9 / CGFloat(maxVol)
+        // 峰值 bin（命中最大 volume）特别染色
+        let peakIdx = profileBins.firstIndex(where: { $0.volume == maxVol }) ?? -1
+        for (i, bin) in profileBins.enumerated() {
+            // 高价在顶 · 低价在底（i=0 是最低价 · 倒序映射）
+            let yTop = size.height - CGFloat(i + 1) * binHeight + 1
+            let barWidth = CGFloat(bin.volume) * xScale
+            let rect = CGRect(x: 0, y: yTop, width: barWidth, height: binHeight - 2)
+            let color = (i == peakIdx) ? Self.purpleColor : Self.purpleColor.opacity(0.45)
+            ctx.fill(Path(rect), with: .color(color))
         }
     }
 

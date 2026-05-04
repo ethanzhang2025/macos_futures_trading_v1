@@ -171,6 +171,8 @@ struct ExecutionContext {
 }
 
 /// K线数据（公式引擎使用的简化版本）
+/// v15.18 · 加 timestamp 可选字段 · 启用 DATE/TIME/HOUR/MINUTE 4 函数真实化（WP-62 麦语言）
+/// nil 时 4 函数回退占位（bar 序号）· 业务侧传 KLine.timestamp 时取真值
 public struct BarData: Sendable {
     public let open: Decimal
     public let high: Decimal
@@ -179,9 +181,11 @@ public struct BarData: Sendable {
     public let volume: Int
     public let amount: Decimal
     public let openInterest: Decimal
+    public let timestamp: Date?
 
     public init(open: Decimal, high: Decimal, low: Decimal, close: Decimal,
-                volume: Int, amount: Decimal = 0, openInterest: Decimal = 0) {
+                volume: Int, amount: Decimal = 0, openInterest: Decimal = 0,
+                timestamp: Date? = nil) {
         self.open = open
         self.high = high
         self.low = low
@@ -189,5 +193,6 @@ public struct BarData: Sendable {
         self.volume = volume
         self.amount = amount
         self.openInterest = openInterest
+        self.timestamp = timestamp
     }
 }

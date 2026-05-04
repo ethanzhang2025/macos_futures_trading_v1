@@ -231,7 +231,8 @@ struct ReviewWindow: View {
                     Image(systemName: "doc.on.doc")
                 }
                 .buttonStyle(.borderless)
-                .help("复制全部 stat 行（成交/闭合/总 PnL/胜率/Sharpe/Sortino 等 · 一段文本）")
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .help("复制全部 stat 行（成交/闭合/总 PnL/胜率/Sharpe/Sortino 等 · 一段文本 · ⌘⇧C）")
                 Text("v1 mock · 待 M5 接 JournalStore 真数据")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)

@@ -6,6 +6,8 @@
 
 import SwiftUI
 import Charts
+import AppKit
+import UniformTypeIdentifiers
 import Shared
 import JournalCore
 
@@ -128,11 +130,46 @@ struct ReviewWindow: View {
                 stat("最大单笔盈", "¥\(decimal(s.profitability.largestWin))")
                 stat("最大单笔亏", "¥\(decimal(s.profitability.largestLoss))")
                 Spacer()
+                Button("导出月报…") { exportMonthlyReport(s) }
+                    .help("生成本月 Markdown 复盘报告 · 含全套指标 + 心理标签 + 品种/时段分布")
             }
             .padding(.bottom, 4)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
+    }
+
+    /// 月度 Markdown 复盘报告导出（NSSavePanel · 默认本月 · 用户可改文件名带年月）
+    @MainActor
+    private func exportMonthlyReport(_ s: ReviewSummary) {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let comps = cal.dateComponents([.year, .month], from: Date())
+        let year = comps.year ?? 2026
+        let month = comps.month ?? 1
+        let panel = NSSavePanel()
+        panel.title = "导出月度复盘报告"
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = String(format: "复盘报告_%04d-%02d.md", year, month)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let md = MonthlyReportGenerator.generate(
+            positions: s.closedPositions, year: year, month: month
+        )
+        do {
+            try md.data(using: .utf8)?.write(to: url, options: .atomic)
+            let success = NSAlert()
+            success.messageText = "导出成功"
+            success.informativeText = "已生成 \(year) 年 \(month) 月复盘报告到 \(url.lastPathComponent)。"
+            success.addButton(withTitle: "好")
+            success.runModal()
+        } catch {
+            let err = NSAlert()
+            err.messageText = "导出失败"
+            err.informativeText = error.localizedDescription
+            err.alertStyle = .warning
+            err.addButton(withTitle: "好")
+            err.runModal()
+        }
     }
 
     private func currentStreakLabel(_ s: ReviewAnalytics.StreakMetrics) -> String {

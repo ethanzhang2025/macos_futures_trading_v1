@@ -490,7 +490,12 @@ struct AlertWindow: View {
             Text(a.instrumentID).frame(width: 60, alignment: .leading)
             Text(a.condition.displayDescription).frame(width: 200, alignment: .leading)
                 .foregroundColor(.secondary)
-            statusBadgeWithAge(a).frame(width: 70, alignment: .center)
+            // v15.21 batch116 · 状态 badge 点击切换 active/paused（最直观入口 · 与"暂停"按钮 / contextMenu 三入口）
+            statusBadgeWithAge(a)
+                .frame(width: 70, alignment: .center)
+                .contentShape(Rectangle())
+                .onTapGesture { toggleStatus(a) }
+                .help("点击切换暂停 / 恢复（cancelled 状态不响应）")
             Text(a.channels.map(\.shortLabel).sorted().joined(separator: "·"))
                 .frame(width: 80, alignment: .leading)
                 .foregroundColor(.secondary)

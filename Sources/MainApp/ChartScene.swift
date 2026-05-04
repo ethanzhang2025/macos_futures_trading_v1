@@ -2892,6 +2892,8 @@ struct ChartContentView: View {
     }
 
     /// 屏幕坐标 → 数据空间锚点（barIndex + price）
+    /// v15.18 · 价格自动吸附最近 K 线 OHLC（trader 强需求 · 关键价位"咬住"K 线）
+    /// 吸附阈值：距离 OHLC 任一价位 ≤ 当前价格区间 1.5% 时触发 · 否则保留 raw price
     private func screenToDataPoint(_ location: CGPoint, in size: CGSize) -> DrawingPoint {
         let visibleCount = max(1, viewport.visibleCount)
         let barWidth = size.width / CGFloat(visibleCount)
@@ -2901,8 +2903,24 @@ struct ChartContentView: View {
         let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
         let span = max(0.0001, hi - lo)
         let priceRatio = (size.height - location.y) / size.height
-        let price = lo + Double(priceRatio) * span
-        return DrawingPoint(barIndex: barIndex, price: Decimal(price))
+        let rawPrice = lo + Double(priceRatio) * span
+        let snappedPrice = snapPriceToCandle(rawPrice: rawPrice, barIndex: barIndex, span: span)
+        return DrawingPoint(barIndex: barIndex, price: Decimal(snappedPrice))
+    }
+
+    /// v15.18 · 画线价格吸附到最近 K 线 OHLC（趋势线/水平线/通道等关键位天然咬住）
+    /// 决策逻辑集中在 Shared.CandleSnapPolicy（纯函数 · 单测覆盖）
+    private func snapPriceToCandle(rawPrice: Double, barIndex: Int, span: Double) -> Double {
+        guard barIndex >= 0, barIndex < bars.count else { return rawPrice }
+        let bar = bars[barIndex]
+        return CandleSnapPolicy.snapPrice(
+            rawPrice: rawPrice,
+            open: NSDecimalNumber(decimal: bar.open).doubleValue,
+            high: NSDecimalNumber(decimal: bar.high).doubleValue,
+            low: NSDecimalNumber(decimal: bar.low).doubleValue,
+            close: NSDecimalNumber(decimal: bar.close).doubleValue,
+            visibleSpan: span
+        )
     }
 
     /// 处理画线工具激活下的点击：单点画线立即添加 / 双点画线第 1 点设 pending 第 2 点完成

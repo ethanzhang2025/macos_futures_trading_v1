@@ -486,10 +486,15 @@ struct AlertWindow: View {
                         selectedAlertIDs.insert(a.id)
                     }
                 }
+            // v15.21 batch125 · row 字段 .help() tooltip · trader 列宽 truncate 时鼠标悬停看完整
             Text(a.name).frame(maxWidth: .infinity, alignment: .leading)
+                .help(a.name.count > 30 ? a.name : "")   // 长名才提示 · 短名不打扰
             Text(a.instrumentID).frame(width: 60, alignment: .leading)
             Text(a.condition.displayDescription).frame(width: 200, alignment: .leading)
                 .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(a.condition.displayDescription)    // 完整条件 · 复杂指标条件经常超 200px
             // v15.21 batch116 · 状态 badge 点击切换 active/paused（最直观入口 · 与"暂停"按钮 / contextMenu 三入口）
             statusBadgeWithAge(a)
                 .frame(width: 70, alignment: .center)
@@ -499,6 +504,7 @@ struct AlertWindow: View {
             Text(a.channels.map(\.shortLabel).sorted().joined(separator: "·"))
                 .frame(width: 80, alignment: .leading)
                 .foregroundColor(.secondary)
+                .help(a.channels.map(\.displayLabel).sorted().joined(separator: " / "))   // batch125 · 通道全名
             Text("\(Int(a.cooldownSeconds))s")
                 .frame(width: 50, alignment: .trailing)
                 .foregroundColor(.secondary)

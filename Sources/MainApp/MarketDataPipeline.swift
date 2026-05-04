@@ -22,7 +22,12 @@ final class MarketDataPipeline {
 
     static let defaultInstrumentID = "RB0"
     static let defaultPeriod: KLinePeriod = .minute15
-    static let pollingInterval: TimeInterval = 5.0
+    /// v15.18 · 启动按 Settings.pollingIntervalSec 决定（默认 5s · 范围 1-30s）
+    static var pollingInterval: TimeInterval {
+        let raw = UserDefaults.standard.double(forKey: "settings.pollingIntervalSec")
+        guard raw >= 1, raw <= 30 else { return 5.0 }
+        return raw
+    }
 
     /// 缓存上限按 period 动态（v12.9 · 中国期货每天约 540min 交易 · 让小周期能覆盖更多天 · 大周期合理保留长跨度）
     /// - 1min: 10000 ≈ 18 个交易日（短线分析）

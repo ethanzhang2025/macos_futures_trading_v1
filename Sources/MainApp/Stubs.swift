@@ -41,12 +41,13 @@ struct SettingsContentView: View {
     }
 }
 
-// MARK: - 通用 Tab（v15.18 · 默认合约 / 启动恢复 / 反馈入口）
+// MARK: - 通用 Tab（v15.18 · 默认合约 / 启动恢复 / 行情频率 / 反馈入口）
 
 private struct GeneralSettingsTab: View {
 
     @AppStorage("settings.defaultInstrumentID") private var defaultInstrument: String = "RB0"
     @AppStorage("settings.restoreLastSession") private var restoreLastSession: Bool = true
+    @AppStorage("settings.pollingIntervalSec") private var pollingIntervalSec: Double = 5.0
 
     private static let availableInstruments = [
         "RB0", "IF0", "AU0", "CU0", "AG0", "I0", "TA0", "MA0"
@@ -65,6 +66,22 @@ private struct GeneralSettingsTab: View {
                 Text("启动行为").font(.headline)
             } footer: {
                 Text("修改后下次启动生效")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+
+            Section {
+                HStack {
+                    Text("行情轮询间隔")
+                    Spacer()
+                    Text("\(Int(pollingIntervalSec)) 秒")
+                        .font(.system(size: 12, design: .monospaced))
+                }
+                Slider(value: $pollingIntervalSec, in: 1...30, step: 1)
+            } header: {
+                Text("行情").font(.headline)
+            } footer: {
+                Text("Sina 免费源 · 默认 5 秒（建议 3-5 秒 · 太短易被限流 · 太长延时大）· 修改后重启生效")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }

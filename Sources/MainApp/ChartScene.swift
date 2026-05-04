@@ -2291,6 +2291,8 @@ struct ChartContentView: View {
                 tooltipSecondaryText: chartTheme.textSecondary,
                 crosshairLineColor: chartTheme.textSecondary.opacity(0.7)
             )
+            // v15.19 batch35 · 昨结算线（trader 关键参考位 · 商品昨结算 / 金融昨收 · price 在线上下分歧情绪不同）
+            preSettlementLine
             // v13.0 WP-42 画线 overlay 渲染层（在十字光标上 · HUD 下）
             // v13.3 pendingDrawing 接 pendingDrawingPoint + hoverDataPoint 实时预览第二点（虚线）
             DrawingsOverlayView(
@@ -2361,6 +2363,41 @@ struct ChartContentView: View {
         .contextMenu {
             // v13.5 选中画线右键菜单（删除 / 编辑文字 / 取消选中）· v13.6 加复制
             drawingContextMenu
+        }
+    }
+
+    /// v15.19 batch35 · 昨结算线水平虚线（trader 关键参考位 · 价位在结算线上下情绪分歧）
+    /// 颜色用淡金黄色 · 不抢戏 · preSettle nil 时不画
+    @ViewBuilder
+    private var preSettlementLine: some View {
+        if let baseline = preSettle {
+            GeometryReader { geom in
+                let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+                let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+                let span = max(0.0001, hi - lo)
+                let priceD = NSDecimalNumber(decimal: baseline).doubleValue
+                let inRange = priceD >= lo && priceD <= hi
+                if inRange {
+                    let y = geom.size.height * (1 - CGFloat((priceD - lo) / span))
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: y))
+                        p.addLine(to: CGPoint(x: geom.size.width, y: y))
+                    }
+                    .stroke(
+                        Color(red: 0.95, green: 0.78, blue: 0.20).opacity(0.55),
+                        style: StrokeStyle(lineWidth: 1, dash: [6, 4])
+                    )
+                    Text("昨结")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(Color(red: 0.95, green: 0.78, blue: 0.20))
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(chartTheme.hudBackground.opacity(0.85))
+                        .cornerRadius(2)
+                        .position(x: 24, y: y)
+                }
+            }
+            .allowsHitTesting(false)
         }
     }
 

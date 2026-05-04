@@ -443,7 +443,7 @@ struct AlertWindow: View {
             Text(a.instrumentID).frame(width: 60, alignment: .leading)
             Text(a.condition.displayDescription).frame(width: 200, alignment: .leading)
                 .foregroundColor(.secondary)
-            statusBadge(a.status).frame(width: 70, alignment: .center)
+            statusBadgeWithAge(a).frame(width: 70, alignment: .center)
             Text(a.channels.map(\.shortLabel).sorted().joined(separator: "·"))
                 .frame(width: 80, alignment: .leading)
                 .foregroundColor(.secondary)
@@ -683,6 +683,29 @@ struct AlertWindow: View {
             .padding(.vertical, 2)
             .background(s.badgeColor.opacity(0.8))
             .cornerRadius(3)
+    }
+
+    /// v15.20 batch80 · status badge + 最近触发距今（trader 看每条 alert 上次触发时刻）
+    /// lastTriggeredAt nil → 仅显 badge · 否则 badge 上方显微"5m" / "2h" / "3d"
+    @ViewBuilder
+    private func statusBadgeWithAge(_ a: Alert) -> some View {
+        VStack(spacing: 2) {
+            statusBadge(a.status)
+            if let last = a.lastTriggeredAt {
+                Text(Self.compactAge(from: last))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    /// v15.20 batch80 · 紧凑距今格式（"5m" / "2h" / "3d" / "<1m"）· 行内 9pt 显示用
+    static func compactAge(from date: Date, now: Date = Date()) -> String {
+        let secs = max(0, now.timeIntervalSince(date))
+        if secs < 60 {        return "<1m" }
+        if secs < 3600 {      return "\(Int(secs / 60))m" }
+        if secs < 86400 {     return "\(Int(secs / 3600))h" }
+        return "\(Int(secs / 86400))d"
     }
 
     // MARK: - 触发历史列表

@@ -133,6 +133,9 @@ struct FuturesTerminalApp: App {
     /// stub source（默认空 · 不骚扰）· UserDefaults dismissal · ChartScene 顶部 overlay
     private let bannerService: BannerService?
 
+    /// Banner 周期刷新 driver（v15.18 · 5min poll · 后端可热推送 / 撤回）
+    private let bannerRefreshDriver: BannerRefreshDriver?
+
     init() {
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
         // 菜单栏不切换 · ⌘N / ⌘L / ⌘, 全部落到 Terminal 上。
@@ -198,10 +201,15 @@ struct FuturesTerminalApp: App {
             Task { await driver.start() }
         }
         // v15.18 · WP-120 BannerService（stub source 默认空 · UserDefaults dismissal 持久）
-        self.bannerService = BannerService(
+        let banner = BannerService(
             store: UserDefaultsBannerDismissalStore(),
             source: StubBannerSource()
         )
+        self.bannerService = banner
+        // v15.18 · BannerRefreshDriver 5min poll 启动后周期 fetch（后端可热推送 / 撤回）
+        let bannerDriver = BannerRefreshDriver(service: banner)
+        self.bannerRefreshDriver = bannerDriver
+        Task { await bannerDriver.start() }
         // v15.18 · WP-133a session_start/end wire（didBecomeActive 触发首次 session_start · 3 分钟规则跨启动）
         // App.init 后 NSApplication 主循环开始 · 首个 didBecomeActive 通知会触发 sessionStart
         // willResignActive 时除发 session_end 外还 flush driver（防后台被杀丢事件）

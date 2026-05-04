@@ -1,12 +1,13 @@
-// MainApp · 统一 NSAlert toast helper（导出 / 导入 / 操作反馈通用）
+// MainApp · 统一 NSAlert toast helper + PNGRenderer 渲染工具（导出 / 操作反馈通用）
 //
 // 设计取舍：
-// - @MainActor enum · 静态方法 · 调用方一行 · 替代各处重复的 4-5 行 NSAlert 套路
-// - 视觉一致：所有信息提示统一"好"按钮 · 错误统一 .warning style + localizedDescription
+// - Toast：@MainActor enum · 静态方法 · 替代各处重复 NSAlert 模板 · 视觉一致
+// - PNGRenderer：抽 ImageRenderer + tiff/bitmap/png 4 行套路 · 截图导出 3 个 callsite 共用
 
 #if canImport(SwiftUI) && os(macOS)
 
 import AppKit
+import SwiftUI
 
 @MainActor
 enum Toast {
@@ -37,6 +38,27 @@ enum Toast {
         a.alertStyle = .warning
         a.addButton(withTitle: "好")
         a.runModal()
+    }
+}
+
+/// SwiftUI 视图 → PNG Data 渲染工具（ChartScene 截图 / ReviewWindow chartCard 单图 / 全部图导出共用）
+@MainActor
+enum PNGRenderer {
+    /// - Parameters:
+    ///   - view: 待渲染 SwiftUI View
+    ///   - width / height: 输出尺寸 pt
+    ///   - scale: Retina 倍率（默认 2 · trader 高清需求）
+    /// - Returns: PNG Data · ImageRenderer 失败任一步骤返回 nil
+    static func render<V: View>(_ view: V, width: CGFloat, height: CGFloat, scale: CGFloat = 2) -> Data? {
+        let renderer = ImageRenderer(content: view.frame(width: width, height: height))
+        renderer.scale = scale
+        guard let nsImage = renderer.nsImage,
+              let tiff = nsImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+        return pngData
     }
 }
 

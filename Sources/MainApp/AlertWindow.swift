@@ -214,11 +214,7 @@ struct AlertWindow: View {
         for alert in newAlerts {
             NotificationCenter.default.post(name: .alertAddedFromChart, object: alert)
         }
-        let success = NSAlert()
-        success.messageText = "已创建 \(newAlerts.count) 条预警"
-        success.informativeText = "在列表中可逐条编辑 / 暂停 / 删除。"
-        success.addButton(withTitle: "好")
-        success.runModal()
+        Toast.info("已创建 \(newAlerts.count) 条预警", "在列表中可逐条编辑 / 暂停 / 删除。")
     }
 
     private func stat(_ label: String, _ value: String, color: Color = .primary) -> some View {

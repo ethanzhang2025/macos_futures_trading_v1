@@ -237,13 +237,7 @@ struct ReviewWindow: View {
             }
             .padding(20)
             .background(Color.white)
-            .frame(width: 720, height: 480)
-            let renderer = ImageRenderer(content: exportable)
-            renderer.scale = 2
-            guard let nsImage = renderer.nsImage,
-                  let tiff = nsImage.tiffRepresentation,
-                  let bitmap = NSBitmapImageRep(data: tiff),
-                  let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            guard let pngData = PNGRenderer.render(exportable, width: 720, height: 480) else {
                 failedCount += 1
                 continue
             }
@@ -333,7 +327,7 @@ struct ReviewWindow: View {
         chart
     }
 
-    /// v15.19 batch41 · 单 chartCard PNG 导出（trader 分享单图 · 复用 ImageRenderer 模式）
+    /// v15.19 batch41 · 单 chartCard PNG 导出（trader 分享单图）
     @MainActor
     private func exportChartCardPNG<Content: View>(title: String, subtitle: String, content: Content) {
         let exportable = VStack(alignment: .leading, spacing: 8) {
@@ -343,14 +337,8 @@ struct ReviewWindow: View {
         }
         .padding(20)
         .background(Color.white)   // 白底便于导出后插入文档
-        .frame(width: 720, height: 480)
 
-        let renderer = ImageRenderer(content: exportable)
-        renderer.scale = 2
-        guard let nsImage = renderer.nsImage,
-              let tiff = nsImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+        guard let pngData = PNGRenderer.render(exportable, width: 720, height: 480) else {
             Toast.errorBody("截图失败", "ImageRenderer 渲染失败")
             return
         }

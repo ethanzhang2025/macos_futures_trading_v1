@@ -2460,33 +2460,43 @@ struct ChartContentView: View {
     @ViewBuilder
     private var todaysOpenLine: some View {
         if let open = todaysOpenPrice {
-            GeometryReader { geom in
-                let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
-                let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
-                let span = max(0.0001, hi - lo)
-                let priceD = NSDecimalNumber(decimal: open).doubleValue
-                if priceD >= lo && priceD <= hi {
-                    let y = geom.size.height * (1 - CGFloat((priceD - lo) / span))
-                    Path { p in
-                        p.move(to: CGPoint(x: 0, y: y))
-                        p.addLine(to: CGPoint(x: geom.size.width, y: y))
-                    }
-                    .stroke(
-                        Color(red: 0.63, green: 0.42, blue: 0.83).opacity(0.5),
-                        style: StrokeStyle(lineWidth: 1, dash: [4, 6])
-                    )
-                    Text("今开")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(Color(red: 0.63, green: 0.42, blue: 0.83))
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(chartTheme.hudBackground.opacity(0.85))
-                        .cornerRadius(2)
-                        .position(x: 56, y: y)   // 错开"昨结"标签位置 · 不重叠
-                }
-            }
-            .allowsHitTesting(false)
+            priceHorizontalLine(
+                price: open,
+                color: Color(red: 0.63, green: 0.42, blue: 0.83),
+                label: "今开",
+                labelX: 56,
+                dashPattern: [4, 6]
+            )
         }
+    }
+
+    /// 主图水平价位虚线 helper（昨结算线 / 今日开盘 / 后续可加 OHLC 共用）
+    /// 仅价位在 currentPriceRange 内时绘制 · 标签自带 hudBackground 衬底防被 K 线吞噬
+    @ViewBuilder
+    private func priceHorizontalLine(price: Decimal, color: Color, label: String,
+                                      labelX: CGFloat, dashPattern: [CGFloat]) -> some View {
+        GeometryReader { geom in
+            let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+            let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+            let span = max(0.0001, hi - lo)
+            let priceD = NSDecimalNumber(decimal: price).doubleValue
+            if priceD >= lo && priceD <= hi {
+                let y = geom.size.height * (1 - CGFloat((priceD - lo) / span))
+                Path { p in
+                    p.move(to: CGPoint(x: 0, y: y))
+                    p.addLine(to: CGPoint(x: geom.size.width, y: y))
+                }
+                .stroke(color.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: dashPattern))
+                Text(label)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(color)
+                    .padding(.horizontal, 3).padding(.vertical, 1)
+                    .background(chartTheme.hudBackground.opacity(0.85))
+                    .cornerRadius(2)
+                    .position(x: labelX, y: y)
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     /// v15.19 batch43 · hover 价距 visible 高/低 % HUD · 帮 trader 评估当前位置在区间中的相对位置
@@ -2523,37 +2533,17 @@ struct ChartContentView: View {
     }
 
     /// v15.19 batch35 · 昨结算线水平虚线（trader 关键参考位 · 价位在结算线上下情绪分歧）
-    /// 颜色用淡金黄色 · 不抢戏 · preSettle nil 时不画
+    /// 颜色用淡金黄色 · preSettle nil 时不画
     @ViewBuilder
     private var preSettlementLine: some View {
         if let baseline = preSettle {
-            GeometryReader { geom in
-                let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
-                let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
-                let span = max(0.0001, hi - lo)
-                let priceD = NSDecimalNumber(decimal: baseline).doubleValue
-                let inRange = priceD >= lo && priceD <= hi
-                if inRange {
-                    let y = geom.size.height * (1 - CGFloat((priceD - lo) / span))
-                    Path { p in
-                        p.move(to: CGPoint(x: 0, y: y))
-                        p.addLine(to: CGPoint(x: geom.size.width, y: y))
-                    }
-                    .stroke(
-                        Color(red: 0.95, green: 0.78, blue: 0.20).opacity(0.55),
-                        style: StrokeStyle(lineWidth: 1, dash: [6, 4])
-                    )
-                    Text("昨结")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(Color(red: 0.95, green: 0.78, blue: 0.20))
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(chartTheme.hudBackground.opacity(0.85))
-                        .cornerRadius(2)
-                        .position(x: 24, y: y)
-                }
-            }
-            .allowsHitTesting(false)
+            priceHorizontalLine(
+                price: baseline,
+                color: Color(red: 0.95, green: 0.78, blue: 0.20),
+                label: "昨结",
+                labelX: 24,
+                dashPattern: [6, 4]
+            )
         }
     }
 
@@ -2928,18 +2918,8 @@ struct ChartContentView: View {
     /// v13.25 主图截图导出 PNG · ImageRenderer + NSSavePanel · macOS 13+
     @MainActor
     private func exportChartScreenshot() {
-        let renderer = ImageRenderer(content: chartMainArea
-            .frame(width: 1280, height: 720))
-        renderer.scale = 2  // Retina 高清
-        guard let nsImage = renderer.nsImage,
-              let tiff = nsImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            let err = NSAlert()
-            err.messageText = "截图失败"
-            err.informativeText = "ImageRenderer 渲染未返回有效图片。"
-            err.alertStyle = .warning
-            err.runModal()
+        guard let pngData = PNGRenderer.render(chartMainArea, width: 1280, height: 720) else {
+            Toast.errorBody("截图失败", "ImageRenderer 渲染未返回有效图片。")
             return
         }
         let panel = NSSavePanel()

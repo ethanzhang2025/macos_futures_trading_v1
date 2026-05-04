@@ -853,6 +853,7 @@ struct AlertWindow: View {
 
     private func historyRow(_ e: AlertHistoryEntry) -> some View {
         let isExpanded = expandedHistoryID == e.id
+        let alertStillExists = alerts.contains { $0.id == e.alertID }
         return VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
@@ -877,10 +878,37 @@ struct AlertWindow: View {
             .onTapGesture {
                 expandedHistoryID = isExpanded ? nil : e.id
             }
+            // v15.20 batch77 · 历史 row 右键 contextMenu（复盘效率 · 与 batch62 alert row 同模式）
+            .contextMenu {
+                Button("复制详情") { copyHistoryDetail(e) }
+                Button("复制时间戳") { copyHistoryTimestamp(e) }
+                if alertStillExists {
+                    Button("跳到对应预警") {
+                        selectedTab = .list
+                        selectedAlertIDs = [e.alertID]
+                        alertInstrumentFilter = ""
+                    }
+                }
+                Divider()
+                Button(isExpanded ? "收起详情" : "展开详情") {
+                    expandedHistoryID = isExpanded ? nil : e.id
+                }
+                Divider()
+                Button("删除此条历史", role: .destructive) {
+                    historyEntries.removeAll { $0.id == e.id }
+                }
+            }
             if isExpanded {
                 historyExpandedDetail(e)
             }
         }
+    }
+
+    /// v15.20 batch77 · 复制单条历史的时间戳（IM 同步触发时刻）
+    private func copyHistoryTimestamp(_ e: AlertHistoryEntry) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(Self.timeFormatter.string(from: e.triggeredAt), forType: .string)
     }
 
     /// v15.20 batch62 · 历史 row 展开详情面板（trader 复盘触发时刻完整信息）

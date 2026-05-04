@@ -46,7 +46,9 @@ struct ReviewWindow: View {
                 maxDrawdown: ReviewAnalytics.maxDrawdownCurve(from: closed),
                 profitLossRatio: ReviewAnalytics.profitLossRatio(from: closed),
                 sessionPnL: ReviewAnalytics.sessionPnL(from: closed),
-                streak: ReviewAnalytics.streakMetrics(from: closed)
+                streak: ReviewAnalytics.streakMetrics(from: closed),
+                riskAdjusted: ReviewAnalytics.riskAdjustedMetrics(from: closed),
+                profitability: ReviewAnalytics.profitabilityMetrics(from: closed)
             )
         }.value
         summary = result
@@ -98,23 +100,39 @@ struct ReviewWindow: View {
     }
 
     private func header(_ s: ReviewSummary) -> some View {
-        HStack(spacing: 20) {
-            Text("📊 复盘工作台").font(.title2).bold()
-            Divider().frame(height: 24)
-            stat("成交", "\(s.tradeCount) 笔")
-            stat("闭合", "\(s.closedPositions.count) 笔")
-            stat("总 PnL", "¥\(signedDecimal(s.monthlyPnL.totalPnL))")
-            stat("胜率", pct(s.winRateCurve.finalWinRate))
-            stat("最长连胜", "\(s.streak.maxWinningStreak) 笔")
-            stat("最长连败", "\(s.streak.maxLosingStreak) 笔")
-            stat("当前", currentStreakLabel(s.streak))
-            Spacer()
-            Text("v1 mock · 待 M5 接 JournalStore 真数据")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
+        VStack(spacing: 4) {
+            HStack(spacing: 20) {
+                Text("📊 复盘工作台").font(.title2).bold()
+                Divider().frame(height: 24)
+                stat("成交", "\(s.tradeCount) 笔")
+                stat("闭合", "\(s.closedPositions.count) 笔")
+                stat("总 PnL", "¥\(signedDecimal(s.monthlyPnL.totalPnL))")
+                stat("胜率", pct(s.winRateCurve.finalWinRate))
+                stat("最长连胜", "\(s.streak.maxWinningStreak) 笔")
+                stat("最长连败", "\(s.streak.maxLosingStreak) 笔")
+                stat("当前", currentStreakLabel(s.streak))
+                Spacer()
+                Text("v1 mock · 待 M5 接 JournalStore 真数据")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            // 风险调整 / 盈利能力专业指标（v15.18 已计算 · v15.19 batch20 暴露 UI）
+            HStack(spacing: 20) {
+                Spacer().frame(width: 110)   // 与上行 "📊 复盘工作台" + Divider 对齐
+                stat("Sharpe", String(format: "%.2f", s.riskAdjusted.sharpeRatio))
+                stat("Sortino", String(format: "%.2f", s.riskAdjusted.sortinoRatio))
+                stat("Calmar", String(format: "%.2f", s.riskAdjusted.calmarRatio))
+                stat("Recovery", String(format: "%.2f", s.riskAdjusted.recoveryFactor))
+                stat("ProfitFactor", String(format: "%.2f", s.profitability.profitFactor))
+                stat("Expectancy", "¥\(signedDecimal(s.profitability.expectancy))")
+                stat("最大单笔盈", "¥\(decimal(s.profitability.largestWin))")
+                stat("最大单笔亏", "¥\(decimal(s.profitability.largestLoss))")
+                Spacer()
+            }
+            .padding(.bottom, 4)
         }
         .padding(.horizontal, 16)
-        .frame(height: 48)
+        .padding(.vertical, 6)
     }
 
     private func currentStreakLabel(_ s: ReviewAnalytics.StreakMetrics) -> String {
@@ -469,6 +487,8 @@ private struct ReviewSummary {
     let profitLossRatio: ProfitLossRatio
     let sessionPnL: SessionPnL
     let streak: ReviewAnalytics.StreakMetrics
+    let riskAdjusted: ReviewAnalytics.RiskAdjustedMetrics
+    let profitability: ReviewAnalytics.ProfitabilityMetrics
 }
 
 // MARK: - Mock Trades 生成器（v1 演示 · M5 替换为 JournalStore 真数据）

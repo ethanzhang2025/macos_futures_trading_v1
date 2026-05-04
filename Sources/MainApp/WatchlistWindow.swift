@@ -309,14 +309,25 @@ struct WatchlistWindow: View {
     }
 
     private func groupRow(_ group: Watchlist, index: Int) -> some View {
-        HStack(spacing: 8) {
+        // v15.20 batch86 · 分组级涨跌统计（sidebar 一眼看每组状态）
+        let pcts = group.instrumentIDs.compactMap { parseChangePct(changePctText(for: $0)) }
+        let upCount = pcts.filter { $0 > 0 }.count
+        let downCount = pcts.filter { $0 < 0 }.count
+        return HStack(spacing: 8) {
             Image(systemName: "folder")
                 .foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 2) {
                 Text(group.name)
-                Text("\(group.instrumentIDs.count) 个合约")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 4) {
+                    Text("\(group.instrumentIDs.count) 合约")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    if !pcts.isEmpty {
+                        Text("·").foregroundColor(.secondary).font(.caption2)
+                        Text("↑\(upCount)").font(.caption2).foregroundColor(Self.priceColor(0.5))
+                        Text("↓\(downCount)").font(.caption2).foregroundColor(Self.priceColor(-0.5))
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

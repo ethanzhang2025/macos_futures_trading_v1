@@ -23,6 +23,7 @@ import UniformTypeIdentifiers
 import Shared
 import StoreCore
 import DataCore
+import AlertCore
 
 // MARK: - Sheet 状态
 
@@ -376,6 +377,23 @@ struct WatchlistWindow: View {
         .onTapGesture(count: 2) {
             openInstrumentInChart(id)
         }
+        .contextMenu {
+            // v15.19 batch48 · 右键一键创建预警模板（联动 AlertPreset · 复用 alertAddedFromChart）
+            Button("打开主图") { openInstrumentInChart(id) }
+            Divider()
+            Menu("📋 创建预警模板") {
+                ForEach(AlertPreset.allCases) { preset in
+                    Button(preset.displayName) {
+                        createAlertPreset(preset, instrumentID: id)
+                    }
+                    .help(preset.helpText)
+                }
+                Divider()
+                Button("全部 6 类一次创建") {
+                    createAllAlertPresets(instrumentID: id)
+                }
+            }
+        }
         .overlay(alignment: .top) { insertionIndicator(at: groupID, index: index) }
         .draggable(WatchlistInstrumentRef(sourceGroupID: groupID, instrumentID: id)) {
             dragPreview(systemImage: "doc.text.fill", text: id)
@@ -649,6 +667,32 @@ struct WatchlistWindow: View {
             return String(format: "%.2f", NSDecimalNumber(decimal: q.lastPrice).doubleValue)
         }
         return MockQuote.price(for: id)
+    }
+
+    /// v15.19 batch48 · 右键一键创建单个预警预设（联动 AlertPreset + alertAddedFromChart 通知）
+    @MainActor
+    private func createAlertPreset(_ preset: AlertPreset, instrumentID: String) {
+        // 用当前最新价（quotes 实时报价 fallback Mock 价的 Decimal 解析）
+        let lastPrice = currentLastPrice(for: instrumentID)
+        let alert = preset.makeAlert(instrumentID: instrumentID, lastPrice: lastPrice)
+        NotificationCenter.default.post(name: .alertAddedFromChart, object: alert)
+    }
+
+    /// v15.19 batch48 · 一次创建 6 类全部预设
+    @MainActor
+    private func createAllAlertPresets(instrumentID: String) {
+        let lastPrice = currentLastPrice(for: instrumentID)
+        let alerts = AlertPreset.makeAlerts(AlertPreset.allCases, instrumentID: instrumentID, lastPrice: lastPrice)
+        for a in alerts {
+            NotificationCenter.default.post(name: .alertAddedFromChart, object: a)
+        }
+    }
+
+    /// 取当前最新价（实时 quotes 优先 · fallback Mock 字符串解析 · 异常兜底 0）
+    private func currentLastPrice(for id: String) -> Decimal {
+        if let q = quotes[id] { return q.lastPrice }
+        if let parsed = Decimal(string: MockQuote.price(for: id)) { return parsed }
+        return 0
     }
 
     /// 涨跌幅文本 · 前缀 "+"/"-" 兼容现有涨跌色判断（hasPrefix("-") → green）

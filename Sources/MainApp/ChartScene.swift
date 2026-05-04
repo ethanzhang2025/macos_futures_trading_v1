@@ -2503,6 +2503,14 @@ struct ChartContentView: View {
         }
     }
 
+    /// v15.19 batch45 · 复制价格到剪贴板（trader 与 IM/邮件分享便捷）
+    @MainActor
+    private func copyPriceToPasteboard(_ price: Decimal) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(formatPrice(price), forType: .string)
+    }
+
     /// 跳到最新 K 线（保持 visibleCount · 滚到最右）· ⌘End / ⌘→ 共用
     private func jumpToLatestBar() {
         inertiaTask?.cancel()
@@ -2802,6 +2810,15 @@ struct ChartContentView: View {
             if let hp = hoverDataPoint {
                 Button("在 \(formatPrice(hp.price)) 创建预警…") {
                     quickCreatePriceAlert(at: hp.price)
+                }
+                Button("复制 hover 价 \(formatPrice(hp.price))") {
+                    copyPriceToPasteboard(hp.price)
+                }
+                Divider()
+            }
+            if let lastBar = bars.last {
+                Button("复制当前价 \(formatPrice(lastBar.close))") {
+                    copyPriceToPasteboard(lastBar.close)
                 }
                 Divider()
             }

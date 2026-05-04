@@ -83,6 +83,8 @@ struct AlertWindow: View {
 
     /// v15.21 batch93 · 历史 tab 搜索框聚焦（⌘F 触发 · trader 高频快搜）
     @FocusState private var isHistorySearchFocused: Bool
+    /// v15.21 batch135 · 删除确认对话框（防止 trash 按钮误点丢失复杂条件预警）
+    @State private var pendingDeleteAlert: Alert?
     /// v15.21 batch95 · 列表 tab 搜索框（按预警名 / 合约 / 条件描述模糊匹配）
     @State private var alertSearchText: String = ""
     @FocusState private var isAlertSearchFocused: Bool
@@ -151,6 +153,24 @@ struct AlertWindow: View {
             selectedTab = .list
             alertInstrumentFilter = id
             alertSearchText = ""    // 清搜索 · 让 instrument filter 全权显示
+        }
+        // v15.21 batch135 · 单条删除确认对话框（防 trash 按钮 / contextMenu "删除…" 误点 · 与 watchlist groupRow 一致）
+        .confirmationDialog(
+            "删除预警？",
+            isPresented: Binding(
+                get: { pendingDeleteAlert != nil },
+                set: { if !$0 { pendingDeleteAlert = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeleteAlert
+        ) { alert in
+            Button("删除「\(alert.name)」", role: .destructive) {
+                deleteAlert(alert)
+                pendingDeleteAlert = nil
+            }
+            Button("取消", role: .cancel) { pendingDeleteAlert = nil }
+        } message: { alert in
+            Text("\(alert.instrumentID) · \(alert.condition.displayDescription)")
         }
         .sheet(item: $sheetState) { state in
             switch state {
@@ -555,7 +575,7 @@ struct AlertWindow: View {
                 Button("加入选中") { selectedAlertIDs.insert(a.id) }
             }
             Divider()
-            Button("删除", role: .destructive) { deleteAlert(a) }
+            Button("删除…", role: .destructive) { pendingDeleteAlert = a }   // v15.21 batch135 · 弹确认
         }
     }
 
@@ -599,12 +619,12 @@ struct AlertWindow: View {
             .help("编辑")
 
             Button {
-                deleteAlert(a)
+                pendingDeleteAlert = a   // v15.21 batch135 · 弹确认对话框防误删
             } label: {
                 Image(systemName: "trash").foregroundColor(.red)
             }
             .buttonStyle(.borderless)
-            .help("删除")
+            .help("删除（弹确认）")
         }
         .font(.system(size: 14))
     }

@@ -820,11 +820,14 @@ struct ChartScene: View {
                 if measureAnchor == nil {
                     measureAnchor = hoverDataPoint
                     measureFinal = nil
+                    presentToggleNotice("测距：起点已设")
                 } else if measureFinal == nil {
                     measureFinal = hoverDataPoint
+                    presentToggleNotice("测距：终点已锁定 · ⌘⇧X 复制详情")
                 } else {
                     measureAnchor = nil
                     measureFinal = nil
+                    presentToggleNotice("测距：已退出")
                 }
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])

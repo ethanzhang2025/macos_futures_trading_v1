@@ -212,11 +212,19 @@ struct FuturesTerminalApp: App {
                 batchSize: 100,
                 timeTriggerMs: 5 * 60 * 1000,
                 pollIntervalSec: 30,
-                onFailure: { [weak banner] consecutive, _, _ in
+                onFailure: { [weak banner] consecutive, _, error in
                     guard let banner else { return }
                     if consecutive == 5 {   // 5 连败首次触发 · 不重复 emit
-                        // 实际场景下这里通过自定义 source push banner · stub 阶段不真发
-                        _ = await banner.refresh()
+                        let nowMs = AnalyticsEvent.nowMs()
+                        let warn = Banner(
+                            id: "system.upload-failure",
+                            title: "埋点上报中断",
+                            body: "已连续 5 次失败 · 后台自动重试中（\(error)）",
+                            level: .warning,
+                            createdAtMs: nowMs,
+                            expiredAtMs: nowMs + 60 * 60 * 1000   // 1 小时过期
+                        )
+                        await banner.emitLocal(warn)
                     }
                 }
             )

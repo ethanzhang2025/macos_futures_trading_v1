@@ -97,6 +97,45 @@ struct BannerServiceTests {
         #expect(BannerLevel.critical.rawValue == "critical")
         #expect(BannerLevel.allCases.count == 3)
     }
+
+    @Test("emitLocal · 客户端主动 push banner · 立即在 active 出现")
+    func emitLocalAddsBanner() async {
+        let store = InMemoryBannerDismissalStore()
+        let source = StubBannerSource()
+        let service = BannerService(store: store, source: source)
+        _ = await service.refresh()    // empty
+        await service.emitLocal(makeBanner("alert-1", level: .warning))
+        let active = await service.active()
+        #expect(active.count == 1)
+        #expect(active[0].id == "alert-1")
+    }
+
+    @Test("emitLocal · 同 id 已存在则替换（防重复 emit）")
+    func emitLocalReplacesById() async {
+        let store = InMemoryBannerDismissalStore()
+        let source = StubBannerSource()
+        let service = BannerService(store: store, source: source)
+        await service.emitLocal(makeBanner("x"))
+        await service.emitLocal(Banner(
+            id: "x", title: "新标题", body: "新内容", level: .critical,
+            createdAtMs: 1_700_000_000_000
+        ))
+        let active = await service.active()
+        #expect(active.count == 1)
+        #expect(active[0].title == "新标题")
+        #expect(active[0].level == .critical)
+    }
+
+    @Test("emitLocal · dismissed 后不再出现（dismiss 持久化优先）")
+    func emitLocalRespectsDismissed() async {
+        let store = InMemoryBannerDismissalStore()
+        await store.markDismissed("x")
+        let source = StubBannerSource()
+        let service = BannerService(store: store, source: source)
+        await service.emitLocal(makeBanner("x"))
+        let active = await service.active()
+        #expect(active.isEmpty)
+    }
 }
 
 @Suite("BannerDismissalStore · 持久化")

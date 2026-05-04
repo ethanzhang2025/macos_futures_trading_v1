@@ -50,6 +50,18 @@ public actor BannerService {
         await rebuildActive()
     }
 
+    /// v15.18 · 客户端自己 emit 一条 banner（如 BatchUploadDriver 5 连失败 · 不需后端推送）
+    /// 同 id 已存在则替换 · 立即出现在 activeCache（不等下一次 refresh）
+    public func emitLocal(_ banner: Banner) async {
+        // 与 lastFetched 合并 · 同 id 替换
+        if let idx = lastFetched.firstIndex(where: { $0.id == banner.id }) {
+            lastFetched[idx] = banner
+        } else {
+            lastFetched.append(banner)
+        }
+        await rebuildActive()
+    }
+
     /// 当前应展示的 active 列表（不触发 refresh）
     public func active() async -> [Banner] {
         activeCache

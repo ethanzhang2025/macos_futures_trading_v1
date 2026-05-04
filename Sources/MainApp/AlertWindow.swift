@@ -53,6 +53,8 @@ struct AlertWindow: View {
     /// v15.20 batch69 · 列表排序（@AppStorage 持久化 · 重启保留 · 默认 .manual 创建顺序）
     @AppStorage("viewState.v1.alert.sortFieldRaw") private var alertSortFieldRaw: String = AlertSortField.manual.rawValue
     @AppStorage("viewState.v1.alert.sortAscending") private var alertSortAscending: Bool = true
+    /// v15.21 batch90 · 新建预警默认 cooldown 秒数（trader 工作流个性化 · 持久化）
+    @AppStorage("viewState.v1.alert.defaultCooldownSeconds") private var defaultCooldownSeconds: Int = 60
 
     private var alertSortField: AlertSortField {
         AlertSortField(rawValue: alertSortFieldRaw) ?? .manual
@@ -140,11 +142,11 @@ struct AlertWindow: View {
         .sheet(item: $sheetState) { state in
             switch state {
             case .add:
-                AddOrEditAlertSheet(editing: nil) { newAlert in
+                AddOrEditAlertSheet(editing: nil, defaultCooldownSeconds: defaultCooldownSeconds) { newAlert in
                     alerts.append(newAlert)
                 }
             case .edit(let alert):
-                AddOrEditAlertSheet(editing: alert) { updated in
+                AddOrEditAlertSheet(editing: alert, defaultCooldownSeconds: defaultCooldownSeconds) { updated in
                     if let idx = alerts.firstIndex(where: { $0.id == updated.id }) {
                         alerts[idx] = updated
                     }
@@ -1172,8 +1174,12 @@ private struct AlertFormDraft {
 
     var channels: Set<NotificationChannelKind> = [.inApp, .systemNotice]
 
-    init(from alert: Alert? = nil) {
-        guard let a = alert else { return }
+    /// v15.21 batch90 · defaultCooldownSeconds 用于新建 alert 时初始 cooldown · trader Settings 持久化
+    init(from alert: Alert? = nil, defaultCooldownSeconds: Int = 60) {
+        guard let a = alert else {
+            cooldownSeconds = defaultCooldownSeconds
+            return
+        }
         name = a.name
         instrumentID = a.instrumentID
         status = a.status
@@ -1274,14 +1280,18 @@ private enum IndicatorEventTag: String, CaseIterable, Identifiable {
 
 struct AddOrEditAlertSheet: View {
     let editing: Alert?
+    let defaultCooldownSeconds: Int
     let onSave: (Alert) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AlertFormDraft
+    /// v15.21 batch90 · 持久化默认 cooldown · 仅新建预警时"设为默认"按钮可写
+    @AppStorage("viewState.v1.alert.defaultCooldownSeconds") private var storedDefaultCooldown: Int = 60
 
-    init(editing: Alert?, onSave: @escaping (Alert) -> Void) {
+    init(editing: Alert?, defaultCooldownSeconds: Int = 60, onSave: @escaping (Alert) -> Void) {
         self.editing = editing
+        self.defaultCooldownSeconds = defaultCooldownSeconds
         self.onSave = onSave
-        self._draft = State(initialValue: AlertFormDraft(from: editing))
+        self._draft = State(initialValue: AlertFormDraft(from: editing, defaultCooldownSeconds: defaultCooldownSeconds))
     }
 
     var body: some View {
@@ -1317,6 +1327,15 @@ struct AddOrEditAlertSheet: View {
                         Text("冷却（秒）")
                         TextField("", value: $draft.cooldownSeconds, format: .number)
                             .frame(width: 80)
+                        // v15.21 batch90 · 仅新建预警时显示"设为默认"按钮 · 写 @AppStorage 持久化
+                        if editing == nil {
+                            Button("设为默认") {
+                                storedDefaultCooldown = max(0, draft.cooldownSeconds)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("把当前冷却秒数保存为新预警默认值（持久化 · 重启保留）")
+                            .disabled(draft.cooldownSeconds == storedDefaultCooldown)
+                        }
                     }
                 }
             }

@@ -3236,6 +3236,11 @@ struct ChartContentView: View {
                 NotificationCenter.default.post(name: .alertWindowFilterToInstrument, object: currentInstrumentID)
                 openWindow(id: "alert")
             }
+            // v15.21 batch131 · 跨窗口联动 · 加本合约到自选（trader 在 ChartScene 浏览外部数据时一键收藏）
+            Button("加入自选（\(currentInstrumentID)）") {
+                NotificationCenter.default.post(name: .watchlistAddInstrument, object: currentInstrumentID)
+                openWindow(id: "watchlist")
+            }
             Divider()
             // v13.24 无选中画线 · 显示通用 chart 操作（重置缩放 / 复制可见区 CSV）
             Button("重置缩放（⌘0）") {

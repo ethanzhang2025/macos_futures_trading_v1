@@ -1848,6 +1848,8 @@ enum MockAlertHistory {
 extension Notification.Name {
     public static let alertAddedFromChart = Notification.Name("alertAddedFromChart")
     public static let alertWindowFilterToInstrument = Notification.Name("alertWindowFilterToInstrument")
+    /// v15.21 batch131 · ChartScene → WatchlistWindow 加合约到默认/当前 group（跨窗口工作流闭环）
+    public static let watchlistAddInstrument = Notification.Name("watchlistAddInstrument")
 }
 
 #endif

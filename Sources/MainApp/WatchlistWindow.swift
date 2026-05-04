@@ -135,6 +135,26 @@ struct WatchlistWindow: View {
         .onChange(of: selectedGroupID) { _ in
             selectedInstruments.removeAll()
         }
+        // v15.21 batch131 · 跨窗口加合约 · ChartScene 触发 → 加到当前选中 group（无选中则加到第一个）
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistAddInstrument)) { notification in
+            guard let id = notification.object as? String,
+                  let trimmed = id.trimmedOrNil?.uppercased() else { return }
+            // 优先目标：当前选中分组 · 否则第一个分组 · 都没有时弹 sheet 让用户先建分组
+            let targetGroupID: UUID? = selectedGroupID ?? book.groups.first?.id
+            guard let groupID = targetGroupID,
+                  let group = book.group(id: groupID) else {
+                sheetState = .addGroup
+                return
+            }
+            // 已存在则不重复
+            if !group.instrumentIDs.contains(trimmed) {
+                book.addInstrument(trimmed, to: groupID)
+                Toast.info("已加入自选", "\(trimmed) → 「\(group.name)」")
+            } else {
+                Toast.info("已存在", "\(trimmed) 已在「\(group.name)」")
+            }
+            selectedGroupID = groupID   // 切到该 group 让 trader 看见
+        }
         .sheet(item: $sheetState) { state in
             switch state {
             case .addGroup:

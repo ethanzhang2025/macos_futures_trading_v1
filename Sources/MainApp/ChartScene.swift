@@ -3217,6 +3217,10 @@ struct ChartContentView: View {
             Button("复制可见区 OHLC（Markdown 表格）") {
                 copyVisibleBarsAsMarkdown()
             }
+            // v15.21 batch119 · 复制可见区时间范围（标关注区间 · 写笔记/IM 群讨论用）
+            Button("复制可见区时间范围") {
+                copyVisibleTimeRange()
+            }
             Button("导出主图截图（PNG · ⌘P）…") {
                 exportChartScreenshot()
             }
@@ -3269,6 +3273,17 @@ struct ChartContentView: View {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd HH:mm"
         return fmt.string(from: date)
+    }
+
+    /// v15.21 batch119 · 复制可见区起始 - 结束时间范围（trader 标关注区间 · IM 群讨论）
+    private func copyVisibleTimeRange() {
+        let endIdx = min(bars.count, viewport.startIndex + viewport.visibleCount)
+        let startIdx = max(0, viewport.startIndex)
+        guard startIdx < endIdx else { return }
+        let firstTime = formatBarTime(bars[startIdx].openTime)
+        let lastTime = formatBarTime(bars[endIdx - 1].openTime)
+        let count = endIdx - startIdx
+        Pasteboard.copy("\(firstTime) → \(lastTime)（共 \(count) 根 K 线）")
     }
 
     /// v15.21 batch112 · 复制 hover bar 周边前后 N 根 K 线为 Markdown 表格（关键区段复盘）

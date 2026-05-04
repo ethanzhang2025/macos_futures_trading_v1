@@ -94,4 +94,53 @@ struct SwingPointsTests {
         #expect(SwingPointsDetector.detect(bars, lookback: 0) == [])
         #expect(SwingPointsDetector.detect(bars, lookback: -5) == [])
     }
+
+    @Test("v15.21 batch105 · filterDense · 同向密集合并取更极值（high 取大）")
+    func filterDenseSameKindHigh() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let points: [SwingPoint] = [
+            SwingPoint(kind: .high, barIndex: 10, price: 100, time: now),
+            SwingPoint(kind: .high, barIndex: 12, price: 110, time: now),  // 距离 2 < 5 · 取更高 110
+            SwingPoint(kind: .high, barIndex: 13, price: 105, time: now),  // 距离 1 < 5 · 不替换
+            SwingPoint(kind: .high, barIndex: 20, price: 90,  time: now),  // 距离 8 ≥ 5 · 保留
+        ]
+        let result = SwingPointsDetector.filterDense(points, minSpacing: 5)
+        #expect(result.count == 2)
+        #expect(result[0].barIndex == 12 && result[0].price == 110)
+        #expect(result[1].barIndex == 20)
+    }
+
+    @Test("v15.21 batch105 · filterDense · 同向密集合并取更极值（low 取小）")
+    func filterDenseSameKindLow() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let points: [SwingPoint] = [
+            SwingPoint(kind: .low, barIndex: 10, price: 100, time: now),
+            SwingPoint(kind: .low, barIndex: 12, price: 90,  time: now),  // 距离 2 < 5 · 取更低 90
+            SwingPoint(kind: .low, barIndex: 13, price: 95,  time: now),  // 距离 1 < 5 · 不替换
+        ]
+        let result = SwingPointsDetector.filterDense(points, minSpacing: 5)
+        #expect(result.count == 1)
+        #expect(result[0].barIndex == 12 && result[0].price == 90)
+    }
+
+    @Test("v15.21 batch105 · filterDense · 不同 kind 相邻不过滤")
+    func filterDenseDifferentKind() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let points: [SwingPoint] = [
+            SwingPoint(kind: .high, barIndex: 10, price: 100, time: now),
+            SwingPoint(kind: .low,  barIndex: 11, price: 80,  time: now),  // 距离 1 但不同 kind · 保留
+            SwingPoint(kind: .high, barIndex: 12, price: 105, time: now),
+        ]
+        let result = SwingPointsDetector.filterDense(points, minSpacing: 5)
+        #expect(result.count == 3)
+    }
+
+    @Test("v15.21 batch105 · detect 接 minBarSpacing 默认 0 不过滤")
+    func detectMinSpacingDefaultZero() {
+        let bars = (0..<11).map { i in bar(100, 100 + Decimal(i % 3), 90, 100, idx: i) }
+        // 默认 minBarSpacing=0 等价于不过滤
+        let raw = SwingPointsDetector.detect(bars, lookback: 2)
+        let same = SwingPointsDetector.detect(bars, lookback: 2, minBarSpacing: 0)
+        #expect(raw == same)
+    }
 }

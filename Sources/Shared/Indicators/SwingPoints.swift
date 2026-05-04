@@ -38,7 +38,8 @@ public enum SwingPointsDetector {
     /// 检测全部 swing high/low
     /// - bars: K 线数组（按时间升序）
     /// - lookback: 前后窗口大小（默认 5 · 须 ≥1）
-    public static func detect(_ bars: [KLine], lookback: Int = 5) -> [SwingPoint] {
+    /// - minBarSpacing: v15.21 batch105 · 同向 swing 最小 bar 间距（默认 0 不过滤 · >0 时密集合并保留更极值）
+    public static func detect(_ bars: [KLine], lookback: Int = 5, minBarSpacing: Int = 0) -> [SwingPoint] {
         guard lookback >= 1, bars.count > 2 * lookback else { return [] }
         var out: [SwingPoint] = []
         for i in lookback..<(bars.count - lookback) {
@@ -61,6 +62,24 @@ public enum SwingPointsDetector {
                 out.append(SwingPoint(kind: .low, barIndex: i, price: bar.low, time: bar.openTime))
             }
         }
-        return out
+        return minBarSpacing > 0 ? filterDense(out, minSpacing: minBarSpacing) : out
+    }
+
+    /// v15.21 batch105 · 同向相邻 swing 距离 < minSpacing 时保留更极值（high 取大 · low 取小）
+    /// 不同 kind 相邻不过滤（高 → 低 是有效结构 · 不算密集）
+    static func filterDense(_ points: [SwingPoint], minSpacing: Int) -> [SwingPoint] {
+        var kept: [SwingPoint] = []
+        for p in points {
+            if let last = kept.last, last.kind == p.kind, p.barIndex - last.barIndex < minSpacing {
+                if (p.kind == .high && p.price > last.price)
+                    || (p.kind == .low && p.price < last.price) {
+                    kept[kept.count - 1] = p   // 替换为更极值
+                }
+                // 否则 last 已更极值 · 跳过 p
+            } else {
+                kept.append(p)
+            }
+        }
+        return kept
     }
 }

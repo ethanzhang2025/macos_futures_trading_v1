@@ -154,4 +154,21 @@ struct MaiLangSyntaxHighlighterTests {
         #expect(tokens[0].kind == .builtinFunc)
         #expect(tokens[0].text == "MA")
     }
+
+    @Test("v15.22 batch9 · allCompletionCandidates 含关键字 + 函数 + 绘图属性")
+    func completionCandidates() {
+        let all = MaiLangSyntaxHighlighter.allCompletionCandidates
+        // 关键字
+        #expect(all.contains("AND"))
+        #expect(all.contains("IF"))
+        // 函数
+        #expect(all.contains("MA"))
+        #expect(all.contains("EMA"))
+        #expect(all.contains("CLOSE"))
+        // 绘图属性
+        #expect(all.contains("COLORRED"))
+        #expect(all.contains("LINETHICK2"))
+        // 总数 ≥ 60（实际更多）
+        #expect(all.count >= 60)
+    }
 }

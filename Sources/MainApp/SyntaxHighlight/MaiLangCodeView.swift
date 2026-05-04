@@ -76,6 +76,23 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 self.parent.applyHighlight(to: tv)
             }
         }
+
+        /// v15.22 batch9 · 自动补全候选（NSTextView 默认 F5 / Esc 触发 popup）
+        /// trader 输入"M" → Esc → 弹 MA / MAX / MIN / MEDIAN / MOD / MULAR 等候选
+        public func textView(_ textView: NSTextView,
+                             completions words: [String],
+                             forPartialWordRange charRange: NSRange,
+                             indexOfSelectedItem index: UnsafeMutablePointer<Int>?) -> [String]? {
+            let prefix = (textView.string as NSString).substring(with: charRange).uppercased()
+            guard !prefix.isEmpty else { return nil }
+            let candidates = MaiLangSyntaxHighlighter.allCompletionCandidates
+                .filter { $0.hasPrefix(prefix) }
+            // 默认选中第一个（trader 直接 Tab 即可补全）
+            if !candidates.isEmpty, index != nil {
+                index!.pointee = 0
+            }
+            return candidates
+        }
     }
 
     // MARK: - 主题 + 高亮

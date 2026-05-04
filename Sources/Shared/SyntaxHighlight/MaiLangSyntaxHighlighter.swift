@@ -40,15 +40,20 @@ public struct SyntaxToken: Sendable, Equatable {
 /// 麦语言 syntax 高亮 token 化器（tolerant · 不抛错）
 public enum MaiLangSyntaxHighlighter {
 
+    /// v15.22 batch9 · 自动补全候选词全集（关键字 + 内置函数 + 绘图属性 · 已大写）
+    public static var allCompletionCandidates: [String] {
+        Array(keywords).sorted() + Array(builtinFuncs).sorted() + Array(drawAttributesExact).sorted()
+    }
+
     /// 逻辑 / 控制流关键字（与 IndicatorCore.Lexer logicKeywords 一致 + IF/THEN/ELSE 控制流）
-    private static let keywords: Set<String> = [
+    static let keywords: Set<String> = [
         "AND", "OR", "NOT",
         "IF", "THEN", "ELSE", "ELSIF",   // 部分方言支持
     ]
 
     /// 内置函数名（与 IndicatorCore.BuiltinFunctions.all 同步 · 60+ 函数）
     /// 后续可加脚本验证 / 生成保持一致
-    private static let builtinFuncs: Set<String> = [
+    static let builtinFuncs: Set<String> = [
         // 均线
         "MA", "EMA", "SMA", "DMA", "WMA",
         // 引用
@@ -76,7 +81,7 @@ public enum MaiLangSyntaxHighlighter {
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）
-    private static let drawAttributesExact: Set<String> = [
+    static let drawAttributesExact: Set<String> = [
         "COLORRED", "COLORGREEN", "COLORBLUE", "COLORWHITE", "COLORYELLOW",
         "COLORCYAN", "COLORMAGENTA", "COLORGRAY", "COLORBLACK",
         "DOTLINE", "POINTDOT", "CIRCLELINE", "CROSSDOT", "STICK",

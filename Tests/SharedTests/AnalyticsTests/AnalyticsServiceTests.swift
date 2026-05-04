@@ -101,6 +101,52 @@ struct AnalyticsServiceSessionTests {
         await service.setSession("S1")
         #expect(await service.currentSession() == "S1")
     }
+
+    // MARK: - v15.18 · WP-133a session_start/end + drawing_create wire 端到端字段
+
+    @Test("session_start · sessionID 透传到事件 + properties 携带 session_id 字段（v15.18 wire）")
+    func sessionStartCarriesSessionFields() async throws {
+        let store = InMemoryAnalyticsEventStore()
+        let service = AnalyticsService(store: store, deviceID: "d1", appVersion: "1.0")
+        let sid = "session-uuid-X"
+        await service.setSession(sid)
+        try await service.record(.sessionStart, userID: "u1", properties: ["session_id": sid])
+        let pending = try await store.queryPending(limit: 0)
+        #expect(pending[0].eventName == .sessionStart)
+        #expect(pending[0].sessionID == sid)
+        #expect(pending[0].properties["session_id"] == sid)
+    }
+
+    @Test("session_end · 携带 session_id + duration_sec（v15.18 wire）")
+    func sessionEndCarriesDurationField() async throws {
+        let store = InMemoryAnalyticsEventStore()
+        let service = AnalyticsService(store: store, deviceID: "d1", appVersion: "1.0")
+        let sid = "session-uuid-Y"
+        await service.setSession(sid)
+        try await service.record(
+            .sessionEnd,
+            userID: "u1",
+            properties: ["session_id": sid, "duration_sec": "127"]
+        )
+        let pending = try await store.queryPending(limit: 0)
+        #expect(pending[0].eventName == .sessionEnd)
+        #expect(pending[0].properties["session_id"] == sid)
+        #expect(pending[0].properties["duration_sec"] == "127")
+    }
+
+    @Test("drawing_create · properties 携带 drawing_type 字段（v15.18 wire · ChartScene addUserDrawing）")
+    func drawingCreateCarriesTypeField() async throws {
+        let store = InMemoryAnalyticsEventStore()
+        let service = AnalyticsService(store: store, deviceID: "d1", appVersion: "1.0")
+        try await service.record(
+            .drawingCreate,
+            userID: "u1",
+            properties: ["drawing_type": "trendLine"]
+        )
+        let pending = try await store.queryPending(limit: 0)
+        #expect(pending[0].eventName == .drawingCreate)
+        #expect(pending[0].properties["drawing_type"] == "trendLine")
+    }
 }
 
 @Suite("AnalyticsService · 上报路径透传")

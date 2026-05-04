@@ -914,7 +914,7 @@ struct ChartScene: View {
                 ForEach(drawingTemplates) { template in
                     Button("\(template.name) · \(drawingTypeLabel(template.drawing.type))") {
                         let d = instantiateTemplate(template)
-                        drawings.append(d)
+                        addUserDrawing(d)
                         selectedDrawingIDs = [d.id]
                     }
                 }
@@ -1062,7 +1062,7 @@ struct ChartScene: View {
             strokeOpacity: ChartContentView.alphaComponent(from: currentStrokeColor),
             extraPoints: pendingExtraPoints
         )
-        drawings.append(drawing)
+        addUserDrawing(drawing)
         pendingDrawingPoint = nil
         pendingExtraPoints = []
         activeDrawingTool = nil
@@ -2425,6 +2425,23 @@ struct ChartContentView: View {
         selectedDrawingIDs = [copy.id]
     }
 
+    /// v15.18 · WP-133a drawing_create 用户主动新建画线集中入口
+    /// append 到 drawings + 异步发埋点（StageA-补遗 G2 #6 drawing_create · drawing_type 字段）
+    /// 复制 / 导入 / 模板批量不走此入口（不算原创 create 语义）
+    private func addUserDrawing(_ drawing: Drawing) {
+        drawings.append(drawing)
+        if let service = analytics {
+            let typeRaw = drawing.type.rawValue
+            Task {
+                _ = try? await service.record(
+                    .drawingCreate,
+                    userID: FuturesTerminalApp.anonymousUserID,
+                    properties: ["drawing_type": typeRaw]
+                )
+            }
+        }
+    }
+
     /// v13.6 克隆 helper · 偏移 20 bar / 价格区间 5%（避免完全重叠）· v13.8 复制色/线宽 · v13.9 多选用
     /// v13.11 副本不继承 isLocked · 让用户能立即拖动 / 删除新副本（防误改不应延续到副本）
     private func duplicatedDrawing(_ drawing: Drawing) -> Drawing {
@@ -2927,7 +2944,7 @@ struct ChartContentView: View {
                     strokeWidth: currentStrokeWidth,
                     strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
                 )
-                drawings.append(drawing)
+                addUserDrawing(drawing)
                 pendingDrawingPoint = nil
                 activeDrawingTool = nil  // 完成后回浏览模式
             } else {
@@ -2944,7 +2961,7 @@ struct ChartContentView: View {
                     strokeWidth: currentStrokeWidth,
                     strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
                 )
-                drawings.append(drawing)
+                addUserDrawing(drawing)
                 activeDrawingTool = nil
             } else if tool == .text {
                 // v13.1 弹 NSAlert 让用户输入文字（之前 v13.0 hardcode "标注"）
@@ -2957,7 +2974,7 @@ struct ChartContentView: View {
                     strokeWidth: currentStrokeWidth,
                     strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
                 )
-                drawings.append(drawing)
+                addUserDrawing(drawing)
                 activeDrawingTool = nil
             }
         }
@@ -2980,7 +2997,7 @@ struct ChartContentView: View {
                 strokeOpacity: Self.alphaComponent(from: currentStrokeColor),
                 extraPoints: [point]
             )
-            drawings.append(drawing)
+            addUserDrawing(drawing)
             pendingDrawingPoint = nil
             pendingExtraPoints = []
             activeDrawingTool = nil
@@ -3011,7 +3028,7 @@ struct ChartContentView: View {
                 fontSize: currentFontSize,
                 strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
             )
-            drawings.append(drawing)
+            addUserDrawing(drawing)
         }
         activeDrawingTool = nil
     }

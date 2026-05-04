@@ -420,11 +420,23 @@ struct ReviewWindow: View {
         [GridItem(.adaptive(minimum: 260, maximum: 600), spacing: 16)]
     }
 
+    /// v15.20 batch81 · 加载错误视图 + "重试" 按钮（trader 暂态错误恢复）
     private func errorView(_ msg: String) -> some View {
         VStack(spacing: 12) {
-            Text("❌ 复盘加载失败").font(.headline)
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 32))
+                .foregroundColor(.orange)
+            Text("复盘加载失败").font(.headline)
             Text(msg).font(.system(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 480)
+            Button("重试") {
+                loadError = nil
+                Task { await loadMockReview() }
+            }
+            .keyboardShortcut(.defaultAction)
+            .help("重新尝试加载复盘数据 · 网络/IO 暂态错误时点此恢复")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

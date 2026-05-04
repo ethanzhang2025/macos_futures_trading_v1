@@ -331,6 +331,9 @@ struct AlertWindow: View {
                     Button("批量复制") { batchDuplicateSelected() }
                         .buttonStyle(.borderless)
                         .help("每条复制一份 · 名后缀（副本）· 默认 paused")
+                    Button("重置冷却") { batchResetCooldownSelected() }
+                        .buttonStyle(.borderless)
+                        .help("清 lastTriggeredAt · triggered 回 active · 立即可再触发")
                     Button("批量删除") { batchDeleteSelected() }
                         .buttonStyle(.borderless)
                         .foregroundColor(.red)
@@ -504,6 +507,10 @@ struct AlertWindow: View {
         let result = AlertBatchOperator.duplicate(ids: selectedAlertIDs, in: alerts)
         alerts = result.alerts
         selectedAlertIDs = result.newIDs    // 自动跳到新副本以便后续操作
+    }
+
+    private func batchResetCooldownSelected() {
+        alerts = AlertBatchOperator.resetCooldown(ids: selectedAlertIDs, in: alerts)
     }
 
     /// 模拟触发一次预警 · dispatch 走已注册的 channels + 标记 status + 写入 historyEntries

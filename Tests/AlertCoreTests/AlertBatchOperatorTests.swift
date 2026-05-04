@@ -102,6 +102,27 @@ struct AlertBatchOperatorTests {
         #expect(result.newIDs.count == 2)
     }
 
+    @Test("v15.20 batch72 · resetCooldown · 清 lastTriggeredAt · triggered 回 active")
+    func resetCooldown() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        var a = make(name: "a", status: .active)
+        a.lastTriggeredAt = now
+        var b = make(name: "b", status: .triggered)
+        b.lastTriggeredAt = now
+        let c = make(name: "c", status: .paused)   // lastTriggeredAt nil
+        let d = make(name: "d", status: .active)   // 不在选中
+
+        let result = AlertBatchOperator.resetCooldown(ids: [a.id, b.id, c.id], in: [a, b, c, d])
+        #expect(result[0].lastTriggeredAt == nil)        // a · 清掉
+        #expect(result[0].status == .active)              // 不变
+        #expect(result[1].lastTriggeredAt == nil)        // b · 清掉
+        #expect(result[1].status == .active)              // triggered → active
+        #expect(result[2].lastTriggeredAt == nil)        // c · 本来就是 nil
+        #expect(result[2].status == .paused)              // 不变（不只 triggered 才回 active）
+        #expect(result[3].lastTriggeredAt == nil)        // d · 不在选中 · 但本来就是 nil
+        #expect(result[3].status == .active)
+    }
+
     @Test("空选择 · 全部为 no-op")
     func emptySelection() {
         let a = make(name: "a", status: .active)

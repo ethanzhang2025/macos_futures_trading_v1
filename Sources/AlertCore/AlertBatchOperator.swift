@@ -41,6 +41,18 @@ public enum AlertBatchOperator {
         alerts.filter { !ids.contains($0.id) }
     }
 
+    /// v15.20 batch72 · 批量重置冷却（清 lastTriggeredAt · trader 想立即触发 / 复盘后清状态）
+    /// triggered 状态同时回到 active（视为重新启用）· 其他状态仅清 lastTriggeredAt
+    public static func resetCooldown(ids: Set<UUID>, in alerts: [Alert]) -> [Alert] {
+        alerts.map { a in
+            guard ids.contains(a.id) else { return a }
+            var copy = a
+            copy.lastTriggeredAt = nil
+            if copy.status == .triggered { copy.status = .active }
+            return copy
+        }
+    }
+
     /// 批量复制（每条选中的 alert 复制一份 · 新 UUID + 名加 "（副本）" · 默认 paused · createdAt=now）
     /// - 返回 (新数组, 复制出的 alert IDs) · IDs 用于 UI 重设 selectedIDs
     public static func duplicate(

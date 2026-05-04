@@ -2645,6 +2645,7 @@ struct ChartContentView: View {
                 ("⌘.", "副图显隐"),
                 ("⌘\\", "画线 overlay 显隐"),
                 ("⌘⇧H", "HUD 显隐"),
+                ("⌘⇧W", "Swing High/Low 标注显隐"),
             ]),
             ("主题 / 截图", [
                 ("⌘⇧D", "切换深色 / 浅色主题"),

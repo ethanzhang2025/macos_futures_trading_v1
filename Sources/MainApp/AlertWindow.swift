@@ -171,6 +171,10 @@ struct AlertWindow: View {
             stat("活跃", "\(counts.active)", color: .green)
             stat("已触发", "\(counts.triggered)", color: .red)
             stat("已暂停", "\(counts.paused)", color: .secondary)
+            // v15.20 batch79 · 触发活跃度统计（24h / 本周 · trader 看预警系统是否活跃）
+            Divider().frame(height: 24)
+            stat("24h 触发", "\(triggerCounts.last24h)", color: triggerCounts.last24h > 0 ? .orange : .secondary)
+            stat("本周触发", "\(triggerCounts.thisWeek)", color: .secondary)
             Spacer()
             Menu {
                 Button("添加预警…") { sheetState = .add }
@@ -301,6 +305,23 @@ struct AlertWindow: View {
     private var filteredAlerts: [Alert] {
         let scoped = alertInstrumentFilter.isEmpty ? alerts : alerts.filter { $0.instrumentID == alertInstrumentFilter }
         return AlertSorter.sort(scoped, field: alertSortField, ascending: alertSortAscending)
+    }
+
+    /// v15.20 batch79 · 触发活跃度统计（24h / 本周 · 走 historyEntries 触发时间过滤）
+    private var triggerCounts: (last24h: Int, thisWeek: Int) {
+        let now = Date()
+        let day = now.addingTimeInterval(-24 * 3600)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        cal.firstWeekday = 2   // 周一作周起（中国习惯 · 与 AlertHistoryFilter.range 一致）
+        let weekStart = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? day
+        var d24 = 0
+        var dWeek = 0
+        for entry in historyEntries {
+            if entry.triggeredAt >= day { d24 += 1 }
+            if entry.triggeredAt >= weekStart { dWeek += 1 }
+        }
+        return (d24, dWeek)
     }
 
     private var alertsList: some View {

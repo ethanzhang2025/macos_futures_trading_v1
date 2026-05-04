@@ -36,6 +36,11 @@ public enum FeatureFlag: String, Sendable, Codable, CaseIterable, Equatable, Has
     /// 声音提醒（v15.17 已接 NSSound Glass · 默认开 · 用户可在 Settings 关）
     case alertSound = "alert.sound"
 
+    // MARK: - 隐私（privacy.*）
+    /// 埋点上报开关（v15.18 · StageA-补遗 G2 §隐私"用户可在设置一键关闭埋点"）
+    /// 默认开 · 用户在 Settings 隐私 tab 可关闭 · 关闭后 AnalyticsService.setEnabled(false) · 事件直接丢弃不入库
+    case analyticsEnabled = "analytics.enabled"
+
     // MARK: - 实验性（experimental.*）
     /// 麦语言完整模式（Stage B；默认关）
     case experimentalFormulaCompleteMode = "experimental.formulaCompleteMode"
@@ -47,7 +52,8 @@ public enum FeatureFlag: String, Sendable, Codable, CaseIterable, Equatable, Has
         switch self {
         // 已实现 + 安全的功能默认开（含 v15.17 注入的 system notification + sound channels）
         case .importWenhua, .importGeneric, .replayMode, .reviewCharts,
-             .alertCenter, .alertSystemNotification, .alertSound:
+             .alertCenter, .alertSystemNotification, .alertSound,
+             .analyticsEnabled:
             return true
         // 商业化 / 实验性默认关
         case .subscriptionPaywall, .subscriptionFreeTrial,

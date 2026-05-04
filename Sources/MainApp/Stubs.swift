@@ -14,6 +14,8 @@ struct SettingsContentView: View {
         TabView {
             NotificationSettingsTab()
                 .tabItem { Label("通知", systemImage: "bell.badge") }
+            PrivacySettingsTab()
+                .tabItem { Label("隐私", systemImage: "hand.raised.fill") }
             placeholder(title: "通用", note: "外观 / 启动行为 / 默认合约")
                 .tabItem { Label("通用", systemImage: "gearshape") }
             placeholder(title: "图表", note: "全局快捷键 ⌘⇧D 切主题（已实现 v15.17）· 颜色 / 指标 / 精度细化待补")
@@ -23,7 +25,7 @@ struct SettingsContentView: View {
             placeholder(title: "订阅", note: "Pro / Pro 500 / 设备绑定（待 WP-91 IAP 接入）")
                 .tabItem { Label("订阅", systemImage: "person.badge.key") }
         }
-        .frame(width: 520, height: 380)
+        .frame(width: 520, height: 400)
     }
 
     private func placeholder(title: String, note: String) -> some View {
@@ -36,6 +38,33 @@ struct SettingsContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(20)
+    }
+}
+
+// MARK: - 隐私 Tab（v15.18 · StageA-补遗 G2 §隐私"用户可在设置一键关闭埋点"）
+
+private struct PrivacySettingsTab: View {
+
+    @AppStorage("featureFlag.analytics.enabled") private var analyticsOn: Bool = FeatureFlag.analyticsEnabled.defaultValue
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("启用匿名使用埋点（帮助产品改进）", isOn: $analyticsOn)
+            } header: {
+                Text("数据采集").font(.headline)
+            } footer: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("我们采集匿名事件（启动 / 图表打开 / 指标添加 / 画线 / 预警触发等）用于改进体验。")
+                    Text("**绝不采集**：交易订单 / 资金金额 / 持仓明细 / 个人身份信息。")
+                    Text("修改后需重启生效。")
+                }
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .padding(.vertical, 8)
     }
 }
 

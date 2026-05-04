@@ -20,6 +20,8 @@ struct FeatureFlagTests {
         // v15.18 · v15.17 注入 NotificationChannels 后默认开（与现实一致 · 用户可在 Settings 关）
         #expect(FeatureFlag.alertSystemNotification.defaultValue)
         #expect(FeatureFlag.alertSound.defaultValue)
+        // v15.18 · 埋点默认开（StageA-补遗 G2 §隐私"用户可在设置一键关闭"）
+        #expect(FeatureFlag.analyticsEnabled.defaultValue)
 
         #expect(!FeatureFlag.subscriptionPaywall.defaultValue)
         #expect(!FeatureFlag.subscriptionFreeTrial.defaultValue)

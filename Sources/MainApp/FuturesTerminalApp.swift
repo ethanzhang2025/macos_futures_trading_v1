@@ -182,8 +182,14 @@ struct FuturesTerminalApp: App {
             }
         }
         // app_launch 异步发 · 失败静默（埋点不阻塞 App 启动）
+        // v15.18 · 启动按 FeatureFlag.analyticsEnabled 设置 enabled · 用户在 Settings 隐私 tab 可关闭
         if let service = self.analytics {
-            Task { _ = try? await service.record(.appLaunch, userID: Self.anonymousUserID) }
+            let enabled = UserDefaults.standard.object(forKey: "featureFlag.analytics.enabled") as? Bool
+                ?? FeatureFlag.analyticsEnabled.defaultValue
+            Task {
+                await service.setEnabled(enabled)
+                _ = try? await service.record(.appLaunch, userID: Self.anonymousUserID)
+            }
         }
         // v15.18 · WP-133b BatchUploadDriver wire（stub client · 后端就绪后切 HTTP client）
         // 周期 30s poll · 双阈值（5min OR 100 条）触发 · driver 自管 task 生命周期

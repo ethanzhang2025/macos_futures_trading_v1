@@ -136,6 +136,24 @@ struct BannerServiceTests {
         let active = await service.active()
         #expect(active.isEmpty)
     }
+
+    @Test("active 排序 · critical > warning > info（同级按 createdAt 倒序）· v15.18")
+    func severityRanksOrder() async {
+        let store = InMemoryBannerDismissalStore()
+        let nowMs: Int64 = 1_700_000_000_000
+        let source = StubBannerSource(fixed: [
+            Banner(id: "info-old",  title: "i", body: "", level: .info,     createdAtMs: nowMs - 1000),
+            Banner(id: "warn-new",  title: "w", body: "", level: .warning,  createdAtMs: nowMs),
+            Banner(id: "crit-old",  title: "c", body: "", level: .critical, createdAtMs: nowMs - 5000),
+            Banner(id: "info-new",  title: "i", body: "", level: .info,     createdAtMs: nowMs)
+        ])
+        let service = BannerService(store: store, source: source)
+        let active = await service.refresh()
+        #expect(active[0].id == "crit-old")    // critical 最高优先
+        #expect(active[1].id == "warn-new")    // warning 次之
+        #expect(active[2].id == "info-new")    // info 同级 · 新在前
+        #expect(active[3].id == "info-old")
+    }
 }
 
 @Suite("BannerDismissalStore · 持久化")

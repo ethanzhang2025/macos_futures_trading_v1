@@ -77,8 +77,23 @@ public actor BannerService {
     private func rebuildActive() async {
         let dismissed = await store.allDismissed()
         let nowMs = AnalyticsEvent.nowMs(now())
+        // v15.18 · 排序：critical > warning > info（同级按 createdAt 倒序最新在前）
         activeCache = lastFetched
             .filter { !dismissed.contains($0.id) && !$0.isExpired(nowMs: nowMs) }
-            .sorted { $0.createdAtMs > $1.createdAtMs }   // 最新在前
+            .sorted { lhs, rhs in
+                let lp = Self.severityRank(lhs.level)
+                let rp = Self.severityRank(rhs.level)
+                if lp != rp { return lp > rp }
+                return lhs.createdAtMs > rhs.createdAtMs
+            }
+    }
+
+    /// 视觉优先级排名：critical > warning > info（数字大优先）
+    private static func severityRank(_ level: BannerLevel) -> Int {
+        switch level {
+        case .critical: return 2
+        case .warning:  return 1
+        case .info:     return 0
+        }
     }
 }

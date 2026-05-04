@@ -41,8 +41,9 @@ public struct QuickPasteParser: Sendable {
                 // 3) 过滤纯数字（价格/数量误粘）
                 if token.allSatisfy(\.isNumber) { continue }
 
-                // 4) 合约代码必须含字母（rb0 / IF2606 / au2412 等）
-                guard token.contains(where: { $0.isLetter }) else { continue }
+                // 4) 合约代码必须含 ASCII 字母（rb0 / IF2606 / au2412 等）
+                //    v15.21 batch91 · 限定 ASCII 排除中文标签（CSV 表头"合约"/品种名"螺纹钢"等）
+                guard token.contains(where: { $0.isASCII && $0.isLetter }) else { continue }
 
                 // 5) 去重保序
                 if !seen.contains(token) {

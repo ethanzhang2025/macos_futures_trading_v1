@@ -74,6 +74,8 @@ struct WatchlistWindow: View {
 
     /// v15.20 batch55 · 自由粘贴合约 sheet 显隐（文本框 + 分组选择 + 实时解析预览）
     @State private var showQuickPasteSheet: Bool = false
+    /// v15.21 batch91 · CSV 导入 sheet 预填文本（importWatchlistFromFile 把 .csv 内容塞进去 · 复用 QuickPasteSheet）
+    @State private var quickPasteInitialText: String = ""
 
     /// v15.20 batch59 · 排序字段（v15.20 batch60 · @AppStorage 持久化 · 重启保留）
     /// 默认 .manual 保持用户拖拽顺序 · 反序失败 fallback .manual
@@ -198,7 +200,7 @@ struct WatchlistWindow: View {
                     Image(systemName: "square.and.arrow.down")
                 }
                 .buttonStyle(.borderless)
-                .help("导入文华自选（.txt）")
+                .help("导入自选合约（.txt 文华格式 · .csv 自由表格）")
                 Button {
                     showQuickPasteSheet = true
                 } label: {
@@ -249,10 +251,11 @@ struct WatchlistWindow: View {
         } message: { preview in
             Text(preview.message)
         }
-        .sheet(isPresented: $showQuickPasteSheet) {
+        .sheet(isPresented: $showQuickPasteSheet, onDismiss: { quickPasteInitialText = "" }) {
             QuickPasteSheet(
                 groups: book.groups,
                 defaultGroupID: selectedGroupID ?? book.groups.first?.id,
+                initialText: quickPasteInitialText,
                 onSubmit: applyQuickPaste
             )
         }
@@ -900,27 +903,38 @@ struct WatchlistWindow: View {
         )
     }
 
+    /// v15.21 batch91 · 双格式导入：.txt 文华自选（含 "{" 标头）走严格 · 否则（.csv / 自由 .txt）走 QuickPasteSheet 预填
     private func importWatchlistFromFile() {
         let panel = NSOpenPanel()
-        panel.title = "导入文华自选"
-        panel.allowedContentTypes = [.plainText]
+        panel.title = "导入自选合约（.txt 文华格式 · .csv 自由表格）"
+        panel.allowedContentTypes = [.plainText, .commaSeparatedText]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
+        let text: String
         do {
-            let text = try String(contentsOf: url, encoding: .utf8)
+            text = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            importPreview = ImportPreview(
+                parseResult: WatchlistImportResult(groups: []),
+                message: "导入失败：\(error.localizedDescription)"
+            )
+            return
+        }
+
+        // 文华标头检测：含 "{" 走严格分组解析（保多分组结构）· 否则走 QuickPasteSheet 让 trader 选目标分组
+        if text.contains("{") {
             let result = WatchlistImporter.parse(text)
             let groupSummary = result.groups.map { "「\($0.name)」\($0.instrumentIDs.count) 个" }.joined(separator: " / ")
             importPreview = ImportPreview(
                 parseResult: result,
                 message: "解析到 \(result.groups.count) 个分组 · 共 \(result.totalInstruments) 个合约：\n\(groupSummary)\n\n确认导入将合并到当前自选（同名分组追加去重 / 新分组新建）"
             )
-        } catch {
-            importPreview = ImportPreview(
-                parseResult: WatchlistImportResult(groups: []),
-                message: "导入失败：\(error.localizedDescription)"
-            )
+        } else {
+            // .csv / 无标头自由 .txt → 复用 QuickPasteSheet（QuickPasteParser 自动跳过纯数字 token + 表头列名）
+            quickPasteInitialText = text
+            showQuickPasteSheet = true
         }
     }
 
@@ -1194,11 +1208,13 @@ private struct QuickPasteSheet: View {
     init(
         groups: [Watchlist],
         defaultGroupID: UUID?,
+        initialText: String = "",
         onSubmit: @escaping (String, UUID?, String?) -> Void
     ) {
         self.groups = groups
         self.defaultGroupID = defaultGroupID
         self.onSubmit = onSubmit
+        self._text = State(initialValue: initialText)
         self._targetGroupID = State(initialValue: defaultGroupID)
         self._createNewGroup = State(initialValue: groups.isEmpty)
     }

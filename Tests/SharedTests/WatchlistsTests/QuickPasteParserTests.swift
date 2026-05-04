@@ -93,4 +93,26 @@ struct QuickPasteParserTests {
         let result = QuickPasteParser.parse(text)
         #expect(result == ["rb0", "IF0", "au2606", "ag2412", "cu0"])
     }
+
+    @Test("v15.21 batch91 · CSV 表头 + 多列（合约/最新价/涨跌）")
+    func csvWithHeader() {
+        let text = """
+        合约,最新价,涨跌幅
+        rb2510,3850,1.2
+        IF2606,4250.5,-0.3
+        au2412,510.2,0.5
+        """
+        let result = QuickPasteParser.parse(text)
+        #expect(result == ["rb2510", "IF2606", "au2412"])
+    }
+
+    @Test("v15.21 batch91 · CSV 含 quoted 字段")
+    func csvQuotedFields() {
+        let text = """
+        "rb2510","3850","螺纹钢"
+        "IF2606","4250","沪深300"
+        """
+        let result = QuickPasteParser.parse(text)
+        #expect(result == ["rb2510", "IF2606"])
+    }
 }

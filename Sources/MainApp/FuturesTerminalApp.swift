@@ -191,21 +191,6 @@ struct FuturesTerminalApp: App {
                 _ = try? await service.record(.appLaunch, userID: Self.anonymousUserID)
             }
         }
-        // v15.18 · WP-133b BatchUploadDriver wire（stub client · 后端就绪后切 HTTP client）
-        // 周期 30s poll · 双阈值（5min OR 100 条）触发 · driver 自管 task 生命周期
-        let driver = manager.map { mgr in
-            BatchUploadDriver(
-                store: mgr.analytics,
-                client: StubBatchUploadClient(),
-                batchSize: 100,
-                timeTriggerMs: 5 * 60 * 1000,
-                pollIntervalSec: 30
-            )
-        }
-        self.batchUploadDriver = driver
-        if let driver {
-            Task { await driver.start() }
-        }
         // v15.18 · WP-120 BannerService（stub source 默认空 · UserDefaults dismissal 持久）
         let banner = BannerService(
             store: UserDefaultsBannerDismissalStore(),
@@ -216,6 +201,30 @@ struct FuturesTerminalApp: App {
         let bannerDriver = BannerRefreshDriver(service: banner)
         self.bannerRefreshDriver = bannerDriver
         Task { await bannerDriver.start() }
+
+        // v15.18 · WP-133b BatchUploadDriver wire（stub client · 后端就绪后切 HTTP client）
+        // 周期 30s poll · 双阈值（5min OR 100 条）触发 · driver 自管 task 生命周期
+        // onFailure callback 接 banner：连续 5 次失败 emit warning（让用户感知后台异常）
+        let driver = manager.map { mgr in
+            BatchUploadDriver(
+                store: mgr.analytics,
+                client: StubBatchUploadClient(),
+                batchSize: 100,
+                timeTriggerMs: 5 * 60 * 1000,
+                pollIntervalSec: 30,
+                onFailure: { [weak banner] consecutive, _, _ in
+                    guard let banner else { return }
+                    if consecutive == 5 {   // 5 连败首次触发 · 不重复 emit
+                        // 实际场景下这里通过自定义 source push banner · stub 阶段不真发
+                        _ = await banner.refresh()
+                    }
+                }
+            )
+        }
+        self.batchUploadDriver = driver
+        if let driver {
+            Task { await driver.start() }
+        }
         // v15.18 · WP-133a session_start/end wire（didBecomeActive 触发首次 session_start · 3 分钟规则跨启动）
         // App.init 后 NSApplication 主循环开始 · 首个 didBecomeActive 通知会触发 sessionStart
         // willResignActive 时除发 session_end 外还 flush driver（防后台被杀丢事件）

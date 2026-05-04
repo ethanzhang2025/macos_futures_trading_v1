@@ -227,15 +227,21 @@ struct JournalWindow: View {
             .keyboardShortcut("m", modifiers: [.command, .shift])
             .help("导入交割单 CSV（⌘⇧M · 文华 / 通用格式）")
 
-            // v15.18 · 闭合持仓 CSV 导出（trader 报税 / 复盘归档）
-            Button {
-                presentExportPanel()
+            // v15.18 · 导出 CSV 菜单（闭合持仓 / Trade 流水二选一）
+            Menu {
+                Button("闭合持仓 CSV（PositionMatcher 配对结果）") {
+                    presentExportPanel(kind: .closedPosition)
+                }
+                Button("Trade 流水 CSV（原始成交记录）") {
+                    presentExportPanel(kind: .tradeFlow)
+                }
             } label: {
                 Label("导出", systemImage: "square.and.arrow.up")
             }
-            .keyboardShortcut("e", modifiers: [.command, .shift])
-            .help("导出闭合持仓 CSV（⌘⇧E · 含 BOM · Excel 中文友好）")
+            .menuStyle(.borderlessButton)
+            .frame(width: 80)
             .disabled(trades.isEmpty)
+            .help("导出 CSV · 含 BOM · Excel 中文友好")
 
             Text("commit 4/4 · WP-53 收官")
                 .font(.caption2)
@@ -574,25 +580,38 @@ struct JournalWindow: View {
         parseImport()
     }
 
-    /// v15.18 · 闭合持仓 CSV 导出（trader 报税 / 复盘归档）
-    /// 走 PositionMatcher.match → ClosedPositionCSVExporter → NSSavePanel
-    private func presentExportPanel() {
-        let (closed, _) = PositionMatcher.match(trades: trades)
-        guard !closed.isEmpty else {
-            let alert = NSAlert()
-            alert.messageText = "无可导出闭合持仓"
-            alert.informativeText = "当前 trades 全部为开仓 / 未配对 · 至少需有一对开+平才能生成"
-            alert.runModal()
-            return
-        }
+    /// v15.18 · 导出 CSV（闭合持仓 / Trade 流水二选一）
+    private enum ExportKind {
+        case closedPosition
+        case tradeFlow
+    }
+
+    private func presentExportPanel(kind: ExportKind) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
-        panel.title = "导出闭合持仓 CSV"
         panel.prompt = "导出"
         let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
-        panel.nameFieldStringValue = "闭合持仓-\(dateStr).csv"
+
+        let data: Data
+        switch kind {
+        case .closedPosition:
+            let (closed, _) = PositionMatcher.match(trades: trades)
+            guard !closed.isEmpty else {
+                let alert = NSAlert()
+                alert.messageText = "无可导出闭合持仓"
+                alert.informativeText = "当前 trades 全部为开仓 / 未配对 · 至少需有一对开+平才能生成"
+                alert.runModal()
+                return
+            }
+            panel.title = "导出闭合持仓 CSV"
+            panel.nameFieldStringValue = "闭合持仓-\(dateStr).csv"
+            data = ClosedPositionCSVExporter.exportData(closed)
+        case .tradeFlow:
+            panel.title = "导出 Trade 流水 CSV"
+            panel.nameFieldStringValue = "trade流水-\(dateStr).csv"
+            data = TradeCSVExporter.exportData(trades)
+        }
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let data = ClosedPositionCSVExporter.exportData(closed)
         do {
             try data.write(to: url)
         } catch {

@@ -143,4 +143,24 @@ struct SwingPointsTests {
         let same = SwingPointsDetector.detect(bars, lookback: 2, minBarSpacing: 0)
         #expect(raw == same)
     }
+
+    @Test("v15.21 batch126 · filterDense 空数组 / 单点 直接返回")
+    func filterDenseEdgeCases() {
+        #expect(SwingPointsDetector.filterDense([], minSpacing: 5) == [])
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let single = [SwingPoint(kind: .high, barIndex: 10, price: 100, time: now)]
+        #expect(SwingPointsDetector.filterDense(single, minSpacing: 5) == single)
+    }
+
+    @Test("v15.21 batch126 · filterDense 距离恰好 = minSpacing 时保留两点")
+    func filterDenseExactSpacing() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let points: [SwingPoint] = [
+            SwingPoint(kind: .high, barIndex: 10, price: 100, time: now),
+            SwingPoint(kind: .high, barIndex: 15, price: 110, time: now),  // 距离恰好 = 5
+        ]
+        let result = SwingPointsDetector.filterDense(points, minSpacing: 5)
+        // 距离 = minSpacing 不过滤（< minSpacing 才过滤）
+        #expect(result.count == 2)
+    }
 }

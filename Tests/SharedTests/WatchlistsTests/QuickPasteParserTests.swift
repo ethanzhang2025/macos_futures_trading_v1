@@ -115,4 +115,21 @@ struct QuickPasteParserTests {
         let result = QuickPasteParser.parse(text)
         #expect(result == ["rb2510", "IF2606"])
     }
+
+    @Test("v15.21 batch126 · 日期前缀（2024-05-04 RB0）只取合约")
+    func datePrefix() {
+        // trader 复制日志格式 "2026-05-04 09:00 RB0 3850" · 应仅留 RB0
+        let text = "2026-05-04 09:00 RB0 3850\n2026-05-05 IF2606 4250"
+        let result = QuickPasteParser.parse(text)
+        #expect(result == ["RB0", "IF2606"])
+    }
+
+    @Test("v15.21 batch126 · 中文混排 ASCII 合约（沪深 IF0 螺纹 rb2510）只取合约")
+    func mixedChineseASCII() {
+        let text = "沪深 IF0 螺纹 rb2510 黄金AU0"
+        let result = QuickPasteParser.parse(text)
+        // "AU0" 与 "黄金AU0" 紧贴 · 中间无分隔符 · "黄金AU0" 整体作为 token · 含 ASCII 字母被保留
+        #expect(result.contains("IF0"))
+        #expect(result.contains("rb2510"))
+    }
 }

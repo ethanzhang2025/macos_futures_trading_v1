@@ -35,6 +35,9 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
     case elderRay    // Elder Ray Bull/Bear 双线 · 上下对称视野 · 0 参考线
     case choppiness  // 震荡度 · 单线 · 0~100 视野 · 61.8/38.2 黄金分割参考
     case forceIndex  // ForceIndex 价量复合 · 单线 · 上下对称视野 · 0 参考线
+    // v15.18+ batch13 · 波动率 squeeze + 跨品种比较
+    case bbw         // Bollinger Bandwidth · 单线 · 0 基线 · 视野 visible max · % 单位
+    case atrp        // ATR% · 单线 · 0 基线 · 视野 visible max · % 单位
 
     var id: String { rawValue }
 
@@ -58,6 +61,8 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .elderRay:    return "Elder \(params.elderRayPeriod)"
         case .choppiness:  return "CHOP \(params.choppinessPeriod)"
         case .forceIndex:  return "FI \(params.forceIndexPeriod)"
+        case .bbw:         return "BBW \(params.bbwParams[0])/\(params.bbwParams[1])"
+        case .atrp:        return "ATRP \(params.atrpPeriod)"
         }
     }
 
@@ -81,6 +86,8 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .elderRay:    return "Elder"
         case .choppiness:  return "CHOP"
         case .forceIndex:  return "FI"
+        case .bbw:         return "BBW"
+        case .atrp:        return "ATRP"
         }
     }
 }
@@ -258,6 +265,11 @@ struct SubChartView: View {
                 return (try? Choppiness.calculate(kline: series, params: paramsCopy.choppinessParamsDecimal)) ?? []
             case .forceIndex:
                 return (try? ForceIndex.calculate(kline: series, params: paramsCopy.forceIndexParamsDecimal)) ?? []
+            // v15.18+ batch13 · BBW / ATRP（单线 · 复用 BOLL / ATR · 单位 %）
+            case .bbw:
+                return (try? BollingerBandwidth.calculate(kline: series, params: paramsCopy.bbwParamsDecimal)) ?? []
+            case .atrp:
+                return (try? ATRPercent.calculate(kline: series, params: paramsCopy.atrpParamsDecimal)) ?? []
             case .volume, .oi:
                 return []  // 直读 bars · 不走 Indicator 计算
             }
@@ -272,7 +284,7 @@ struct SubChartView: View {
             seriesA = doublesOf(result, name: "K")
             seriesB = doublesOf(result, name: "D")
             seriesC = doublesOf(result, name: "J")
-        case .rsi, .obv, .cci, .wr, .roc, .bias, .stc, .choppiness, .forceIndex:
+        case .rsi, .obv, .cci, .wr, .roc, .bias, .stc, .choppiness, .forceIndex, .bbw, .atrp:
             // 单线副图：取首个 series（输出名带参数 · 不依赖 name 匹配 · 直接首项）
             let firstSeries = result.first?.values ?? []
             seriesA = firstSeries.map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
@@ -394,6 +406,11 @@ struct SubChartView: View {
                 Text("FI \(fmt(aLast))").foregroundColor(
                     aLast.map { $0 >= 0 ? Self.bullColor : Self.bearColor } ?? .secondary
                 )
+            // v15.18+ batch13 · BBW（squeeze 信号）/ ATRP（跨品种波动率）· 单位 %
+            case .bbw:
+                Text("BBW \(fmt(aLast))%").foregroundColor(Self.yellowColor)
+            case .atrp:
+                Text("ATRP \(fmt(aLast))%").foregroundColor(Self.yellowColor)
             }
         }
         .font(.system(size: 11, design: .monospaced))
@@ -504,6 +521,12 @@ struct SubChartView: View {
                          visibleStart: visibleStart, visibleEnd: visibleEnd,
                          barWidth: barWidth, xOffset: xOffset,
                          guideValues: [0])
+        // v15.18+ batch13 · 非负值 · 0 基线（底部）· visible max 撑满 90% 高度
+        case .bbw, .atrp:
+            drawAutoBaseline(seriesA, color: Self.yellowColor,
+                             ctx: ctx, size: size,
+                             visibleStart: visibleStart, visibleEnd: visibleEnd,
+                             barWidth: barWidth, xOffset: xOffset)
         }
     }
 
@@ -529,6 +552,29 @@ struct SubChartView: View {
                      visibleStart: visibleStart, visibleEnd: visibleEnd,
                      barWidth: barWidth, xOffset: xOffset)
         }
+    }
+
+    /// v15.18+ batch13 · 非负单线 0 基线绘制（BBW / ATRP 共用 · 底部 0 · 顶部 visible max · 留 10% 边距）
+    private func drawAutoBaseline(
+        _ values: [Double?], color: Color,
+        ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        var maxV: CGFloat = 0.01
+        for i in visibleStart..<visibleEnd where i < values.count {
+            if let v = values[i], v > 0 { maxV = max(maxV, CGFloat(v)) }
+        }
+        let yScale = size.height * 0.9 / max(0.0001, maxV)
+        let yBase = size.height
+        let yMap: (CGFloat) -> CGFloat = { yBase - $0 * yScale }
+
+        // 底部基线（弱档 · 视觉提示 0 锚点）
+        drawDashLine(at: yBase - 1, ctx: ctx, width: size.width, color: kdjGuideColor)
+
+        drawLine(values, color: color, ctx: ctx, yMap: yMap,
+                 visibleStart: visibleStart, visibleEnd: visibleEnd,
+                 barWidth: barWidth, xOffset: xOffset)
     }
 
     /// v15.18 · 上下对称视野多线绘制（ElderRay 双线共用 · visible max(|v|) 自动撑开 · 0 参考）

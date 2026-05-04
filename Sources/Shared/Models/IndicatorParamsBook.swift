@@ -43,6 +43,10 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
     public var choppinessPeriod: Int
     /// ForceIndex 周期（默认 13 · v15.18 · 单线 · 价量复合 · 0 参考）
     public var forceIndexPeriod: Int
+    /// BBW 参数（默认 [20, 2] · v15.18+ batch13 · [period, stdDev] · 单线 · 0 基线 · % 单位）
+    public var bbwParams: [Int]
+    /// ATRP 周期（默认 14 · v15.18+ batch13 · 单线 · 0 基线 · % 单位）
+    public var atrpPeriod: Int
 
     public init(
         mainMAPeriods: [Int],
@@ -60,7 +64,9 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         stcParams: [Int] = [23, 50, 10, 10],
         elderRayPeriod: Int = 13,
         choppinessPeriod: Int = 14,
-        forceIndexPeriod: Int = 13
+        forceIndexPeriod: Int = 13,
+        bbwParams: [Int] = [20, 2],
+        atrpPeriod: Int = 14
     ) {
         self.mainMAPeriods = mainMAPeriods
         self.mainBOLLParams = mainBOLLParams
@@ -78,6 +84,8 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.elderRayPeriod = elderRayPeriod
         self.choppinessPeriod = choppinessPeriod
         self.forceIndexPeriod = forceIndexPeriod
+        self.bbwParams = bbwParams
+        self.atrpPeriod = atrpPeriod
     }
 
     public static let `default` = IndicatorParamsBook(
@@ -96,7 +104,9 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         stcParams: [23, 50, 10, 10],
         elderRayPeriod: 13,
         choppinessPeriod: 14,
-        forceIndexPeriod: 13
+        forceIndexPeriod: 13,
+        bbwParams: [20, 2],
+        atrpPeriod: 14
     )
 
     // MARK: - Codable · v15.11 加 cciPeriod/wrPeriod · v15.13 加 dmi/stoch/roc/bias 字段
@@ -107,6 +117,7 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         case cciPeriod, wrPeriod
         case dmiPeriod, stochParams, rocPeriod, biasPeriod
         case aroonPeriod, stcParams, elderRayPeriod, choppinessPeriod, forceIndexPeriod
+        case bbwParams, atrpPeriod
     }
 
     public init(from decoder: Decoder) throws {
@@ -128,6 +139,9 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.elderRayPeriod   = try c.decodeIfPresent(Int.self, forKey: .elderRayPeriod) ?? 13
         self.choppinessPeriod = try c.decodeIfPresent(Int.self, forKey: .choppinessPeriod) ?? 14
         self.forceIndexPeriod = try c.decodeIfPresent(Int.self, forKey: .forceIndexPeriod) ?? 13
+        // v15.18+ batch13 · BBW / ATRP（旧用户启动 fallback 默认）
+        self.bbwParams        = try c.decodeIfPresent([Int].self, forKey: .bbwParams) ?? [20, 2]
+        self.atrpPeriod       = try c.decodeIfPresent(Int.self, forKey: .atrpPeriod) ?? 14
     }
 
     // MARK: - Decimal 转换 helper（IndicatorCore.calculate 接受 [Decimal]）
@@ -196,6 +210,16 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
 
     public var forceIndexParamsDecimal: [Decimal] {
         [Decimal(forceIndexPeriod)]
+    }
+
+    // v15.18+ batch13 · BBW / ATRP Decimal helper
+
+    public var bbwParamsDecimal: [Decimal] {
+        bbwParams.map { Decimal($0) }
+    }
+
+    public var atrpParamsDecimal: [Decimal] {
+        [Decimal(atrpPeriod)]
     }
 }
 

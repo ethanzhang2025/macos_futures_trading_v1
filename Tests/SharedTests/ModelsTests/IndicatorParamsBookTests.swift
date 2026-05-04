@@ -142,6 +142,45 @@ struct IndicatorParamsBookTests {
         #expect(book.rsiParamsDecimal == [Decimal(9)])
     }
 
+    @Test("v15.18+ batch13 BBW/ATRP 默认值 + Decimal helper")
+    func bbwAtrpDefaultsAndDecimal() {
+        let d = IndicatorParamsBook.default
+        #expect(d.bbwParams == [20, 2])
+        #expect(d.atrpPeriod == 14)
+        #expect(d.bbwParamsDecimal == [Decimal(20), Decimal(2)])
+        #expect(d.atrpParamsDecimal == [Decimal(14)])
+        var custom = d
+        custom.bbwParams = [30, 3]
+        custom.atrpPeriod = 21
+        #expect(custom.bbwParamsDecimal == [Decimal(30), Decimal(3)])
+        #expect(custom.atrpParamsDecimal == [Decimal(21)])
+    }
+
+    @Test("v15.18+ batch13 兼容旧 JSON · 缺 bbw/atrp 字段时 fallback [20,2]/14")
+    func decodeLegacyJSONWithoutBBWATRP() throws {
+        // 模拟 v15.18 前的持久化（含 v15.18 的 5 指标 · 缺 batch13 BBW/ATRP）
+        let legacyJSON = """
+        {
+          "mainMAPeriods": [5, 20, 60],
+          "mainBOLLParams": [20, 2],
+          "macdParams": [12, 26, 9],
+          "kdjParams": [9, 3, 3],
+          "rsiPeriod": 14,
+          "aroonPeriod": 25,
+          "stcParams": [23, 50, 10, 10],
+          "elderRayPeriod": 13,
+          "choppinessPeriod": 14,
+          "forceIndexPeriod": 13
+        }
+        """
+        let data = legacyJSON.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(IndicatorParamsBook.self, from: data)
+        #expect(decoded.bbwParams == [20, 2])
+        #expect(decoded.atrpPeriod == 14)
+        // 旧字段保留用户值
+        #expect(decoded.aroonPeriod == 25)
+    }
+
     @Test("Equatable")
     func equatable() {
         let a = IndicatorParamsBook.default

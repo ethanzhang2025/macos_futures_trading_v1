@@ -441,6 +441,8 @@ struct AlertWindow: View {
                         .help("彻底删除选中的预警")
                     Button("清空选择") { selectedAlertIDs.removeAll() }
                         .buttonStyle(.borderless)
+                        .keyboardShortcut(.escape, modifiers: [])
+                        .help("取消所有选中（Esc）")
                 }
                 Spacer()
                 // v15.20 batch69 · 排序 Menu（持久化 · 同字段切升降）

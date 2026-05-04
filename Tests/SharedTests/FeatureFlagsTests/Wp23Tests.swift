@@ -17,11 +17,12 @@ struct FeatureFlagTests {
         #expect(FeatureFlag.replayMode.defaultValue)
         #expect(FeatureFlag.reviewCharts.defaultValue)
         #expect(FeatureFlag.alertCenter.defaultValue)
+        // v15.18 · v15.17 注入 NotificationChannels 后默认开（与现实一致 · 用户可在 Settings 关）
+        #expect(FeatureFlag.alertSystemNotification.defaultValue)
+        #expect(FeatureFlag.alertSound.defaultValue)
 
         #expect(!FeatureFlag.subscriptionPaywall.defaultValue)
         #expect(!FeatureFlag.subscriptionFreeTrial.defaultValue)
-        #expect(!FeatureFlag.alertSystemNotification.defaultValue)
-        #expect(!FeatureFlag.alertSound.defaultValue)
         #expect(!FeatureFlag.experimentalFormulaCompleteMode.defaultValue)
         #expect(!FeatureFlag.experimentalAIAssist.defaultValue)
     }

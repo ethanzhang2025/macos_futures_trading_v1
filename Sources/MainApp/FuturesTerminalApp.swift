@@ -150,14 +150,19 @@ struct FuturesTerminalApp: App {
             )
         }
         // v15.17 · WP-52 通知通道接入 · macOS 注册 SystemNoticeChannel + SoundChannel
-        // 之前 dispatcher 创建空 channels · 用户预警仅 console log 不实用
+        // v15.18 · 按 FeatureFlag 决定启用的 channels（系统通知 / 声音 用户可关）
+        // 同步读 UserDefaults（feature flag 本地 override 路径）· 默认值与 FeatureFlag.defaultValue 一致
         self.alertEvaluator = manager.map {
             #if canImport(AppKit) && os(macOS)
-            let dispatcher = NotificationDispatcher(channels: [
-                InAppOverlayChannel(),
-                SystemNoticeChannel(),
-                SoundChannel()
-            ])
+            let defaults = UserDefaults.standard
+            let sysOn = defaults.object(forKey: "featureFlag.alert.systemNotification") as? Bool
+                ?? FeatureFlag.alertSystemNotification.defaultValue
+            let soundOn = defaults.object(forKey: "featureFlag.alert.sound") as? Bool
+                ?? FeatureFlag.alertSound.defaultValue
+            var channels: [any NotificationChannel] = [InAppOverlayChannel()]
+            if sysOn { channels.append(SystemNoticeChannel()) }
+            if soundOn { channels.append(SoundChannel()) }
+            let dispatcher = NotificationDispatcher(channels: channels)
             #else
             let dispatcher = NotificationDispatcher()
             #endif

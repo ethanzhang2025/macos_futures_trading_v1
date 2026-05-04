@@ -31,9 +31,9 @@ public enum FeatureFlag: String, Sendable, Codable, CaseIterable, Equatable, Has
     // MARK: - 预警（alert.*）
     /// 条件预警中心（已实现 WP-52，默认开）
     case alertCenter = "alert.center"
-    /// 系统通知中心（macOS UserNotifications，留 Mac 切机；默认关）
+    /// 系统通知中心（v15.17 已接 macOS UserNotifications · 默认开 · 用户可在 Settings 关）
     case alertSystemNotification = "alert.systemNotification"
-    /// 声音提醒（默认关，避免打扰）
+    /// 声音提醒（v15.17 已接 NSSound Glass · 默认开 · 用户可在 Settings 关）
     case alertSound = "alert.sound"
 
     // MARK: - 实验性（experimental.*）
@@ -45,12 +45,12 @@ public enum FeatureFlag: String, Sendable, Codable, CaseIterable, Equatable, Has
     /// 默认值（远程 + 本地都未设置时的兜底）
     public var defaultValue: Bool {
         switch self {
-        // 已实现 + 安全的功能默认开
-        case .importWenhua, .importGeneric, .replayMode, .reviewCharts, .alertCenter:
+        // 已实现 + 安全的功能默认开（含 v15.17 注入的 system notification + sound channels）
+        case .importWenhua, .importGeneric, .replayMode, .reviewCharts,
+             .alertCenter, .alertSystemNotification, .alertSound:
             return true
-        // 商业化 / 通知 / 实验性默认关
+        // 商业化 / 实验性默认关
         case .subscriptionPaywall, .subscriptionFreeTrial,
-             .alertSystemNotification, .alertSound,
              .experimentalFormulaCompleteMode, .experimentalAIAssist:
             return false
         }

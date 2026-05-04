@@ -1,40 +1,68 @@
-// MainApp · 偏好设置占位 Scene
+// MainApp · 偏好设置 Scene（v15.18 · 通知 tab 真实化 · WP-23 FeatureFlag wire）
 //
-// spike 阶段只验证多窗口路径是否打通；真实 UI 留给后续 WP：
-// - SettingsContentView → WP-90 上线决策（订阅 / 账号 / 偏好）
-// - WatchlistContentView 已被 WatchlistWindow.swift 取代（WP-43 UI commit 1/4 起）
+// v15.18 通知 tab 真实化：用户可开关系统通知 / 声音（重启生效 · 提示横幅）
+// 其余 tab 保留占位（图表已有 ⌘⇧D 全局切主题 · 订阅 Stage B WP-91）
 
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
-
-// MARK: - 偏好设置（stub · 待 WP-90 / Settings Scene 真内容）
+import Shared
 
 struct SettingsContentView: View {
 
     var body: some View {
         TabView {
+            NotificationSettingsTab()
+                .tabItem { Label("通知", systemImage: "bell.badge") }
             placeholder(title: "通用", note: "外观 / 启动行为 / 默认合约")
                 .tabItem { Label("通用", systemImage: "gearshape") }
-            placeholder(title: "图表", note: "颜色主题 / 默认指标 / 刻度精度")
+            placeholder(title: "图表", note: "全局快捷键 ⌘⇧D 切主题（已实现 v15.17）· 颜色 / 指标 / 精度细化待补")
                 .tabItem { Label("图表", systemImage: "chart.line.uptrend.xyaxis") }
-            placeholder(title: "数据", note: "行情源 / 缓存路径 / 加密 passphrase")
+            placeholder(title: "数据", note: "行情源 / 缓存路径 / 加密 passphrase（Keychain wire 待 Stage B IAP）")
                 .tabItem { Label("数据", systemImage: "externaldrive") }
-            placeholder(title: "订阅", note: "Pro / Pro 500 / 设备绑定（待 WP-91）")
+            placeholder(title: "订阅", note: "Pro / Pro 500 / 设备绑定（待 WP-91 IAP 接入）")
                 .tabItem { Label("订阅", systemImage: "person.badge.key") }
         }
-        .frame(width: 520, height: 360)
+        .frame(width: 520, height: 380)
     }
 
     private func placeholder(title: String, note: String) -> some View {
         VStack(spacing: 12) {
             Text(title).font(.title2)
-            Text(note).foregroundColor(.secondary)
+            Text(note).foregroundColor(.secondary).multilineTextAlignment(.center)
             Text("（待后续 WP 接入）")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(20)
+    }
+}
+
+// MARK: - 通知 Tab（v15.18 · WP-23 FeatureFlag wire · alertSystemNotification + alertSound）
+
+private struct NotificationSettingsTab: View {
+
+    @AppStorage("featureFlag.alert.systemNotification") private var systemNotificationOn: Bool = FeatureFlag.alertSystemNotification.defaultValue
+    @AppStorage("featureFlag.alert.sound") private var soundOn: Bool = FeatureFlag.alertSound.defaultValue
+    @AppStorage("featureFlag.alert.center") private var centerOn: Bool = FeatureFlag.alertCenter.defaultValue
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("启用预警中心（条件触发评估）", isOn: $centerOn)
+                Toggle("系统通知（macOS 通知中心横幅）", isOn: $systemNotificationOn)
+                Toggle("声音提醒（NSSound Glass）", isOn: $soundOn)
+            } header: {
+                Text("预警通知").font(.headline)
+            } footer: {
+                Text("修改后需重启应用生效（dispatcher 在启动时按当前偏好装配 channels · v15.18 简化策略）")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .padding(.vertical, 8)
     }
 }
 

@@ -434,6 +434,37 @@ struct AlertWindow: View {
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        // v15.20 batch73 · 右键 contextMenu 完整操作集（与 row buttons 互补 · 含 batch72 重置冷却 + 复制 + 选中辅助）
+        .contextMenu {
+            Button("测试触发") { Task { await testTrigger(a) } }
+            Button(a.status == .paused ? "恢复" : "暂停") { toggleStatus(a) }
+                .disabled(a.status == .cancelled)
+            Button("重置冷却") { resetCooldownSingle(a) }
+                .disabled(a.lastTriggeredAt == nil && a.status != .triggered)
+            Divider()
+            Button("编辑…") { sheetState = .edit(a) }
+            Button("复制 alert 名") { copyAlertName(a) }
+            Divider()
+            if selectedAlertIDs.contains(a.id) {
+                Button("从选中移除") { selectedAlertIDs.remove(a.id) }
+            } else {
+                Button("加入选中") { selectedAlertIDs.insert(a.id) }
+            }
+            Divider()
+            Button("删除", role: .destructive) { deleteAlert(a) }
+        }
+    }
+
+    /// v15.20 batch73 · 单条重置冷却（contextMenu 用 · 复用 batch72 batch operator 单 ID 集合）
+    private func resetCooldownSingle(_ a: Alert) {
+        alerts = AlertBatchOperator.resetCooldown(ids: [a.id], in: alerts)
+    }
+
+    /// v15.20 batch73 · 复制 alert 名到剪贴板
+    private func copyAlertName(_ a: Alert) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(a.name, forType: .string)
     }
 
     @ViewBuilder

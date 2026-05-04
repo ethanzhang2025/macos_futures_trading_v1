@@ -80,6 +80,9 @@ struct WatchlistWindow: View {
     @AppStorage("viewState.v1.watchlist.sortFieldRaw") private var sortFieldRaw: String = WatchlistSortField.manual.rawValue
     @AppStorage("viewState.v1.watchlist.sortAscending") private var sortAscending: Bool = false
 
+    /// v15.20 batch61 · 跨分组聚合视图（trader 涨幅榜扫盘 · 不用切分组找涨幅大的）
+    @State private var showAllAggregated: Bool = false
+
     /// 解析 sortField · raw 不合法 fallback .manual
     private var sortField: WatchlistSortField {
         get { WatchlistSortField(rawValue: sortFieldRaw) ?? .manual }
@@ -217,6 +220,13 @@ struct WatchlistWindow: View {
 
             Divider()
 
+            // v15.20 batch61 · 跨分组聚合视图入口（涨幅榜扫盘）
+            allAggregatedRow
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+
+            Divider()
+
             List(selection: $selectedGroupID) {
                 ForEach(Array(book.groups.enumerated()), id: \.element.id) { index, group in
                     groupRow(group, index: index)
@@ -266,6 +276,37 @@ struct WatchlistWindow: View {
         }
     }
 
+    /// v15.20 batch61 · 全部聚合视图入口 row（去重合约总数 + 高亮 active）
+    private var allAggregatedRow: some View {
+        let total = aggregatedInstrumentIDs.count
+        let isActive = showAllAggregated
+        return HStack(spacing: 8) {
+            Image(systemName: "chart.bar.fill")
+                .foregroundColor(isActive ? .accentColor : .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("全部 · 跨分组扫盘")
+                    .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+                Text("\(total) 个合约（去重）")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .background(isActive ? Color.accentColor.opacity(0.18) : Color.clear)
+        .cornerRadius(4)
+        .onTapGesture {
+            showAllAggregated.toggle()
+            if showAllAggregated { selectedGroupID = nil }
+        }
+    }
+
+    /// v15.20 batch61 · 跨所有分组的合约去重列表 · 委托 WatchlistBook.allInstrumentIDsDeduped
+    private var aggregatedInstrumentIDs: [String] {
+        book.allInstrumentIDsDeduped
+    }
+
     private func groupRow(_ group: Watchlist, index: Int) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "folder")
@@ -311,7 +352,9 @@ struct WatchlistWindow: View {
 
     @ViewBuilder
     private var detail: some View {
-        if let groupID = selectedGroupID, let group = book.group(id: groupID) {
+        if showAllAggregated {
+            aggregatedInstrumentList
+        } else if let groupID = selectedGroupID, let group = book.group(id: groupID) {
             instrumentList(for: group)
         } else {
             emptyState(
@@ -319,6 +362,101 @@ struct WatchlistWindow: View {
                 title: "未选择分组",
                 hint: "在左侧选择一个自选分组以查看合约"
             )
+        }
+    }
+
+    /// v15.20 batch61 · 聚合视图 detail（跨分组扫盘 · 复用 sortableHeader + 排序状态 · 拖拽与添加禁用）
+    private var aggregatedInstrumentList: some View {
+        let ids = aggregatedInstrumentIDs
+        let sortedIDs = WatchlistSorter.sort(
+            ids: ids,
+            field: sortField,
+            ascending: sortAscending,
+            keyForID: keyForInstrument
+        )
+        return VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Image(systemName: "chart.bar.fill").foregroundColor(.accentColor)
+                Text("全部 · 跨分组扫盘")
+                    .font(.title3).fontWeight(.semibold)
+                Text("· \(ids.count) 合约（去重）")
+                    .font(.caption).foregroundColor(.secondary)
+                Spacer()
+                Button("退出聚合视图") { showAllAggregated = false }
+                    .buttonStyle(.borderless)
+                    .help("回到分组视图")
+            }
+            .padding(16)
+
+            Divider()
+            instrumentColumnsHeader
+            Divider()
+
+            if sortedIDs.isEmpty {
+                emptyState(
+                    icon: "tray",
+                    title: "尚无任何分组",
+                    hint: "在左侧创建分组并添加合约"
+                )
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(sortedIDs, id: \.self) { id in
+                            // 聚合视图不接受拖拽 · groupID 传 nil sentinel · instrumentRow 守卫不会调 reorder
+                            aggregatedInstrumentRow(id: id)
+                            Divider()
+                        }
+                    }
+                }
+            }
+            Divider()
+            footerHint
+        }
+    }
+
+    /// v15.20 batch61 · 聚合视图 row（与 instrumentRow 同列宽 · 双击切主图 · 不带 reorder handle）
+    private func aggregatedInstrumentRow(id: String) -> some View {
+        let change = changePctText(for: id)
+        let pctValue = parseChangePct(change)
+        return HStack(spacing: 0) {
+            Spacer().frame(width: 24)
+            Text(id)
+                .font(.system(.body, design: .monospaced))
+                .fontWeight(.medium)
+                .frame(width: 100, alignment: .leading)
+            Text(priceText(for: id))
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(Self.priceColor(pctValue))
+                .frame(width: 90, alignment: .trailing)
+            Spacer().frame(width: 16)
+            Text(change)
+                .font(.system(.body, design: .monospaced))
+                .fontWeight(abs(pctValue ?? 0) >= 2 ? .bold : .regular)
+                .foregroundColor(Self.priceColor(pctValue))
+                .frame(width: 80, alignment: .trailing)
+            Spacer().frame(width: 16)
+            Text(openInterestText(for: id))
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .trailing)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            openInstrumentInChart(id)
+        }
+        .contextMenu {
+            Button("打开主图") { openInstrumentInChart(id) }
+            Divider()
+            Menu("📋 创建预警模板") {
+                ForEach(AlertPreset.allCases) { preset in
+                    Button(preset.displayName) {
+                        createAlertPreset(preset, instrumentID: id)
+                    }
+                }
+            }
         }
     }
 

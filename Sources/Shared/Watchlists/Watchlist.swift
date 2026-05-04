@@ -175,6 +175,19 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
         groups.filter { $0.instrumentIDs.contains(instrumentID) }
     }
 
+    /// v15.20 batch61 · 跨所有分组的合约去重列表（保持首次出现顺序）· 聚合视图扫盘用
+    public var allInstrumentIDsDeduped: [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for g in groups {
+            for id in g.instrumentIDs where !seen.contains(id) {
+                seen.insert(id)
+                out.append(id)
+            }
+        }
+        return out
+    }
+
     // MARK: - 私有
 
     /// 强制 sortIndex 与数组顺序一致（连续整数 0..<N）

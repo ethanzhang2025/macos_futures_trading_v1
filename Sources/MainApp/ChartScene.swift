@@ -1039,15 +1039,23 @@ struct ChartScene: View {
                     .foregroundColor(.secondary)
             } else {
                 // v15.19 batch39 · 按 category 分组（trader 多模板时管理友好）
+                // v15.19 batch50 · 每个模板 Menu 含应用 + 重命名 + 删除（v1 只能删全部 · 单删痛点）
                 ForEach(DrawingTemplateCategory.allCases, id: \.self) { cat in
                     let inCat = drawingTemplates.filter { $0.category == cat }
                     if !inCat.isEmpty {
                         Menu(cat.displayName) {
                             ForEach(inCat) { template in
-                                Button("\(template.name) · \(drawingTypeLabel(template.drawing.type))") {
-                                    let d = instantiateTemplate(template)
-                                    addUserDrawing(d)
-                                    selectedDrawingIDs = [d.id]
+                                Menu("\(template.name) · \(drawingTypeLabel(template.drawing.type))") {
+                                    Button("应用此模板") {
+                                        let d = instantiateTemplate(template)
+                                        addUserDrawing(d)
+                                        selectedDrawingIDs = [d.id]
+                                    }
+                                    Button("重命名…") { renameTemplate(template) }
+                                    Divider()
+                                    Button("删除", role: .destructive) {
+                                        confirmDeleteTemplate(template)
+                                    }
                                 }
                             }
                         }
@@ -1193,6 +1201,39 @@ struct ChartScene: View {
         case .text:             return .annotation
         case .rectangle:        return .keyLevel
         default:                return .custom
+        }
+    }
+
+    /// v15.19 batch50 · 单个模板重命名（NSAlert + NSTextField · 空名保留旧名）
+    @MainActor
+    private func renameTemplate(_ template: DrawingTemplate) {
+        let alert = NSAlert()
+        alert.messageText = "重命名模板"
+        alert.informativeText = "原名：\(template.name)"
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        textField.stringValue = template.name
+        alert.accessoryView = textField
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "取消")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let newName = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newName.isEmpty else { return }
+        if let idx = drawingTemplates.firstIndex(where: { $0.id == template.id }) {
+            drawingTemplates[idx].name = newName
+        }
+    }
+
+    /// v15.19 batch50 · 单个模板删除（confirmation alert · 防误删）
+    @MainActor
+    private func confirmDeleteTemplate(_ template: DrawingTemplate) {
+        let alert = NSAlert()
+        alert.messageText = "删除模板"
+        alert.informativeText = "确认删除模板「\(template.name)」？此操作不可撤销。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "删除")
+        alert.addButton(withTitle: "取消")
+        if alert.runModal() == .alertFirstButtonReturn {
+            drawingTemplates.removeAll { $0.id == template.id }
         }
     }
 

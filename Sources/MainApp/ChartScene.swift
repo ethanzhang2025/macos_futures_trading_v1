@@ -3182,6 +3182,9 @@ struct ChartContentView: View {
             Button("复制可见区 OHLC（CSV）") {
                 copyVisibleBarsToCSV()
             }
+            Button("复制可见区 OHLC（Markdown 表格）") {
+                copyVisibleBarsAsMarkdown()
+            }
             Button("导出主图截图（PNG）…") {
                 exportChartScreenshot()
             }
@@ -3227,6 +3230,17 @@ struct ChartContentView: View {
         panel.nameFieldStringValue = "chart_\(instrumentLabel)_\(periodLabel)_\(dateFmt.string(from: Date())).png"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? pngData.write(to: url)
+    }
+
+    /// v15.21 batch87 · 复制 viewport 可见区 K 线为 Markdown 表格（trader 复盘 IM/邮件分享）
+    private func copyVisibleBarsAsMarkdown() {
+        let endIdx = min(bars.count, viewport.startIndex + viewport.visibleCount)
+        let startIdx = max(0, viewport.startIndex)
+        guard startIdx < endIdx else { return }
+        let slice = Array(bars[startIdx..<endIdx])
+        let markdown = OHLCMarkdownExporter.render(slice)
+        guard !markdown.isEmpty else { return }
+        Pasteboard.copy(markdown)
     }
 
     /// v13.24 复制 viewport 可见区 K 线为 CSV 到 NSPasteboard

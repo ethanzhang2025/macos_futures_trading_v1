@@ -77,6 +77,16 @@ public struct MaiLangCodeView: NSViewRepresentable {
             }
         }
 
+        /// v15.22 batch10 · Tab 键插入 4 空格（替代默认 \t · 与 Swift 缩进习惯一致）
+        /// 仅在无补全 popup 时触发（popup 时 Tab 由 NSTextView 内部消化用于选中候选 · 不会进 doCommandBy）
+        public func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertTab(_:)) {
+                textView.insertText("    ", replacementRange: textView.selectedRange())
+                return true
+            }
+            return false
+        }
+
         /// v15.22 batch9 · 自动补全候选（NSTextView 默认 F5 / Esc 触发 popup）
         /// trader 输入"M" → Esc → 弹 MA / MAX / MIN / MEDIAN / MOD / MULAR 等候选
         public func textView(_ textView: NSTextView,

@@ -22,6 +22,8 @@ final class AppLifecycleObserver {
 
     private let analytics: AnalyticsService
     private let userID: String
+    /// 上报 driver（v15.18 · willResignActive 时 flushAll 防后台被杀丢事件）· nil 表示 storeManager 未启动
+    private let uploadDriver: BatchUploadDriver?
 
     // MARK: - 状态
 
@@ -36,9 +38,10 @@ final class AppLifecycleObserver {
 
     // MARK: - 初始化（启动即开始监听 · 生命周期与 App 同步 · 无 deinit）
 
-    init(analytics: AnalyticsService, userID: String) {
+    init(analytics: AnalyticsService, userID: String, uploadDriver: BatchUploadDriver? = nil) {
         self.analytics = analytics
         self.userID = userID
+        self.uploadDriver = uploadDriver
 
         let center = NotificationCenter.default
         center.addObserver(
@@ -97,6 +100,7 @@ final class AppLifecycleObserver {
 
         let analytics = self.analytics
         let userID = self.userID
+        let driver = self.uploadDriver
         Task {
             _ = try? await analytics.record(
                 .sessionEnd,
@@ -107,6 +111,8 @@ final class AppLifecycleObserver {
                 ]
             )
             await analytics.setSession(nil)
+            // v15.18 · 后台前 flushAll 防被杀丢事件（stub 阶段也演练链路）
+            await driver?.flushAll()
         }
     }
 }

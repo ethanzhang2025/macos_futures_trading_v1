@@ -109,6 +109,11 @@ struct FuturesTerminalApp: App {
     /// analytics nil 时 nil · 持有强引用与 App 生命周期绑定（无 deinit · 跨次启动靠 UserDefaults lastSessionEndMs）
     private let lifecycleObserver: AppLifecycleObserver?
 
+    /// 埋点上报 driver（v15.18 · WP-133b 客户端层闭环）
+    /// stub mode · 后端 WP-80 就绪后切 HTTPBatchUploadClient · 客户端 wire 不动
+    /// 周期 30s poll · 双阈值（5min OR 100 条）触发 · App init 后 fire-and-forget start
+    private let batchUploadDriver: BatchUploadDriver?
+
     init() {
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
         // 菜单栏不切换 · ⌘N / ⌘L / ⌘, 全部落到 Terminal 上。
@@ -153,10 +158,26 @@ struct FuturesTerminalApp: App {
         if let service = self.analytics {
             Task { _ = try? await service.record(.appLaunch, userID: Self.anonymousUserID) }
         }
+        // v15.18 · WP-133b BatchUploadDriver wire（stub client · 后端就绪后切 HTTP client）
+        // 周期 30s poll · 双阈值（5min OR 100 条）触发 · driver 自管 task 生命周期
+        let driver = manager.map { mgr in
+            BatchUploadDriver(
+                store: mgr.analytics,
+                client: StubBatchUploadClient(),
+                batchSize: 100,
+                timeTriggerMs: 5 * 60 * 1000,
+                pollIntervalSec: 30
+            )
+        }
+        self.batchUploadDriver = driver
+        if let driver {
+            Task { await driver.start() }
+        }
         // v15.18 · WP-133a session_start/end wire（didBecomeActive 触发首次 session_start · 3 分钟规则跨启动）
         // App.init 后 NSApplication 主循环开始 · 首个 didBecomeActive 通知会触发 sessionStart
+        // willResignActive 时除发 session_end 外还 flush driver（防后台被杀丢事件）
         self.lifecycleObserver = self.analytics.map {
-            AppLifecycleObserver(analytics: $0, userID: Self.anonymousUserID)
+            AppLifecycleObserver(analytics: $0, userID: Self.anonymousUserID, uploadDriver: driver)
         }
     }
 

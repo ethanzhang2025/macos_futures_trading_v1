@@ -59,13 +59,19 @@ struct ReviewWindow: View {
         }
     }
 
-    /// v15.20 batch65 · 全屏放大 chartCard sheet（关闭按钮 + 完整 content + 同款 PNG 导出）
+    /// v15.20 batch65/71 · 全屏放大 chartCard sheet（关闭 + PNG 导出 · trader 放大后立刻分享）
     @ViewBuilder
     private func zoomedCardView(_ card: ZoomedCard) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text(card.title).font(.title2).bold()
                 Spacer()
+                Button {
+                    exportChartCardPNG(title: card.title, subtitle: card.subtitle, content: card.content)
+                } label: {
+                    Label("导出 PNG", systemImage: "camera")
+                }
+                .help("导出全屏视图为 PNG")
                 Button("关闭") { zoomedCard = nil }
                     .keyboardShortcut(.cancelAction)
             }

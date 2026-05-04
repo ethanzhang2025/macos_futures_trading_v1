@@ -15,6 +15,11 @@ struct ReviewWindow: View {
 
     @State private var summary: ReviewSummary?
     @State private var loadError: String?
+    /// v15.19 batch44 · 月份筛选 · "" = 全部 · 否则 "yyyy-MM" · 改值后重算 summary
+    @State private var selectedMonth: String = ""
+    /// 全量 closedPositions · 启动一次加载 · 月份切换不重拉数据
+    @State private var allPositions: [ClosedPosition] = []
+    @State private var totalTradeCount: Int = 0
 
     var body: some View {
         Group {
@@ -29,33 +34,65 @@ struct ReviewWindow: View {
         }
         .frame(minWidth: 1024, idealWidth: 1280, minHeight: 720, idealHeight: 900)
         .task { await loadMockReview() }
+        .onChange(of: selectedMonth) { _ in recomputeSummary() }
     }
 
-    /// v1 mock trades · M5 替换为 JournalStore 真数据（StoreManager 注入时一并接入）
+    /// 启动加载 · 拉一次 trades + match · 后续仅按 selectedMonth 重算 summary
     private func loadMockReview() async {
-        let result = await Task.detached(priority: .userInitiated) {
-            let trades = MockReviewTrades.generate(pairCount: 50)
+        let (trades, closed) = await Task.detached(priority: .userInitiated) {
+            let t = MockReviewTrades.generate(pairCount: 50)
             let multipliers: [String: Int] = ["RB0": 10, "IF0": 300, "AU0": 1000, "CU0": 5]
-            let (closed, _) = PositionMatcher.match(trades: trades, multipliers: multipliers)
-            return ReviewSummary(
-                tradeCount: trades.count,
-                closedPositions: closed,
-                monthlyPnL: ReviewAnalytics.monthlyPnL(from: closed),
-                pnlDistribution: ReviewAnalytics.pnlDistribution(from: closed, binSize: Decimal(500)),
-                winRateCurve: ReviewAnalytics.winRateCurve(from: closed),
-                instrumentMatrix: ReviewAnalytics.instrumentMatrix(from: closed),
-                holdingDuration: ReviewAnalytics.holdingDurationStats(from: closed),
-                maxDrawdown: ReviewAnalytics.maxDrawdownCurve(from: closed),
-                profitLossRatio: ReviewAnalytics.profitLossRatio(from: closed),
-                sessionPnL: ReviewAnalytics.sessionPnL(from: closed),
-                streak: ReviewAnalytics.streakMetrics(from: closed),
-                riskAdjusted: ReviewAnalytics.riskAdjustedMetrics(from: closed),
-                profitability: ReviewAnalytics.profitabilityMetrics(from: closed),
-                streakRunPoints: Self.computeStreakRunPoints(from: closed),
-                psychTagCounts: Self.computePsychTagCounts(from: closed)
-            )
+            let (c, _) = PositionMatcher.match(trades: t, multipliers: multipliers)
+            return (t, c)
         }.value
-        summary = result
+        allPositions = closed
+        totalTradeCount = trades.count
+        recomputeSummary()
+    }
+
+    /// 按 selectedMonth 过滤 + 重算 summary（同步 · MainActor · 0 IO）
+    @MainActor
+    private func recomputeSummary() {
+        let filtered = filterByMonth(allPositions, monthString: selectedMonth)
+        summary = ReviewSummary(
+            tradeCount: totalTradeCount,
+            closedPositions: filtered,
+            monthlyPnL: ReviewAnalytics.monthlyPnL(from: filtered),
+            pnlDistribution: ReviewAnalytics.pnlDistribution(from: filtered, binSize: Decimal(500)),
+            winRateCurve: ReviewAnalytics.winRateCurve(from: filtered),
+            instrumentMatrix: ReviewAnalytics.instrumentMatrix(from: filtered),
+            holdingDuration: ReviewAnalytics.holdingDurationStats(from: filtered),
+            maxDrawdown: ReviewAnalytics.maxDrawdownCurve(from: filtered),
+            profitLossRatio: ReviewAnalytics.profitLossRatio(from: filtered),
+            sessionPnL: ReviewAnalytics.sessionPnL(from: filtered),
+            streak: ReviewAnalytics.streakMetrics(from: filtered),
+            riskAdjusted: ReviewAnalytics.riskAdjustedMetrics(from: filtered),
+            profitability: ReviewAnalytics.profitabilityMetrics(from: filtered),
+            streakRunPoints: Self.computeStreakRunPoints(from: filtered),
+            psychTagCounts: Self.computePsychTagCounts(from: filtered)
+        )
+    }
+
+    /// 月份过滤 · "" = 全部 · 否则按 yyyy-MM 字符串匹配
+    private func filterByMonth(_ positions: [ClosedPosition], monthString: String) -> [ClosedPosition] {
+        guard !monthString.isEmpty else { return positions }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM"
+        fmt.timeZone = cal.timeZone
+        return positions.filter { fmt.string(from: $0.closeTime) == monthString }
+    }
+
+    /// 当前 positions 涵盖的所有月份（升序）· 用于 Picker 选项
+    private var availableMonths: [String] {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM"
+        fmt.timeZone = cal.timeZone
+        let months = Set(allPositions.map { fmt.string(from: $0.closeTime) })
+        return months.sorted()
     }
 
     @ViewBuilder
@@ -118,6 +155,16 @@ struct ReviewWindow: View {
             HStack(spacing: 20) {
                 Text("📊 复盘工作台").font(.title2).bold()
                 Divider().frame(height: 24)
+                // v15.19 batch44 · 月份筛选 Picker（全部 / yyyy-MM 历史月份）
+                Picker("", selection: $selectedMonth) {
+                    Text("全部").tag("")
+                    ForEach(availableMonths, id: \.self) { m in
+                        Text(m).tag(m)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 110)
+                .help("按月份筛选 · 默认全部")
                 stat("成交", "\(s.tradeCount) 笔")
                 stat("闭合", "\(s.closedPositions.count) 笔")
                 stat("总 PnL", "¥\(signedDecimal(s.monthlyPnL.totalPnL))")

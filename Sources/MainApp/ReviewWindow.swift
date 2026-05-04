@@ -22,6 +22,16 @@ struct ReviewWindow: View {
     @State private var allPositions: [ClosedPosition] = []
     @State private var totalTradeCount: Int = 0
 
+    /// v15.20 batch65 · chartCard 全屏放大查看（trader 专注分析单张图）
+    @State private var zoomedCard: ZoomedCard?
+
+    private struct ZoomedCard: Identifiable {
+        var id: String { title }
+        let title: String
+        let subtitle: String
+        let content: AnyView
+    }
+
     /// v15.20 batch60 · 从 AppStorage rawTag 解析（dateFilter 计算属性 · 写入时反序）
     private var dateFilter: ReviewDateFilter {
         get { ReviewDateFilter.fromRawTag(dateFilterRawTag) ?? .all }
@@ -44,6 +54,29 @@ struct ReviewWindow: View {
         .frame(minWidth: 1024, idealWidth: 1280, minHeight: 720, idealHeight: 900)
         .task { await loadMockReview() }
         .onChange(of: dateFilterRawTag) { _ in recomputeSummary() }
+        .sheet(item: $zoomedCard) { card in
+            zoomedCardView(card)
+        }
+    }
+
+    /// v15.20 batch65 · 全屏放大 chartCard sheet（关闭按钮 + 完整 content + 同款 PNG 导出）
+    @ViewBuilder
+    private func zoomedCardView(_ card: ZoomedCard) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(card.title).font(.title2).bold()
+                Spacer()
+                Button("关闭") { zoomedCard = nil }
+                    .keyboardShortcut(.cancelAction)
+            }
+            Text(card.subtitle)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.secondary)
+            card.content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .padding(24)
+        .frame(minWidth: 900, idealWidth: 1100, minHeight: 600, idealHeight: 720)
     }
 
     /// 启动加载 · 拉一次 trades + match · 后续仅按 dateFilter 重算 summary
@@ -317,6 +350,13 @@ struct ReviewWindow: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(title).font(.headline)
                 Spacer()
+                Button {
+                    zoomedCard = ZoomedCard(title: title, subtitle: subtitle, content: AnyView(content()))
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .help("放大查看本图")
                 Button {
                     exportChartCardPNG(title: title, subtitle: subtitle, content: content())
                 } label: {

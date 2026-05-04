@@ -14,10 +14,10 @@ macos_futures_trading_v1/
 ├── Sources/                      # 8 Core 业务模块
 │   ├── Shared/                   # 跨端共用模型 / 协议 / 工具
 │   ├── DataCore/                 # Tick / K 线 / 合约 / 数据源协议
-│   ├── IndicatorCore/            # 60+ 指标（v15.18 末 · IndicatorRegistry 注册）+ 麦语言底层函数 ~97% 兼容
-│   ├── ChartCore/                # Metal 图表渲染管线
-│   ├── JournalCore/              # 交易日志 + 复盘分析
-│   ├── AlertCore/                # 条件预警
+│   ├── IndicatorCore/            # 60+ 指标（v15.19 · IndicatorRegistry · BBW/ATRP UI 收尾）+ 麦语言底层函数 ~97% 兼容
+│   ├── ChartCore/                # Metal 图表渲染管线 · 画线 OHLC 吸附 · 模板 JSON 导入导出（v15.19）
+│   ├── JournalCore/              # 交易日志 + 复盘分析（v15.19 加连胜连败 streak 心理预警）
+│   ├── AlertCore/                # 条件预警（v15.19 加 Donchian 突破 priceBreakoutHigh/Low）
 │   ├── ReplayCore/               # K 线回放
 │   └── WorkspaceCore/            # 工作区模板 + 自选
 ├── Tests/                        # 对应 8 个 testTarget 骨架（Swift Testing）

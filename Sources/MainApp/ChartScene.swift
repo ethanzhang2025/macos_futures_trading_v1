@@ -2860,7 +2860,9 @@ struct ChartContentView: View {
     private var swingPointsOverlay: some View {
         let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
         let lookback = max(1, indicatorParams.swingLookback)
-        let swings = SwingPointsDetector.detect(bars, lookback: lookback)
+        // v15.21 batch106 · 接入 swingMinSpacing 密度过滤（0=不过滤 · 与 batch82 默认一致）
+        let minSpacing = max(0, indicatorParams.swingMinSpacing)
+        let swings = SwingPointsDetector.detect(bars, lookback: lookback, minBarSpacing: minSpacing)
             .filter { $0.barIndex >= viewport.startIndex && $0.barIndex < visibleEnd }
         GeometryReader { geom in
             let visibleCount = max(1, viewport.visibleCount)

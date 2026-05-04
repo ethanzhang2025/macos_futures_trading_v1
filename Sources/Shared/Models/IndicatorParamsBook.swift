@@ -49,6 +49,8 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
     public var atrpPeriod: Int
     /// Swing High/Low lookback（默认 5 · v15.20 batch85 · 前后窗口大小 · 越大越稳）
     public var swingLookback: Int
+    /// Swing 同向最小 bar 间距（默认 0 · v15.21 batch106 · >0 时密集合并保留更极值 · 减少视觉噪声）
+    public var swingMinSpacing: Int
 
     public init(
         mainMAPeriods: [Int],
@@ -69,7 +71,8 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         forceIndexPeriod: Int = 13,
         bbwParams: [Int] = [20, 2],
         atrpPeriod: Int = 14,
-        swingLookback: Int = 5
+        swingLookback: Int = 5,
+        swingMinSpacing: Int = 0
     ) {
         self.mainMAPeriods = mainMAPeriods
         self.mainBOLLParams = mainBOLLParams
@@ -90,6 +93,7 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.bbwParams = bbwParams
         self.atrpPeriod = atrpPeriod
         self.swingLookback = swingLookback
+        self.swingMinSpacing = swingMinSpacing
     }
 
     public static let `default` = IndicatorParamsBook(
@@ -111,7 +115,8 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         forceIndexPeriod: 13,
         bbwParams: [20, 2],
         atrpPeriod: 14,
-        swingLookback: 5
+        swingLookback: 5,
+        swingMinSpacing: 0
     )
 
     // MARK: - Codable · v15.11 加 cciPeriod/wrPeriod · v15.13 加 dmi/stoch/roc/bias 字段
@@ -123,7 +128,7 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         case dmiPeriod, stochParams, rocPeriod, biasPeriod
         case aroonPeriod, stcParams, elderRayPeriod, choppinessPeriod, forceIndexPeriod
         case bbwParams, atrpPeriod
-        case swingLookback
+        case swingLookback, swingMinSpacing
     }
 
     public init(from decoder: Decoder) throws {
@@ -150,6 +155,8 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.atrpPeriod       = try c.decodeIfPresent(Int.self, forKey: .atrpPeriod) ?? 14
         // v15.20 batch85 · Swing lookback（旧用户启动 fallback 5）
         self.swingLookback    = try c.decodeIfPresent(Int.self, forKey: .swingLookback) ?? 5
+        // v15.21 batch106 · Swing 同向最小间距（旧用户启动 fallback 0 不过滤）
+        self.swingMinSpacing  = try c.decodeIfPresent(Int.self, forKey: .swingMinSpacing) ?? 0
     }
 
     // MARK: - Decimal 转换 helper（IndicatorCore.calculate 接受 [Decimal]）

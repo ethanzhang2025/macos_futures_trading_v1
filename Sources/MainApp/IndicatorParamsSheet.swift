@@ -124,8 +124,9 @@ struct IndicatorParamsSheet: View {
                     paramField("周期", $draft.atrpPeriod)
                 }
 
-                paramSection("主图 Swing 标注（v15.20 batch82 · ⌘⇧W）", subtitle: "默认 5（前后窗口大小 · 越大识别越稳 · 越小越多 swing）") {
+                paramSection("主图 Swing 标注（v15.20 batch82 · ⌘⇧W）", subtitle: "lookback 默认 5（前后窗口）· minSpacing 默认 0（同向密集合并 · 0=不过滤）") {
                     paramField("lookback", $draft.swingLookback)
+                    paramField("minSpacing", $draft.swingMinSpacing, leadingPad: true)
                 }
             }
             .formStyle(.grouped)
@@ -225,6 +226,8 @@ struct IndicatorParamsSheet: View {
         guard b.atrpPeriod >= 1 && b.atrpPeriod <= 500 else { return false }
         // v15.20 batch85 · Swing lookback 范围（1~50 · 太大遮蔽全局趋势）
         guard b.swingLookback >= 1 && b.swingLookback <= 50 else { return false }
+        // v15.21 batch106 · Swing minSpacing 范围（0~100 · 0=不过滤 · 默认 0）
+        guard b.swingMinSpacing >= 0 && b.swingMinSpacing <= 100 else { return false }
         return true
     }
 }

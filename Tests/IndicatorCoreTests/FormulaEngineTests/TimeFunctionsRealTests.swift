@@ -91,4 +91,57 @@ struct TimeFunctionsRealTests {
         // [10（真）, 1（idx=1 占位）, 23（真）]
         #expect(result == [Decimal(10), Decimal(1), Decimal(23)] as [Decimal?])
     }
+
+    // MARK: - v15.18 · YEAR / MONTH / DAY / WEEKDAY 时间细分函数
+
+    @Test("YEAR · 4 位整数年份（2026）")
+    func yearValue() throws {
+        let bars = [makeBar(utcDate(2026, 5, 3))]
+        let result = try YEARFunction().execute(args: [], bars: bars)
+        #expect(result[0] == Decimal(2026))
+    }
+
+    @Test("MONTH · 1-12")
+    func monthValue() throws {
+        let bars = [
+            makeBar(utcDate(2026, 1, 1)),
+            makeBar(utcDate(2026, 6, 15)),
+            makeBar(utcDate(2026, 12, 31))
+        ]
+        let result = try MONTHFunction().execute(args: [], bars: bars)
+        #expect(result == [Decimal(1), Decimal(6), Decimal(12)] as [Decimal?])
+    }
+
+    @Test("DAY · 1-31")
+    func dayValue() throws {
+        let bars = [
+            makeBar(utcDate(2026, 5, 1)),
+            makeBar(utcDate(2026, 5, 15)),
+            makeBar(utcDate(2026, 5, 31))
+        ]
+        let result = try DAYFunction().execute(args: [], bars: bars)
+        #expect(result == [Decimal(1), Decimal(15), Decimal(31)] as [Decimal?])
+    }
+
+    @Test("WEEKDAY · 通达信 1=周一 ~ 7=周日（与 Calendar.weekday 1=周日不同）")
+    func weekdayConversion() throws {
+        // 2026-05-04 是周一 · 2026-05-10 是周日
+        let bars = [
+            makeBar(utcDate(2026, 5, 4)),    // 周一 → 1
+            makeBar(utcDate(2026, 5, 10))    // 周日 → 7
+        ]
+        let result = try WEEKDAYFunction().execute(args: [], bars: bars)
+        #expect(result == [Decimal(1), Decimal(7)] as [Decimal?])
+    }
+
+    @Test("YEAR/MONTH/DAY · timestamp == nil 回退占位（bar 序号）")
+    func ymdFallback() throws {
+        let bars = [makeBar(nil), makeBar(nil)]
+        let yr = try YEARFunction().execute(args: [], bars: bars)
+        let mo = try MONTHFunction().execute(args: [], bars: bars)
+        let dy = try DAYFunction().execute(args: [], bars: bars)
+        #expect(yr == [Decimal(0), Decimal(1)] as [Decimal?])
+        #expect(mo == [Decimal(0), Decimal(1)] as [Decimal?])
+        #expect(dy == [Decimal(0), Decimal(1)] as [Decimal?])
+    }
 }

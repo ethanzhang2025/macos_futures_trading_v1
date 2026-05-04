@@ -68,6 +68,53 @@ struct MINUTEFunction: BuiltinFunction {
     }
 }
 
+/// YEAR — 年份（4 位整数 · 如 2026）· v15.18
+struct YEARFunction: BuiltinFunction {
+    let name = "YEAR"
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        return bars.enumerated().map { (idx, bar) in
+            guard let ts = bar.timestamp else { return Decimal(idx) as Decimal? }
+            return Decimal(_utcCalendar.component(.year, from: ts)) as Decimal?
+        }
+    }
+}
+
+/// MONTH — 月份（1-12）· v15.18
+struct MONTHFunction: BuiltinFunction {
+    let name = "MONTH"
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        return bars.enumerated().map { (idx, bar) in
+            guard let ts = bar.timestamp else { return Decimal(idx) as Decimal? }
+            return Decimal(_utcCalendar.component(.month, from: ts)) as Decimal?
+        }
+    }
+}
+
+/// DAY — 日（1-31）· v15.18
+struct DAYFunction: BuiltinFunction {
+    let name = "DAY"
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        return bars.enumerated().map { (idx, bar) in
+            guard let ts = bar.timestamp else { return Decimal(idx) as Decimal? }
+            return Decimal(_utcCalendar.component(.day, from: ts)) as Decimal?
+        }
+    }
+}
+
+/// WEEKDAY — 星期几（通达信 1=周一 ~ 7=周日）· v15.18
+/// 注：Calendar.weekday 默认 1=周日 ~ 7=周六 · 转通达信 1-7 = (cal.weekday + 5) % 7 + 1
+struct WEEKDAYFunction: BuiltinFunction {
+    let name = "WEEKDAY"
+    func execute(args: [[Decimal?]], bars: [BarData]) throws -> [Decimal?] {
+        return bars.enumerated().map { (idx, bar) in
+            guard let ts = bar.timestamp else { return Decimal(idx) as Decimal? }
+            let calWeekday = _utcCalendar.component(.weekday, from: ts)  // 1-7（日-六）
+            let tdxWeekday = ((calWeekday + 5) % 7) + 1                  // 1-7（一-日）
+            return Decimal(tdxWeekday) as Decimal?
+        }
+    }
+}
+
 /// ISLASTBAR — 是否最后一根K线
 struct ISLASTBARFunction: BuiltinFunction {
     let name = "ISLASTBAR"

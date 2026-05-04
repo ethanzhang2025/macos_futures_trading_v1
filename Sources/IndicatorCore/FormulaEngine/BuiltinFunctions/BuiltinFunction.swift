@@ -71,6 +71,11 @@ public enum BuiltinFunctions {
             TIMEFunction(),
             HOURFunction(),
             MINUTEFunction(),
+            // v15.18 · 时间细分函数（YEAR / MONTH / DAY / WEEKDAY · 通达信日历分量）
+            YEARFunction(),
+            MONTHFunction(),
+            DAYFunction(),
+            WEEKDAYFunction(),
             ISLASTBARFunction(),
             BARPOSFunction(),
             // 麦语言扩展（第 1 批 · v6.0+ 兼容度 85% → ~90%）

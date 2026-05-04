@@ -189,15 +189,25 @@ struct ReviewWindow: View {
         }
     }
 
-    /// 8 图统一卡片容器（标题 + subtitle + 内容区）
+    /// 8 图统一卡片容器（标题 + subtitle + 内容区）· v15.19 batch41 加 📷 PNG 导出按钮
     @ViewBuilder
     private func chartCard<Content: View>(
         _ title: String,
         subtitle: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
+        let chart = VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(.headline)
+                Spacer()
+                Button {
+                    exportChartCardPNG(title: title, subtitle: subtitle, content: content())
+                } label: {
+                    Image(systemName: "camera").font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .help("导出本图为 PNG")
+            }
             Text(subtitle)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
@@ -209,6 +219,43 @@ struct ReviewWindow: View {
         .frame(minHeight: 220)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(8)
+        chart
+    }
+
+    /// v15.19 batch41 · 单 chartCard PNG 导出（trader 分享单图 · 复用 ImageRenderer 模式）
+    @MainActor
+    private func exportChartCardPNG<Content: View>(title: String, subtitle: String, content: Content) {
+        let exportable = VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline)
+            Text(subtitle).font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
+            content
+        }
+        .padding(20)
+        .background(Color.white)   // 白底便于导出后插入文档
+        .frame(width: 720, height: 480)
+
+        let renderer = ImageRenderer(content: exportable)
+        renderer.scale = 2
+        guard let nsImage = renderer.nsImage,
+              let tiff = nsImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            Toast.errorBody("截图失败", "ImageRenderer 渲染失败")
+            return
+        }
+        let panel = NSSavePanel()
+        panel.title = "导出 \(title) PNG"
+        panel.allowedContentTypes = [.png]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        panel.nameFieldStringValue = "\(title)_\(dateFmt.string(from: Date())).png"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try pngData.write(to: url, options: .atomic)
+            Toast.info("导出成功", "已导出 \(title) 到 \(url.lastPathComponent)。")
+        } catch {
+            Toast.error("导出失败", error)
+        }
     }
 
     /// 自适应列数：每列至少 260 · 窗口窄自动减到 3/2/1 列 · 不再固定 4 列裁切

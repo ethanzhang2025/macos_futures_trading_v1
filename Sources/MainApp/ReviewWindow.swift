@@ -23,6 +23,7 @@ struct ReviewWindow: View {
     @State private var totalTradeCount: Int = 0
 
     /// v15.20 batch65 · chartCard 全屏放大查看（trader 专注分析单张图）
+    /// v15.21 batch123 · 加 index/total · 支持 ←/→ 切前后图
     @State private var zoomedCard: ZoomedCard?
 
     private struct ZoomedCard: Identifiable {
@@ -30,6 +31,8 @@ struct ReviewWindow: View {
         let title: String
         let subtitle: String
         let content: AnyView
+        let index: Int      // v15.21 batch123 · 当前在 specs 中的索引
+        let total: Int      // v15.21 batch123 · specs 总数（用于循环边界）
     }
 
     /// v15.20 batch60 · 从 AppStorage rawTag 解析（dateFilter 计算属性 · 写入用 setDateFilter）
@@ -60,18 +63,36 @@ struct ReviewWindow: View {
     }
 
     /// v15.20 batch65/71 · 全屏放大 chartCard sheet（关闭 + PNG 导出 · trader 放大后立刻分享）
+    /// v15.21 batch123 · 加 ←/→ 切前后图（trader 复盘连续翻 · 不必关闭再开）
     @ViewBuilder
     private func zoomedCardView(_ card: ZoomedCard) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text(card.title).font(.title2).bold()
+                Text("\(card.index + 1) / \(card.total)").font(.caption).foregroundColor(.secondary)
                 Spacer()
+                // v15.21 batch123 · ← / → 切前后图（循环边界 · 0 → total-1 反之亦然）
+                Button {
+                    navigateZoomedCard(by: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+                .help("上一张（←）")
+                Button {
+                    navigateZoomedCard(by: 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .keyboardShortcut(.rightArrow, modifiers: [])
+                .help("下一张（→）")
                 Button {
                     exportChartCardPNG(title: card.title, subtitle: card.subtitle, content: card.content)
                 } label: {
                     Label("导出 PNG", systemImage: "camera")
                 }
-                .help("导出全屏视图为 PNG")
+                .keyboardShortcut("s", modifiers: [.command])
+                .help("导出全屏视图为 PNG（⌘S）")
                 Button("关闭") { zoomedCard = nil }
                     .keyboardShortcut(.cancelAction)
             }
@@ -83,6 +104,18 @@ struct ReviewWindow: View {
         }
         .padding(24)
         .frame(minWidth: 900, idealWidth: 1100, minHeight: 600, idealHeight: 720)
+    }
+
+    /// v15.21 batch123 · 全屏 ←/→ 切前后图（循环边界 · 当前 summary 不变 · 只换 zoomedCard 内容）
+    @MainActor
+    private func navigateZoomedCard(by step: Int) {
+        guard let current = zoomedCard, let s = summary else { return }
+        let specs = reviewCardSpecs(s)
+        guard !specs.isEmpty else { return }
+        let next = ((current.index + step) % specs.count + specs.count) % specs.count
+        let spec = specs[next]
+        zoomedCard = ZoomedCard(title: spec.title, subtitle: spec.subtitle,
+                                content: spec.content, index: next, total: specs.count)
     }
 
     /// 启动加载 · 拉一次 trades + match · 后续仅按 dateFilter 重算 summary
@@ -138,52 +171,58 @@ struct ReviewWindow: View {
             Divider()
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: 16) {
-                    chartCard("月度盈亏",
-                              subtitle: "MonthlyPnL · \(s.monthlyPnL.buckets.count) 月跨度") {
-                        monthlyPnLChart(s.monthlyPnL)
-                    }
-                    chartCard("分布直方",
-                              subtitle: "PnLDistribution · \(s.pnlDistribution.bins.count) 桶 · 盈\(s.pnlDistribution.positiveCount)/亏\(s.pnlDistribution.negativeCount)") {
-                        pnlDistributionChart(s.pnlDistribution)
-                    }
-                    chartCard("胜率曲线",
-                              subtitle: "WinRateCurve · 终值 \(pct(s.winRateCurve.finalWinRate))") {
-                        winRateChart(s.winRateCurve)
-                    }
-                    chartCard("品种矩阵",
-                              subtitle: "InstrumentMatrix · \(s.instrumentMatrix.cells.count) 合约") {
-                        instrumentMatrixView(s.instrumentMatrix)
-                    }
-                    chartCard("持仓时间",
-                              subtitle: "中位 \(durationLabel(s.holdingDuration.medianSeconds)) · 平均 \(durationLabel(s.holdingDuration.averageSeconds))") {
-                        holdingDurationChart(s.holdingDuration)
-                    }
-                    chartCard("最大回撤",
-                              subtitle: "MaxDrawdown · ¥-\(decimal(s.maxDrawdown.maxDrawdown))") {
-                        maxDrawdownChart(s.maxDrawdown)
-                    }
-                    chartCard("盈亏比",
-                              subtitle: "ProfitLossRatio · \(decimal(s.profitLossRatio.ratio)) · 胜 \(s.profitLossRatio.winCount) / 亏 \(s.profitLossRatio.lossCount)") {
-                        profitLossRatioView(s.profitLossRatio)
-                    }
-                    chartCard("时段分析",
-                              subtitle: "SessionPnL · \(s.sessionPnL.buckets.count) 段") {
-                        sessionPnLChart(s.sessionPnL)
-                    }
-                    // v15.19 batch27 · streak 累积曲线（trader 看交易心理时间线 · 哪段连胜哪段连败）
-                    chartCard("连胜连败曲线",
-                              subtitle: "Streak · 最长连胜 \(s.streak.maxWinningStreak) / 最长连败 \(s.streak.maxLosingStreak)") {
-                        streakRunChart(s.streakRunPoints)
-                    }
-                    // v15.19 batch27 · 心理标签命中分布（基于 EmotionAutoTagger.tagAll）
-                    chartCard("心理风险标签",
-                              subtitle: "EmotionAutoTagger · 6 类自动建议") {
-                        psychTagsChart(s.psychTagCounts)
+                    // v15.21 batch123 · chartCard 数据驱动 · 全屏 ←/→ 切换前后图依赖此数组顺序
+                    ForEach(Array(reviewCardSpecs(s).enumerated()), id: \.offset) { idx, spec in
+                        chartCard(spec.title, subtitle: spec.subtitle, index: idx, total: reviewCardSpecs(s).count) {
+                            spec.content
+                        }
                     }
                 }
                 .padding(16)
             }
         }
+    }
+
+    /// v15.21 batch123 · chartCard 数据驱动数组 · 单一 source-of-truth · grid 渲染 + zoomedCard 切换共用
+    private struct ReviewCardSpec {
+        let title: String
+        let subtitle: String
+        let content: AnyView
+    }
+
+    private func reviewCardSpecs(_ s: ReviewSummary) -> [ReviewCardSpec] {
+        [
+            .init(title: "月度盈亏",
+                  subtitle: "MonthlyPnL · \(s.monthlyPnL.buckets.count) 月跨度",
+                  content: AnyView(monthlyPnLChart(s.monthlyPnL))),
+            .init(title: "分布直方",
+                  subtitle: "PnLDistribution · \(s.pnlDistribution.bins.count) 桶 · 盈\(s.pnlDistribution.positiveCount)/亏\(s.pnlDistribution.negativeCount)",
+                  content: AnyView(pnlDistributionChart(s.pnlDistribution))),
+            .init(title: "胜率曲线",
+                  subtitle: "WinRateCurve · 终值 \(pct(s.winRateCurve.finalWinRate))",
+                  content: AnyView(winRateChart(s.winRateCurve))),
+            .init(title: "品种矩阵",
+                  subtitle: "InstrumentMatrix · \(s.instrumentMatrix.cells.count) 合约",
+                  content: AnyView(instrumentMatrixView(s.instrumentMatrix))),
+            .init(title: "持仓时间",
+                  subtitle: "中位 \(durationLabel(s.holdingDuration.medianSeconds)) · 平均 \(durationLabel(s.holdingDuration.averageSeconds))",
+                  content: AnyView(holdingDurationChart(s.holdingDuration))),
+            .init(title: "最大回撤",
+                  subtitle: "MaxDrawdown · ¥-\(decimal(s.maxDrawdown.maxDrawdown))",
+                  content: AnyView(maxDrawdownChart(s.maxDrawdown))),
+            .init(title: "盈亏比",
+                  subtitle: "ProfitLossRatio · \(decimal(s.profitLossRatio.ratio)) · 胜 \(s.profitLossRatio.winCount) / 亏 \(s.profitLossRatio.lossCount)",
+                  content: AnyView(profitLossRatioView(s.profitLossRatio))),
+            .init(title: "时段分析",
+                  subtitle: "SessionPnL · \(s.sessionPnL.buckets.count) 段",
+                  content: AnyView(sessionPnLChart(s.sessionPnL))),
+            .init(title: "连胜连败曲线",
+                  subtitle: "Streak · 最长连胜 \(s.streak.maxWinningStreak) / 最长连败 \(s.streak.maxLosingStreak)",
+                  content: AnyView(streakRunChart(s.streakRunPoints))),
+            .init(title: "心理风险标签",
+                  subtitle: "EmotionAutoTagger · 6 类自动建议",
+                  content: AnyView(psychTagsChart(s.psychTagCounts))),
+        ]
     }
 
     private func header(_ s: ReviewSummary) -> some View {
@@ -379,25 +418,29 @@ struct ReviewWindow: View {
     }
 
     /// 8 图统一卡片容器（标题 + subtitle + 内容区）· v15.19 batch41 加 📷 PNG 导出按钮
+    /// v15.21 batch123 · 加 index/total 用于全屏 ←/→ 切换 + 双击进全屏
     @ViewBuilder
     private func chartCard<Content: View>(
         _ title: String,
         subtitle: String,
+        index: Int,
+        total: Int,
         @ViewBuilder content: () -> Content
     ) -> some View {
+        let body = content()
         let chart = VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title).font(.headline)
                 Spacer()
                 Button {
-                    zoomedCard = ZoomedCard(title: title, subtitle: subtitle, content: AnyView(content()))
+                    zoomedCard = ZoomedCard(title: title, subtitle: subtitle, content: AnyView(body), index: index, total: total)
                 } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption)
                 }
                 .buttonStyle(.borderless)
-                .help("放大查看本图")
+                .help("放大查看本图（双击 card 也可）")
                 Button {
-                    exportChartCardPNG(title: title, subtitle: subtitle, content: content())
+                    exportChartCardPNG(title: title, subtitle: subtitle, content: body)
                 } label: {
                     Image(systemName: "camera").font(.caption)
                 }
@@ -408,13 +451,18 @@ struct ReviewWindow: View {
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
                 .lineLimit(2)
-            content()
+            body
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(12)
         .frame(minHeight: 220)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(8)
+        // v15.21 batch123 · 双击 chartCard 全屏（与 ↗ 按钮同效 · trader 流畅）
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            zoomedCard = ZoomedCard(title: title, subtitle: subtitle, content: AnyView(body), index: index, total: total)
+        }
         chart
     }
 

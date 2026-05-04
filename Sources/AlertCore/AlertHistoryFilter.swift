@@ -81,11 +81,31 @@ public enum AlertHistoryStatistics {
         }
     }
 
-    public struct Summary: Sendable {
+    /// v15.20 batch58 · 通用计数桶（替代 v15.19 batch23 的 (key, count) tuple · Equatable + Identifiable）
+    /// SwiftUI ForEach 直接 ForEach(buckets) {...} 不再需要 .id(\.key)
+    /// 测试可以 #expect(buckets == [Bucket(key:..., count:...)])
+    public struct Bucket<K: Hashable & Sendable>: Sendable, Equatable, Identifiable {
+        public let key: K
+        public let count: Int
+        public init(key: K, count: Int) {
+            self.key = key
+            self.count = count
+        }
+        public var id: K { key }
+    }
+
+    public struct Summary: Sendable, Equatable {
         public let total: Int
-        public let byInstrument: [(key: String, count: Int)]   // count 降序
-        public let byKind: [(key: ConditionKind, count: Int)]  // count 降序
-        public let byHour: [Int: Int]                           // hour(0-23) → count（Asia/Shanghai）
+        public let byInstrument: [Bucket<String>]          // count 降序 · 同 count 按 key 升序
+        public let byKind: [Bucket<ConditionKind>]         // count 降序
+        public let byHour: [Int: Int]                       // hour(0-23) → count（Asia/Shanghai）
+
+        public init(total: Int, byInstrument: [Bucket<String>], byKind: [Bucket<ConditionKind>], byHour: [Int: Int]) {
+            self.total = total
+            self.byInstrument = byInstrument
+            self.byKind = byKind
+            self.byHour = byHour
+        }
     }
 
     public static func summarize(_ entries: [AlertHistoryEntry],
@@ -102,12 +122,9 @@ public enum AlertHistoryStatistics {
             byHour[h, default: 0] += 1
         }
         let sortedInst = byInstrument.sorted { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) }
-            .map { (key: $0.key, count: $0.value) }
+            .map { Bucket(key: $0.key, count: $0.value) }
         let sortedKind = byKind.sorted { $0.value > $1.value || ($0.value == $1.value && $0.key.rawValue < $1.key.rawValue) }
-            .map { (key: $0.key, count: $0.value) }
+            .map { Bucket(key: $0.key, count: $0.value) }
         return Summary(total: entries.count, byInstrument: sortedInst, byKind: sortedKind, byHour: byHour)
     }
 }
-
-// Summary.byInstrument / byKind 用 tuple 避免要求 ConditionKind/String 是 Identifiable
-// 上层 SwiftUI ForEach 用 .id(\.key) 索引即可

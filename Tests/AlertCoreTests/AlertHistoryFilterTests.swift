@@ -133,6 +133,29 @@ struct AlertHistoryStatisticsTests {
         #expect(s.byKind.first?.key == .spike)
     }
 
+    @Test("v15.20 batch58 · Bucket Equatable + Identifiable + key/count 字段")
+    func bucketStruct() {
+        let a = AlertHistoryStatistics.Bucket<String>(key: "RB0", count: 5)
+        let b = AlertHistoryStatistics.Bucket<String>(key: "RB0", count: 5)
+        let c = AlertHistoryStatistics.Bucket<String>(key: "IF0", count: 5)
+        #expect(a == b)
+        #expect(a != c)
+        #expect(a.id == "RB0")    // Identifiable conformance
+        #expect(a.key == "RB0")
+        #expect(a.count == 5)
+    }
+
+    @Test("v15.20 batch58 · Summary 整体 Equatable（用于 .onChange 缓存对比）")
+    func summaryEquatable() {
+        let now = Date(timeIntervalSince1970: 1_746_320_400)
+        let entries = [entry(at: now, instrument: "RB0"), entry(at: now, instrument: "RB0")]
+        let s1 = AlertHistoryStatistics.summarize(entries, timeZone: cn)
+        let s2 = AlertHistoryStatistics.summarize(entries, timeZone: cn)
+        #expect(s1 == s2)
+        let s3 = AlertHistoryStatistics.summarize([entry(at: now, instrument: "IF0")], timeZone: cn)
+        #expect(s1 != s3)
+    }
+
     @Test("byHour 按 Asia/Shanghai 小时分桶")
     func hourBuckets() {
         // 2026-05-04 09:00 +0800 / 09:30 +0800 / 14:00 +0800

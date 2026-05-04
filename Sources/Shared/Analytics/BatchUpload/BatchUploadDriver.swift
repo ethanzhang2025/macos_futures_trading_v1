@@ -136,11 +136,9 @@ public actor BatchUploadDriver {
             failures += 1
             consecutiveFailures += 1
             // 不 markUploaded · 下轮 queryPending 仍返回这些事件 · 自然重试
-            // v15.18 · 触发 onFailure callback（caller 可 emit banner 或上报监控）
+            // v15.18 · 触发 onFailure callback 同步 await（保证测试可靠 · 调用方不应在 callback 内做长任务）
             if let cb = onFailure {
-                let consec = consecutiveFailures
-                let count = pending.count
-                Task { await cb(consec, count, error) }
+                await cb(consecutiveFailures, pending.count, error)
             }
         }
     }

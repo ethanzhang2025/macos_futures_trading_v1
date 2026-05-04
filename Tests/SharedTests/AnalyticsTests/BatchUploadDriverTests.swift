@@ -202,8 +202,6 @@ struct BatchUploadDriverFailureCallbackTests {
             }
         )
         await driver.tickNow()
-        // 给 callback Task 执行机会
-        try? await Task.sleep(nanoseconds: 50_000_000)
         let cnt = await counter.count
         let lastConsec = await counter.lastConsecutive
         #expect(cnt == 1)
@@ -226,11 +224,7 @@ struct BatchUploadDriverFailureCallbackTests {
             onFailure: { consec, _, _ in await counter.record(consecutive: consec) }
         )
         for _ in 0..<3 { await driver.tickNow() }
-        // 轮询等待 callback 到达（fire-and-forget Task · 不可靠 sleep · 最多 1s）
-        for _ in 0..<20 {
-            if await counter.lastConsecutive == 3 { break }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
+        // v15.18 · callback 改 sync await · 测试可靠
         #expect(await counter.lastConsecutive == 3)
         #expect(await driver.consecutiveFailureCount() == 3)
 

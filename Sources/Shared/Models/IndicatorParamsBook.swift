@@ -33,6 +33,16 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
     public var rocPeriod: Int
     /// BIAS 周期（默认 6 · v15.13 · 单线 · 上下对称视野 · 0 参考线）
     public var biasPeriod: Int
+    /// Aroon 周期（默认 14 · v15.18 · 输出 Up/Down/Osc 3 线 · 值域 -100~+100）
+    public var aroonPeriod: Int
+    /// STC 参数（默认 [23,50,10,10] · v15.18 · [fast,slow,period,smooth] · 单线 0-100）
+    public var stcParams: [Int]
+    /// ElderRay 周期（默认 13 · v15.18 · Bull/Bear 双线 · 0 参考）
+    public var elderRayPeriod: Int
+    /// Choppiness 周期（默认 14 · v15.18 · 单线 0-100 · 61.8/38.2 黄金分割阈值）
+    public var choppinessPeriod: Int
+    /// ForceIndex 周期（默认 13 · v15.18 · 单线 · 价量复合 · 0 参考）
+    public var forceIndexPeriod: Int
 
     public init(
         mainMAPeriods: [Int],
@@ -45,7 +55,12 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         dmiPeriod: Int = 14,
         stochParams: [Int] = [14, 3],
         rocPeriod: Int = 12,
-        biasPeriod: Int = 6
+        biasPeriod: Int = 6,
+        aroonPeriod: Int = 14,
+        stcParams: [Int] = [23, 50, 10, 10],
+        elderRayPeriod: Int = 13,
+        choppinessPeriod: Int = 14,
+        forceIndexPeriod: Int = 13
     ) {
         self.mainMAPeriods = mainMAPeriods
         self.mainBOLLParams = mainBOLLParams
@@ -58,6 +73,11 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.stochParams = stochParams
         self.rocPeriod = rocPeriod
         self.biasPeriod = biasPeriod
+        self.aroonPeriod = aroonPeriod
+        self.stcParams = stcParams
+        self.elderRayPeriod = elderRayPeriod
+        self.choppinessPeriod = choppinessPeriod
+        self.forceIndexPeriod = forceIndexPeriod
     }
 
     public static let `default` = IndicatorParamsBook(
@@ -71,7 +91,12 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         dmiPeriod: 14,
         stochParams: [14, 3],
         rocPeriod: 12,
-        biasPeriod: 6
+        biasPeriod: 6,
+        aroonPeriod: 14,
+        stcParams: [23, 50, 10, 10],
+        elderRayPeriod: 13,
+        choppinessPeriod: 14,
+        forceIndexPeriod: 13
     )
 
     // MARK: - Codable · v15.11 加 cciPeriod/wrPeriod · v15.13 加 dmi/stoch/roc/bias 字段
@@ -81,6 +106,7 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         case mainMAPeriods, mainBOLLParams, macdParams, kdjParams, rsiPeriod
         case cciPeriod, wrPeriod
         case dmiPeriod, stochParams, rocPeriod, biasPeriod
+        case aroonPeriod, stcParams, elderRayPeriod, choppinessPeriod, forceIndexPeriod
     }
 
     public init(from decoder: Decoder) throws {
@@ -96,6 +122,12 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.stochParams    = try c.decodeIfPresent([Int].self, forKey: .stochParams) ?? [14, 3]
         self.rocPeriod      = try c.decodeIfPresent(Int.self, forKey: .rocPeriod) ?? 12
         self.biasPeriod     = try c.decodeIfPresent(Int.self, forKey: .biasPeriod) ?? 6
+        // v15.18 · 5 个新指标参数（旧用户启动 fallback 默认 · 不丢偏好）
+        self.aroonPeriod      = try c.decodeIfPresent(Int.self, forKey: .aroonPeriod) ?? 14
+        self.stcParams        = try c.decodeIfPresent([Int].self, forKey: .stcParams) ?? [23, 50, 10, 10]
+        self.elderRayPeriod   = try c.decodeIfPresent(Int.self, forKey: .elderRayPeriod) ?? 13
+        self.choppinessPeriod = try c.decodeIfPresent(Int.self, forKey: .choppinessPeriod) ?? 14
+        self.forceIndexPeriod = try c.decodeIfPresent(Int.self, forKey: .forceIndexPeriod) ?? 13
     }
 
     // MARK: - Decimal 转换 helper（IndicatorCore.calculate 接受 [Decimal]）
@@ -142,6 +174,28 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
 
     public var biasParamsDecimal: [Decimal] {
         [Decimal(biasPeriod)]
+    }
+
+    // v15.18 · 5 个新指标 Decimal helper
+
+    public var aroonParamsDecimal: [Decimal] {
+        [Decimal(aroonPeriod)]
+    }
+
+    public var stcParamsDecimal: [Decimal] {
+        stcParams.map { Decimal($0) }
+    }
+
+    public var elderRayParamsDecimal: [Decimal] {
+        [Decimal(elderRayPeriod)]
+    }
+
+    public var choppinessParamsDecimal: [Decimal] {
+        [Decimal(choppinessPeriod)]
+    }
+
+    public var forceIndexParamsDecimal: [Decimal] {
+        [Decimal(forceIndexPeriod)]
     }
 }
 

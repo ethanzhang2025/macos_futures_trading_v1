@@ -307,6 +307,73 @@ public enum ReviewAnalytics {
         public let tradingDays: Int              // 有交易的日历天数
     }
 
+    // MARK: - 10. 盈利能力综合指标（v15.18 · ProfitFactor / Expectancy / GrossWin/Loss）
+
+    public struct ProfitabilityMetrics: Sendable, Codable, Equatable {
+        public let grossWin: Decimal           // 所有盈利交易总和
+        public let grossLoss: Decimal          // 所有亏损交易总和（取绝对值 · 已转正）
+        public let profitFactor: Double        // GrossWin / GrossLoss（无亏损时 +∞ → 999.0 上限）
+        public let winRate: Double             // 胜率 0-1
+        public let lossRate: Double            // 败率 0-1
+        public let expectancy: Decimal         // 单笔期望 = avgWin*winRate - avgLoss*lossRate
+        public let largestWin: Decimal         // 最大单笔盈利
+        public let largestLoss: Decimal        // 最大单笔亏损（绝对值）
+        public let totalTrades: Int
+        public let winningTrades: Int
+        public let losingTrades: Int
+    }
+
+    public static func profitabilityMetrics(from positions: [ClosedPosition]) -> ProfitabilityMetrics {
+        guard !positions.isEmpty else {
+            return ProfitabilityMetrics(
+                grossWin: 0, grossLoss: 0, profitFactor: 0,
+                winRate: 0, lossRate: 0, expectancy: 0,
+                largestWin: 0, largestLoss: 0,
+                totalTrades: 0, winningTrades: 0, losingTrades: 0
+            )
+        }
+        let wins = positions.filter { $0.realizedPnL > 0 }
+        let losses = positions.filter { $0.realizedPnL < 0 }
+        let total = positions.count
+        let winRate = Double(wins.count) / Double(total)
+        let lossRate = Double(losses.count) / Double(total)
+
+        let grossWin = wins.reduce(Decimal(0)) { $0 + $1.realizedPnL }
+        let grossLossSigned = losses.reduce(Decimal(0)) { $0 + $1.realizedPnL }
+        let grossLoss = -grossLossSigned   // 转正
+
+        let pf: Double
+        if grossLoss > 0 {
+            pf = NSDecimalNumber(decimal: grossWin / grossLoss).doubleValue
+        } else if grossWin > 0 {
+            pf = 999.0   // 无亏损 · 上限避免 Inf
+        } else {
+            pf = 0
+        }
+
+        let avgWin: Decimal = wins.isEmpty ? 0 : grossWin / Decimal(wins.count)
+        let avgLoss: Decimal = losses.isEmpty ? 0 : grossLoss / Decimal(losses.count)
+        let expectancy = avgWin * Decimal(winRate) - avgLoss * Decimal(lossRate)
+
+        let largestWin = wins.map(\.realizedPnL).max() ?? 0
+        let largestLossSigned = losses.map(\.realizedPnL).min() ?? 0
+        let largestLoss = -largestLossSigned
+
+        return ProfitabilityMetrics(
+            grossWin: grossWin,
+            grossLoss: grossLoss,
+            profitFactor: pf,
+            winRate: winRate,
+            lossRate: lossRate,
+            expectancy: expectancy,
+            largestWin: largestWin,
+            largestLoss: largestLoss,
+            totalTrades: total,
+            winningTrades: wins.count,
+            losingTrades: losses.count
+        )
+    }
+
     public static func riskAdjustedMetrics(
         from positions: [ClosedPosition],
         annualizationFactor: Double = 252,

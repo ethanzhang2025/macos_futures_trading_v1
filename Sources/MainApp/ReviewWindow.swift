@@ -45,7 +45,8 @@ struct ReviewWindow: View {
                 holdingDuration: ReviewAnalytics.holdingDurationStats(from: closed),
                 maxDrawdown: ReviewAnalytics.maxDrawdownCurve(from: closed),
                 profitLossRatio: ReviewAnalytics.profitLossRatio(from: closed),
-                sessionPnL: ReviewAnalytics.sessionPnL(from: closed)
+                sessionPnL: ReviewAnalytics.sessionPnL(from: closed),
+                streak: ReviewAnalytics.streakMetrics(from: closed)
             )
         }.value
         summary = result
@@ -97,18 +98,16 @@ struct ReviewWindow: View {
     }
 
     private func header(_ s: ReviewSummary) -> some View {
-        // v15.19+ batch17 · 复盘 streak 头部展示（trader 当前连败 N 笔时立即可见 · 心理预警）
-        let streak = ReviewAnalytics.streakMetrics(from: s.closedPositions)
-        return HStack(spacing: 20) {
+        HStack(spacing: 20) {
             Text("📊 复盘工作台").font(.title2).bold()
             Divider().frame(height: 24)
             stat("成交", "\(s.tradeCount) 笔")
             stat("闭合", "\(s.closedPositions.count) 笔")
             stat("总 PnL", "¥\(signedDecimal(s.monthlyPnL.totalPnL))")
             stat("胜率", pct(s.winRateCurve.finalWinRate))
-            stat("最长连胜", "\(streak.maxWinningStreak) 笔")
-            stat("最长连败", "\(streak.maxLosingStreak) 笔")
-            stat("当前", currentStreakLabel(streak))
+            stat("最长连胜", "\(s.streak.maxWinningStreak) 笔")
+            stat("最长连败", "\(s.streak.maxLosingStreak) 笔")
+            stat("当前", currentStreakLabel(s.streak))
             Spacer()
             Text("v1 mock · 待 M5 接 JournalStore 真数据")
                 .font(.system(size: 11, design: .monospaced))
@@ -118,7 +117,6 @@ struct ReviewWindow: View {
         .frame(height: 48)
     }
 
-    /// v15.19+ batch17 · 当前连胜/连败可视化（≥3 连败时染红 · trader 心理预警）
     private func currentStreakLabel(_ s: ReviewAnalytics.StreakMetrics) -> String {
         if s.currentStreak == 0 { return "—" }
         if s.currentStreakIsWinning { return "连胜 \(s.currentStreak)" }
@@ -470,6 +468,7 @@ private struct ReviewSummary {
     let maxDrawdown: MaxDrawdownCurve
     let profitLossRatio: ProfitLossRatio
     let sessionPnL: SessionPnL
+    let streak: ReviewAnalytics.StreakMetrics
 }
 
 // MARK: - Mock Trades 生成器（v1 演示 · M5 替换为 JournalStore 真数据）

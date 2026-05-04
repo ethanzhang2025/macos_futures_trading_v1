@@ -202,55 +202,44 @@ public actor AlertEvaluator {
         perInstrument[period] = window
         klineWindows[instrumentID] = perInstrument
 
-        // 2. 评估该 instrumentID + period 的所有 active 指标预警
+        // 评估该 (instrumentID, period) 下所有 active 预警 · 一次循环 · 按 condition 分发
         for alert in alerts.values where alert.instrumentID == instrumentID && alert.canTrigger(at: now) {
-            guard case .indicator(let spec) = alert.condition, spec.period == period else { continue }
-            if let event = evaluateIndicator(alert: alert, spec: spec, kline: window, now: now) {
-                await fire(event: event, alert: alert, now: now)
+            let event: AlertTriggeredEvent?
+            switch alert.condition {
+            case .indicator(let spec) where spec.period == period:
+                event = evaluateIndicator(alert: alert, spec: spec, kline: window, now: now)
+            case .priceBreakoutHigh, .priceBreakoutLow:
+                event = evaluateBreakout(alert: alert, period: period, window: window, now: now)
+            default:
+                continue
             }
-        }
-
-        // 3. v15.19+ batch16 · 评估该 (instrumentID, period) 的 Donchian 突破预警（onBar 驱动 · onTick 不算）
-        //    - priceBreakoutHigh：本根 close > 前 lookback 根 highs 最大值（不含本根）
-        //    - priceBreakoutLow ：本根 close < 前 lookback 根 lows  最小值（不含本根）
-        for alert in alerts.values where alert.instrumentID == instrumentID && alert.canTrigger(at: now) {
-            if let event = evaluateBreakout(alert: alert, period: period, window: window, now: now) {
-                await fire(event: event, alert: alert, now: now)
-            }
+            if let event { await fire(event: event, alert: alert, now: now) }
         }
     }
 
-    /// v15.19+ batch16 · Donchian 突破评估（period 不匹配 / lookback 不足时返回 nil）
+    /// Donchian 突破评估（priceBreakoutHigh / priceBreakoutLow · period 不匹配 / lookback 不足返回 nil）
     private func evaluateBreakout(alert: Alert, period: KLinePeriod, window: [KLine], now: Date) -> AlertTriggeredEvent? {
-        let cond = alert.condition
-        let lookback: Int
-        let isHigh: Bool
-        switch cond {
-        case .priceBreakoutHigh(let p, let n):
-            guard p == period else { return nil }
-            lookback = n
-            isHigh = true
-        case .priceBreakoutLow(let p, let n):
-            guard p == period else { return nil }
-            lookback = n
-            isHigh = false
-        default:
-            return nil
-        }
-        // 需要 lookback + 1 根（前 N 根 + 当前根）· 不足时跳过
-        guard lookback >= 1, window.count >= lookback + 1 else { return nil }
+        // 一次性把 condition 解构成方向 + lookback · 后续无需再分支
+        let direction: (lookback: Int, isHigh: Bool)? = {
+            switch alert.condition {
+            case .priceBreakoutHigh(let p, let n) where p == period: return (n, true)
+            case .priceBreakoutLow(let p, let n)  where p == period: return (n, false)
+            default: return nil
+            }
+        }()
+        guard let dir = direction, dir.lookback >= 1, window.count >= dir.lookback + 1 else { return nil }
         let current = window[window.count - 1]
-        let prior = window[(window.count - 1 - lookback)..<(window.count - 1)]
-        let message: String
+        let prior = window[(window.count - 1 - dir.lookback)..<(window.count - 1)]
+        // lazy.map 避免分配中间数组（lookback 可达 200）
+        let extreme: Decimal
         let matched: Bool
-        if isHigh {
-            guard let priorMax = prior.map(\.high).max() else { return nil }
-            matched = current.close > priorMax
-            message = "突破前 \(lookback) 根 \(period.displayName) 高 \(priorMax)（现 close \(current.close)）"
+        let label: String
+        if dir.isHigh {
+            guard let m = prior.lazy.map(\.high).max() else { return nil }
+            extreme = m; matched = current.close > m; label = "突破前 \(dir.lookback) 根 \(period.displayName) 高"
         } else {
-            guard let priorMin = prior.map(\.low).min() else { return nil }
-            matched = current.close < priorMin
-            message = "跌破前 \(lookback) 根 \(period.displayName) 低 \(priorMin)（现 close \(current.close)）"
+            guard let m = prior.lazy.map(\.low).min() else { return nil }
+            extreme = m; matched = current.close < m; label = "跌破前 \(dir.lookback) 根 \(period.displayName) 低"
         }
         guard matched else { return nil }
         return AlertTriggeredEvent(
@@ -259,7 +248,7 @@ public actor AlertEvaluator {
             instrumentID: alert.instrumentID,
             triggerPrice: current.close,
             triggeredAt: now,
-            message: message
+            message: "\(label) \(extreme)（现 close \(current.close)）"
         )
     }
 

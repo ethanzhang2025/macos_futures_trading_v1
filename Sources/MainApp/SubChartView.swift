@@ -406,11 +406,9 @@ struct SubChartView: View {
                 Text("FI \(fmt(aLast))").foregroundColor(
                     aLast.map { $0 >= 0 ? Self.bullColor : Self.bearColor } ?? .secondary
                 )
-            // v15.18+ batch13 · BBW（squeeze 信号）/ ATRP（跨品种波动率）· 单位 %
-            case .bbw:
-                Text("BBW \(fmt(aLast))%").foregroundColor(Self.yellowColor)
-            case .atrp:
-                Text("ATRP \(fmt(aLast))%").foregroundColor(Self.yellowColor)
+            // BBW（squeeze 信号）/ ATRP（跨品种波动率）· 单位 %
+            case .bbw, .atrp:
+                Text("\(kind.shortName) \(fmt(aLast))%").foregroundColor(Self.yellowColor)
             }
         }
         .font(.system(size: 11, design: .monospaced))

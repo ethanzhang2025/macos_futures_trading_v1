@@ -138,7 +138,9 @@ struct ChartScene: View {
     @State private var instrumentLabel: String = "—"
     @State private var periodLabel: String = "—"
     @State private var dataSourceLabel: String = "加载中…"
-    @State private var currentInstrumentID: String = MarketDataPipeline.defaultInstrumentID
+    /// v15.18 · 启动从 Settings.defaultInstrumentID 读 · 用户可在通用 tab 改默认合约
+    @State private var currentInstrumentID: String = (UserDefaults.standard.string(forKey: "settings.defaultInstrumentID")
+        ?? MarketDataPipeline.defaultInstrumentID)
     @State private var selectedPeriod: KLinePeriod = MarketDataPipeline.defaultPeriod
     /// v13.19 副图多选 · selectedSubIndicators Set 替代单选 · 默认 [.macd]
     /// vertical stack 渲染多个 SubChartView · 高度按数量等分（每个最少 80pt）

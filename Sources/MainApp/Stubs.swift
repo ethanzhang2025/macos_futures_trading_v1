@@ -6,6 +6,8 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 import Shared
 
 struct SettingsContentView: View {
@@ -87,6 +89,19 @@ private struct GeneralSettingsTab: View {
             }
 
             Section {
+                HStack(spacing: 12) {
+                    Button("导出偏好…") { exportPreferences() }
+                    Button("导入偏好…") { importPreferences() }
+                }
+            } header: {
+                Text("备份 / 恢复").font(.headline)
+            } footer: {
+                Text("将当前偏好导出 JSON · 拷到新设备 / 重装时导入恢复（不含订单 / 资金等运行时数据）")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+
+            Section {
                 Text("反馈渠道见项目 README · 内测期欢迎在内测群直接反馈")
                     .font(.system(size: 12))
                 Text("版本：v15.18 · Stage A · 距 Legacy ~99.95%")
@@ -98,6 +113,39 @@ private struct GeneralSettingsTab: View {
         }
         .formStyle(.grouped)
         .padding(.vertical, 8)
+    }
+
+    private func exportPreferences() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.title = "导出偏好为 JSON"
+        let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        panel.nameFieldStringValue = "futures-terminal-prefs-\(dateStr).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data = PreferenceExporter.export()
+        try? data.write(to: url)
+    }
+
+    private func importPreferences() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.title = "选择偏好 JSON"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            let written = try PreferenceExporter.import(from: data)
+            let alert = NSAlert()
+            alert.messageText = "导入完成"
+            alert.informativeText = "已写入 \(written) 项偏好 · 重启 App 后生效"
+            alert.runModal()
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "导入失败"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .critical
+            alert.runModal()
+        }
     }
 }
 

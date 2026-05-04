@@ -2920,9 +2920,8 @@ struct ChartContentView: View {
                         : 0
                     let barDiff = end.barIndex - anchor.barIndex
                     let arrow = priceDiff >= 0 ? "↑" : "↓"
-                    let priceColor: Color = priceDiff >= 0
-                        ? Color(red: 0.96, green: 0.27, blue: 0.27)
-                        : Color(red: 0.18, green: 0.74, blue: 0.42)
+                    // v15.21 batch94 · 配色与 chartTheme 集成（与 batch89 swing 一致 · 涨 candleBull / 跌 candleBear）
+                    let priceColor: Color = priceDiff >= 0 ? chartTheme.candleBull : chartTheme.candleBear
                     Group {
                         Text("起 \(formatPrice(anchor.price)) → \(isLocked ? "终" : "现") \(formatPrice(end.price))")
                         Text("\(arrow) \(formatPriceDiff(priceDiff)) (\(String(format: "%+.2f%%", pct)))")

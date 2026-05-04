@@ -10,6 +10,7 @@
 
 import SwiftUI
 import Foundation
+import UniformTypeIdentifiers
 import Shared
 import AlertCore
 import StoreCore
@@ -451,6 +452,11 @@ struct AlertWindow: View {
                 Text("合约").frame(width: 60, alignment: .leading)
                 Text("触发价").frame(width: 80, alignment: .trailing)
                 Text("条件").frame(width: 200, alignment: .leading)
+                Spacer().frame(width: 8)
+                Button("导出 CSV…") { exportHistoryCSV() }
+                    .disabled(historyEntries.isEmpty)
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .help("导出全部触发历史为 CSV（trader 报税 / 复盘归档）· ⌘⇧E")
             }
             .font(.system(size: 11, design: .monospaced))
             .foregroundColor(.secondary)
@@ -470,6 +476,34 @@ struct AlertWindow: View {
                     }
                 }
             }
+        }
+    }
+
+    /// AlertHistory CSV 导出（NSSavePanel · UTF-8 BOM · trader 报税 / 复盘归档）
+    @MainActor
+    private func exportHistoryCSV() {
+        let panel = NSSavePanel()
+        panel.title = "导出预警触发历史"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        panel.nameFieldStringValue = "alert_history_\(dateFmt.string(from: Date())).csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data = AlertHistoryCSVExporter.exportData(historyEntries)
+        do {
+            try data.write(to: url, options: .atomic)
+            let success = NSAlert()
+            success.messageText = "导出成功"
+            success.informativeText = "已导出 \(historyEntries.count) 条触发历史到 \(url.lastPathComponent)。"
+            success.addButton(withTitle: "好")
+            success.runModal()
+        } catch {
+            let err = NSAlert()
+            err.messageText = "导出失败"
+            err.informativeText = error.localizedDescription
+            err.alertStyle = .warning
+            err.addButton(withTitle: "好")
+            err.runModal()
         }
     }
 

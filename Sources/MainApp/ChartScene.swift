@@ -834,6 +834,9 @@ struct ChartScene: View {
             // v15.20 batch74 · ⌘/ 切换快捷键提示浮窗（trader 不记快捷键时随时查询）
             Button("") { showShortcutsHelp.toggle() }
                 .keyboardShortcut("/", modifiers: [.command])
+            // v15.20 batch82 · ⌘⇧W 切换 swing high/low 标注（趋势可视化 · 默认关）
+            Button("") { showSwingPoints.toggle() }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
             // v15.19 batch36 · ⌘End / ⌘→ 跳到最新 K 线（保持 visibleCount · 仅滚到最右）
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.end, modifiers: [.command])
@@ -2071,6 +2074,9 @@ struct ChartContentView: View {
     /// v15.20 batch74 · 快捷键提示浮窗显隐（⌘/ 切换）
     @State private var showShortcutsHelp: Bool = false
 
+    /// v15.20 batch82 · swing high/low 标注显隐（⌘⇧W 切换 · 默认关 · @AppStorage 持久化）
+    @AppStorage("viewState.v1.chart.showSwingPoints") private var showSwingPoints: Bool = false
+
     /// v15.19 batch30 · 快捷测距锚点（⌘⇧M 设 · 再按取消）· 配合 hoverDataPoint 实时显示距离
     @State var measureAnchor: DrawingPoint?
     /// v15.19 batch51 · 副图显隐切换（⌘. · 默认显示）· trader 专注主图分析时清屏
@@ -2409,6 +2415,8 @@ struct ChartContentView: View {
             }
             // v15.20 batch66 · 测距双锚点视觉 marker（在 K 线层之上 · 不拦截 hover）
             measurementMarkers
+            // v15.20 batch82 · swing high/low 标注（⌘⇧W 切换 · 默认关）
+            if showSwingPoints { swingPointsOverlay }
         }
         .overlay(alignment: .topTrailing) {
             // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
@@ -2794,6 +2802,45 @@ struct ChartContentView: View {
         let priceD = NSDecimalNumber(decimal: pt.price).doubleValue
         let y = CGFloat((hi - priceD) / span) * geomSize.height
         return CGPoint(x: x, y: y)
+    }
+
+    /// v15.20 batch82 · swing high/low 标注 overlay（趋势可视化 · ⌘⇧W 切换显隐）
+    /// 高点：红色 ↑ 三角 + 价位标签 · 低点：绿色 ↓ 三角 + 价位标签
+    /// lookback=5（与默认值一致 · trader 关键摆动点）· 仅渲染 visible 范围内的 swing
+    @ViewBuilder
+    private var swingPointsOverlay: some View {
+        let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
+        let swings = SwingPointsDetector.detect(bars, lookback: 5)
+            .filter { $0.barIndex >= viewport.startIndex && $0.barIndex < visibleEnd }
+        GeometryReader { geom in
+            let visibleCount = max(1, viewport.visibleCount)
+            let barWidth = geom.size.width / CGFloat(visibleCount)
+            let xOffset = CGFloat(viewport.startOffset)
+            let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+            let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+            let span = max(0.0001, hi - lo)
+            ForEach(Array(swings.enumerated()), id: \.offset) { _, swing in
+                let priceD = NSDecimalNumber(decimal: swing.price).doubleValue
+                let x = (CGFloat(swing.barIndex - viewport.startIndex) + 0.5 - xOffset) * barWidth
+                let y = CGFloat((hi - priceD) / span) * geom.size.height
+                // marker：高点 marker 上方（y - 8）· 低点 marker 下方（y + 8）
+                let isHigh = swing.kind == .high
+                let markerY = isHigh ? y - 12 : y + 12
+                Image(systemName: isHigh ? "triangle.fill" : "triangle.fill")
+                    .rotationEffect(.degrees(isHigh ? 0 : 180))
+                    .foregroundColor(isHigh ? Color.red.opacity(0.85) : Color.green.opacity(0.85))
+                    .font(.system(size: 8))
+                    .position(x: x, y: markerY)
+                Text(formatPrice(swing.price))
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(isHigh ? Color.red : Color.green)
+                    .padding(.horizontal, 2)
+                    .background(chartTheme.hudBackground.opacity(0.85))
+                    .cornerRadius(2)
+                    .position(x: x, y: isHigh ? markerY - 12 : markerY + 12)
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     /// v15.19 batch30 + v15.20 batch63 · 测距 HUD（三态）

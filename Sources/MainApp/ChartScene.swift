@@ -3174,6 +3174,10 @@ struct ChartContentView: View {
                     Button("复制 hover 时间 \(formatBarTime(bar.openTime))") {
                         Pasteboard.copy(formatBarTime(bar.openTime))
                     }
+                    // v15.21 batch113 · 复制 Unix 时间戳（trader 写量化脚本 / 回测 epoch 秒）
+                    Button("复制 hover Unix 时间戳（\(Int(bar.openTime.timeIntervalSince1970))）") {
+                        Pasteboard.copy(String(Int(bar.openTime.timeIntervalSince1970)))
+                    }
                     Button("复制本根 K 线 OHLC") {
                         copyBarOHLC(at: hp.barIndex)
                     }

@@ -3177,6 +3177,13 @@ struct ChartContentView: View {
                     Button("复制本根 K 线 OHLC") {
                         copyBarOHLC(at: hp.barIndex)
                     }
+                    // v15.21 batch112 · 复制 hover 周边 N 根 K 线 Markdown（trader 复盘关键区段 · 突破前后）
+                    Menu("复制周边 K 线（Markdown）") {
+                        Button("前 5 根") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 5, after: 0) }
+                        Button("后 5 根") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 0, after: 5) }
+                        Button("前后各 5 根（共 11）") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 5, after: 5) }
+                        Button("前后各 10 根（共 21）") { copyNeighborBarsAsMarkdown(at: hp.barIndex, before: 10, after: 10) }
+                    }
                 }
                 Divider()
             }
@@ -3258,6 +3265,17 @@ struct ChartContentView: View {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd HH:mm"
         return fmt.string(from: date)
+    }
+
+    /// v15.21 batch112 · 复制 hover bar 周边前后 N 根 K 线为 Markdown 表格（关键区段复盘）
+    private func copyNeighborBarsAsMarkdown(at index: Int, before: Int, after: Int) {
+        let lo = max(0, index - max(0, before))
+        let hi = min(bars.count, index + max(0, after) + 1)
+        guard lo < hi else { return }
+        let slice = Array(bars[lo..<hi])
+        let markdown = OHLCMarkdownExporter.render(slice)
+        guard !markdown.isEmpty else { return }
+        Pasteboard.copy(markdown)
     }
 
     /// v15.21 batch96 · 复制 hover 落在的单根 K 线 OHLC 完整数据（标准化文本 · 适合 IM/邮件粘贴）

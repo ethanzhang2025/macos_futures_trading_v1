@@ -241,9 +241,11 @@ struct ReviewWindow: View {
                 stat("最大单笔亏", "¥\(decimal(s.profitability.largestLoss))")
                 Spacer()
                 Button("导出月报…") { exportMonthlyReport(s) }
-                    .help("生成本月 Markdown 复盘报告 · 含全套指标 + 心理标签 + 品种/时段分布")
+                    .help("生成本月 Markdown 复盘报告 · 含全套指标 + 心理标签 + 品种/时段分布（⌘E）")
+                    .keyboardShortcut("e", modifiers: [.command])
                 Button("导出全部图…") { exportAllChartCards(s) }
-                    .help("一键导出全部 10 张 chartCard 为 PNG 到选定目录 · 月底归档")
+                    .help("一键导出全部 10 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E）")
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
             }
             .padding(.bottom, 4)
         }

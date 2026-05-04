@@ -2872,8 +2872,9 @@ struct ChartContentView: View {
         let lookback = max(1, indicatorParams.swingLookback)
         // v15.21 batch106 · 接入 swingMinSpacing 密度过滤（0=不过滤 · 与 batch82 默认一致）
         let minSpacing = max(0, indicatorParams.swingMinSpacing)
-        let swings = SwingPointsDetector.detect(bars, lookback: lookback, minBarSpacing: minSpacing)
-            .filter { $0.barIndex >= viewport.startIndex && $0.barIndex < visibleEnd }
+        // v15.21 batch130 · 全 swing 数组（不仅 visible · 用于查 prev 同向 swing 跨边界）
+        let allSwings = SwingPointsDetector.detect(bars, lookback: lookback, minBarSpacing: minSpacing)
+        let swings = allSwings.filter { $0.barIndex >= viewport.startIndex && $0.barIndex < visibleEnd }
         GeometryReader { geom in
             let visibleCount = max(1, viewport.visibleCount)
             let barWidth = geom.size.width / CGFloat(visibleCount)
@@ -2902,9 +2903,32 @@ struct ChartContentView: View {
                     .background(chartTheme.hudBackground.opacity(0.85))
                     .cornerRadius(2)
                     .position(x: x, y: isHigh ? markerY - 12 : markerY + 12)
+                // v15.21 batch130 · 距上次同向 swing 的 bar 数 + 价差%（趋势强度可视化）
+                // high → high 上升趋势强度 · low → low 下降趋势强度
+                if let prev = previousSameKindSwing(of: swing, in: allSwings) {
+                    let barDelta = swing.barIndex - prev.barIndex
+                    let pct = swing.price > 0 && prev.price > 0
+                        ? NSDecimalNumber(decimal: (swing.price - prev.price) / prev.price).doubleValue * 100
+                        : 0
+                    let arrow = pct >= 0 ? "↗" : "↘"
+                    Text("\(arrow)\(barDelta)b \(String(format: "%+.1f%%", pct))")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(swingColor.opacity(0.7))
+                        .padding(.horizontal, 2)
+                        .background(chartTheme.hudBackground.opacity(0.7))
+                        .cornerRadius(2)
+                        .position(x: x, y: isHigh ? markerY - 24 : markerY + 24)
+                }
             }
         }
         .allowsHitTesting(false)
+    }
+
+    /// v15.21 batch130 · 在 swings 数组中找指定 swing 之前的同 kind swing（趋势强度计算用）
+    private func previousSameKindSwing(of swing: SwingPoint, in swings: [SwingPoint]) -> SwingPoint? {
+        guard let idx = swings.firstIndex(where: { $0.barIndex == swing.barIndex && $0.kind == swing.kind }),
+              idx > 0 else { return nil }
+        return swings[..<idx].reversed().first { $0.kind == swing.kind }
     }
 
     /// v15.19 batch30 + v15.20 batch63 · 测距 HUD（三态）

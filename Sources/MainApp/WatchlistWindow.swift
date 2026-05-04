@@ -687,6 +687,8 @@ struct WatchlistWindow: View {
     private func instrumentRow(id: String, index: Int, groupID: UUID) -> some View {
         let change = changePctText(for: id)
         let pctValue = parseChangePct(change)
+        // v15.21 batch130 · 极端涨跌幅警示（≥ 9% 接近涨跌停 · row outline 提示 · trader 视觉警觉）
+        let isExtreme = abs(pctValue ?? 0) >= 9
         return HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.5))
@@ -714,6 +716,12 @@ struct WatchlistWindow: View {
         }
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // v15.21 batch130 · 极端 row 加 1px outline（红涨/绿跌 · trader 不看涨跌幅也能秒识别）
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(isExtreme ? Self.priceColor(pctValue).opacity(0.6) : Color.clear, lineWidth: 1)
+                .padding(.horizontal, 4)
+        )
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             openInstrumentInChart(id)

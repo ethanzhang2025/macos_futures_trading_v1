@@ -149,16 +149,67 @@ struct AlertWindow: View {
             stat("已触发", "\(counts.triggered)", color: .red)
             stat("已暂停", "\(counts.paused)", color: .secondary)
             Spacer()
-            Button {
-                sheetState = .add
+            Menu {
+                Button("添加预警…") { sheetState = .add }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                Divider()
+                Text("📋 一键创建模板（trader 常用）").font(.caption).foregroundColor(.secondary)
+                ForEach(AlertPreset.allCases) { preset in
+                    Button(preset.displayName) { presentPresetSheet(preset) }
+                        .help(preset.helpText)
+                }
+                Divider()
+                Button("全部 6 类一次创建…") { presentPresetSheet(nil) }
+                    .help("一次创建 6 类常用预警 · 适合新合约入场快速布防")
             } label: {
                 Label("添加", systemImage: "plus")
             }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
-            .help("添加预警（⌘⇧N）")
+            .menuStyle(.borderlessButton)
+            .frame(maxWidth: 80)
+            .help("添加预警 / 一键模板")
         }
         .padding(.horizontal, 16)
         .frame(height: 48)
+    }
+
+    /// 一键模板入口 · NSAlert 让用户填合约 + 当前价 → 批量 emit alertAddedFromChart
+    /// - Parameter preset: nil = 全部 6 类一次性创建 · 否则只创建该单一 preset
+    @MainActor
+    private func presentPresetSheet(_ preset: AlertPreset?) {
+        let nsAlert = NSAlert()
+        let title = preset?.displayName ?? "一次创建全部 6 类"
+        nsAlert.messageText = "📋 \(title)"
+        nsAlert.informativeText = "输入合约 + 当前价 · 自动用合理默认创建预警 · 创建后可在列表编辑"
+        let container = NSStackView()
+        container.orientation = .vertical
+        container.alignment = .leading
+        container.spacing = 8
+        container.frame = NSRect(x: 0, y: 0, width: 260, height: 70)
+        let instField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        instField.placeholderString = "合约（如 RB0 / IF0）"
+        instField.stringValue = "RB0"
+        let priceField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        priceField.placeholderString = "当前价（涨跌停 ±5% 基准）"
+        priceField.stringValue = "3500"
+        container.addArrangedSubview(instField)
+        container.addArrangedSubview(priceField)
+        nsAlert.accessoryView = container
+        nsAlert.addButton(withTitle: "创建")
+        nsAlert.addButton(withTitle: "取消")
+        guard nsAlert.runModal() == .alertFirstButtonReturn else { return }
+        let inst = instField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !inst.isEmpty, let priceDouble = Double(priceField.stringValue) else { return }
+        let lastPrice = Decimal(priceDouble)
+        let presets: [AlertPreset] = preset.map { [$0] } ?? AlertPreset.allCases
+        let newAlerts = AlertPreset.makeAlerts(presets, instrumentID: inst, lastPrice: lastPrice)
+        for alert in newAlerts {
+            NotificationCenter.default.post(name: .alertAddedFromChart, object: alert)
+        }
+        let success = NSAlert()
+        success.messageText = "已创建 \(newAlerts.count) 条预警"
+        success.informativeText = "在列表中可逐条编辑 / 暂停 / 删除。"
+        success.addButton(withTitle: "好")
+        success.runModal()
     }
 
     private func stat(_ label: String, _ value: String, color: Color = .primary) -> some View {

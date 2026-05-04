@@ -215,6 +215,10 @@ struct ChartScene: View {
     @State private var alertToast: AlertToastInfo?
     @State private var alertToastDismissTask: Task<Void, Never>?
 
+    /// v15.18 · WP-120 App 内 Banner 推送（事故 / 公告 / 版本提醒）· 顶部 overlay 多条
+    @State private var banners: [Banner] = []
+    @Environment(\.bannerService) private var bannerService
+
     private static let drawingTemplatesKey = "drawingTemplates.v1"
     /// v13.21 副图偏好持久化（重启保留 · 跨合约/周期共享）
     private static let subIndicatorsKey = "subIndicators.v1"
@@ -292,14 +296,28 @@ struct ChartScene: View {
             }
         }
         .overlay(alignment: .top) {
-            // v15.17 · InAppOverlayChannel 预警 toast（3 秒自动消失）
-            if let toast = alertToast {
-                alertToastView(toast)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .padding(.top, 8)
+            VStack(spacing: 6) {
+                // v15.18 · WP-120 App 内 Banner 推送（事故 / 公告 / 版本提醒）· 显示最多 3 条
+                if !banners.isEmpty {
+                    bannerStack
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                // v15.17 · InAppOverlayChannel 预警 toast（3 秒自动消失）
+                if let toast = alertToast {
+                    alertToastView(toast)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            .padding(.top, 8)
         }
         .animation(.easeInOut(duration: 0.25), value: alertToast?.id)
+        .animation(.easeInOut(duration: 0.2), value: banners.map(\.id))
+        .task {
+            // v15.18 · WP-120 启动拉一次 banner · 失败静默 fallback 空
+            if let svc = bannerService {
+                banners = await svc.refresh()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: InAppOverlayChannel.alertNotification)) { note in
             handleAlertToastNotification(note)
         }
@@ -602,6 +620,67 @@ struct ChartScene: View {
     }
 
     /// v15.17 · 预警 toast view · 与主题色对齐（hudBackground + textPrimary）
+    /// v15.18 · WP-120 Banner overlay 堆叠（最多 3 条 · 用户 dismiss 后自动重排）
+    @ViewBuilder
+    private var bannerStack: some View {
+        VStack(spacing: 4) {
+            ForEach(banners.prefix(3)) { banner in
+                bannerView(banner)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func bannerView(_ banner: Banner) -> some View {
+        let accent: Color = {
+            switch banner.level {
+            case .info:     return .blue
+            case .warning:  return .yellow
+            case .critical: return .red
+            }
+        }()
+        VStack(spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: banner.level == .critical ? "exclamationmark.octagon.fill" : "megaphone.fill")
+                    .foregroundColor(accent)
+                Text(banner.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(chartTheme.textPrimary)
+                Spacer()
+                Button {
+                    let id = banner.id
+                    let svc = bannerService
+                    Task { @MainActor in
+                        await svc?.dismiss(id)
+                        if let svc = svc { banners = await svc.active() }
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(chartTheme.textSecondary)
+                }
+                .buttonStyle(.borderless)
+            }
+            if !banner.body.isEmpty {
+                HStack {
+                    Text(banner.body)
+                        .font(.system(size: 11))
+                        .foregroundColor(chartTheme.textSecondary)
+                        .lineLimit(2)
+                    Spacer()
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(width: 480)
+        .background(chartTheme.hudBackground)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(accent.opacity(0.45), lineWidth: 1)
+        )
+    }
+
     @ViewBuilder
     private func alertToastView(_ toast: AlertToastInfo) -> some View {
         VStack(spacing: 4) {

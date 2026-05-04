@@ -84,6 +84,21 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - BannerService 环境注入（v15.18 · WP-120 App 内 Banner 推送）
+
+private struct BannerServiceKey: EnvironmentKey {
+    static let defaultValue: BannerService? = nil
+}
+
+extension EnvironmentValues {
+    /// Banner 服务：App.init 一次性创建 · stub source · UserDefaults dismissal store
+    /// 后端就绪后切 HTTPBannerSource · ChartScene 顶部 overlay 监听
+    var bannerService: BannerService? {
+        get { self[BannerServiceKey.self] }
+        set { self[BannerServiceKey.self] = newValue }
+    }
+}
+
 @main
 struct FuturesTerminalApp: App {
 
@@ -113,6 +128,10 @@ struct FuturesTerminalApp: App {
     /// stub mode · 后端 WP-80 就绪后切 HTTPBatchUploadClient · 客户端 wire 不动
     /// 周期 30s poll · 双阈值（5min OR 100 条）触发 · App init 后 fire-and-forget start
     private let batchUploadDriver: BatchUploadDriver?
+
+    /// App 内 Banner 服务（v15.18 · WP-120 推送）
+    /// stub source（默认空 · 不骚扰）· UserDefaults dismissal · ChartScene 顶部 overlay
+    private let bannerService: BannerService?
 
     init() {
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
@@ -173,6 +192,11 @@ struct FuturesTerminalApp: App {
         if let driver {
             Task { await driver.start() }
         }
+        // v15.18 · WP-120 BannerService（stub source 默认空 · UserDefaults dismissal 持久）
+        self.bannerService = BannerService(
+            store: UserDefaultsBannerDismissalStore(),
+            source: StubBannerSource()
+        )
         // v15.18 · WP-133a session_start/end wire（didBecomeActive 触发首次 session_start · 3 分钟规则跨启动）
         // App.init 后 NSApplication 主循环开始 · 首个 didBecomeActive 通知会触发 sessionStart
         // willResignActive 时除发 session_end 外还 flush driver（防后台被杀丢事件）
@@ -215,6 +239,7 @@ struct FuturesTerminalApp: App {
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
                 .environment(\.simulatedTradingEngine, simulatedTradingEngine)
+                .environment(\.bannerService, bannerService)
         }
         // 视觉迭代第 13 项：显式 defaultSize · 启动时合理大窗 · 不依赖 SwiftUI 默认
         .defaultSize(width: 1280, height: 800)

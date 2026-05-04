@@ -2351,6 +2351,10 @@ struct ChartContentView: View {
             // v15.19 batch33 · 缩放快捷栏（鼠标 / 触屏用户友好 · 与 ⌘0/⌘=/⌘- 互补）
             zoomControls
         }
+        .overlay(alignment: .topTrailing) {
+            // v15.19 batch43 · hover 价距 visible 高/低 % HUD（trader 评估当前位置 · priceTopBar 下方）
+            hoverPositionHUD
+        }
         .simultaneousGesture(panGesture)
         .simultaneousGesture(zoomGesture)
         .background(
@@ -2428,6 +2432,39 @@ struct ChartContentView: View {
                 }
             }
             .allowsHitTesting(false)
+        }
+    }
+
+    /// v15.19 batch43 · hover 价距 visible 高/低 % HUD · 帮 trader 评估当前位置在区间中的相对位置
+    /// 仅 hoverDataPoint 非 nil + visible 高低有效时显示 · 偏移 priceTopBar 下方
+    @ViewBuilder
+    private var hoverPositionHUD: some View {
+        if let hp = hoverDataPoint {
+            let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
+            let visibleBars = bars[viewport.startIndex..<visibleEnd]
+            if let hi = visibleBars.map(\.high).max(),
+               let lo = visibleBars.map(\.low).min(),
+               hi > lo {
+                let priceD = NSDecimalNumber(decimal: hp.price).doubleValue
+                let hiD = NSDecimalNumber(decimal: hi).doubleValue
+                let loD = NSDecimalNumber(decimal: lo).doubleValue
+                let span = hiD - loD
+                let posPct = span > 0 ? (priceD - loD) / span * 100 : 0
+                let toHi = hiD > 0 ? (hiD - priceD) / hiD * 100 : 0
+                let toLo = loD > 0 ? (priceD - loD) / loD * 100 : 0
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("位置 \(String(format: "%.0f%%", posPct))").bold()
+                    Text("距高 \(String(format: "%+.2f%%", -toHi))").foregroundColor(chartTheme.textSecondary)
+                    Text("距低 \(String(format: "%+.2f%%", toLo))").foregroundColor(chartTheme.textSecondary)
+                }
+                .font(.system(size: 10, design: .monospaced))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(chartTheme.hudBackground.opacity(0.85))
+                .cornerRadius(4)
+                .padding(.top, 60)    // 偏移 priceTopBar 下方
+                .padding(.trailing, 12)
+            }
         }
     }
 

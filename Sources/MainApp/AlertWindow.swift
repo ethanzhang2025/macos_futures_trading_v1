@@ -48,6 +48,8 @@ struct AlertWindow: View {
 
     @State private var alerts: [Alert] = []
     @State private var alertInstrumentFilter: String = ""   // "" = 全部 · 否则只显示指定合约
+    /// v15.20 batch57 · 多选批量操作 · alertRow checkbox 状态 · 走 AlertBatchOperator 纯函数
+    @State private var selectedAlertIDs: Set<UUID> = []
     @State private var historyEntries: [AlertHistoryEntry] = []
     @State private var historyWindow: AlertHistoryFilter.Window = .all
     @State private var historySearchText: String = ""   // v15.19 batch46 · 按预警名搜索
@@ -291,7 +293,7 @@ struct AlertWindow: View {
 
     private var alertsList: some View {
         VStack(spacing: 0) {
-            // v15.19 batch42 · 合约筛选 toolbar
+            // v15.19 batch42 · 合约筛选 + v15.20 batch57 · 批量操作 toolbar
             HStack(spacing: 8) {
                 Text("合约筛选").font(.caption).foregroundColor(.secondary)
                 Picker("", selection: $alertInstrumentFilter) {
@@ -303,7 +305,37 @@ struct AlertWindow: View {
                 }
                 .labelsHidden()
                 .frame(maxWidth: 200)
+                if !selectedAlertIDs.isEmpty {
+                    Divider().frame(height: 16)
+                    Text("已选 \(selectedAlertIDs.count) 条")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.blue)
+                    Button("批量暂停") { batchPauseSelected() }
+                        .buttonStyle(.borderless)
+                        .help("把选中的 active/triggered 预警转为 paused")
+                    Button("批量恢复") { batchResumeSelected() }
+                        .buttonStyle(.borderless)
+                        .help("把选中的 paused 预警转为 active")
+                    Button("批量复制") { batchDuplicateSelected() }
+                        .buttonStyle(.borderless)
+                        .help("每条复制一份 · 名后缀（副本）· 默认 paused")
+                    Button("批量删除") { batchDeleteSelected() }
+                        .buttonStyle(.borderless)
+                        .foregroundColor(.red)
+                        .help("彻底删除选中的预警")
+                    Button("清空选择") { selectedAlertIDs.removeAll() }
+                        .buttonStyle(.borderless)
+                }
                 Spacer()
+                if filteredAlerts.allSatisfy({ selectedAlertIDs.contains($0.id) }) && !filteredAlerts.isEmpty {
+                    Button("全不选") { selectedAlertIDs.subtract(filteredAlerts.map(\.id)) }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                } else {
+                    Button("全选") { selectedAlertIDs.formUnion(filteredAlerts.map(\.id)) }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                }
                 Text("当前显示 \(filteredAlerts.count) / \(alerts.count) 条")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
@@ -312,6 +344,8 @@ struct AlertWindow: View {
             .padding(.vertical, 6)
 
             HStack(spacing: 8) {
+                // v15.20 batch57 · 多选 checkbox 列
+                Text("☑").frame(width: 18, alignment: .center)
                 Text("名称").frame(maxWidth: .infinity, alignment: .leading)
                 Text("合约").frame(width: 60, alignment: .leading)
                 Text("条件").frame(width: 200, alignment: .leading)
@@ -339,6 +373,18 @@ struct AlertWindow: View {
 
     private func alertRow(_ a: Alert) -> some View {
         HStack(spacing: 8) {
+            // v15.20 batch57 · 多选 checkbox（点击切换 selectedAlertIDs）
+            Image(systemName: selectedAlertIDs.contains(a.id) ? "checkmark.square.fill" : "square")
+                .foregroundColor(selectedAlertIDs.contains(a.id) ? .blue : .secondary)
+                .frame(width: 18, alignment: .center)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if selectedAlertIDs.contains(a.id) {
+                        selectedAlertIDs.remove(a.id)
+                    } else {
+                        selectedAlertIDs.insert(a.id)
+                    }
+                }
             Text(a.name).frame(maxWidth: .infinity, alignment: .leading)
             Text(a.instrumentID).frame(width: 60, alignment: .leading)
             Text(a.condition.displayDescription).frame(width: 200, alignment: .leading)
@@ -406,6 +452,28 @@ struct AlertWindow: View {
 
     private func deleteAlert(_ a: Alert) {
         alerts.removeAll { $0.id == a.id }
+        selectedAlertIDs.remove(a.id)
+    }
+
+    // MARK: - v15.20 batch57 · 批量操作（走 AlertBatchOperator 纯函数）
+
+    private func batchPauseSelected() {
+        alerts = AlertBatchOperator.pause(ids: selectedAlertIDs, in: alerts)
+    }
+
+    private func batchResumeSelected() {
+        alerts = AlertBatchOperator.resume(ids: selectedAlertIDs, in: alerts)
+    }
+
+    private func batchDeleteSelected() {
+        alerts = AlertBatchOperator.delete(ids: selectedAlertIDs, in: alerts)
+        selectedAlertIDs.removeAll()
+    }
+
+    private func batchDuplicateSelected() {
+        let result = AlertBatchOperator.duplicate(ids: selectedAlertIDs, in: alerts)
+        alerts = result.alerts
+        selectedAlertIDs = result.newIDs    // 自动跳到新副本以便后续操作
     }
 
     /// 模拟触发一次预警 · dispatch 走已注册的 channels + 标记 status + 写入 historyEntries

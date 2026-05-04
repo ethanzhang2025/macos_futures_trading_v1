@@ -509,7 +509,10 @@ struct AlertWindow: View {
     private var historyList: some View {
         VStack(spacing: 0) {
             historyToolbar
-            if !filteredHistory.isEmpty { historySummaryStrip }
+            if !filteredHistory.isEmpty {
+                historySummaryStrip
+                historyHourChart   // v15.19 batch32 · 24h 触发分布 mini bar
+            }
             historyTableHeader
 
             if filteredHistory.isEmpty {
@@ -525,6 +528,44 @@ struct AlertWindow: View {
                 }
             }
         }
+    }
+
+    /// v15.19 batch32 · 24 小时触发分布 mini bar chart（trader 一眼看自己什么时段触发预警最多）
+    /// 高度 36 · 高度等比 visible max · 中国期货活跃时段（早 9-11 / 午 13-15 / 夜 21-23）应有明显起伏
+    private var historyHourChart: some View {
+        let buckets = historySummary.byHour
+        let maxCount = buckets.values.max() ?? 1
+        return HStack(alignment: .bottom, spacing: 1) {
+            Text("24h")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: 28, alignment: .leading)
+            ForEach(0..<24, id: \.self) { h in
+                let count = buckets[h] ?? 0
+                let ratio = maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0
+                VStack(spacing: 2) {
+                    Spacer()
+                    Rectangle()
+                        .fill(barColorForHour(h, hasData: count > 0))
+                        .frame(height: max(2, 30 * ratio))
+                    Text("\(h)")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .help(count > 0 ? "\(h):00 触发 \(count) 次" : "\(h):00 无触发")
+            }
+        }
+        .frame(height: 50)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+    }
+
+    /// 中国期货活跃时段染色（活跃 9-11/13-15/21-23 染主色 · 其他染浅）
+    private func barColorForHour(_ h: Int, hasData: Bool) -> Color {
+        guard hasData else { return Color.secondary.opacity(0.18) }
+        let active = (9...11).contains(h) || (13...15).contains(h) || (21...23).contains(h)
+        return active ? Color.orange.opacity(0.85) : Color.blue.opacity(0.65)
     }
 
     /// 时间窗口 segmented + 导出（trader 模式分析入口）

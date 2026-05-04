@@ -224,6 +224,14 @@ struct ReviewWindow: View {
                 stat("最长连败", "\(s.streak.maxLosingStreak) 笔")
                 stat("当前", currentStreakLabel(s.streak))
                 Spacer()
+                // v15.21 batch108 · 复制 header 全部统计行（trader 月底直接贴邮件/IM）
+                Button {
+                    Pasteboard.copy(headerStatsText(s))
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .help("复制全部 stat 行（成交/闭合/总 PnL/胜率/Sharpe/Sortino 等 · 一段文本）")
                 Text("v1 mock · 待 M5 接 JournalStore 真数据")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
@@ -345,6 +353,18 @@ struct ReviewWindow: View {
             Text(label).font(.caption).foregroundColor(.secondary)
             Text(value).font(.system(size: 14, design: .monospaced))
         }
+    }
+
+    /// v15.21 batch108 · 把 header 两行 stat 合成一段文本（按区间筛选 · trader 月底贴邮件/IM）
+    private func headerStatsText(_ s: ReviewSummary) -> String {
+        let lines: [String] = [
+            "📊 复盘统计 · 区间：\(dateFilter.displayName)",
+            "成交 \(s.tradeCount) 笔 · 闭合 \(s.closedPositions.count) 笔 · 总 PnL ¥\(signedDecimal(s.monthlyPnL.totalPnL)) · 胜率 \(pct(s.winRateCurve.finalWinRate))",
+            "最长连胜 \(s.streak.maxWinningStreak) 笔 · 最长连败 \(s.streak.maxLosingStreak) 笔 · 当前 \(currentStreakLabel(s.streak))",
+            "Sharpe \(String(format: "%.2f", s.riskAdjusted.sharpeRatio)) · Sortino \(String(format: "%.2f", s.riskAdjusted.sortinoRatio)) · Calmar \(String(format: "%.2f", s.riskAdjusted.calmarRatio)) · Recovery \(String(format: "%.2f", s.riskAdjusted.recoveryFactor))",
+            "ProfitFactor \(String(format: "%.2f", s.profitability.profitFactor)) · Expectancy ¥\(signedDecimal(s.profitability.expectancy)) · 最大单笔盈 ¥\(decimal(s.profitability.largestWin)) · 最大单笔亏 ¥\(decimal(s.profitability.largestLoss))",
+        ]
+        return lines.joined(separator: "\n")
     }
 
     /// 8 图统一卡片容器（标题 + subtitle + 内容区）· v15.19 batch41 加 📷 PNG 导出按钮

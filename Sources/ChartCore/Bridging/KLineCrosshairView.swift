@@ -85,6 +85,7 @@ public struct KLineCrosshairView: View {
                         time: timeFormatter.string(from: info.bar.openTime),
                         bar: info.bar,
                         cursorPrice: info.cursorPrice,
+                        prevClose: info.prevClose,
                         backgroundColor: tooltipBackground,
                         primaryText: tooltipPrimaryText,
                         secondaryText: tooltipSecondaryText
@@ -100,6 +101,8 @@ public struct KLineCrosshairView: View {
     private struct BarInfo {
         let bar: KLine
         let cursorPrice: Decimal
+        /// v15.18 · 前一根 close（用于计算涨跌幅 / 振幅）· 第一根为 nil
+        let prevClose: Decimal?
     }
 
     private func computeBarInfo(at pt: CGPoint, in size: CGSize) -> BarInfo? {
@@ -108,12 +111,13 @@ public struct KLineCrosshairView: View {
         let barIndex = viewport.startIndex + Int(xRatio * CGFloat(visibleCount))
         guard barIndex >= 0, barIndex < bars.count else { return nil }
         let bar = bars[barIndex]
+        let prevClose: Decimal? = barIndex > 0 ? bars[barIndex - 1].close : nil
         // y → price · 顶 0 = upperBound · 底 1 = lowerBound
         let lo = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
         let hi = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
         let yRatio = 1.0 - max(0, min(1, Double(pt.y / size.height)))
         let priceDouble = lo + (hi - lo) * yRatio
-        return BarInfo(bar: bar, cursorPrice: Decimal(priceDouble))
+        return BarInfo(bar: bar, cursorPrice: Decimal(priceDouble), prevClose: prevClose)
     }
 
     private func crosshairLines(at pt: CGPoint, in size: CGSize) -> some View {
@@ -173,6 +177,8 @@ private struct OHLCTooltip: View {
     let time: String
     let bar: KLine
     let cursorPrice: Decimal
+    /// v15.18 · 前一根 close（计算涨跌幅 / 振幅）· nil 时省略
+    let prevClose: Decimal?
     let backgroundColor: Color
     let primaryText: Color
     let secondaryText: Color
@@ -188,6 +194,15 @@ private struct OHLCTooltip: View {
             row(label: "低", value: bar.low, color: .green)
             row(label: "收", value: bar.close, color: bar.close >= bar.open ? .red : .green)
             row(label: "量", value: Decimal(bar.volume), color: secondaryText)
+            // v15.18 · 涨跌幅 / 振幅（trader 实用 · 需 prevClose）
+            if let pc = prevClose, pc > 0 {
+                Divider().background(secondaryText.opacity(0.3))
+                let changePct = (bar.close - pc) / pc * 100
+                let amplPct = (bar.high - bar.low) / pc * 100
+                let changeColor: Color = bar.close >= pc ? .red : .green
+                pctRow(label: "涨跌", value: changePct, color: changeColor)
+                pctRow(label: "振幅", value: amplPct, color: .yellow)
+            }
             Divider().background(secondaryText.opacity(0.3))
             row(label: "价位", value: cursorPrice, color: .yellow)
         }
@@ -209,6 +224,22 @@ private struct OHLCTooltip: View {
                 .foregroundColor(secondaryText)
                 .frame(width: 28, alignment: .leading)
             Text(value.description)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(color)
+            Spacer()
+        }
+    }
+
+    private func pctRow(label: String, value: Decimal, color: Color) -> some View {
+        let d = NSDecimalNumber(decimal: value).doubleValue
+        let sign = d >= 0 ? "+" : ""
+        let text = String(format: "\(sign)%.2f%%", d)
+        return HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(secondaryText)
+                .frame(width: 28, alignment: .leading)
+            Text(text)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(color)
             Spacer()

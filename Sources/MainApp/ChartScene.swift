@@ -3158,6 +3158,12 @@ struct ChartContentView: View {
                 Button("复制 hover 价 \(formatPrice(hp.price))") {
                     copyPriceToPasteboard(hp.price)
                 }
+                // v15.21 batch96 · 复制 hover 落在的 K 线 OHLC 完整数据（trader 截一根关键 bar 给同事 / 笔记）
+                if hp.barIndex >= 0 && hp.barIndex < bars.count {
+                    Button("复制本根 K 线 OHLC") {
+                        copyBarOHLC(at: hp.barIndex)
+                    }
+                }
                 Divider()
             }
             if let lastBar = bars.last {
@@ -3231,6 +3237,22 @@ struct ChartContentView: View {
         panel.nameFieldStringValue = "chart_\(instrumentLabel)_\(periodLabel)_\(dateFmt.string(from: Date())).png"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? pngData.write(to: url)
+    }
+
+    /// v15.21 batch96 · 复制 hover 落在的单根 K 线 OHLC 完整数据（标准化文本 · 适合 IM/邮件粘贴）
+    private func copyBarOHLC(at index: Int) {
+        guard index >= 0, index < bars.count else { return }
+        let bar = bars[index]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyy-MM-dd HH:mm"
+        let pct = OHLCMarkdownExporter.formatChangePercent(open: bar.open, close: bar.close)
+        let lines = [
+            "📊 \(bar.instrumentID) · \(dateFmt.string(from: bar.openTime))",
+            "开 \(NSDecimalNumber(decimal: bar.open).stringValue)  高 \(NSDecimalNumber(decimal: bar.high).stringValue)",
+            "低 \(NSDecimalNumber(decimal: bar.low).stringValue)  收 \(NSDecimalNumber(decimal: bar.close).stringValue) (\(pct))",
+            "量 \(bar.volume)  持仓 \(NSDecimalNumber(decimal: bar.openInterest).stringValue)",
+        ]
+        Pasteboard.copy(lines.joined(separator: "\n"))
     }
 
     /// v15.21 batch87 · 复制 viewport 可见区 K 线为 Markdown 表格（trader 复盘 IM/邮件分享）

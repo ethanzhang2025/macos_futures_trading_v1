@@ -2675,6 +2675,12 @@ struct ChartContentView: View {
                 ("⌘⇧M", "测距三态 起 → 终 → 退出"),
                 ("⌘⇧X", "复制测距详情到剪贴板"),
             ]),
+            ("右键复制（hover）", [
+                ("hover 时间 / Unix", "v15.21 batch100/113"),
+                ("本根 K 线 OHLC", "v15.21 batch96"),
+                ("周边 N 根 Markdown", "v15.21 batch112 · 4 preset"),
+                ("可见区 stat / Markdown", "v15.21 batch87/121"),
+            ]),
             ("显隐切换", [
                 ("⌘.", "副图显隐"),
                 ("⌘\\", "画线 overlay 显隐"),

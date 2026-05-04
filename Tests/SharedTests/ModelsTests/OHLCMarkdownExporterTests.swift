@@ -60,6 +60,32 @@ struct OHLCMarkdownExporterTests {
         #expect(s == "0.00%")
     }
 
+    @Test("v15.21 batch124 · 涨跌% 极端值（接近 0 不丢小数 · 大值不溢出）")
+    func changePercentExtremes() {
+        // 微小变化（< 0.01%）显示 +0.00%
+        let tiny = OHLCMarkdownExporter.formatChangePercent(open: 100, close: Decimal(string: "100.001")!)
+        #expect(tiny.starts(with: "+0.00"))
+        // 跌停（-10%）
+        let limitDown = OHLCMarkdownExporter.formatChangePercent(open: 100, close: 90)
+        #expect(limitDown == "-10.00%")
+        // 涨停（+10%）
+        let limitUp = OHLCMarkdownExporter.formatChangePercent(open: 100, close: 110)
+        #expect(limitUp == "+10.00%")
+    }
+
+    @Test("v15.21 batch124 · 自定义 dateFormat 参数生效")
+    func customDateFormat() {
+        let bar = makeBar(open: 100, high: 110, low: 95, close: 105)
+        let mdDefault = OHLCMarkdownExporter.render([bar])
+        let mdShort = OHLCMarkdownExporter.render([bar], dateFormat: "HH:mm")
+        // 默认 "yyyy-MM-dd HH:mm" 数据行含 "20" 前缀（年份开头）
+        let defaultDataRow = mdDefault.split(separator: "\n").last.map(String.init) ?? ""
+        let shortDataRow = mdShort.split(separator: "\n").last.map(String.init) ?? ""
+        #expect(defaultDataRow.contains("20"))           // yyyy-MM-dd 年份起首
+        #expect(!shortDataRow.contains("20"))            // HH:mm 仅时分（24h 不会有 20: · 测试用 makeBar 时间不在 20 点）
+        #expect(shortDataRow.contains(":"))              // 时分冒号
+    }
+
     @Test("多根 K 线全部展现 + 持仓量列存在")
     func multipleBars() {
         let bars = [

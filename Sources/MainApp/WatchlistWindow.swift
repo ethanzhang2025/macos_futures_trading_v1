@@ -75,6 +75,10 @@ struct WatchlistWindow: View {
     /// v15.20 batch55 · 自由粘贴合约 sheet 显隐（文本框 + 分组选择 + 实时解析预览）
     @State private var showQuickPasteSheet: Bool = false
 
+    /// v15.20 batch59 · 排序字段 · 默认 .manual 保持用户拖拽顺序
+    @State private var sortField: WatchlistSortField = .manual
+    @State private var sortAscending: Bool = false   // 默认降序（涨幅榜从高到低 trader 习惯）
+
     @Environment(\.openWindow) private var openWindow
     @Environment(\.storeManager) private var storeManager
 
@@ -341,7 +345,7 @@ struct WatchlistWindow: View {
                 )
             } else {
                 List(selection: $selectedInstruments) {
-                    ForEach(Array(group.instrumentIDs.enumerated()), id: \.element) { index, id in
+                    ForEach(Array(sortedInstrumentIDs(for: group).enumerated()), id: \.element) { index, id in
                         instrumentRow(id: id, index: index, groupID: group.id)
                             .tag(id)
                     }
@@ -365,12 +369,12 @@ struct WatchlistWindow: View {
     private var instrumentColumnsHeader: some View {
         HStack(spacing: 0) {
             Spacer().frame(width: 24)
-            Text("合约").frame(width: 100, alignment: .leading)
-            Text("最新价").frame(width: 90, alignment: .trailing)
+            sortableHeaderCell("合约", field: .instrumentID, width: 100, alignment: .leading)
+            sortableHeaderCell("最新价", field: .lastPrice, width: 90, alignment: .trailing)
             Spacer().frame(width: 16)
-            Text("涨跌幅").frame(width: 80, alignment: .trailing)
+            sortableHeaderCell("涨跌幅", field: .changePct, width: 80, alignment: .trailing)
             Spacer().frame(width: 16)
-            Text("持仓量").frame(width: 80, alignment: .trailing)
+            sortableHeaderCell("持仓量", field: .openInterest, width: 80, alignment: .trailing)
             Spacer()
         }
         .font(.system(size: 11, design: .monospaced))
@@ -378,6 +382,49 @@ struct WatchlistWindow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
         .background(Color.secondary.opacity(0.06))
+    }
+
+    /// v15.20 batch59 · 可点击表头单元格（同字段切升降序 · 异字段切到该字段降序起）
+    private func sortableHeaderCell(_ title: String, field: WatchlistSortField, width: CGFloat, alignment: Alignment) -> some View {
+        let isActive = sortField == field
+        let arrow = isActive ? (sortAscending ? "↑" : "↓") : ""
+        return Text("\(title)\(arrow)")
+            .frame(width: width, alignment: alignment)
+            .foregroundColor(isActive ? .accentColor : .secondary)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if isActive {
+                    sortAscending.toggle()
+                } else {
+                    sortField = field
+                    sortAscending = false   // 默认降序（涨幅榜从高到低）
+                }
+            }
+            .help("点击按\(title)排序 · 再点切升降序 · 拖拽行自动切回手动")
+    }
+
+    /// v15.20 batch59 · 按 sortField + sortAscending 排序合约 ID（quotes 不可达 fallback nil 排末尾）
+    private func sortedInstrumentIDs(for group: Watchlist) -> [String] {
+        WatchlistSorter.sort(
+            ids: group.instrumentIDs,
+            field: sortField,
+            ascending: sortAscending,
+            keyForID: keyForInstrument
+        )
+    }
+
+    /// v15.20 batch59 · 数值字段 closure（同 sort field 提取规则）
+    private func keyForInstrument(_ id: String) -> Double? {
+        switch sortField {
+        case .lastPrice:
+            return quotes[id].map { NSDecimalNumber(decimal: $0.lastPrice).doubleValue }
+        case .changePct:
+            return parseChangePct(changePctText(for: id))
+        case .openInterest:
+            return quotes[id].map { Double($0.openInterest) }
+        case .manual, .instrumentID:
+            return nil   // sorter 不调 keyForID
+        }
     }
 
     private func instrumentRow(id: String, index: Int, groupID: UUID) -> some View {
@@ -570,6 +617,8 @@ struct WatchlistWindow: View {
     @discardableResult
     private func moveInstrumentToSlot(_ ref: WatchlistInstrumentRef, targetGroupID: UUID, targetIndex: Int) -> Bool {
         defer { clearHover() }
+        // v15.20 batch59 · 用户拖拽重排 → 自动切回 .manual（否则 sort 会立刻覆盖拖拽结果）
+        if sortField != .manual { sortField = .manual }
         if ref.sourceGroupID == targetGroupID {
             guard let group = book.group(id: targetGroupID),
                   let from = group.instrumentIDs.firstIndex(of: ref.instrumentID),

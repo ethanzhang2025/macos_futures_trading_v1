@@ -138,10 +138,12 @@ struct ChartScene: View {
     @State private var instrumentLabel: String = "—"
     @State private var periodLabel: String = "—"
     @State private var dataSourceLabel: String = "加载中…"
-    /// v15.18 · 启动从 Settings.defaultInstrumentID 读 · 用户可在通用 tab 改默认合约
-    @State private var currentInstrumentID: String = (UserDefaults.standard.string(forKey: "settings.defaultInstrumentID")
-        ?? MarketDataPipeline.defaultInstrumentID)
-    @State private var selectedPeriod: KLinePeriod = MarketDataPipeline.defaultPeriod
+    /// v15.18 · 启动按 Settings 决定：
+    /// - restoreLastSession=true（默认）：读 settings.lastInstrumentID（上次合约）
+    /// - restoreLastSession=false：读 settings.defaultInstrumentID（用户偏好默认）
+    /// 都没值时 fallback MarketDataPipeline.defaultInstrumentID（"RB0"）
+    @State private var currentInstrumentID: String = Self.resolveInitialInstrumentID()
+    @State private var selectedPeriod: KLinePeriod = Self.resolveInitialPeriod()
     /// v13.19 副图多选 · selectedSubIndicators Set 替代单选 · 默认 [.macd]
     /// vertical stack 渲染多个 SubChartView · 高度按数量等分（每个最少 80pt）
     @State private var selectedSubIndicators: Set<SubIndicatorKind> = [.macd]
@@ -328,6 +330,10 @@ struct ChartScene: View {
         .background(periodShortcuts)
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         .task(id: PipelineKey(mode: chartMode, instrumentID: currentInstrumentID, period: selectedPeriod)) {
+            // v15.18 · 持久化最近合约 / 周期（restoreLastSession=true 时下次启动恢复 · 仅 live 模式记录）
+            if chartMode == .live {
+                Self.persistLastSession(instrumentID: currentInstrumentID, period: selectedPeriod)
+            }
             await resetForNewPipeline()
             // v13.0 WP-42 画线状态切合约/周期重载 · 各 (instrumentID, period) 组合独立持久化
             // v13.2 升级 UserDefaults JSON → SQLiteDrawingStore（M5 持久化 8/8）
@@ -1313,6 +1319,36 @@ struct ChartScene: View {
                          : "加载 \(currentInstrumentID) 真行情…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    // MARK: - v15.18 启动 instrument/period 决策（Settings.restoreLastSession 驱动）
+
+    private static func resolveInitialInstrumentID() -> String {
+        let defaults = UserDefaults.standard
+        let restore = defaults.object(forKey: "settings.restoreLastSession") as? Bool ?? true
+        if restore, let last = defaults.string(forKey: "settings.lastInstrumentID"), !last.isEmpty {
+            return last
+        }
+        return defaults.string(forKey: "settings.defaultInstrumentID")
+            ?? MarketDataPipeline.defaultInstrumentID
+    }
+
+    private static func resolveInitialPeriod() -> KLinePeriod {
+        let defaults = UserDefaults.standard
+        let restore = defaults.object(forKey: "settings.restoreLastSession") as? Bool ?? true
+        guard restore, let raw = defaults.string(forKey: "settings.lastPeriod"),
+              let period = KLinePeriod.allCases.first(where: { $0.displayName == raw })
+        else {
+            return MarketDataPipeline.defaultPeriod
+        }
+        return period
+    }
+
+    /// v15.18 · onChange 时持久化最近合约 / 周期（restoreLastSession=true 时下次启动恢复）
+    private static func persistLastSession(instrumentID: String, period: KLinePeriod) {
+        let defaults = UserDefaults.standard
+        defaults.set(instrumentID, forKey: "settings.lastInstrumentID")
+        defaults.set(period.displayName, forKey: "settings.lastPeriod")
     }
 
     // MARK: - v11.0+1 · K 线 close 假 Tick（evaluator wiring）

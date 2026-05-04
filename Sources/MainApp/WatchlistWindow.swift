@@ -348,6 +348,15 @@ struct WatchlistWindow: View {
             Button("重命名（双击也行）") {
                 sheetState = .renameGroup(group)
             }
+            // v15.21 batch104 · 复制整组合约代码 · 换行/逗号两种格式（trader IM 群发 / Excel 粘贴）
+            Button("复制全部合约代码（换行）") {
+                Pasteboard.copy(group.instrumentIDs.joined(separator: "\n"))
+            }
+            .disabled(group.instrumentIDs.isEmpty)
+            Button("复制全部合约代码（逗号）") {
+                Pasteboard.copy(group.instrumentIDs.joined(separator: ","))
+            }
+            .disabled(group.instrumentIDs.isEmpty)
             Divider()
             Button("删除分组", role: .destructive) {
                 pendingDeleteGroup = group

@@ -2310,6 +2310,8 @@ struct ChartContentView: View {
             )
             // v15.19 batch35 · 昨结算线（trader 关键参考位 · 商品昨结算 / 金融昨收 · price 在线上下分歧情绪不同）
             preSettlementLine
+            // v15.19 batch40 · 今日开盘价水平线（紫色虚线 · 与昨结算线互补 · trader 看价格在开盘上下情绪不同）
+            todaysOpenLine
             // v13.0 WP-42 画线 overlay 渲染层（在十字光标上 · HUD 下）
             // v13.3 pendingDrawing 接 pendingDrawingPoint + hoverDataPoint 实时预览第二点（虚线）
             DrawingsOverlayView(
@@ -2380,6 +2382,52 @@ struct ChartContentView: View {
         .contextMenu {
             // v13.5 选中画线右键菜单（删除 / 编辑文字 / 取消选中）· v13.6 加复制
             drawingContextMenu
+        }
+    }
+
+    /// v15.19 batch40 · 今日开盘价（visible bars 中今日首根 K 线 open · Asia/Shanghai 时区）
+    /// 与昨结算线互补 · 紫色虚线区分
+    private var todaysOpenPrice: Decimal? {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let todayStart = cal.startOfDay(for: Date())
+        // 找第一根 closeTime ≥ todayStart 的 K 线 · open 即为开盘价
+        return bars.first { bar in
+            // KLine 用 openTime · v1 简化：closeTime fallback openTime + period.seconds
+            let bClose = bar.closeTime
+            return bClose >= todayStart
+        }?.open
+    }
+
+    @ViewBuilder
+    private var todaysOpenLine: some View {
+        if let open = todaysOpenPrice {
+            GeometryReader { geom in
+                let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+                let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+                let span = max(0.0001, hi - lo)
+                let priceD = NSDecimalNumber(decimal: open).doubleValue
+                if priceD >= lo && priceD <= hi {
+                    let y = geom.size.height * (1 - CGFloat((priceD - lo) / span))
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: y))
+                        p.addLine(to: CGPoint(x: geom.size.width, y: y))
+                    }
+                    .stroke(
+                        Color(red: 0.63, green: 0.42, blue: 0.83).opacity(0.5),
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 6])
+                    )
+                    Text("今开")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(Color(red: 0.63, green: 0.42, blue: 0.83))
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(chartTheme.hudBackground.opacity(0.85))
+                        .cornerRadius(2)
+                        .position(x: 56, y: y)   // 错开"昨结"标签位置 · 不重叠
+                }
+            }
+            .allowsHitTesting(false)
         }
     }
 

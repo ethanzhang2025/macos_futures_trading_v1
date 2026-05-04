@@ -314,6 +314,8 @@ struct FuturesTerminalApp: App {
             }
             CommandMenu("工具") {
                 ImportFormulaButton()
+                Divider()
+                OpenFormulaEditorButton()  // v15.22 batch4 · WP-65 公式编辑器（⌘⌥F）
             }
         }
 
@@ -376,6 +378,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()  // v15.17 · 跟主图 chartTheme.v1 · sheet/popup 一致
         }
         .defaultSize(width: 1100, height: 720)
+
+        // v15.22 batch4 · 麦语言公式编辑器（WP-65 · syntax 高亮 + 编辑 + 保存）
+        WindowGroup("公式编辑器", id: "formulaEditor") {
+            FormulaEditorWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 920, height: 640)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -449,6 +458,15 @@ private struct OpenWorkspaceButton: View {
     var body: some View {
         Button("工作区模板") { openWindow(id: "workspace") }
             .keyboardShortcut("k", modifiers: [.command])
+    }
+}
+
+/// v15.22 batch4 · WP-65 公式编辑器入口（工具菜单 · ⌘⌥F · syntax 高亮 + 打开 / 保存）
+private struct OpenFormulaEditorButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("公式编辑器（⌘⌥F）") { openWindow(id: "formulaEditor") }
+            .keyboardShortcut("f", modifiers: [.command, .option])
     }
 }
 

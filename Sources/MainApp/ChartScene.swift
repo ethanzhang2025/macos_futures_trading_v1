@@ -812,6 +812,25 @@ struct ChartScene: View {
                 .keyboardShortcut("5", modifiers: [.command])
             Button("") { selectedPeriod = .daily }
                 .keyboardShortcut("6", modifiers: [.command])
+            // v15.19 batch28 · ⌥1-9 全 9 个常用周期一键切（trader 高频工作流 · 与 ⌘1-6 互补）
+            Button("") { selectedPeriod = .minute1 }
+                .keyboardShortcut("1", modifiers: [.option])
+            Button("") { selectedPeriod = .minute3 }
+                .keyboardShortcut("2", modifiers: [.option])
+            Button("") { selectedPeriod = .minute5 }
+                .keyboardShortcut("3", modifiers: [.option])
+            Button("") { selectedPeriod = .minute15 }
+                .keyboardShortcut("4", modifiers: [.option])
+            Button("") { selectedPeriod = .minute30 }
+                .keyboardShortcut("5", modifiers: [.option])
+            Button("") { selectedPeriod = .hour1 }
+                .keyboardShortcut("6", modifiers: [.option])
+            Button("") { selectedPeriod = .hour4 }
+                .keyboardShortcut("7", modifiers: [.option])
+            Button("") { selectedPeriod = .daily }
+                .keyboardShortcut("8", modifiers: [.option])
+            Button("") { selectedPeriod = .weekly }
+                .keyboardShortcut("9", modifiers: [.option])
             // v13.9 多选 · Delete 批量删除全部 selectedDrawingIDs · v13.11 跳过锁定的画线
             Button("") {
                 let deletable = drawings.filter { selectedDrawingIDs.contains($0.id) && !$0.locked }.map(\.id)

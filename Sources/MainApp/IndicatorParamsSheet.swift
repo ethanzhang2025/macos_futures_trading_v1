@@ -36,242 +36,92 @@ struct IndicatorParamsSheet: View {
             // v15.15 polish：9 Section 在 13" Mac 屏（~800pt 高）超出 · 包 ScrollView 可滚动 · sheet 整体高度收 720
             ScrollView {
             Form {
-                Section("主图均线 MA · 3 条") {
-                    HStack {
-                        Text("MA1")
-                        TextField("", value: maPeriodBinding(0), format: .number)
-                            .frame(width: 60)
-                        Text("MA2").padding(.leading, 12)
-                        TextField("", value: maPeriodBinding(1), format: .number)
-                            .frame(width: 60)
-                        Text("MA3").padding(.leading, 12)
-                        TextField("", value: maPeriodBinding(2), format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 5 / 20 / 60")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("主图均线 MA · 3 条", subtitle: "默认 5 / 20 / 60") {
+                    paramField("MA1", maPeriodBinding(0))
+                    paramField("MA2", maPeriodBinding(1), leadingPad: true)
+                    paramField("MA3", maPeriodBinding(2), leadingPad: true)
                 }
 
-                Section("主图布林带 BOLL") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: bollParamBinding(0), format: .number)
-                            .frame(width: 60)
-                        Text("倍数").padding(.leading, 12)
-                        TextField("", value: bollParamBinding(1), format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 20 / 2")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("主图布林带 BOLL", subtitle: "默认 20 / 2") {
+                    paramField("周期", bollParamBinding(0))
+                    paramField("倍数", bollParamBinding(1), leadingPad: true)
                 }
 
-                Section("副图 MACD") {
-                    HStack {
-                        Text("快线")
-                        TextField("", value: macdParamBinding(0), format: .number)
-                            .frame(width: 60)
-                        Text("慢线").padding(.leading, 12)
-                        TextField("", value: macdParamBinding(1), format: .number)
-                            .frame(width: 60)
-                        Text("信号").padding(.leading, 12)
-                        TextField("", value: macdParamBinding(2), format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 12 / 26 / 9（fast 必须 < slow）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 MACD", subtitle: "默认 12 / 26 / 9（fast 必须 < slow）") {
+                    paramField("快线", macdParamBinding(0))
+                    paramField("慢线", macdParamBinding(1), leadingPad: true)
+                    paramField("信号", macdParamBinding(2), leadingPad: true)
                 }
 
-                Section("副图 KDJ") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: kdjParamBinding(0), format: .number)
-                            .frame(width: 60)
-                        Text("smoothK").padding(.leading, 12)
-                        TextField("", value: kdjParamBinding(1), format: .number)
-                            .frame(width: 60)
-                        Text("smoothD").padding(.leading, 12)
-                        TextField("", value: kdjParamBinding(2), format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 9 / 3 / 3")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 KDJ", subtitle: "默认 9 / 3 / 3") {
+                    paramField("周期", kdjParamBinding(0))
+                    paramField("smoothK", kdjParamBinding(1), leadingPad: true)
+                    paramField("smoothD", kdjParamBinding(2), leadingPad: true)
                 }
 
-                Section("副图 RSI") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.rsiPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 14（超买 70 / 超卖 30 阈值固定）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 RSI", subtitle: "默认 14（超买 70 / 超卖 30 阈值固定）") {
+                    paramField("周期", $draft.rsiPeriod)
                 }
 
                 // v15.11 WP-41 v4 副图扩 4 类（OBV / CCI / WR / 持仓量）· OBV / 持仓量无参数
-                Section("副图 CCI（顺势指标）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.cciPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 14（>+100 超买 / <-100 超卖 阈值固定）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 CCI（顺势指标）", subtitle: "默认 14（>+100 超买 / <-100 超卖 阈值固定）") {
+                    paramField("周期", $draft.cciPeriod)
                 }
 
-                Section("副图 WR（威廉指标）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.wrPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 14（值域 -100~0 · >-20 超买 / <-80 超卖）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 WR（威廉指标）", subtitle: "默认 14（值域 -100~0 · >-20 超买 / <-80 超卖）") {
+                    paramField("周期", $draft.wrPeriod)
                 }
 
                 // v15.13 副图扩第二批（DMI / Stochastic / ROC / BIAS）
-                Section("副图 DMI（趋向指标）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.dmiPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 14（输出 +DI/-DI 双线 · +DI 红强势 / -DI 绿弱势）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 DMI（趋向指标）", subtitle: "默认 14（输出 +DI/-DI 双线 · +DI 红强势 / -DI 绿弱势）") {
+                    paramField("周期", $draft.dmiPeriod)
                 }
 
-                Section("副图 STOCH（随机指标）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: stochParamBinding(0), format: .number)
-                            .frame(width: 60)
-                        Text("smooth").padding(.leading, 12)
-                        TextField("", value: stochParamBinding(1), format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 14 / 3（%K/%D 双线 · 固定 0~100 视野 · 80/50/20 参考）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 STOCH（随机指标）", subtitle: "默认 14 / 3（%K/%D 双线 · 固定 0~100 视野 · 80/50/20 参考）") {
+                    paramField("周期", stochParamBinding(0))
+                    paramField("smooth", stochParamBinding(1), leadingPad: true)
                 }
 
-                Section("副图 ROC（变动率 %）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.rocPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 12（单线 · 上下对称视野 · 0 参考）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 ROC（变动率 %）", subtitle: "默认 12（单线 · 上下对称视野 · 0 参考）") {
+                    paramField("周期", $draft.rocPeriod)
                 }
 
-                Section("副图 BIAS（乖离率 %）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.biasPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 6（单线 · 上下对称视野 · 0 参考 · 价格偏离 N 期均线百分比）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 BIAS（乖离率 %）", subtitle: "默认 6（单线 · 上下对称视野 · 0 参考 · 价格偏离 N 期均线百分比）") {
+                    paramField("周期", $draft.biasPeriod)
                 }
 
                 // v15.18 第三批副图（Aroon / STC / ElderRay / Choppiness / ForceIndex）
-                Section("副图 AROON（趋势强度）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.aroonPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 14（Up/Down 双线 · 0~100 视野 · 50 参考线）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 AROON（趋势强度）", subtitle: "默认 14（Up/Down 双线 · 0~100 视野 · 50 参考线）") {
+                    paramField("周期", $draft.aroonPeriod)
                 }
 
-                Section("副图 STC（Schaff Trend Cycle）") {
-                    HStack {
-                        Text("快线")
-                        TextField("", value: stcParamBinding(0), format: .number)
-                            .frame(width: 60)
-                        Text("慢线").padding(.leading, 12)
-                        TextField("", value: stcParamBinding(1), format: .number)
-                            .frame(width: 60)
-                        Text("周期").padding(.leading, 12)
-                        TextField("", value: stcParamBinding(2), format: .number)
-                            .frame(width: 60)
-                        Text("smooth").padding(.leading, 12)
-                        TextField("", value: stcParamBinding(3), format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 23 / 50 / 10 / 10（5 步复合 · 0~100 视野 · 25/75 阈值）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 STC（Schaff Trend Cycle）", subtitle: "默认 23 / 50 / 10 / 10（5 步复合 · 0~100 视野 · 25/75 阈值）") {
+                    paramField("快线", stcParamBinding(0))
+                    paramField("慢线", stcParamBinding(1), leadingPad: true)
+                    paramField("周期", stcParamBinding(2), leadingPad: true)
+                    paramField("smooth", stcParamBinding(3), leadingPad: true)
                 }
 
-                Section("副图 ELDER RAY（多空力量）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.elderRayPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 13（Bull/Bear 双线 · 0 参考 · 上下对称视野）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 ELDER RAY（多空力量）", subtitle: "默认 13（Bull/Bear 双线 · 0 参考 · 上下对称视野）") {
+                    paramField("周期", $draft.elderRayPeriod)
                 }
 
-                Section("副图 CHOPPINESS（震荡度）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.choppinessPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 14（单线 · 0~100 视野 · 61.8/38.2 黄金分割 · 高=震荡 / 低=趋势）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 CHOPPINESS（震荡度）", subtitle: "默认 14（单线 · 0~100 视野 · 61.8/38.2 黄金分割 · 高=震荡 / 低=趋势）") {
+                    paramField("周期", $draft.choppinessPeriod)
                 }
 
-                Section("副图 FORCE INDEX（价量复合）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.forceIndexPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 13（单线 · 上下对称视野 · 0 参考 · Alexander Elder）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 FORCE INDEX（价量复合）", subtitle: "默认 13（单线 · 上下对称视野 · 0 参考 · Alexander Elder）") {
+                    paramField("周期", $draft.forceIndexPeriod)
                 }
 
                 // v15.18+ batch13 波动率指标（BBW + ATRP）
-                Section("副图 BBW（布林带宽 %）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: bbwParamBinding(0), format: .number)
-                            .frame(width: 60)
-                        Text("倍数").padding(.leading, 12)
-                        TextField("", value: bbwParamBinding(1), format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 20 / 2（与 BOLL 一致 · BBW 极低 = squeeze 即将爆发）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 BBW（布林带宽 %）", subtitle: "默认 20 / 2（与 BOLL 一致 · BBW 极低 = squeeze 即将爆发）") {
+                    paramField("周期", bbwParamBinding(0))
+                    paramField("倍数", bbwParamBinding(1), leadingPad: true)
                 }
 
-                Section("副图 ATRP（标准化 ATR%）") {
-                    HStack {
-                        Text("周期")
-                        TextField("", value: $draft.atrpPeriod, format: .number)
-                            .frame(width: 60)
-                    }
-                    Text("默认 14（单线 % · 跨品种波动率比较 · ATR / Close × 100）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                paramSection("副图 ATRP（标准化 ATR%）", subtitle: "默认 14（单线 % · 跨品种波动率比较 · ATR / Close × 100）") {
+                    paramField("周期", $draft.atrpPeriod)
                 }
             }
             .formStyle(.grouped)
@@ -293,6 +143,30 @@ struct IndicatorParamsSheet: View {
         }
         .padding(20)
         .frame(width: 540, height: 720)
+    }
+
+    // MARK: - v15.20 batch64 · paramSection / paramField helper（22 Section 模板化 · ~110 行重复 → 1 helper）
+
+    /// 标准参数 Section · Section 标题 + HStack 字段 + 副本说明文字
+    @ViewBuilder
+    private func paramSection<Fields: View>(
+        _ title: String,
+        subtitle: String,
+        @ViewBuilder fields: () -> Fields
+    ) -> some View {
+        Section(title) {
+            HStack { fields() }
+            Text(subtitle)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    /// 单参数字段（Label + 数字 TextField · 60pt 宽 · 非首字段加 leading pad）
+    @ViewBuilder
+    private func paramField(_ label: String, _ binding: Binding<Int>, leadingPad: Bool = false) -> some View {
+        Text(label).padding(.leading, leadingPad ? 12 : 0)
+        TextField("", value: binding, format: .number).frame(width: 60)
     }
 
     // MARK: - Binding helper（按 KeyPath 定位 [Int] 数组 + 下标 · 4 类参数共用）

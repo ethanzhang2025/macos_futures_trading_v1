@@ -209,6 +209,58 @@ public actor AlertEvaluator {
                 await fire(event: event, alert: alert, now: now)
             }
         }
+
+        // 3. v15.19+ batch16 · 评估该 (instrumentID, period) 的 Donchian 突破预警（onBar 驱动 · onTick 不算）
+        //    - priceBreakoutHigh：本根 close > 前 lookback 根 highs 最大值（不含本根）
+        //    - priceBreakoutLow ：本根 close < 前 lookback 根 lows  最小值（不含本根）
+        for alert in alerts.values where alert.instrumentID == instrumentID && alert.canTrigger(at: now) {
+            if let event = evaluateBreakout(alert: alert, period: period, window: window, now: now) {
+                await fire(event: event, alert: alert, now: now)
+            }
+        }
+    }
+
+    /// v15.19+ batch16 · Donchian 突破评估（period 不匹配 / lookback 不足时返回 nil）
+    private func evaluateBreakout(alert: Alert, period: KLinePeriod, window: [KLine], now: Date) -> AlertTriggeredEvent? {
+        let cond = alert.condition
+        let lookback: Int
+        let isHigh: Bool
+        switch cond {
+        case .priceBreakoutHigh(let p, let n):
+            guard p == period else { return nil }
+            lookback = n
+            isHigh = true
+        case .priceBreakoutLow(let p, let n):
+            guard p == period else { return nil }
+            lookback = n
+            isHigh = false
+        default:
+            return nil
+        }
+        // 需要 lookback + 1 根（前 N 根 + 当前根）· 不足时跳过
+        guard lookback >= 1, window.count >= lookback + 1 else { return nil }
+        let current = window[window.count - 1]
+        let prior = window[(window.count - 1 - lookback)..<(window.count - 1)]
+        let message: String
+        let matched: Bool
+        if isHigh {
+            guard let priorMax = prior.map(\.high).max() else { return nil }
+            matched = current.close > priorMax
+            message = "突破前 \(lookback) 根 \(period.displayName) 高 \(priorMax)（现 close \(current.close)）"
+        } else {
+            guard let priorMin = prior.map(\.low).min() else { return nil }
+            matched = current.close < priorMin
+            message = "跌破前 \(lookback) 根 \(period.displayName) 低 \(priorMin)（现 close \(current.close)）"
+        }
+        guard matched else { return nil }
+        return AlertTriggeredEvent(
+            alertID: alert.id,
+            alertName: alert.name,
+            instrumentID: alert.instrumentID,
+            triggerPrice: current.close,
+            triggeredAt: now,
+            message: message
+        )
     }
 
     // MARK: - 私有：评估各类条件
@@ -245,6 +297,9 @@ public actor AlertEvaluator {
                 return (abs(move) >= percentThreshold, "\(windowSeconds)s 内价格变化 \(move * 100)%（阈值 \(percentThreshold * 100)%）")
             case .indicator:
                 // 指标条件预警走 onBar 路径 · onTick 不评估
+                return (false, "")
+            case .priceBreakoutHigh, .priceBreakoutLow:
+                // v15.19+ batch16 · Donchian 突破走 onBar 路径 · onTick 不评估
                 return (false, "")
             }
         }()

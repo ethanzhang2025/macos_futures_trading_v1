@@ -426,6 +426,7 @@ struct AlertWindow: View {
         case .horizontalLineTouched(_, let p):  return p
         case .volumeSpike, .openInterestSpike, .priceMoveSpike:  return 0
         case .indicator:                        return 0
+        case .priceBreakoutHigh, .priceBreakoutLow:  return 0   // v15.19+ batch16 · onBar 评估 · 测试触发价 0
         }
     }
 
@@ -563,12 +564,15 @@ struct AlertWindow: View {
 
 // MARK: - 添加 / 编辑 预警 Sheet
 
-/// 8 类可编辑 condition（horizontalLineTouched 需 drawingID 选择 · 留 v2）
+/// 10 类可编辑 condition（horizontalLineTouched 需 drawingID 选择 · 留 v2）
+/// v15.19+ batch16 · 加 priceBreakoutHigh / priceBreakoutLow（Donchian 突破）
 private enum ConditionKind: String, CaseIterable, Identifiable {
     case priceAbove          = "价格 >"
     case priceBelow          = "价格 <"
     case priceCrossAbove     = "上穿"
     case priceCrossBelow     = "下穿"
+    case priceBreakoutHigh   = "突破前 N 根高"
+    case priceBreakoutLow    = "跌破前 N 根低"
     case volumeSpike         = "成交量异常"
     case openInterestSpike   = "持仓量异常"
     case priceMoveSpike      = "价格急动"
@@ -581,6 +585,8 @@ private enum ConditionKind: String, CaseIterable, Identifiable {
         case .priceBelow:            return .priceBelow
         case .priceCrossAbove:       return .priceCrossAbove
         case .priceCrossBelow:       return .priceCrossBelow
+        case .priceBreakoutHigh:     return .priceBreakoutHigh
+        case .priceBreakoutLow:      return .priceBreakoutLow
         case .horizontalLineTouched: return .priceAbove   // v2 加 horizontalLine kind 时改
         case .volumeSpike:           return .volumeSpike
         case .openInterestSpike:     return .openInterestSpike
@@ -606,6 +612,9 @@ private struct AlertFormDraft {
     var oiWindowBars: Int = 20
     var movePercent: Double = 1
     var moveSeconds: Int = 60
+    // v15.19+ batch16 · Donchian 突破字段
+    var breakoutPeriod: KLinePeriod = .minute15
+    var breakoutLookback: Int = 20
 
     // 指标条件预警字段（v15.x · 仅 conditionKind == .indicator 用到）
     var indicatorKind: IndicatorKind = .ma
@@ -645,6 +654,9 @@ private struct AlertFormDraft {
         case .priceMoveSpike(let p, let s):
             movePercent = NSDecimalNumber(decimal: p).doubleValue
             moveSeconds = s
+        case .priceBreakoutHigh(let p, let n), .priceBreakoutLow(let p, let n):
+            breakoutPeriod = p
+            breakoutLookback = n
         case .indicator(let spec):
             indicatorKind = spec.indicator
             indicatorPeriod = spec.period
@@ -679,6 +691,10 @@ private struct AlertFormDraft {
             return .openInterestSpike(multiple: Decimal(oiMultiple), windowBars: oiWindowBars)
         case .priceMoveSpike:
             return .priceMoveSpike(percentThreshold: Decimal(movePercent), windowSeconds: moveSeconds)
+        case .priceBreakoutHigh:
+            return .priceBreakoutHigh(period: breakoutPeriod, lookback: max(1, breakoutLookback))
+        case .priceBreakoutLow:
+            return .priceBreakoutLow(period: breakoutPeriod, lookback: max(1, breakoutLookback))
         case .indicator:
             let params: [Decimal]
             switch indicatorKind {
@@ -813,6 +829,27 @@ struct AddOrEditAlertSheet: View {
                 TextField("", value: $draft.moveSeconds, format: .number)
                     .frame(width: 60)
                 Text("秒")
+            }
+        case .priceBreakoutHigh, .priceBreakoutLow:
+            // v15.19+ batch16 · Donchian 通道突破（trader 顺势启动经典）· period 选周期 + lookback 回看根数
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("周期")
+                    Picker("", selection: $draft.breakoutPeriod) {
+                        ForEach(KLinePeriod.allCases, id: \.self) { p in
+                            Text(p.displayName).tag(p)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 100)
+                    Text("回看")
+                    TextField("", value: $draft.breakoutLookback, format: .number)
+                        .frame(width: 60)
+                    Text("根（不含本根）")
+                }
+                Text("close > 前 N 根 high · trader Donchian 通道突破信号")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         case .indicator:
             indicatorParams
@@ -980,6 +1017,8 @@ extension AlertCondition {
         case .volumeSpike(let m, let n):        return "成交量 ≥ \(fmtDecimal(m))× / \(n)期"
         case .openInterestSpike(let m, let n):  return "持仓量 ≥ \(fmtDecimal(m))× / \(n)期"
         case .priceMoveSpike(let p, let s):     return "急动 ≥ \(fmtDecimal(p))% / \(s)秒"
+        case .priceBreakoutHigh(let p, let n):  return "突破 \(p.displayName) 前 \(n) 根高"
+        case .priceBreakoutLow(let p, let n):   return "跌破 \(p.displayName) 前 \(n) 根低"
         case .indicator(let spec):              return spec.displayDescription
         }
     }

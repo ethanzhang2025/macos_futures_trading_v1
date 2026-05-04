@@ -6,6 +6,7 @@
 // 这是 Karpathy "避免过度复杂" 原则——enum 不嵌入 evaluate 函数，避免 enum 状态膨胀
 
 import Foundation
+import Shared
 
 /// 预警条件 · 9 类（价格 4 + 画线 1 + 异常 3 + 指标 1）
 public enum AlertCondition: Sendable, Codable, Equatable, Hashable {
@@ -20,6 +21,15 @@ public enum AlertCondition: Sendable, Codable, Equatable, Hashable {
     case priceCrossAbove(Decimal)
     /// 价格下穿阈值（prev > target 且 current <= target）
     case priceCrossBelow(Decimal)
+
+    // MARK: - Donchian 突破（v15.19+ batch16 · trader 趋势启动捕捉）
+
+    /// 突破前 N 根（同周期）K 线最高价（不含本根 · 当前 bar.close > max(highs[-N..<-1])）
+    /// trader 经典 Donchian 通道突破信号 · 顺势启动入场参考
+    case priceBreakoutHigh(period: KLinePeriod, lookback: Int)
+
+    /// 跌破前 N 根（同周期）K 线最低价（不含本根 · 当前 bar.close < min(lows[-N..<-1])）
+    case priceBreakoutLow(period: KLinePeriod, lookback: Int)
 
     // MARK: - 画线类（v1 仅水平线，其他画线类型留 v2）
 

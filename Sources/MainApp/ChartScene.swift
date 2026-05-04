@@ -3801,11 +3801,22 @@ struct ChartContentView: View {
                     Text("涨跌 \(fmt(diff)) (\(String(format: "%+.2f%%", pct)))")
                         .foregroundColor(diff >= 0 ? chartTheme.candleBull : chartTheme.candleBear)
                 }
+                if hudFields.fields.contains(.amplitude), let amp = visibleAmplitudePct {
+                    Text("振幅 \(String(format: "%.2f%%", amp))")
+                }
                 if hudFields.fields.contains(.volume) {
                     Text("量 \(lastBar.volume)")
                 }
+                if hudFields.fields.contains(.volumeRatio), let ratio = volumeRatio {
+                    Text("量比 \(String(format: "%.2f", ratio))")
+                        .foregroundColor(ratio >= 1.5 ? chartTheme.candleBull
+                            : (ratio < 0.7 ? chartTheme.candleBear : chartTheme.textPrimary))
+                }
                 if hudFields.fields.contains(.openInterest) {
                     Text("持仓 \(fmt(lastBar.openInterest))")
+                }
+                if hudFields.fields.contains(.atr), let atr = latestATR14 {
+                    Text("ATR(14) \(fmt(atr))")
                 }
             }
             // 视觉迭代第 4 项：调试信息（视野/帧时）· v15.14 用户可关 · 默认开
@@ -3828,6 +3839,50 @@ struct ChartContentView: View {
         let end = min(viewport.startIndex + viewport.visibleCount, bars.count) - 1
         guard end >= 0, end < bars.count else { return nil }
         return bars[end]
+    }
+
+    /// v15.20 batch54 · 振幅 = (visible.high.max - visible.low.min) / preSettle × 100%
+    /// 反映品种当日活跃度 · 配合昨结算线让 trader 评估当日波动空间
+    /// preSettle nil 时 fallback bars.first.close（与 priceTopBar 一致）
+    private var visibleAmplitudePct: Double? {
+        let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
+        guard viewport.startIndex < visibleEnd else { return nil }
+        let slice = bars[viewport.startIndex..<visibleEnd]
+        guard let hi = slice.map(\.high).max(),
+              let lo = slice.map(\.low).min() else { return nil }
+        let baseline = preSettle ?? bars.first?.close ?? Decimal(0)
+        guard baseline > 0 else { return nil }
+        return NSDecimalNumber(decimal: (hi - lo) / baseline).doubleValue * 100
+    }
+
+    /// v15.20 batch54 · 量比 = lastBar.volume / 前 5 根均值
+    /// 不足 5 根 / 均值 0 返回 nil · 高量比染红（≥1.5）· 低量比染绿（<0.7）
+    private var volumeRatio: Double? {
+        guard let last = visibleLastBar else { return nil }
+        let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count) - 1
+        let priorStart = max(0, visibleEnd - 5)
+        let prior = bars[priorStart..<max(priorStart, visibleEnd)]
+        guard prior.count >= 1 else { return nil }
+        let avg = Double(prior.map(\.volume).reduce(0, +)) / Double(prior.count)
+        guard avg > 0 else { return nil }
+        return Double(last.volume) / avg
+    }
+
+    /// v15.20 batch54 · ATR(14) Wilder · 取末位值 · 数据不足返回 nil
+    /// 直接调 IndicatorCore.ATR.calculate · 全量计算（visible 一般 ~120 根 · 帧时无感）
+    private var latestATR14: Decimal? {
+        guard bars.count >= 14 else { return nil }
+        let series = KLineSeries(
+            opens: bars.map(\.open),
+            highs: bars.map(\.high),
+            lows: bars.map(\.low),
+            closes: bars.map(\.close),
+            volumes: bars.map(\.volume),
+            openInterests: bars.map { Int(NSDecimalNumber(decimal: $0.openInterest).intValue) }
+        )
+        guard let result = try? ATR.calculate(kline: series, params: [Decimal(14)]),
+              let last = result.first?.values.last else { return nil }
+        return last
     }
 
     /// v15.14 价格 / OI 数字格式（保 2 位小数）

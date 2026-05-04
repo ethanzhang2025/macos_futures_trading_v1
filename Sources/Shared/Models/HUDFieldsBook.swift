@@ -14,8 +14,11 @@ import Foundation
 public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable {
     case ohlc          // 最新 K 线 OHLC（开高低收）
     case change        // 涨跌幅 vs preSettle（与 priceTopBar 重复 · 移到 HUD 时关闭顶栏）
+    case amplitude     // v15.20 batch54 · 振幅 = (visible.high - visible.low) / preSettle %
     case volume        // 最新 K 线 volume
+    case volumeRatio   // v15.20 batch54 · 量比 = 当根 / 前 5 根均值
     case openInterest  // 最新 K 线 OI（期货特有）
+    case atr           // v15.20 batch54 · ATR(14) Wilder · trader 设止损用
     case timestamp     // 最新 K 线时间戳
     case debug         // 调试信息（视野/起点/帧时 · v13.x 之前默认行为）
 
@@ -25,8 +28,11 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
         switch self {
         case .ohlc:         return "OHLC（开高低收）"
         case .change:       return "涨跌幅"
+        case .amplitude:    return "振幅（visible 高低 / 昨结）"
         case .volume:       return "成交量"
+        case .volumeRatio:  return "量比（当根 / 前 5 根均值）"
         case .openInterest: return "持仓量"
+        case .atr:          return "ATR(14) 真实波幅均值"
         case .timestamp:    return "时间戳"
         case .debug:        return "调试信息（可见/起点/帧时）"
         }
@@ -34,8 +40,9 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
 
     /// v15.16 hotfix #10：HUD 渲染顺序（与 ChartScene.hud 内 if 链顺序一致 · 用户视觉对齐）
     /// 时间戳放最上 · debug 放最下 · 中间是数据字段
+    /// v15.20 batch54：amplitude 跟 change 后 · volumeRatio 跟 volume 后 · atr 跟 openInterest 后
     public static let displayOrder: [HUDFieldKind] = [
-        .timestamp, .ohlc, .change, .volume, .openInterest, .debug
+        .timestamp, .ohlc, .change, .amplitude, .volume, .volumeRatio, .openInterest, .atr, .debug
     ]
 }
 

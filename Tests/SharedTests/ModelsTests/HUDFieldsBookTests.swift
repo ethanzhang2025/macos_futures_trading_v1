@@ -15,33 +15,61 @@ struct HUDFieldsBookTests {
         #expect(d.fields.count == 1)
     }
 
-    @Test("HUDFieldKind allCases 6 类完整")
+    @Test("HUDFieldKind allCases 9 类完整（v15.20 batch54 加 amplitude/volumeRatio/atr）")
     func allCases() {
         let cases = HUDFieldKind.allCases
-        #expect(cases.count == 6)
+        #expect(cases.count == 9)
         #expect(cases.contains(.ohlc))
         #expect(cases.contains(.change))
+        #expect(cases.contains(.amplitude))
         #expect(cases.contains(.volume))
+        #expect(cases.contains(.volumeRatio))
         #expect(cases.contains(.openInterest))
+        #expect(cases.contains(.atr))
         #expect(cases.contains(.timestamp))
         #expect(cases.contains(.debug))
     }
 
-    @Test("displayOrder 与 ChartScene HUD 渲染顺序对齐（v15.16 hotfix #10）")
+    @Test("displayOrder 与 ChartScene HUD 渲染顺序对齐（v15.16 hotfix #10 · v15.20 batch54 扩 9 项）")
     func displayOrder() {
         let order = HUDFieldKind.displayOrder
-        #expect(order == [.timestamp, .ohlc, .change, .volume, .openInterest, .debug])
+        #expect(order == [
+            .timestamp, .ohlc, .change, .amplitude,
+            .volume, .volumeRatio, .openInterest, .atr, .debug
+        ])
         #expect(Set(order) == Set(HUDFieldKind.allCases))  // 不漏 / 不重
     }
 
-    @Test("displayName 全 6 类中文化")
+    @Test("displayName 全 9 类中文化（v15.20 batch54 扩 amplitude/volumeRatio/atr）")
     func displayNames() {
         #expect(HUDFieldKind.ohlc.displayName.contains("OHLC"))
         #expect(HUDFieldKind.change.displayName == "涨跌幅")
+        #expect(HUDFieldKind.amplitude.displayName.contains("振幅"))
         #expect(HUDFieldKind.volume.displayName == "成交量")
+        #expect(HUDFieldKind.volumeRatio.displayName.contains("量比"))
         #expect(HUDFieldKind.openInterest.displayName == "持仓量")
+        #expect(HUDFieldKind.atr.displayName.contains("ATR"))
         #expect(HUDFieldKind.timestamp.displayName == "时间戳")
         #expect(HUDFieldKind.debug.displayName.contains("调试"))
+    }
+
+    @Test("v15.20 batch54 新字段 Codable round-trip 兼容旧 JSON（缺新字段 fallback 不影响）")
+    func batch54NewFieldsRoundTrip() throws {
+        let book = HUDFieldsBook(fields: [.atr, .amplitude, .volumeRatio, .debug])
+        let data = try JSONEncoder().encode(book)
+        let decoded = try JSONDecoder().decode(HUDFieldsBook.self, from: data)
+        #expect(decoded.fields == [.atr, .amplitude, .volumeRatio, .debug])
+        // rawValue 字符串稳定（用 atr/amplitude/volumeRatio · 兼容未来反序列化）
+        let json = String(data: data, encoding: .utf8) ?? ""
+        #expect(json.contains("atr") && json.contains("amplitude") && json.contains("volumeRatio"))
+    }
+
+    @Test("default 不含 v15.20 新字段（保 v15.13+ 行为：仅 .debug）")
+    func defaultExcludesNewFields() {
+        let d = HUDFieldsBook.default
+        #expect(!d.fields.contains(.atr))
+        #expect(!d.fields.contains(.amplitude))
+        #expect(!d.fields.contains(.volumeRatio))
     }
 
     @Test("Codable 往返 · 6 字段全开")

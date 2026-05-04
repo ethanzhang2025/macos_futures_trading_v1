@@ -11,9 +11,10 @@ import Testing
 import Foundation
 @testable import Shared
 
-private func makeTemplate(_ name: String, id: UUID = UUID()) -> DrawingTemplate {
+private func makeTemplate(_ name: String, id: UUID = UUID(),
+                          category: DrawingTemplateCategory = .custom) -> DrawingTemplate {
     let drawing = Drawing.horizontalLine(price: 3850)
-    return DrawingTemplate(id: id, name: name, drawing: drawing)
+    return DrawingTemplate(id: id, name: name, drawing: drawing, category: category)
 }
 
 @Suite("DrawingTemplateExporter · v15.18+ batch15 JSON 导出/导入")

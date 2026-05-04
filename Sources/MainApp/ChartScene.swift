@@ -1038,11 +1038,19 @@ struct ChartScene: View {
                 Text("（无模板 · 选中画线后点下方保存项）")
                     .foregroundColor(.secondary)
             } else {
-                ForEach(drawingTemplates) { template in
-                    Button("\(template.name) · \(drawingTypeLabel(template.drawing.type))") {
-                        let d = instantiateTemplate(template)
-                        addUserDrawing(d)
-                        selectedDrawingIDs = [d.id]
+                // v15.19 batch39 · 按 category 分组（trader 多模板时管理友好）
+                ForEach(DrawingTemplateCategory.allCases, id: \.self) { cat in
+                    let inCat = drawingTemplates.filter { $0.category == cat }
+                    if !inCat.isEmpty {
+                        Menu(cat.displayName) {
+                            ForEach(inCat) { template in
+                                Button("\(template.name) · \(drawingTypeLabel(template.drawing.type))") {
+                                    let d = instantiateTemplate(template)
+                                    addUserDrawing(d)
+                                    selectedDrawingIDs = [d.id]
+                                }
+                            }
+                        }
                     }
                 }
                 Divider()
@@ -1136,26 +1144,55 @@ struct ChartScene: View {
         }
     }
 
-    /// v13.16 保存选中画线为模板 · NSAlert 输入名称
+    /// v13.16 保存选中画线为模板 · NSAlert 输入名称 + v15.19 batch39 选 category
     private func saveCurrentAsTemplate(_ drawing: Drawing) {
         let alert = NSAlert()
         alert.messageText = "保存为模板"
-        alert.informativeText = "输入模板名称（已存 \(drawingTemplates.count) 个）："
-        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        alert.informativeText = "输入模板名称 + 选分类（已存 \(drawingTemplates.count) 个）："
         let typeName = drawingTypeLabel(drawing.type)
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "MM-dd HH:mm"
-        textField.stringValue = "\(typeName) \(dateFmt.string(from: Date()))"
-        alert.accessoryView = textField
+        let container = NSStackView()
+        container.orientation = .vertical
+        container.alignment = .leading
+        container.spacing = 8
+        container.frame = NSRect(x: 0, y: 0, width: 240, height: 60)
+        let nameField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        nameField.stringValue = "\(typeName) \(dateFmt.string(from: Date()))"
+        let categoryPopup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 240, height: 26), pullsDown: false)
+        categoryPopup.addItems(withTitles: DrawingTemplateCategory.allCases.map(\.displayName))
+        // 默认按画线类型推断 category（趋势线/通道→trend / 水平线→keyLevel / 平行通道→channel / 文字→annotation）
+        let suggestedCategory = suggestCategory(for: drawing.type)
+        if let idx = DrawingTemplateCategory.allCases.firstIndex(of: suggestedCategory) {
+            categoryPopup.selectItem(at: idx)
+        }
+        container.addArrangedSubview(nameField)
+        container.addArrangedSubview(categoryPopup)
+        alert.accessoryView = container
         alert.addButton(withTitle: "保存")
         alert.addButton(withTitle: "取消")
         if alert.runModal() == .alertFirstButtonReturn {
-            let name = textField.stringValue.isEmpty ? typeName : textField.stringValue
+            let name = nameField.stringValue.isEmpty ? typeName : nameField.stringValue
+            let categoryIdx = max(0, min(categoryPopup.indexOfSelectedItem, DrawingTemplateCategory.allCases.count - 1))
+            let category = DrawingTemplateCategory.allCases[categoryIdx]
             var clean = drawing
             clean.id = UUID()
             clean.isLocked = nil
-            let template = DrawingTemplate(name: name, drawing: clean)
+            let template = DrawingTemplate(name: name, drawing: clean, category: category)
             drawingTemplates.append(template)
+        }
+    }
+
+    /// 按画线类型推断默认 category（用户可改）
+    private func suggestCategory(for type: DrawingType) -> DrawingTemplateCategory {
+        switch type {
+        case .trendLine:        return .trend
+        case .horizontalLine:   return .keyLevel
+        case .parallelChannel:  return .channel
+        case .fibonacci:        return .channel
+        case .text:             return .annotation
+        case .rectangle:        return .keyLevel
+        default:                return .custom
         }
     }
 

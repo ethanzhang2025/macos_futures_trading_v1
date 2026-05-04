@@ -197,6 +197,15 @@ struct WatchlistWindow: View {
             HStack {
                 Text("自选分组").font(.headline)
                 Spacer()
+                // v15.21 batch109 · 立即刷新报价（⌘R · 与 5s 周期 task 并行 · 重要数据/会议前后强刷）
+                Button {
+                    refreshQuotesNow()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("立即刷新报价（⌘R · 不等 5s 周期）")
+                .keyboardShortcut("r", modifiers: [.command])
                 Button {
                     importWatchlistFromFile()
                 } label: {
@@ -1013,6 +1022,20 @@ struct WatchlistWindow: View {
                 }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
+        }
+    }
+
+    /// v15.21 batch109 · 立即刷新报价（不影响 5s 周期 task · trader 重要数据/会议前后强刷）
+    @MainActor
+    private func refreshQuotesNow() {
+        let allIDs = Array(Set(book.groups.flatMap { $0.instrumentIDs }))
+        guard !allIDs.isEmpty else { return }
+        Task { @MainActor in
+            let sina = SinaMarketData()
+            let fetched = await sina.fetchQuotesWithFallback(symbols: allIDs)
+            var next = quotes
+            for q in fetched { next[q.symbol] = q }
+            quotes = next
         }
     }
 

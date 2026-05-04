@@ -29,6 +29,12 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
     case stoch   // v15.13 · Stochastic %K/%D 双线（[14,3] · 视野固定 0~100 · 80/50/20 参考）
     case roc     // v15.13 · 变动率 % 单线（默认 12 · 上下对称视野 · 0 参考）
     case bias    // v15.13 · 乖离率 % 单线（默认 6 · 上下对称视野 · 0 参考）
+    // v15.18 · 5 个新指标
+    case aroon       // 趋势强度 · Up/Down 双线 · 0~100 视野 · 50 参考线
+    case stc         // Schaff Trend Cycle · 单线 · 0~100 视野 · 25/75 参考线
+    case elderRay    // Elder Ray Bull/Bear 双线 · 上下对称视野 · 0 参考线
+    case choppiness  // 震荡度 · 单线 · 0~100 视野 · 61.8/38.2 黄金分割参考
+    case forceIndex  // ForceIndex 价量复合 · 单线 · 上下对称视野 · 0 参考线
 
     var id: String { rawValue }
 
@@ -47,6 +53,11 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .stoch:  return "STOCH \(params.stochParams[0])/\(params.stochParams[1])"
         case .roc:    return "ROC \(params.rocPeriod)"
         case .bias:   return "BIAS \(params.biasPeriod)"
+        case .aroon:       return "AROON \(params.aroonPeriod)"
+        case .stc:         return "STC \(params.stcParams[0])/\(params.stcParams[1])"
+        case .elderRay:    return "Elder \(params.elderRayPeriod)"
+        case .choppiness:  return "CHOP \(params.choppinessPeriod)"
+        case .forceIndex:  return "FI \(params.forceIndexPeriod)"
         }
     }
 
@@ -65,6 +76,11 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .stoch:  return "STOCH"
         case .roc:    return "ROC"
         case .bias:   return "BIAS"
+        case .aroon:       return "AROON"
+        case .stc:         return "STC"
+        case .elderRay:    return "Elder"
+        case .choppiness:  return "CHOP"
+        case .forceIndex:  return "FI"
         }
     }
 }
@@ -231,6 +247,17 @@ struct SubChartView: View {
                 return (try? ROC.calculate(kline: series, params: paramsCopy.rocParamsDecimal)) ?? []
             case .bias:
                 return (try? BIAS.calculate(kline: series, params: paramsCopy.biasParamsDecimal)) ?? []
+            // v15.18 · 5 个新指标
+            case .aroon:
+                return (try? Aroon.calculate(kline: series, params: paramsCopy.aroonParamsDecimal)) ?? []
+            case .stc:
+                return (try? STC.calculate(kline: series, params: paramsCopy.stcParamsDecimal)) ?? []
+            case .elderRay:
+                return (try? ElderRay.calculate(kline: series, params: paramsCopy.elderRayParamsDecimal)) ?? []
+            case .choppiness:
+                return (try? Choppiness.calculate(kline: series, params: paramsCopy.choppinessParamsDecimal)) ?? []
+            case .forceIndex:
+                return (try? ForceIndex.calculate(kline: series, params: paramsCopy.forceIndexParamsDecimal)) ?? []
             case .volume, .oi:
                 return []  // 直读 bars · 不走 Indicator 计算
             }
@@ -245,11 +272,21 @@ struct SubChartView: View {
             seriesA = doublesOf(result, name: "K")
             seriesB = doublesOf(result, name: "D")
             seriesC = doublesOf(result, name: "J")
-        case .rsi, .obv, .cci, .wr, .roc, .bias:
+        case .rsi, .obv, .cci, .wr, .roc, .bias, .stc, .choppiness, .forceIndex:
             // 单线副图：取首个 series（输出名带参数 · 不依赖 name 匹配 · 直接首项）
             let firstSeries = result.first?.values ?? []
             seriesA = firstSeries.map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
             seriesB = []
+            seriesC = []
+        case .aroon:
+            // Aroon 输出 [Up, Down, Osc] · UI 只用 Up + Down 双线（Osc 留给用户心算）
+            seriesA = (result.indices.contains(0) ? result[0].values : []).map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
+            seriesB = (result.indices.contains(1) ? result[1].values : []).map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
+            seriesC = []
+        case .elderRay:
+            // ElderRay 输出 [Bull, Bear] · 双线 · 上下对称视野
+            seriesA = (result.indices.contains(0) ? result[0].values : []).map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
+            seriesB = (result.indices.contains(1) ? result[1].values : []).map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
             seriesC = []
         case .dmi:
             // DMI 输出 [+DI, -DI] · v15.13
@@ -335,6 +372,28 @@ struct SubChartView: View {
                 Text("ROC \(fmt(aLast))").foregroundColor(Self.rocLineColor)
             case .bias:
                 Text("BIAS \(fmt(aLast))").foregroundColor(Self.biasLineColor)
+            // v15.18 · 5 个新指标
+            case .aroon:
+                Text("Up \(fmt(aLast))").foregroundColor(Self.bullColor)
+                Text("Down \(fmt(bLast))").foregroundColor(Self.bearColor)
+            case .stc:
+                // STC HUD 染色：>75 红（看涨）/ <25 绿（看跌）/ 中间黄
+                Text("STC \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 75 ? Self.bullColor : ($0 <= 25 ? Self.bearColor : Self.yellowColor) } ?? .secondary
+                )
+            case .elderRay:
+                Text("Bull \(fmt(aLast))").foregroundColor(Self.bullColor)
+                Text("Bear \(fmt(bLast))").foregroundColor(Self.bearColor)
+            case .choppiness:
+                // CHOP HUD 染色：>61.8 黄（横盘）/ <38.2 蓝（趋势）
+                Text("CHOP \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 61.8 ? Self.yellowColor : ($0 <= 38.2 ? Self.blueColor : .secondary) } ?? .secondary
+                )
+            case .forceIndex:
+                // FI HUD 染色：>0 红（多头）/ <0 绿（空头）
+                Text("FI \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 0 ? Self.bullColor : Self.bearColor } ?? .secondary
+                )
             }
         }
         .font(.system(size: 11, design: .monospaced))
@@ -414,6 +473,86 @@ struct SubChartView: View {
                          visibleStart: visibleStart, visibleEnd: visibleEnd,
                          barWidth: barWidth, xOffset: xOffset,
                          guideValues: [0])
+        // v15.18 · 5 个新指标
+        case .aroon:
+            drawFixedRange(0...100, guideValues: [50],
+                           seriesAList: [(seriesA, Self.bullColor), (seriesB, Self.bearColor)],
+                           ctx: ctx, size: size,
+                           visibleStart: visibleStart, visibleEnd: visibleEnd,
+                           barWidth: barWidth, xOffset: xOffset)
+        case .stc:
+            drawFixedRange(0...100, guideValues: [75, 50, 25],
+                           seriesAList: [(seriesA, Self.yellowColor)],
+                           ctx: ctx, size: size,
+                           visibleStart: visibleStart, visibleEnd: visibleEnd,
+                           barWidth: barWidth, xOffset: xOffset)
+        case .elderRay:
+            // Bull/Bear 双线 · 上下对称视野（自动）· 0 参考
+            drawAutoSymmetric([(seriesA, Self.bullColor), (seriesB, Self.bearColor)],
+                              ctx: ctx, size: size,
+                              visibleStart: visibleStart, visibleEnd: visibleEnd,
+                              barWidth: barWidth, xOffset: xOffset)
+        case .choppiness:
+            drawFixedRange(0...100, guideValues: [61.8, 38.2],
+                           seriesAList: [(seriesA, Self.yellowColor)],
+                           ctx: ctx, size: size,
+                           visibleStart: visibleStart, visibleEnd: visibleEnd,
+                           barWidth: barWidth, xOffset: xOffset)
+        case .forceIndex:
+            drawAutoLine(seriesA, color: Self.yellowColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [0])
+        }
+    }
+
+    /// v15.18 · 固定 0~100 区间多线绘制（Aroon / STC / Choppiness 共用）
+    private func drawFixedRange(
+        _ range: ClosedRange<CGFloat>, guideValues: [CGFloat],
+        seriesAList: [(values: [Double?], color: Color)],
+        ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        let viewMin = range.lowerBound
+        let viewMax = range.upperBound
+        let span = viewMax - viewMin
+        let h = size.height
+        let yMap: (CGFloat) -> CGFloat = { v in h * (viewMax - v) / span }
+
+        for guide in guideValues {
+            drawDashLine(at: yMap(guide), ctx: ctx, width: size.width, color: kdjGuideColor)
+        }
+        for (vals, color) in seriesAList {
+            drawLine(vals, color: color, ctx: ctx, yMap: yMap,
+                     visibleStart: visibleStart, visibleEnd: visibleEnd,
+                     barWidth: barWidth, xOffset: xOffset)
+        }
+    }
+
+    /// v15.18 · 上下对称视野多线绘制（ElderRay 双线共用 · visible max(|v|) 自动撑开 · 0 参考）
+    private func drawAutoSymmetric(
+        _ seriesAList: [(values: [Double?], color: Color)],
+        ctx: GraphicsContext, size: CGSize,
+        visibleStart: Int, visibleEnd: Int,
+        barWidth: CGFloat, xOffset: CGFloat
+    ) {
+        var maxAbs: CGFloat = 0.01
+        for (vals, _) in seriesAList {
+            for i in visibleStart..<visibleEnd where i < vals.count {
+                if let v = vals[i] { maxAbs = max(maxAbs, abs(CGFloat(v))) }
+            }
+        }
+        let yScale = (size.height / 2) * 0.9 / max(0.0001, maxAbs)
+        let yCenter = size.height / 2
+        let yMap: (CGFloat) -> CGFloat = { yCenter - $0 * yScale }
+
+        drawDashLine(at: yMap(0), ctx: ctx, width: size.width, color: zeroLineColor)
+        for (vals, color) in seriesAList {
+            drawLine(vals, color: color, ctx: ctx, yMap: yMap,
+                     visibleStart: visibleStart, visibleEnd: visibleEnd,
+                     barWidth: barWidth, xOffset: xOffset)
         }
     }
 

@@ -145,6 +145,13 @@ struct AlertWindow: View {
             if alerts.contains(where: { $0.id == alert.id }) { return }
             alerts.append(alert)
         }
+        // v15.21 batch128 · 跨窗口联动 · WatchlistWindow / ChartScene 触发 → 自动切 list tab + filter 合约
+        .onReceive(NotificationCenter.default.publisher(for: .alertWindowFilterToInstrument)) { notification in
+            guard let id = notification.object as? String else { return }
+            selectedTab = .list
+            alertInstrumentFilter = id
+            alertSearchText = ""    // 清搜索 · 让 instrument filter 全权显示
+        }
         .sheet(item: $sheetState) { state in
             switch state {
             case .add:
@@ -1837,8 +1844,10 @@ enum MockAlertHistory {
 }
 
 /// v13.18 ChartScene 创建画线预警 → 通知 AlertWindow 同步到 alerts list（持久化 + evaluator）
+/// v15.21 batch128 · WatchlistWindow / ChartScene → AlertWindow filter 到指定合约（跨窗口工作流闭环）
 extension Notification.Name {
     public static let alertAddedFromChart = Notification.Name("alertAddedFromChart")
+    public static let alertWindowFilterToInstrument = Notification.Name("alertWindowFilterToInstrument")
 }
 
 #endif

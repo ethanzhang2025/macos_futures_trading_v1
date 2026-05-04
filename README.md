@@ -14,7 +14,7 @@ macos_futures_trading_v1/
 ├── Sources/                      # 8 Core 业务模块
 │   ├── Shared/                   # 跨端共用模型 / 协议 / 工具
 │   ├── DataCore/                 # Tick / K 线 / 合约 / 数据源协议
-│   ├── IndicatorCore/            # 56 指标 + 麦语言底层函数
+│   ├── IndicatorCore/            # 60+ 指标（v15.18 末 · IndicatorRegistry 注册）+ 麦语言底层函数 ~97% 兼容
 │   ├── ChartCore/                # Metal 图表渲染管线
 │   ├── JournalCore/              # 交易日志 + 复盘分析
 │   ├── AlertCore/                # 条件预警

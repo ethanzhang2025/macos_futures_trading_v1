@@ -95,6 +95,16 @@ struct ReviewWindow: View {
                               subtitle: "SessionPnL · \(s.sessionPnL.buckets.count) 段") {
                         sessionPnLChart(s.sessionPnL)
                     }
+                    // v15.19 batch27 · streak 累积曲线（trader 看交易心理时间线 · 哪段连胜哪段连败）
+                    chartCard("连胜连败曲线",
+                              subtitle: "Streak · 最长连胜 \(s.streak.maxWinningStreak) / 最长连败 \(s.streak.maxLosingStreak)") {
+                        streakRunChart(s.closedPositions)
+                    }
+                    // v15.19 batch27 · 心理标签命中分布（基于 EmotionAutoTagger.tagAll）
+                    chartCard("心理风险标签",
+                              subtitle: "EmotionAutoTagger · 6 类自动建议") {
+                        psychTagsChart(s.closedPositions)
+                    }
                 }
                 .padding(16)
             }
@@ -342,6 +352,60 @@ struct ReviewWindow: View {
         }
         .chartXAxis { Self.axisCategoryX() }
         .chartYAxis { Self.axisIntegerY() }
+    }
+
+    /// v15.19 batch27 · 连胜连败累积曲线（横轴=第 N 笔 · 纵轴=signed run · 正连胜上 / 负连败下）
+    private func streakRunChart(_ positions: [ClosedPosition]) -> some View {
+        // 与 ReviewAnalytics.streakMetrics 同 sign-run 模式 · 平交易跳过
+        let sorted = positions.sorted { $0.closeTime < $1.closeTime }
+        var run = 0
+        var prevWin: Bool? = nil
+        var points: [(idx: Int, run: Int)] = []
+        var idx = 0
+        for p in sorted {
+            let pnl = p.realizedPnL
+            if pnl == 0 { continue }
+            let isWin = pnl > 0
+            if let prev = prevWin, prev != isWin { run = 0 }
+            run += isWin ? 1 : -1
+            idx += 1
+            points.append((idx, run))
+            prevWin = isWin
+        }
+        return Chart {
+            ForEach(points.indices, id: \.self) { i in
+                LineMark(
+                    x: .value("笔数", points[i].idx),
+                    y: .value("Run", points[i].run)
+                )
+                .foregroundStyle(Color.blue)
+            }
+            RuleMark(y: .value("0 轴", 0))
+                .foregroundStyle(Color.secondary.opacity(0.3))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        }
+        .chartXAxis { Self.axisCategoryX() }
+    }
+
+    /// v15.19 batch27 · 心理风险标签命中分布（柱状 · 6 类）
+    private func psychTagsChart(_ positions: [ClosedPosition]) -> some View {
+        var counts: [EmotionAutoTagger.Tag: Int] = [:]
+        for (_, tags) in EmotionAutoTagger.tagAll(positions) {
+            for t in tags { counts[t, default: 0] += 1 }
+        }
+        let entries = EmotionAutoTagger.Tag.allCases.map { tag in
+            (tag: tag, count: counts[tag] ?? 0)
+        }
+        return Chart {
+            ForEach(entries.indices, id: \.self) { i in
+                BarMark(
+                    x: .value("标签", entries[i].tag.displayName),
+                    y: .value("命中", entries[i].count)
+                )
+                .foregroundStyle(Color.orange.opacity(0.7))
+            }
+        }
+        .chartXAxis { Self.axisCategoryX() }
     }
 
     /// 时段分析 · 5 段 · 涨红跌绿

@@ -502,6 +502,9 @@ struct AlertWindow: View {
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        // v15.21 batch107 · 双击 row → 编辑预警 sheet（trader 流畅工作流 · 与 batch102 watchlist groupRow 一致）
+        .onTapGesture(count: 2) { sheetState = .edit(a) }
         // v15.20 batch73 · 右键 contextMenu 完整操作集（与 row buttons 互补 · 含 batch72 重置冷却 + 复制 + 选中辅助）
         .contextMenu {
             Button("测试触发") { Task { await testTrigger(a) } }
@@ -510,7 +513,7 @@ struct AlertWindow: View {
             Button("重置冷却") { resetCooldownSingle(a) }
                 .disabled(a.lastTriggeredAt == nil && a.status != .triggered)
             Divider()
-            Button("编辑…") { sheetState = .edit(a) }
+            Button("编辑…（双击 row 也行）") { sheetState = .edit(a) }
             Button("复制 alert 名") { copyAlertName(a) }
             Divider()
             if selectedAlertIDs.contains(a.id) {

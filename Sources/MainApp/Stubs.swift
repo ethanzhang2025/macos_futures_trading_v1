@@ -12,12 +12,12 @@ struct SettingsContentView: View {
 
     var body: some View {
         TabView {
+            GeneralSettingsTab()
+                .tabItem { Label("通用", systemImage: "gearshape") }
             NotificationSettingsTab()
                 .tabItem { Label("通知", systemImage: "bell.badge") }
             PrivacySettingsTab()
                 .tabItem { Label("隐私", systemImage: "hand.raised.fill") }
-            placeholder(title: "通用", note: "外观 / 启动行为 / 默认合约")
-                .tabItem { Label("通用", systemImage: "gearshape") }
             placeholder(title: "图表", note: "全局快捷键 ⌘⇧D 切主题（已实现 v15.17）· 颜色 / 指标 / 精度细化待补")
                 .tabItem { Label("图表", systemImage: "chart.line.uptrend.xyaxis") }
             placeholder(title: "数据", note: "行情源 / 缓存路径 / 加密 passphrase（Keychain wire 待 Stage B IAP）")
@@ -38,6 +38,49 @@ struct SettingsContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(20)
+    }
+}
+
+// MARK: - 通用 Tab（v15.18 · 默认合约 / 启动恢复 / 反馈入口）
+
+private struct GeneralSettingsTab: View {
+
+    @AppStorage("settings.defaultInstrumentID") private var defaultInstrument: String = "RB0"
+    @AppStorage("settings.restoreLastSession") private var restoreLastSession: Bool = true
+
+    private static let availableInstruments = [
+        "RB0", "IF0", "AU0", "CU0", "AG0", "I0", "TA0", "MA0"
+    ]
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("默认合约", selection: $defaultInstrument) {
+                    ForEach(Self.availableInstruments, id: \.self) { id in
+                        Text(id).tag(id)
+                    }
+                }
+                Toggle("启动时恢复上次合约 / 周期", isOn: $restoreLastSession)
+            } header: {
+                Text("启动行为").font(.headline)
+            } footer: {
+                Text("修改后下次启动生效")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+
+            Section {
+                Text("反馈渠道见项目 README · 内测期欢迎在内测群直接反馈")
+                    .font(.system(size: 12))
+                Text("版本：v15.18 · Stage A · 距 Legacy ~99.95%")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            } header: {
+                Text("帮助").font(.headline)
+            }
+        }
+        .formStyle(.grouped)
+        .padding(.vertical, 8)
     }
 }
 

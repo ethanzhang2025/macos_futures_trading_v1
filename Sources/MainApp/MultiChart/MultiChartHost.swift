@@ -45,6 +45,8 @@ struct MultiChartHost: View {
     @State private var showHelpSheet: Bool = false
     /// v15.23 batch68 · 共享悬停 K 线索引 · 跨 cell 联动十字线
     @State private var sharedHoveredIndex: Int? = nil
+    /// v15.23 batch70 · cell 真行情 bars 镜像（uuid → bars · cell 上报 · statusBar hoverOHLC 用）
+    @State private var cellLiveBars: [UUID: [KLine]] = [:]
 
     private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -298,14 +300,18 @@ struct MultiChartHost: View {
     }
 
     /// v15.23 batch69 · hover 时显示某 cell 的 K 线 [idx] OHLC + volume
+    /// v15.23 batch70 · 优先使用 cell 上报的真行情 bars · 无则 mock 兜底
     @ViewBuilder
     private func hoverOHLCText(idx: Int, focusedCellIdx: Int? = nil) -> some View {
         // 显示哪个 cell 的数据：focus 模式 → focused cell · 否则 → cell #1（参考）
         let cellIdx = focusedCellIdx ?? 0
         let state = cellAt(cellIdx)
-        let bars = MultiChartMockData.bars(instrumentID: state.instrumentID,
+        let bars: [KLine] = {
+            if let live = cellLiveBars[state.id], !live.isEmpty { return live }
+            return MultiChartMockData.bars(instrumentID: state.instrumentID,
                                             period: state.period,
                                             tickSeed: autoTickEnabled ? tickSeed : 0)
+        }()
         if idx < bars.count {
             let b = bars[idx]
             let o = (b.open as NSDecimalNumber).doubleValue
@@ -576,9 +582,11 @@ struct MultiChartHost: View {
             ("toolbar 布局预设 → 加载", "一键还原已保存布局"),
             ("toolbar 布局预设 → 删除", "清理过期预设"),
         ]),
-        ("🎬 实时模拟", [
-            ("toolbar play/pause", "切换 mock tick 抖动开关（默认开 · 体验真盘）"),
-            ("末根 K 线", "每秒 ≤0.3× 波动率范围内随机 · close 价格闪动"),
+        ("📡 数据源状态（v15.23 batch70）", [
+            ("🟢 绿点", "Sina 真行情接入成功（每 5s 轮询 · 自动合成 K 线）"),
+            ("🟡 黄点", "Mock 兜底（行情不可达 / 合约暂不在 supported 列表 · 仅 UI 演示）"),
+            ("⚪️ 灰点", "加载中（首次启动 / 切合约/周期时短暂出现）"),
+            ("toolbar play/pause", "Mock tick 抖动开关（不影响真行情 · 仅在黄点时让末根 K 线动起来）"),
         ]),
         ("💡 常用工作流", [
             ("场景 A", "选 2×3 → 全部设为 RB0 → 周期 1m/5m/15m/1h/4h/D · 多周期共振"),
@@ -659,112 +667,22 @@ struct MultiChartHost: View {
         .frame(width: 360, height: 180)
     }
 
-    // MARK: - Cell view（batch52 加每 cell toolbar · 合约 picker + 周期切换 + 量开关）
+    // MARK: - Cell view（v15.23 batch70 · 拆为独立 MultiChartCellView · 每 cell 独立 pipeline 接真行情）
 
     private func cellView(state: MultiChartCellState, idx: Int) -> some View {
-        VStack(spacing: 0) {
-            cellToolbar(state: state, idx: idx)
-            // K 线 Canvas（mock data + tick seed 让末根 K 线动起来 + 跨 cell 联动十字线）
-            MultiChartCellCanvas(
-                bars: MultiChartMockData.bars(instrumentID: state.instrumentID,
-                                              period: state.period,
-                                              tickSeed: autoTickEnabled ? tickSeed : 0),
-                showVolume: state.showVolume,
-                hoveredIndex: sharedHoveredIndex,
-                onHoverIndexChange: { idx in sharedHoveredIndex = idx }
-            )
-        }
-        .background(Color(NSColor.windowBackgroundColor))
-        .overlay(
-            Rectangle()
-                .stroke(Color.secondary.opacity(0.3), lineWidth: 0.5)
+        MultiChartCellView(
+            state: state,
+            idx: idx,
+            autoTickEnabled: autoTickEnabled,
+            tickSeed: tickSeed,
+            sharedHoveredIndex: sharedHoveredIndex,
+            onHoverIndexChange: { hidx in sharedHoveredIndex = hidx },
+            onBarsChange: { uuid, bars in cellLiveBars[uuid] = bars },
+            onContractTap: { id in updateCell(idx) { $0.instrumentID = id } },
+            onPeriodTap: { p in updateCell(idx) { $0.period = p } },
+            onVolumeToggle: { updateCell(idx) { $0.showVolume.toggle() } },
+            onPushToMain: { pushToMainChart(state) }
         )
-        .cornerRadius(4)
-    }
-
-    /// v15.23 batch52 · 每 cell 独立 toolbar
-    private func cellToolbar(state: MultiChartCellState, idx: Int) -> some View {
-        HStack(spacing: 4) {
-            // 合约 picker
-            Menu {
-                ForEach(Self.instrumentPool, id: \.self) { id in
-                    Button(id) {
-                        updateCell(idx) { $0.instrumentID = id }
-                    }
-                }
-            } label: {
-                Text(state.instrumentID)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(minWidth: 40)
-            }
-            .menuStyle(.borderlessButton)
-            .frame(width: 60)
-            .help("切换合约")
-
-            // 周期切换 segmented
-            Menu {
-                ForEach(Self.periodPool, id: \.self) { p in
-                    Button(p.rawValue) {
-                        updateCell(idx) { $0.period = p }
-                    }
-                }
-            } label: {
-                Text(state.period.rawValue)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .frame(width: 50)
-            .help("切换周期")
-
-            Spacer()
-
-            // 末根 close（mock）
-            lastPriceText(state: state)
-
-            // 量开关
-            Button {
-                updateCell(idx) { $0.showVolume.toggle() }
-            } label: {
-                Image(systemName: state.showVolume ? "chart.bar.fill" : "chart.bar")
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.borderless)
-            .help(state.showVolume ? "隐藏成交量" : "显示成交量")
-
-            // v15.23 batch58 · 推送到主 ChartScene 深入分析
-            Button {
-                pushToMainChart(state)
-            } label: {
-                Image(systemName: "arrow.up.right.square")
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.borderless)
-            .help("在主图打开 \(state.instrumentID)（深入分析 · 完整指标/画线/复盘）")
-
-            Text("#\(idx + 1)")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(Color.secondary.opacity(0.08))
-    }
-
-    /// 末根 K 线 close 显示在标题栏（mock）
-    @ViewBuilder
-    private func lastPriceText(state: MultiChartCellState) -> some View {
-        let bars = MultiChartMockData.bars(instrumentID: state.instrumentID,
-                                            period: state.period,
-                                            tickSeed: autoTickEnabled ? tickSeed : 0)
-        if let last = bars.last {
-            let close = (last.close as NSDecimalNumber).doubleValue
-            let prev = bars.count >= 2 ? (bars[bars.count - 2].close as NSDecimalNumber).doubleValue : close
-            let isUp = close >= prev
-            Text(String(format: "%.2f", close))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(isUp ? .red : .green)
-        }
     }
 
     // MARK: - Cell 状态更新（持久化）

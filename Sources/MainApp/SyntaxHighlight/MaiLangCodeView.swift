@@ -59,6 +59,9 @@ public struct MaiLangCodeView: NSViewRepresentable {
         tv.isAutomaticTextReplacementEnabled = false
         tv.isAutomaticSpellingCorrectionEnabled = false
         tv.isContinuousSpellCheckingEnabled = false
+        // v15.22 batch30 · 启用 NSTextView 内置 find bar（⌘F 查找 · ⌘⌥F 查找替换 · trader 长公式标配）
+        tv.usesFindBar = true
+        tv.isIncrementalSearchingEnabled = true
         // v15.22 batch20 · 行号 gutter（NSRulerView · 与编译错误"第 N 行"对齐）
         let ruler = LineNumberRulerView(textView: tv, fontSize: fontSize)
         scrollView.verticalRulerView = ruler

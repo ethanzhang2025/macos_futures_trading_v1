@@ -25,14 +25,18 @@ struct MultiChartCellCanvas: View {
     let hoveredIndex: Int?
     /// hover 回调：本 cell 内鼠标移动时上报当前 index 给父
     let onHoverIndexChange: ((Int?) -> Void)?
+    /// v15.23 batch72 · MA 双均线开关（MA5 黄 + MA20 紫 · 中国期货短线标配）
+    let showIndicators: Bool
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
-         onHoverIndexChange: ((Int?) -> Void)? = nil) {
+         onHoverIndexChange: ((Int?) -> Void)? = nil,
+         showIndicators: Bool = true) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
         self.onHoverIndexChange = onHoverIndexChange
+        self.showIndicators = showIndicators
     }
 
     var body: some View {
@@ -46,6 +50,14 @@ struct MultiChartCellCanvas: View {
 
                 drawGrid(in: ctx, rect: priceRect)
                 drawCandles(in: ctx, rect: priceRect)
+                // v15.23 batch72 · 主图叠加 MA5 + MA20 双均线（中国期货短线最常用）
+                // bars 同坐标系 · 需用相同 minLow/maxHigh 映射价格→Y · 不重算价格区间
+                if showIndicators {
+                    drawMA(in: ctx, rect: priceRect, period: 5,
+                           color: .yellow.opacity(0.85), lineWidth: 1)
+                    drawMA(in: ctx, rect: priceRect, period: 20,
+                           color: .purple.opacity(0.85), lineWidth: 1)
+                }
                 if showVolume, volumeHeight > 8 {
                     drawGrid(in: ctx, rect: volumeRect, lines: 2)
                     drawVolumes(in: ctx, rect: volumeRect)
@@ -160,6 +172,45 @@ struct MultiChartCellCanvas: View {
                 ctx.fill(Path(bodyRect), with: .color(color))
             }
         }
+    }
+
+    // MARK: - MA（v15.23 batch72 · 简单移动平均线 · 复用蜡烛 minLow/maxHigh 价格映射）
+
+    /// 滑动窗口 SMA · O(N) · 前 period-1 根没有 MA 值（跳过不画）
+    private func drawMA(in ctx: GraphicsContext, rect: CGRect, period: Int,
+                        color: Color, lineWidth: CGFloat) {
+        let n = bars.count
+        guard n >= period else { return }
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let priceRange = maxHigh - minLow
+        let yFor = { (price: Double) -> CGFloat in
+            rect.maxY - CGFloat((price - minLow) / priceRange) * rect.height
+        }
+        var sum: Double = 0
+        var path = Path()
+        var started = false
+        for i in 0..<n {
+            let close = (bars[i].close as NSDecimalNumber).doubleValue
+            sum += close
+            if i >= period {
+                let outClose = (bars[i - period].close as NSDecimalNumber).doubleValue
+                sum -= outClose
+            }
+            if i >= period - 1 {
+                let ma = sum / Double(period)
+                let centerX = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+                let pt = CGPoint(x: centerX, y: yFor(ma))
+                if started {
+                    path.addLine(to: pt)
+                } else {
+                    path.move(to: pt)
+                    started = true
+                }
+            }
+        }
+        ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
     }
 
     // MARK: - Volume

@@ -35,6 +35,7 @@ struct MultiChartCellView: View {
     let onContractTap: (String) -> Void
     let onPeriodTap: (KLinePeriod) -> Void
     let onVolumeToggle: () -> Void
+    let onIndicatorsToggle: () -> Void
     let onPushToMain: () -> Void
 
     static let instrumentPool: [String] = [
@@ -76,7 +77,8 @@ struct MultiChartCellView: View {
                 bars: effectiveBars,
                 showVolume: state.showVolume,
                 hoveredIndex: sharedHoveredIndex,
-                onHoverIndexChange: onHoverIndexChange
+                onHoverIndexChange: onHoverIndexChange,
+                showIndicators: state.showIndicators
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -215,6 +217,17 @@ struct MultiChartCellView: View {
             }
             .buttonStyle(.borderless)
             .help(state.showVolume ? "隐藏成交量" : "显示成交量")
+
+            // v15.23 batch72 · MA 双均线开关（MA5 黄 / MA20 紫 · 短线标配）
+            Button {
+                onIndicatorsToggle()
+            } label: {
+                Image(systemName: state.showIndicators ? "chart.line.uptrend.xyaxis" : "chart.line.flattrend.xyaxis")
+                    .font(.system(size: 11))
+                    .foregroundColor(state.showIndicators ? .accentColor : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(state.showIndicators ? "隐藏 MA5/MA20 双均线" : "显示 MA5/MA20 双均线")
 
             Button {
                 onPushToMain()

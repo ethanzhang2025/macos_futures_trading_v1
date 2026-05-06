@@ -18,15 +18,34 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     var instrumentID: String
     var period: KLinePeriod
     var showVolume: Bool
+    /// v15.23 batch72 · 主图 MA 双均线（MA5 + MA20）开关 · 中国期货短线标配
+    /// 历史 cellsJSON 缺这个字段时按 true 解码（默认开 · trader 多周期共振直观）
+    var showIndicators: Bool
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
          period: KLinePeriod = .minute15,
-         showVolume: Bool = true) {
+         showVolume: Bool = true,
+         showIndicators: Bool = true) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
         self.showVolume = showVolume
+        self.showIndicators = showIndicators
+    }
+
+    /// Codable · 老 cellsJSON 反序列化时 showIndicators 缺字段 · 默认 true
+    enum CodingKeys: String, CodingKey {
+        case id, instrumentID, period, showVolume, showIndicators
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.instrumentID = try c.decode(String.self, forKey: .instrumentID)
+        self.period = try c.decode(KLinePeriod.self, forKey: .period)
+        self.showVolume = try c.decode(Bool.self, forKey: .showVolume)
+        self.showIndicators = try c.decodeIfPresent(Bool.self, forKey: .showIndicators) ?? true
     }
 }
 

@@ -652,6 +652,11 @@ public struct FormulaEditorWindow: View {
             if !tabs.isEmpty, activeIdx >= 0, activeIdx < tabs.count {
                 let active = tabs[activeIdx]
                 HStack(spacing: 4) {
+                    // v15.23 batch66 · tab N/M 计数（与 multichart status bar 风格一致）
+                    Text("Tab \(activeIdx + 1)/\(tabs.count)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.accentColor.opacity(0.8))
+                        .help("当前 tab \(activeIdx + 1) · 共 \(tabs.count) 个 · ⌘⌥← / → 切换")
                     Image(systemName: active.fileURL == nil ? "doc" : "doc.text")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)

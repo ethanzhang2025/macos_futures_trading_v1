@@ -477,6 +477,48 @@ struct MultiChartHost: View {
         return nil
     }
 
+    /// v15.23 batch103 · 综合多空评级（0-7 分制 · 末根综合 MA/KDJ/MACD）
+    /// 评分项：
+    ///   1. close > MA20 → +1（短中线多头）
+    ///   2. close > MA60 → +1（长线多头）
+    ///   3. MA5 > MA20 → +1（多头排列）
+    ///   4. MA20 > MA60 → +1（中长多头）
+    ///   5. KDJ K > D AND K < 80 → +1（KDJ 多头但未超买）
+    ///   6. MACD DIF > 0 → +1（DIF 多头）
+    ///   7. MACD DIF > DEA → +1（金叉态势）
+    static func bullScoreAt(bars: [KLine], idx: Int) -> Int {
+        guard idx >= 60 else { return -1 }  // 不足历史 · 无法评级
+        let close = (bars[idx].close as NSDecimalNumber).doubleValue
+        let ma5 = maAt(bars: bars, idx: idx, period: 5) ?? 0
+        let ma20 = maAt(bars: bars, idx: idx, period: 20) ?? 0
+        let ma60 = maAt(bars: bars, idx: idx, period: 60) ?? 0
+        var score = 0
+        if close > ma20 { score += 1 }
+        if close > ma60 { score += 1 }
+        if ma5 > ma20 { score += 1 }
+        if ma20 > ma60 { score += 1 }
+        if let kdj = kdjAt(bars: bars, idx: idx), kdj.k > kdj.d, kdj.k < 80 {
+            score += 1
+        }
+        if let m = macdAt(bars: bars, idx: idx) {
+            if m.dif > 0 { score += 1 }
+            if m.dif > m.dea { score += 1 }
+        }
+        return score
+    }
+
+    /// 评级 emoji + 中文（cellView 调用显示）
+    static func bullRatingLabel(score: Int) -> (emoji: String, text: String, color: Color) {
+        switch score {
+        case 6...7: return ("📈", "强多", .red)
+        case 4...5: return ("↗", "偏多", .red.opacity(0.7))
+        case 3: return ("→", "震荡", .secondary)
+        case 1...2: return ("↘", "偏空", .green.opacity(0.7))
+        case 0: return ("📉", "强空", .green)
+        default: return ("⏳", "数据不足", .gray)
+        }
+    }
+
     /// v15.23 batch95 · ATR 14 Wilder 平滑 · bars[idx] 处的 ATR 值
     static func atrAt(bars: [KLine], idx: Int) -> Double? {
         let N = 14
@@ -848,6 +890,7 @@ struct MultiChartHost: View {
             ("点击主图指标 Menu（batch88-99）", "MA + BOLL + SAR + 整数关口 + 涨跌停 + VWAP + Fibonacci 黄金回撤 · 七选多"),
             ("右键 → 标水平线（batch91）", "在当前 close 价画橙色虚线 · 标支撑/压力位 · 持久化 · 清空也在右键"),
             ("BOLL 突破信号（batch92）", "开 BOLL 时 · close > 上轨 → 末根红边框（强多）· close < 下轨 → 末根绿边框（强空）· 一眼定位"),
+            ("综合多空评级（batch103）", "cell toolbar emoji+中文：📈强多/↗偏多/→震荡/↘偏空/📉强空（综合 MA/KDJ/MACD 7 项 · 0-7 分）"),
             ("K 线 ⇋ 分时切换（batch93）", "点击 chart.bar.doc 图标 · K 线（蜡烛）↔ 分时（close 红线 + 累计均价黄虚线 + 红色底纹）"),
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
             ("hover 时状态栏（batch75）", "OHLCV + M5/M20/M60 三条均线值（参考 cell #1 / focused cell · 当 cell 开启均线时显示）"),

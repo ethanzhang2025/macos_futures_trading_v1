@@ -268,6 +268,9 @@ struct MultiChartCellView: View {
 
             Spacer()
 
+            // batch103 · 综合多空评级（短促 emoji + 中文 · trader 一眼判断方向）
+            bullRatingLabel
+
             lastPriceText
 
             // v15.23 batch79 · 副图 picker（量/KDJ/无 · 替换原 showVolume toggle · 兼容老配置）
@@ -464,6 +467,22 @@ struct MultiChartCellView: View {
         case .rsi: return "gauge.with.dots.needle.50percent"  // 仪表（RSI 强弱）
         case .oi: return "person.3.fill"            // 三人（持仓量 · 主力意图）
         case .atr: return "tornado"                  // 龙卷风（ATR 波动率 · 风险）
+        }
+    }
+
+    /// v15.23 batch103 · 综合多空评级（依赖 effectiveBars · 末根综合 MA/KDJ/MACD）
+    @ViewBuilder
+    private var bullRatingLabel: some View {
+        let bars = effectiveBars
+        if bars.count >= 61 {
+            let score = MultiChartHost.bullScoreAt(bars: bars, idx: bars.count - 1)
+            if score >= 0 {
+                let r = MultiChartHost.bullRatingLabel(score: score)
+                Text("\(r.emoji)\(r.text)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(r.color)
+                    .help("综合 7 项指标多空评级（\(score)/7）：MA20/MA60 位置 · 多头排列 · KDJ 多头 · MACD 金叉")
+            }
         }
     }
 

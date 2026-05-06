@@ -117,12 +117,23 @@ public struct MaiLangCodeView: NSViewRepresentable {
             return false
         }
 
-        /// v15.22 batch12 · 括号 / 引号自动配对（输入 `(` 自动补 `)` 光标停中间）
-        /// 配对集：( [ { ' " · 麦语言 `{}` 是块注释也合适
-        /// 触发条件：单字符插入 + 无选中文本（选中文本按括号 = 替换 · 不补对）
+        /// v15.22 batch12+13 · 括号 / 引号自动配对 + 配对字符 skip
+        /// - 输入 `(` 自动补 `)` 光标停中间（5 类：( [ { ' "）
+        /// - 输入闭括号且光标右已是同字符 → 仅光标右移 1（trader 顺打完整 `MA(CLOSE,5)` 不会变 `))`）
+        /// 触发条件：单字符插入 + 无选中文本
         public func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange,
                              replacementString: String?) -> Bool {
             guard let s = replacementString, s.count == 1, affectedCharRange.length == 0 else { return true }
+            let ns = textView.string as NSString
+            // batch13 · 闭括号 / 引号 skip · 光标右侧已同字符 → 仅右移
+            let closers: Set<String> = [")", "]", "}", "'", "\""]
+            if closers.contains(s),
+               affectedCharRange.location < ns.length,
+               ns.substring(with: NSRange(location: affectedCharRange.location, length: 1)) == s {
+                textView.setSelectedRange(NSRange(location: affectedCharRange.location + 1, length: 0))
+                return false
+            }
+            // batch12 · 开括号 / 引号 → 自动配对
             let pairs: [String: String] = ["(": ")", "[": "]", "{": "}", "'": "'", "\"": "\""]
             guard let close = pairs[s] else { return true }
             textView.insertText(s + close, replacementRange: affectedCharRange)

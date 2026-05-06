@@ -382,7 +382,7 @@ struct ReviewWindow: View {
                     .help("生成本月 Markdown 复盘报告 · 含全套指标 + 心理标签 + 品种/时段分布（⌘E）")
                     .keyboardShortcut("e", modifiers: [.command])
                 Button("导出全部图…") { exportAllChartCards(s) }
-                    .help("一键导出全部 10 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E）")
+                    .help("一键导出全部 12 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v15.23 加日历热力 + 时长散点）")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 // v15.21 batch114 · ⌘R 重新加载复盘数据（trader 实时数据更新或纠错重算）
                 Button {
@@ -416,7 +416,7 @@ struct ReviewWindow: View {
         dateFmt.dateFormat = "yyyyMMdd_HHmm"
         let timestamp = dateFmt.string(from: Date())
 
-        // 10 张图 · 与 content() 内 chartCard 顺序一致
+        // 12 张图 · 与 content() 内 chartCard 顺序一致（v15.23 batch48-49 加日历热力 + 时长散点）
         let cards: [(title: String, view: AnyView)] = [
             ("月度盈亏", AnyView(monthlyPnLChart(s.monthlyPnL))),
             ("分布直方", AnyView(pnlDistributionChart(s.pnlDistribution))),
@@ -427,7 +427,9 @@ struct ReviewWindow: View {
             ("盈亏比", AnyView(profitLossRatioView(s.profitLossRatio))),
             ("时段分析", AnyView(sessionPnLChart(s.sessionPnL))),
             ("连胜连败曲线", AnyView(streakRunChart(s.streakRunPoints))),
-            ("心理风险标签", AnyView(psychTagsChart(s.psychTagCounts)))
+            ("心理风险标签", AnyView(psychTagsChart(s.psychTagCounts))),
+            ("日历热力图", AnyView(dailyPnLHeatmap(s.dailyPnL))),
+            ("时长×盈亏", AnyView(holdingPnLScatter(s.closedPositions))),
         ]
 
         var failedCount = 0

@@ -84,7 +84,8 @@ public struct FormulaEditorWindow: View {
                 activeIdx: $activeIdx,
                 onSwitch: { idx in switchToTab(idx) },
                 onNew: { newTab() },
-                onClose: { idx in closeTab(idx) }
+                onClose: { idx in closeTab(idx) },
+                onRename: { idx, newName in renameTab(idx, to: newName) }
             )
             Divider()
             MaiLangCodeView(text: $sourceText, scheme: scheme,
@@ -1007,6 +1008,7 @@ public struct FormulaEditorWindow: View {
             ("⌘⌥←", "上一个 tab（循环）"),
             ("⌘⌥→", "下一个 tab（循环）"),
             ("点击 tab", "切换 · 内容自动保存"),
+            ("双击 tab", "重命名（Enter 保存 · Esc 取消）"),
         ]),
         ("🔧 编译 / 格式化 / 学习", [
             ("⌘B", "编译验证（IndicatorCore Lexer + Parser · 错误显示行列）"),
@@ -1156,6 +1158,14 @@ public struct FormulaEditorWindow: View {
         let next = (activeIdx + 1) % tabs.count
         switchToTab(next)
     }
+
+    /// v15.23 batch46 · 重命名 tab（双击触发 · 不影响 fileURL）
+    func renameTab(_ idx: Int, to newName: String) {
+        guard idx >= 0, idx < tabs.count else { return }
+        tabs[idx].name = newName
+        persistTabs()
+        statusMessage = "已重命名为 \(newName)"
+    }
 }
 
 // MARK: - v15.23 batch43 · FormulaTab 数据模型（Codable 持久化 · @AppStorage JSON）
@@ -1185,6 +1195,11 @@ struct FormulaTabBar: View {
     let onSwitch: (Int) -> Void
     let onNew: () -> Void
     let onClose: (Int) -> Void
+    let onRename: (Int, String) -> Void
+
+    /// v15.23 batch46 · 当前重命名中的 tab 索引（nil = 无）
+    @State private var renamingIdx: Int? = nil
+    @State private var renameDraft: String = ""
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -1207,15 +1222,27 @@ struct FormulaTabBar: View {
         .background(Color(NSColor.controlBackgroundColor))
     }
 
+    @ViewBuilder
     private func tabPill(idx: Int, tab: FormulaTab) -> some View {
         let isActive = idx == activeIdx
-        return HStack(spacing: 4) {
-            Text(tab.name)
-                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+        let isRenaming = renamingIdx == idx
+        HStack(spacing: 4) {
+            if isRenaming {
+                TextField("名称", text: $renameDraft, onCommit: {
+                    commitRename(idx)
+                })
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 100)
+                .onExitCommand { cancelRename() }
+            } else {
+                Text(tab.name)
+                    .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+            }
             if tab.isDirty {
                 Circle().fill(Color.orange).frame(width: 6, height: 6)
             }
-            if tabs.count > 1 {
+            if tabs.count > 1 && !isRenaming {
                 Button {
                     onClose(idx)
                 } label: {
@@ -1232,9 +1259,34 @@ struct FormulaTabBar: View {
                     ? Color.accentColor.opacity(0.18)
                     : Color.secondary.opacity(0.06))
         .cornerRadius(5)
-        .onTapGesture {
-            onSwitch(idx)
+        .onTapGesture(count: 2) {
+            // v15.23 batch46 · 双击进入重命名
+            startRename(idx, current: tab.name)
         }
+        .onTapGesture {
+            if !isRenaming { onSwitch(idx) }
+        }
+    }
+
+    // MARK: - v15.23 batch46 · 重命名操作
+
+    private func startRename(_ idx: Int, current: String) {
+        renamingIdx = idx
+        renameDraft = current
+    }
+
+    private func commitRename(_ idx: Int) {
+        let trimmed = renameDraft.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty, idx < tabs.count, trimmed != tabs[idx].name {
+            onRename(idx, trimmed)
+        }
+        renamingIdx = nil
+        renameDraft = ""
+    }
+
+    private func cancelRename() {
+        renamingIdx = nil
+        renameDraft = ""
     }
 }
 

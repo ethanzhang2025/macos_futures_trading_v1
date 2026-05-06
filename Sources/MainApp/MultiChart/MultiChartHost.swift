@@ -15,7 +15,9 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import AppKit
 import Foundation
+import UniformTypeIdentifiers
 import Shared
 
 struct MultiChartHost: View {
@@ -182,6 +184,17 @@ struct MultiChartHost: View {
                             }
                         }
                     }
+                }
+                Divider()
+                Button {
+                    exportCurrentLayout()
+                } label: {
+                    Label("导出当前布局…", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    importLayout()
+                } label: {
+                    Label("导入布局…", systemImage: "square.and.arrow.down")
                 }
             } label: {
                 Label("布局预设", systemImage: "square.grid.3x3.square")
@@ -397,6 +410,51 @@ struct MultiChartHost: View {
         var layouts = savedLayouts
         layouts.removeAll { $0.id == id }
         persistLayouts(layouts)
+    }
+
+    // MARK: - v15.23 batch62 · 布局 JSON 导出/导入（trader 分享同事 · 跨设备同步）
+
+    private func exportCurrentLayout() {
+        let snapshot = MultiChartLayoutPreset(
+            name: "导出布局 \(currentDateText())",
+            preset: preset,
+            cells: cells
+        )
+        guard let data = try? JSONEncoder().encode(snapshot),
+              let json = String(data: data, encoding: .utf8) else {
+            return
+        }
+        let panel = NSSavePanel()
+        panel.title = "导出多图表布局"
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "multichart_layout_\(currentDateText()).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? json.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func importLayout() {
+        let panel = NSOpenPanel()
+        panel.title = "导入多图表布局"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let data = try? Data(contentsOf: url),
+              let layout = try? JSONDecoder().decode(MultiChartLayoutPreset.self, from: data) else {
+            return
+        }
+        // 加入到已保存预设（去重 by name）+ 立即应用
+        var layouts = savedLayouts
+        layouts.removeAll { $0.name == layout.name }
+        layouts.append(layout)
+        persistLayouts(layouts)
+        applyLayout(layout)
+    }
+
+    private func currentDateText() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd_HHmm"
+        return f.string(from: Date())
     }
 
     // v15.23 batch60 · 帮助面板内容

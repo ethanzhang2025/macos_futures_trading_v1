@@ -275,13 +275,19 @@ struct MultiChartHost: View {
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
             Spacer()
-            // active cell 标识（focus 时显示）
-            if let idx = focusedIdx {
-                Text("聚焦 #\(idx + 1) · \(cellAt(idx).instrumentID) · \(cellAt(idx).period.rawValue)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.accentColor)
+            // v15.23 batch69 · hover 时显示 active cell 的完整 OHLC + volume
+            if let hidx = sharedHoveredIndex, focusedIdx == nil {
+                hoverOHLCText(idx: hidx)
+            } else if let idx = focusedIdx {
+                if let hidx = sharedHoveredIndex {
+                    hoverOHLCText(idx: hidx, focusedCellIdx: idx)
+                } else {
+                    Text("聚焦 #\(idx + 1) · \(cellAt(idx).instrumentID) · \(cellAt(idx).period.rawValue)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.accentColor)
+                }
             } else {
-                Text("⌘⇧? 查看全部功能")
+                Text("⌘⇧? 查看全部功能 · 鼠标悬停 cell 联动十字线")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -289,6 +295,39 @@ struct MultiChartHost: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .background(Color.secondary.opacity(0.06))
+    }
+
+    /// v15.23 batch69 · hover 时显示某 cell 的 K 线 [idx] OHLC + volume
+    @ViewBuilder
+    private func hoverOHLCText(idx: Int, focusedCellIdx: Int? = nil) -> some View {
+        // 显示哪个 cell 的数据：focus 模式 → focused cell · 否则 → cell #1（参考）
+        let cellIdx = focusedCellIdx ?? 0
+        let state = cellAt(cellIdx)
+        let bars = MultiChartMockData.bars(instrumentID: state.instrumentID,
+                                            period: state.period,
+                                            tickSeed: autoTickEnabled ? tickSeed : 0)
+        if idx < bars.count {
+            let b = bars[idx]
+            let o = (b.open as NSDecimalNumber).doubleValue
+            let h = (b.high as NSDecimalNumber).doubleValue
+            let l = (b.low as NSDecimalNumber).doubleValue
+            let c = (b.close as NSDecimalNumber).doubleValue
+            let isUp = c >= o
+            HStack(spacing: 6) {
+                Text("[\(idx + 1)/\(bars.count)]")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                Text("O \(String(format: "%.2f", o))").font(.system(size: 10, design: .monospaced))
+                Text("H \(String(format: "%.2f", h))").font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.red.opacity(0.8))
+                Text("L \(String(format: "%.2f", l))").font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.green.opacity(0.8))
+                Text("C \(String(format: "%.2f", c))").font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(isUp ? .red : .green)
+                Text("V \(b.volume)").font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+        }
     }
 
     // MARK: - Grid

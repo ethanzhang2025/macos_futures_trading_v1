@@ -64,6 +64,8 @@ public struct FormulaEditorWindow: View {
     @AppStorage("viewState.v1.formulaEditor.formatOnSave") private var formatOnSave: Bool = true
     /// v15.23 batch47 · 最近文件历史（最新在前 · cap 5 · JSON 持久化）
     @AppStorage("viewState.v1.formulaEditor.recentFiles") private var recentFilesJSON: String = ""
+    /// v15.23 batch105 · minimap 缩略图开关（IDE 级长公式快速导航 · 默认开 · ⌘⇧M 切换）
+    @AppStorage("viewState.v1.formulaEditor.showMinimap") private var showMinimap: Bool = true
     /// 多 tab 状态（持久化 · 初始化在 .onAppear）
     @State private var tabs: [FormulaTab] = []
     @State private var activeIdx: Int = 0
@@ -90,32 +92,40 @@ public struct FormulaEditorWindow: View {
                 onRename: { idx, newName in renameTab(idx, to: newName) }
             )
             Divider()
-            MaiLangCodeView(text: $sourceText, scheme: scheme,
-                            fontSize: CGFloat(fontSizeStored),
-                            errorMarker: errorMarker,
-                            onCursorChange: { line, col in
-                                cursorLine = line
-                                cursorCol = col
-                            },
-                            onSelectionChange: { range in selectionRange = range },
-                            onTokenAtCursor: { name in
-                                if let n = name?.uppercased(),
-                                   let s = MaiLangFunctionSignatures.all[n] {
-                                    currentTokenSig = s.formatted
-                                } else {
-                                    currentTokenSig = nil
-                                }
-                            },
-                            pendingGotoLine: $pendingGotoLine,
-                            pendingInsertText: $pendingInsertText)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onChange(of: sourceText) { _ in
-                    // v15.22 batch6 · 用户改动后清错误标注（防陈旧 marker 误导）
-                    if errorMarker != nil { errorMarker = nil }
-                    if compileResult != nil { compileResult = nil }
-                    // v15.23 batch43-44 · 同步 active tab 内容 + 持久化
-                    syncActiveTab()
+            // v15.23 batch105 · 编辑器 + 右侧 minimap 缩略图（HStack 横排 · ⌘⇧M 切换）
+            HStack(spacing: 0) {
+                MaiLangCodeView(text: $sourceText, scheme: scheme,
+                                fontSize: CGFloat(fontSizeStored),
+                                errorMarker: errorMarker,
+                                onCursorChange: { line, col in
+                                    cursorLine = line
+                                    cursorCol = col
+                                },
+                                onSelectionChange: { range in selectionRange = range },
+                                onTokenAtCursor: { name in
+                                    if let n = name?.uppercased(),
+                                       let s = MaiLangFunctionSignatures.all[n] {
+                                        currentTokenSig = s.formatted
+                                    } else {
+                                        currentTokenSig = nil
+                                    }
+                                },
+                                pendingGotoLine: $pendingGotoLine,
+                                pendingInsertText: $pendingInsertText)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if showMinimap {
+                    MinimapView(text: sourceText, scheme: scheme,
+                                onClickLine: { line in pendingGotoLine = line })
+                        .frame(width: 100)
                 }
+            }
+            .onChange(of: sourceText) { _ in
+                // v15.22 batch6 · 用户改动后清错误标注（防陈旧 marker 误导）
+                if errorMarker != nil { errorMarker = nil }
+                if compileResult != nil { compileResult = nil }
+                // v15.23 batch43-44 · 同步 active tab 内容 + 持久化
+                syncActiveTab()
+            }
             Divider()
             statusBar
         }
@@ -556,6 +566,15 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("o", modifiers: [.command, .shift])
             .help("公式大纲（⌘⇧O · 变量定义列表 · 点击跳转）")
+            // v15.23 batch105 · minimap 缩略图开关（IDE 级 · 长公式快速导航 · 拖动跳转）
+            Button {
+                showMinimap.toggle()
+            } label: {
+                Label("缩略图",
+                      systemImage: showMinimap ? "rectangle.righthalf.inset.filled" : "rectangle.righthalf.inset")
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            .help("切换 minimap 缩略图（⌘⇧M · IDE 级 · 拖动跳转 · 持久化）")
             // v15.22 batch36 · 字体大小调节（⌘=放大 / ⌘-缩小 / ⌘0 重置 · 持久化）
             Menu {
                 Button("放大字体（⌘=）") {
@@ -1084,6 +1103,7 @@ public struct FormulaEditorWindow: View {
         ("🎯 行级定位", [
             ("⌘L", "跳转到指定行（输入行号）"),
             ("点击行号", "选中整行（左侧 gutter）"),
+            ("⌘⇧M", "切换 minimap 缩略图（v15.23 · 拖动直接跳转）"),
             ("status bar", "实时显示光标位置 行:列"),
         ]),
         ("🔍 查找", [

@@ -1,0 +1,159 @@
+// WP-65 v15.23 batch105 · 公式编辑器 minimap 缩略图（IDE 级最后 0.5%）
+//
+// 设计：
+// - SwiftUI Canvas 自画 · 不依赖 NSView · token 与主编辑器同源（MaiLangSyntaxHighlighter.tokenize）
+// - 每行画一行像素条带 · 每字符 1.4pt 宽 · 行高自适应 [1.0, 3.0]pt
+//   · 短公式（< 200 行）行高拉到 3pt 占满上半 · 长公式行高压到 1pt 全文可见
+// - 配色与主编辑器同 SyntaxColorScheme · dark / light 自动切换
+// - 拖动/点击 minimap → 通过 onClickLine 回调跳转主编辑器
+// - viewport 高亮（visibleStartLine / visibleEndLine 非 nil 时画半透明矩形 · batch106 启用）
+
+#if canImport(SwiftUI) && os(macOS)
+import SwiftUI
+import Shared
+
+public struct MinimapView: View {
+    let text: String
+    let scheme: SyntaxColorScheme
+    /// 1-based 可视区起始行 · nil = 不显示 viewport（batch105 暂为 nil）
+    let visibleStartLine: Int?
+    /// 1-based 可视区结束行（含）· nil = 不显示 viewport
+    let visibleEndLine: Int?
+    /// 用户点击/拖到第 N 行（1-based）回调 · 主编辑器据此跳转
+    let onClickLine: (Int) -> Void
+
+    public init(text: String, scheme: SyntaxColorScheme,
+                visibleStartLine: Int? = nil, visibleEndLine: Int? = nil,
+                onClickLine: @escaping (Int) -> Void) {
+        self.text = text
+        self.scheme = scheme
+        self.visibleStartLine = visibleStartLine
+        self.visibleEndLine = visibleEndLine
+        self.onClickLine = onClickLine
+    }
+
+    public var body: some View {
+        GeometryReader { geo in
+            Canvas { ctx, size in
+                draw(in: &ctx, size: size)
+            }
+            .background(backgroundColor)
+            .overlay(
+                Rectangle()
+                    .frame(width: 0.5)
+                    .foregroundColor(.secondary.opacity(0.3)),
+                alignment: .leading
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let total = max(1, lineCount)
+                        let lineH = computedLineHeight(canvasH: geo.size.height, totalLines: total)
+                        let raw = Int(value.location.y / lineH) + 1
+                        onClickLine(min(max(1, raw), total))
+                    }
+            )
+        }
+    }
+
+    // MARK: - 配色
+
+    private var backgroundColor: Color {
+        scheme == .dark
+            ? Color(red: 0.05, green: 0.06, blue: 0.08)
+            : Color(red: 0.95, green: 0.95, blue: 0.96)
+    }
+
+    // MARK: - 行结构
+
+    /// 每行 utf16 起始偏移 · count 即总行数（含末尾空行 · 与编辑器行号一致）
+    private var lineStarts: [Int] {
+        let ns = text as NSString
+        var starts: [Int] = [0]
+        starts.reserveCapacity(64)
+        for i in 0..<ns.length where ns.character(at: i) == 0x0A {
+            starts.append(i + 1)
+        }
+        return starts
+    }
+
+    private var lineCount: Int { max(1, lineStarts.count) }
+
+    /// 行高 [1.0, 3.0]pt · 短文档拉满高度 · 长文档压紧
+    private func computedLineHeight(canvasH: CGFloat, totalLines: Int) -> CGFloat {
+        let h = canvasH / CGFloat(max(totalLines, 1))
+        return min(max(h, 1.0), 3.0)
+    }
+
+    // MARK: - 绘制
+
+    private func draw(in ctx: inout GraphicsContext, size: CGSize) {
+        let ns = text as NSString
+        let starts = lineStarts
+        guard !starts.isEmpty else { return }
+        let totalLines = starts.count
+        let lineH = computedLineHeight(canvasH: size.height, totalLines: totalLines)
+        let charW: CGFloat = 1.4
+        let maxCharsPerLine = max(1, Int(size.width / charW))
+
+        // 全文 tokenize 一次（与 status bar token 计数同源 · 不重复词法分析）
+        let tokens = MaiLangSyntaxHighlighter.tokenize(text)
+
+        // token 按起始行分桶（token 一般不跨行；跨行的 string/comment 取其起始行近似画）
+        var tokensByLine: [Int: [SyntaxToken]] = [:]
+        for t in tokens {
+            let line = lineIndex(forLocation: t.range.location, lineStarts: starts)
+            tokensByLine[line, default: []].append(t)
+        }
+
+        for idx in 0..<totalLines {
+            let y = CGFloat(idx) * lineH
+            if y > size.height { break }
+            let lineStart = starts[idx]
+            let lineEnd = idx + 1 < totalLines ? starts[idx + 1] - 1 : ns.length
+            let lineLen = max(0, lineEnd - lineStart)
+            guard let lineTokens = tokensByLine[idx] else { continue }
+
+            for t in lineTokens {
+                let colInLine = max(0, t.range.location - lineStart)
+                let tokLen = min(t.range.length, max(0, lineLen - colInLine))
+                guard tokLen > 0 else { continue }
+                let startCol = min(colInLine, maxCharsPerLine)
+                let endCol = min(colInLine + tokLen, maxCharsPerLine)
+                guard endCol > startCol else { continue }
+                let x = CGFloat(startCol) * charW
+                let w = CGFloat(endCol - startCol) * charW
+                let rgb = scheme.color(for: t.kind)
+                let rect = CGRect(x: x, y: y, width: w, height: max(lineH - 0.3, 0.7))
+                ctx.fill(Path(rect),
+                         with: .color(Color(red: rgb.r, green: rgb.g, blue: rgb.b)))
+            }
+        }
+
+        // batch106 viewport 高亮预留（visibleStartLine 为 nil 时跳过）
+        if let s = visibleStartLine, let e = visibleEndLine, s >= 1, e >= s, s <= totalLines {
+            let endLine = min(e, totalLines)
+            let topY = CGFloat(s - 1) * lineH
+            let h = CGFloat(endLine - s + 1) * lineH
+            let rect = CGRect(x: 0, y: topY, width: size.width, height: h)
+            let fillColor: Color = scheme == .dark
+                ? Color.white.opacity(0.10)
+                : Color.black.opacity(0.08)
+            ctx.fill(Path(rect), with: .color(fillColor))
+            ctx.stroke(Path(rect), with: .color(Color.accentColor.opacity(0.6)), lineWidth: 1)
+        }
+    }
+
+    /// 二分查找 utf16 location 所在的 line index（0-based）
+    private func lineIndex(forLocation loc: Int, lineStarts: [Int]) -> Int {
+        var lo = 0
+        var hi = lineStarts.count - 1
+        var ans = 0
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            if lineStarts[mid] <= loc { ans = mid; lo = mid + 1 } else { hi = mid - 1 }
+        }
+        return ans
+    }
+}
+#endif

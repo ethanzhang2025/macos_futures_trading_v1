@@ -210,6 +210,14 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("b", modifiers: [.command])
             .help("用 IndicatorCore Lexer + Parser 验证公式 · 错误显示行列（⌘B）")
+            // v15.22 batch15 · 注释切换（⌘/ · 麦语言行注释 // · 当前行 toggle）
+            Button {
+                toggleLineComment()
+            } label: {
+                Label("注释切换", systemImage: "text.append")
+            }
+            .keyboardShortcut("/", modifiers: [.command])
+            .help("注释 / 取消注释当前行（⌘/）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in
@@ -373,6 +381,31 @@ public struct FormulaEditorWindow: View {
             errorMarker = nil
             statusMessage = compileResult ?? ""
         }
+    }
+
+    /// v15.22 batch15 · 注释切换 · 当前行 toggle `// ` 前缀（保持原前置空白）
+    /// - 已有 `// ` 或 `//` → 去除（含尾随单个空格）
+    /// - 否则 → 在前置空白后加 `// `
+    /// 选中多行批量 toggle 暂不支持（最小实现 · 后续扩展）
+    private func toggleLineComment() {
+        let lines = sourceText.components(separatedBy: "\n")
+        guard !lines.isEmpty else { return }
+        let idx = max(0, min(cursorLine - 1, lines.count - 1))
+        let line = lines[idx]
+        let leadingWS = line.prefix(while: { $0 == " " || $0 == "\t" })
+        let trimmed = line.dropFirst(leadingWS.count)
+        let newLine: String
+        if trimmed.hasPrefix("// ") {
+            newLine = String(leadingWS) + String(trimmed.dropFirst(3))
+        } else if trimmed.hasPrefix("//") {
+            newLine = String(leadingWS) + String(trimmed.dropFirst(2))
+        } else {
+            newLine = String(leadingWS) + "// " + String(trimmed)
+        }
+        var newLines = lines
+        newLines[idx] = newLine
+        sourceText = newLines.joined(separator: "\n")
+        statusMessage = "已切换第 \(idx + 1) 行注释"
     }
 
     private func textStats(_ s: String) -> (chars: Int, lines: Int) {

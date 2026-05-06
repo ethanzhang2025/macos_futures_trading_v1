@@ -56,6 +56,16 @@ public struct FormulaEditorWindow: View {
     /// v15.22 batch37 · 公式大纲面板（变量定义 + 行号 · 点击跳转）
     @State private var showOutlineSheet: Bool = false
 
+    // v15.23 batch43-44 · 多 tab 支持（多公式同窗口编辑 · 切换不丢内容）
+    /// 持久化：tabs 数组 JSON（除 active tab 内容由 sourceText 镜像）
+    @AppStorage("viewState.v1.formulaEditor.tabsJSON") private var tabsJSON: String = ""
+    @AppStorage("viewState.v1.formulaEditor.activeTabIdx") private var activeTabIdxStored: Int = 0
+    /// 多 tab 状态（持久化 · 初始化在 .onAppear）
+    @State private var tabs: [FormulaTab] = []
+    @State private var activeIdx: Int = 0
+    /// 关闭脏 tab 确认 sheet
+    @State private var pendingCloseIdx: Int? = nil
+
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
     }
@@ -65,6 +75,15 @@ public struct FormulaEditorWindow: View {
     public var body: some View {
         VStack(spacing: 0) {
             toolbar
+            Divider()
+            // v15.23 batch43 · 多 tab bar（在 toolbar 下、编辑器上）
+            FormulaTabBar(
+                tabs: $tabs,
+                activeIdx: $activeIdx,
+                onSwitch: { idx in switchToTab(idx) },
+                onNew: { newTab() },
+                onClose: { idx in closeTab(idx) }
+            )
             Divider()
             MaiLangCodeView(text: $sourceText, scheme: scheme,
                             fontSize: CGFloat(fontSizeStored),
@@ -89,11 +108,50 @@ public struct FormulaEditorWindow: View {
                     // v15.22 batch6 · 用户改动后清错误标注（防陈旧 marker 误导）
                     if errorMarker != nil { errorMarker = nil }
                     if compileResult != nil { compileResult = nil }
+                    // v15.23 batch43-44 · 同步 active tab 内容 + 持久化
+                    syncActiveTab()
                 }
             Divider()
             statusBar
         }
         .frame(minWidth: 720, idealWidth: 920, minHeight: 480, idealHeight: 640)
+        .onAppear {
+            loadTabsIfNeeded()
+        }
+        // v15.23 batch44 · 关闭脏 tab 确认（pendingCloseIdx 非 nil 弹）
+        .alert("关闭未保存的 tab？", isPresented: Binding(
+            get: { pendingCloseIdx != nil },
+            set: { if !$0 { pendingCloseIdx = nil } }
+        )) {
+            Button("取消", role: .cancel) { pendingCloseIdx = nil }
+            Button("丢弃修改并关闭", role: .destructive) {
+                if let idx = pendingCloseIdx { confirmCloseTab(idx) }
+                pendingCloseIdx = nil
+            }
+        } message: {
+            if let idx = pendingCloseIdx, idx < tabs.count {
+                Text("「\(tabs[idx].name)」有未保存修改 · 关闭后将丢失")
+            } else {
+                Text("有未保存修改 · 关闭后将丢失")
+            }
+        }
+        // v15.23 batch44 · 多 tab 快捷键（隐藏 button 触发 · SwiftUI 通用做法）
+        .background(
+            Group {
+                Button("") { newTab() }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                    .opacity(0)
+                Button("") { closeTab(activeIdx) }
+                    .keyboardShortcut("w", modifiers: [.command, .shift])
+                    .opacity(0)
+                Button("") { switchPrev() }
+                    .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                    .opacity(0)
+                Button("") { switchNext() }
+                    .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                    .opacity(0)
+            }
+        )
         // v15.22 batch37 · 公式大纲面板（变量定义 + 行号 · 点击跳转）
         .sheet(isPresented: $showOutlineSheet) {
             VStack(alignment: .leading, spacing: 0) {
@@ -605,6 +663,13 @@ public struct FormulaEditorWindow: View {
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
             sourceText = text
+            // v15.23 batch44 · 打开文件后更新 active tab 名 + URL + 清 dirty
+            if !tabs.isEmpty, activeIdx >= 0, activeIdx < tabs.count {
+                tabs[activeIdx].name = url.deletingPathExtension().lastPathComponent
+                tabs[activeIdx].fileURL = url
+                tabs[activeIdx].isDirty = false
+                persistTabs()
+            }
             statusMessage = "已加载 \(url.lastPathComponent) · \(text.count) 字符"
         } catch {
             statusMessage = "打开失败：\(error.localizedDescription)"
@@ -617,10 +682,24 @@ public struct FormulaEditorWindow: View {
         panel.allowedContentTypes = [.plainText]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyyMMdd_HHmm"
-        panel.nameFieldStringValue = "formula_\(dateFmt.string(from: Date())).wh"
+        // v15.23 batch44 · 已绑文件的 tab 默认用原文件名（trader 重复保存常用）
+        if !tabs.isEmpty, activeIdx >= 0, activeIdx < tabs.count,
+           let url = tabs[activeIdx].fileURL {
+            panel.nameFieldStringValue = url.lastPathComponent
+            panel.directoryURL = url.deletingLastPathComponent()
+        } else {
+            panel.nameFieldStringValue = "formula_\(dateFmt.string(from: Date())).wh"
+        }
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try sourceText.write(to: url, atomically: true, encoding: .utf8)
+            // v15.23 batch44 · 保存后更新 tab 名/URL + 清 dirty
+            if !tabs.isEmpty, activeIdx >= 0, activeIdx < tabs.count {
+                tabs[activeIdx].name = url.deletingPathExtension().lastPathComponent
+                tabs[activeIdx].fileURL = url
+                tabs[activeIdx].isDirty = false
+                persistTabs()
+            }
             statusMessage = "已保存到 \(url.lastPathComponent)"
         } catch {
             statusMessage = "保存失败：\(error.localizedDescription)"
@@ -902,6 +981,13 @@ public struct FormulaEditorWindow: View {
             ("⌘⇧C", "复制全文（纯文本）"),
             ("⌘⌥C", "复制为 Markdown 代码块（含 ```mailang fenced）"),
         ]),
+        ("📑 多 tab（v15.23）", [
+            ("⌘⇧N", "新建 tab"),
+            ("⌘⇧W", "关闭当前 tab（脏 tab 弹确认）"),
+            ("⌘⌥←", "上一个 tab（循环）"),
+            ("⌘⌥→", "下一个 tab（循环）"),
+            ("点击 tab", "切换 · 内容自动保存"),
+        ]),
         ("🔧 编译 / 格式化 / 学习", [
             ("⌘B", "编译验证（IndicatorCore Lexer + Parser · 错误显示行列）"),
             ("⌘⇧F", "一键格式化（关键字大写 + 空白归一 + 逗号空格 · v15.23）"),
@@ -940,5 +1026,196 @@ public struct FormulaEditorWindow: View {
         let lines = s.isEmpty ? 0 : s.components(separatedBy: "\n").count
         return (chars, lines)
     }
+
+    // MARK: - v15.23 batch43-44 · 多 tab 操作
+
+    /// 初始化 tabs（从 @AppStorage 反序列化 · 空则用当前 sourceText 包装一个 tab）
+    func loadTabsIfNeeded() {
+        guard tabs.isEmpty else { return }
+        if !tabsJSON.isEmpty,
+           let data = tabsJSON.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([FormulaTab].self, from: data),
+           !decoded.isEmpty {
+            tabs = decoded
+            activeIdx = max(0, min(activeTabIdxStored, decoded.count - 1))
+            // 同步 active tab 内容到 sourceText（持久化的 sourceText 可能落后）
+            sourceText = tabs[activeIdx].content
+        } else {
+            tabs = [FormulaTab(name: "公式 1", content: sourceText, isDirty: false)]
+            activeIdx = 0
+        }
+    }
+
+    /// 当前 sourceText 镜像写回 active tab · 持久化
+    func syncActiveTab() {
+        guard !tabs.isEmpty, activeIdx >= 0, activeIdx < tabs.count else { return }
+        if tabs[activeIdx].content != sourceText {
+            tabs[activeIdx].content = sourceText
+            tabs[activeIdx].isDirty = true
+        }
+        persistTabs()
+    }
+
+    func persistTabs() {
+        if let data = try? JSONEncoder().encode(tabs),
+           let s = String(data: data, encoding: .utf8) {
+            tabsJSON = s
+        }
+        activeTabIdxStored = activeIdx
+    }
+
+    /// 切到指定 tab（保存当前 sourceText 到旧 tab · 加载新 tab 内容）
+    func switchToTab(_ idx: Int) {
+        guard idx >= 0, idx < tabs.count, idx != activeIdx else { return }
+        // 保存当前
+        tabs[activeIdx].content = sourceText
+        // 切换
+        activeIdx = idx
+        sourceText = tabs[idx].content
+        // 清编辑器状态
+        compileResult = nil
+        errorMarker = nil
+        statusMessage = "切到 · \(tabs[idx].name)"
+        persistTabs()
+    }
+
+    /// 新建 tab（追加 · 自动切到新 tab）
+    func newTab() {
+        // 保存当前
+        tabs[activeIdx].content = sourceText
+        let nextNumber = (tabs.compactMap { Int($0.name.replacingOccurrences(of: "公式 ", with: "")) }.max() ?? 0) + 1
+        let fresh = FormulaTab(name: "公式 \(nextNumber)", content: "", isDirty: false)
+        tabs.append(fresh)
+        activeIdx = tabs.count - 1
+        sourceText = ""
+        compileResult = nil
+        errorMarker = nil
+        statusMessage = "新建 · \(fresh.name)"
+        persistTabs()
+    }
+
+    /// 关闭指定 tab（脏 tab 弹确认）· 关闭后自动切到相邻 tab · 唯一 tab 不允许关闭
+    func closeTab(_ idx: Int) {
+        guard idx >= 0, idx < tabs.count, tabs.count > 1 else {
+            statusMessage = tabs.count <= 1 ? "至少保留 1 个 tab" : ""
+            return
+        }
+        if tabs[idx].isDirty && idx == activeIdx {
+            pendingCloseIdx = idx
+            return
+        }
+        confirmCloseTab(idx)
+    }
+
+    /// 实际关闭 tab（已确认）
+    func confirmCloseTab(_ idx: Int) {
+        guard idx >= 0, idx < tabs.count, tabs.count > 1 else { return }
+        let wasActive = idx == activeIdx
+        tabs.remove(at: idx)
+        if wasActive {
+            activeIdx = max(0, min(idx, tabs.count - 1))
+            sourceText = tabs[activeIdx].content
+            compileResult = nil
+            errorMarker = nil
+        } else if idx < activeIdx {
+            activeIdx -= 1
+        }
+        statusMessage = "已关闭 tab"
+        persistTabs()
+    }
+
+    /// 切换到上一个 / 下一个 tab（循环）
+    func switchPrev() {
+        guard tabs.count > 1 else { return }
+        let next = (activeIdx - 1 + tabs.count) % tabs.count
+        switchToTab(next)
+    }
+
+    func switchNext() {
+        guard tabs.count > 1 else { return }
+        let next = (activeIdx + 1) % tabs.count
+        switchToTab(next)
+    }
 }
+
+// MARK: - v15.23 batch43 · FormulaTab 数据模型（Codable 持久化 · @AppStorage JSON）
+
+struct FormulaTab: Codable, Equatable, Identifiable, Hashable {
+    var id: UUID = UUID()
+    var name: String
+    var content: String
+    var fileURL: URL?
+    var isDirty: Bool
+
+    init(id: UUID = UUID(), name: String, content: String,
+         fileURL: URL? = nil, isDirty: Bool = false) {
+        self.id = id
+        self.name = name
+        self.content = content
+        self.fileURL = fileURL
+        self.isDirty = isDirty
+    }
+}
+
+// MARK: - v15.23 batch43 · Tab Bar 子视图
+
+struct FormulaTabBar: View {
+    @Binding var tabs: [FormulaTab]
+    @Binding var activeIdx: Int
+    let onSwitch: (Int) -> Void
+    let onNew: () -> Void
+    let onClose: (Int) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(Array(tabs.enumerated()), id: \.element.id) { idx, tab in
+                    tabPill(idx: idx, tab: tab)
+                }
+                Button {
+                    onNew()
+                } label: {
+                    Image(systemName: "plus")
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("新建 tab（⌘⇧N）")
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+        }
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+
+    private func tabPill(idx: Int, tab: FormulaTab) -> some View {
+        let isActive = idx == activeIdx
+        return HStack(spacing: 4) {
+            Text(tab.name)
+                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+            if tab.isDirty {
+                Circle().fill(Color.orange).frame(width: 6, height: 6)
+            }
+            if tabs.count > 1 {
+                Button {
+                    onClose(idx)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8))
+                }
+                .buttonStyle(.plain)
+                .help("关闭（⌘⇧W）")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(isActive
+                    ? Color.accentColor.opacity(0.18)
+                    : Color.secondary.opacity(0.06))
+        .cornerRadius(5)
+        .onTapGesture {
+            onSwitch(idx)
+        }
+    }
+}
+
 #endif

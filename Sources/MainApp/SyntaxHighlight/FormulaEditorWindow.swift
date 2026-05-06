@@ -39,6 +39,8 @@ public struct FormulaEditorWindow: View {
     @State private var selectionRange: NSRange = NSRange(location: 0, length: 0)
     /// v15.22 batch27 · 当前光标 token 的函数签名（nil = 当前位置不是已知函数）
     @State private var currentTokenSig: String? = nil
+    /// v15.22 batch28 · 函数列表面板（⌘⇧L 切换 · 73 函数 9 分类）
+    @State private var showFunctionsPanel: Bool = false
 
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
@@ -74,6 +76,49 @@ public struct FormulaEditorWindow: View {
             statusBar
         }
         .frame(minWidth: 720, idealWidth: 920, minHeight: 480, idealHeight: 640)
+        // v15.22 batch28 · 函数库 sheet（73 函数按 9 分类 List · 一键复制签名）
+        .sheet(isPresented: $showFunctionsPanel) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("📚 麦语言函数库").font(.title2).bold()
+                    Text("(\(MaiLangFunctionSignatures.entries.count) 个函数 · 9 大类)")
+                        .font(.caption).foregroundColor(.secondary)
+                    Spacer()
+                    Button("关闭") { showFunctionsPanel = false }
+                        .keyboardShortcut(.cancelAction)
+                }
+                .padding(12)
+                Divider()
+                List {
+                    ForEach(MaiLangFunctionSignatures.byCategory, id: \.0) { (cat, sigs) in
+                        Section(header: Text(cat.rawValue).font(.headline)) {
+                            ForEach(sigs, id: \.name) { sig in
+                                HStack(alignment: .top, spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(sig.formatted)
+                                            .font(.system(.body, design: .monospaced))
+                                            .foregroundColor(.accentColor)
+                                        Text(sig.summary)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Button("复制") {
+                                        Pasteboard.copy(sig.formatted)
+                                        statusMessage = "已复制：\(sig.formatted)"
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("复制 \(sig.formatted) 到剪贴板（再粘贴到编辑器）")
+                                }
+                                .padding(.vertical, 2)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.sidebar)
+            }
+            .frame(minWidth: 460, idealWidth: 540, minHeight: 520, idealHeight: 640)
+        }
         // v15.22 batch7 · 保存片段 sheet · 输入名后追加到 @AppStorage 列表
         .sheet(isPresented: $showSnippetSaveSheet) {
             VStack(alignment: .leading, spacing: 12) {
@@ -264,6 +309,14 @@ public struct FormulaEditorWindow: View {
             Button { indentLines(by: -1) } label: { Image(systemName: "decrease.indent") }
                 .keyboardShortcut("[", modifiers: [.command])
                 .help("反缩进选中行（⌘[）")
+            // v15.22 batch28 · 函数库面板（73 函数 9 分类 · 浏览 + 复制函数签名）
+            Button {
+                showFunctionsPanel = true
+            } label: {
+                Label("函数库", systemImage: "function")
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+            .help("浏览 73 个内置函数（⌘⇧L · 按分类 · 复制签名）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in

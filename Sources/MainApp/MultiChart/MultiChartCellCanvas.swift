@@ -157,6 +157,10 @@ struct MultiChartCellCanvas: View {
                 }
                 // v15.23 batch77 · 简洁 axis 标签（时间 3 + 价格 3 · 不喧宾夺主）
                 drawAxisLabels(in: ctx, priceRect: priceRect, bottomY: size.height)
+                // v15.23 batch102 · 主图 H/L 最高最低点标记（trader 一眼识别区间极值）
+                if !isTimeShareMode {
+                    drawHighLowMarkers(in: ctx, rect: priceRect)
+                }
                 // v15.23 batch68 · 联动十字线（垂直 vertical line at hovered index · 跨 cell 同步）
                 // v15.23 batch85 · 加水平虚线 at close + 右侧价格 label（完整十字线 · trader 经典）
                 if let hidx = hoveredIndex, hidx >= 0, hidx < bars.count {
@@ -514,6 +518,41 @@ struct MultiChartCellCanvas: View {
         if close > upper { return .red.opacity(0.95) }
         if close < lower { return .green.opacity(0.95) }
         return nil
+    }
+
+    // MARK: - H/L 最高最低点标记（v15.23 batch102 · trader 区间极值一眼可见）
+
+    /// 区间最高点标 "H X.XX"（红） · 最低点标 "L X.XX"（绿）· 自动定位
+    private func drawHighLowMarkers(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        guard n >= 2 else { return }
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        guard let maxIdx = highs.firstIndex(of: maxHigh),
+              let minIdx = lows.firstIndex(of: minLow) else { return }
+        let priceRange = maxHigh - minLow
+        let yFor: (Double) -> CGFloat = { p in
+            rect.maxY - CGFloat((p - minLow) / priceRange) * rect.height
+        }
+        // H 标记（在最高点上方 6px · 红色）
+        let hX = rect.minX + (CGFloat(maxIdx) + 0.5) * rect.width / CGFloat(n)
+        let hY = yFor(maxHigh) + 8  // 注意 +y 是向下（顶部最低 y），最高点在 yFor(maxHigh)，标签在它上方就是 -y
+        let hLbl = Text("H \(String(format: "%.2f", maxHigh))")
+            .font(.system(size: 8, design: .monospaced))
+            .foregroundColor(.red.opacity(0.85))
+        ctx.draw(hLbl, at: CGPoint(x: max(rect.minX + 30, min(rect.maxX - 30, hX)),
+                                    y: yFor(maxHigh) - 6),
+                 anchor: .center)
+        _ = hY
+        // L 标记（在最低点下方）
+        let lX = rect.minX + (CGFloat(minIdx) + 0.5) * rect.width / CGFloat(n)
+        let lLbl = Text("L \(String(format: "%.2f", minLow))")
+            .font(.system(size: 8, design: .monospaced))
+            .foregroundColor(.green.opacity(0.85))
+        ctx.draw(lLbl, at: CGPoint(x: max(rect.minX + 30, min(rect.maxX - 30, lX)),
+                                    y: yFor(minLow) + 6),
+                 anchor: .center)
     }
 
     // MARK: - 副图标签（v15.23 batch101 · 左上角显示指标名 + 参数 · trader 一眼识别）

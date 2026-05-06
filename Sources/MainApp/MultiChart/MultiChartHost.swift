@@ -771,7 +771,7 @@ struct MultiChartHost: View {
             ("点击副图图标（batch79-87）", "切换副图：量 / KDJ / MACD / RSI（超买 70/超卖 30）/ 持仓量 OI / 无（主图全屏）"),
             ("OI 持仓量副图（batch87）", "中国期货独有 · 增仓上涨=多头强势 · 增仓下跌=空头强势 · 减仓=多空回吐"),
             ("副图金叉/死叉点（batch82）", "KDJ K↑D 或 MACD DIF↑DEA = 红点（金叉买点）· 反向 = 绿点（死叉卖点）· 一眼定位"),
-            ("点击主图指标 Menu（batch88）", "MA 4 均线（5/10/20/60 默认开）+ BOLL 上下轨（20 · 2σ 默认关）+ SAR 抛物线（Wilder 默认关）· 三选多"),
+            ("点击主图指标 Menu（batch88-94）", "MA 4 均线 + BOLL 上下轨 + SAR 抛物线 + 整数关口辅助线 · 四选多"),
             ("右键 → 标水平线（batch91）", "在当前 close 价画橙色虚线 · 标支撑/压力位 · 持久化 · 清空也在右键"),
             ("BOLL 突破信号（batch92）", "开 BOLL 时 · close > 上轨 → 末根红边框（强多）· close < 下轨 → 末根绿边框（强空）· 一眼定位"),
             ("K 线 ⇋ 分时切换（batch93）", "点击 chart.bar.doc 图标 · K 线（蜡烛）↔ 分时（close 红线 + 累计均价黄虚线 + 红色底纹）"),
@@ -894,6 +894,7 @@ struct MultiChartHost: View {
             onIndicatorsToggle: { updateCell(idx) { $0.showIndicators.toggle() } },
             onBollToggle: { updateCell(idx) { $0.showBoll.toggle() } },
             onSARToggle: { updateCell(idx) { $0.showSAR.toggle() } },
+            onIntegerLevelsToggle: { updateCell(idx) { $0.showIntegerLevels.toggle() } },
             onTimeShareToggle: { updateCell(idx) { $0.isTimeShareMode.toggle() } },
             onSubChartTap: { sub in updateCell(idx) {
                 $0.subChart = sub

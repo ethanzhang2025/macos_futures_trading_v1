@@ -38,6 +38,8 @@ struct MultiChartCellCanvas: View {
     let horizontalLines: [Double]
     /// v15.23 batch93 · 主图视图模式（false=K 线 蜡烛 · true=分时 折线）
     let isTimeShareMode: Bool
+    /// v15.23 batch94 · 整数关口辅助线（trader 心理关口 · 灰虚线 · 默认关）
+    let showIntegerLevels: Bool
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
@@ -47,7 +49,8 @@ struct MultiChartCellCanvas: View {
          subChart: MultiChartSubChartType = .volume,
          showSAR: Bool = false,
          horizontalLines: [Double] = [],
-         isTimeShareMode: Bool = false) {
+         isTimeShareMode: Bool = false,
+         showIntegerLevels: Bool = false) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
@@ -58,6 +61,7 @@ struct MultiChartCellCanvas: View {
         self.showSAR = showSAR
         self.horizontalLines = horizontalLines
         self.isTimeShareMode = isTimeShareMode
+        self.showIntegerLevels = showIntegerLevels
     }
 
     var body: some View {
@@ -101,6 +105,10 @@ struct MultiChartCellCanvas: View {
                 // v15.23 batch91 · 用户标记的水平参考线（trader 支撑/压力位 · 灰虚线 + 价格标签）
                 if !horizontalLines.isEmpty {
                     drawHorizontalLines(in: ctx, rect: priceRect)
+                }
+                // v15.23 batch94 · 整数关口辅助线（trader 心理关口 · 自动按价位级别）
+                if showIntegerLevels {
+                    drawIntegerLevels(in: ctx, rect: priceRect)
                 }
                 if subHeight > 8 {
                     drawGrid(in: ctx, rect: subRect, lines: 2)
@@ -478,6 +486,39 @@ struct MultiChartCellCanvas: View {
         if close > upper { return .red.opacity(0.95) }
         if close < lower { return .green.opacity(0.95) }
         return nil
+    }
+
+    // MARK: - 整数关口辅助线（v15.23 batch94 · 自动按价位级别 · trader 心理关口）
+
+    /// 自动按价位级别决定 step（10000+→1000 / 1000+→100 / 100+→10 / 10+→1 / else→0.1）
+    /// 在 priceRange 内画整数关口（灰色 0.18 alpha · 极弱化 · 不抢蜡烛）
+    private func drawIntegerLevels(in ctx: GraphicsContext, rect: CGRect) {
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let midPrice = (maxHigh + minLow) / 2
+        let step: Double
+        if midPrice > 10000 { step = 1000 }
+        else if midPrice > 1000 { step = 100 }
+        else if midPrice > 100 { step = 10 }
+        else if midPrice > 10 { step = 1 }
+        else { step = 0.1 }
+        let priceRange = maxHigh - minLow
+        let yFor: (Double) -> CGFloat = { p in
+            rect.maxY - CGFloat((p - minLow) / priceRange) * rect.height
+        }
+        var p = ceil(minLow / step) * step
+        var lineCount = 0
+        while p <= maxHigh && lineCount < 10 {  // 防过多线挤
+            let y = yFor(p)
+            var line = Path()
+            line.move(to: CGPoint(x: rect.minX, y: y))
+            line.addLine(to: CGPoint(x: rect.maxX, y: y))
+            ctx.stroke(line, with: .color(.gray.opacity(0.18)),
+                       style: StrokeStyle(lineWidth: 0.4, dash: [1, 4]))
+            p += step
+            lineCount += 1
+        }
     }
 
     // MARK: - 水平参考线（v15.23 batch91 · trader 标支撑/压力价位）

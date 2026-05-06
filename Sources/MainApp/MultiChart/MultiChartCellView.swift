@@ -38,6 +38,7 @@ struct MultiChartCellView: View {
     let onIndicatorsToggle: () -> Void
     let onBollToggle: () -> Void
     let onSARToggle: () -> Void
+    let onIntegerLevelsToggle: () -> Void
     let onSubChartTap: (MultiChartSubChartType) -> Void
     let onTimeShareToggle: () -> Void
     let onPushToMain: () -> Void
@@ -89,7 +90,8 @@ struct MultiChartCellView: View {
                 subChart: state.subChart,
                 showSAR: state.showSAR,
                 horizontalLines: state.horizontalLines,
-                isTimeShareMode: state.isTimeShareMode
+                isTimeShareMode: state.isTimeShareMode,
+                showIntegerLevels: state.showIntegerLevels
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -288,6 +290,11 @@ struct MultiChartCellView: View {
                 } label: {
                     Label("SAR 抛物线（0.02/0.2）", systemImage: state.showSAR ? "checkmark.circle.fill" : "circle")
                 }
+                Button {
+                    onIntegerLevelsToggle()
+                } label: {
+                    Label("整数关口辅助线", systemImage: state.showIntegerLevels ? "checkmark.circle.fill" : "circle")
+                }
             } label: {
                 Image(systemName: indicatorMenuIcon)
                     .font(.system(size: 11))
@@ -388,7 +395,10 @@ struct MultiChartCellView: View {
 
     private var indicatorMenuColor: Color {
         // 全关 → 灰 · 部分开 → secondary accent · 全开 → 亮 accent
-        let count = (state.showIndicators ? 1 : 0) + (state.showBoll ? 1 : 0) + (state.showSAR ? 1 : 0)
+        let count = (state.showIndicators ? 1 : 0)
+                  + (state.showBoll ? 1 : 0)
+                  + (state.showSAR ? 1 : 0)
+                  + (state.showIntegerLevels ? 1 : 0)
         switch count {
         case 0: return .secondary
         case 1, 2: return .accentColor.opacity(0.75)

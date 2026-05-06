@@ -736,6 +736,7 @@ struct MultiChartHost: View {
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
             ("hover 时状态栏（batch75）", "OHLCV + M5/M20/M60 三条均线值（参考 cell #1 / focused cell · 当 cell 开启均线时显示）"),
             ("倒计时 ⏱ mm:ss（batch83）", "短周期 cell（1m/3m/5m/15m/30m/1h）· 真行情时显示距下根 K 线 close 剩余秒数 · trader 短线节奏感"),
+            ("数据新鲜度（batch90）", "真行情时显示 \"Ns 前 / Nm 前 / 停滞\" · 绿色 = <10s · 灰 = <30s · 橙 = <5min · 红 = 停滞警告"),
         ]),
         ("📦 批量操作", [
             ("toolbar 批量 Menu", "全部 cell 设为同一周期（多合约比对）"),

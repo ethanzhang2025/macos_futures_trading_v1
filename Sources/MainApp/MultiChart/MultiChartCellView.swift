@@ -54,6 +54,8 @@ struct MultiChartCellView: View {
     @State private var dataState: MultiChartCellDataState = .loading
     /// v15.23 batch71 · 链式串行写 cache（保 K 线时间序 · 避免 race condition · 同 ChartScene 模式）
     @State private var klineSaveTask: Task<Void, Never>? = nil
+    /// v15.23 batch90 · 真行情最近一次更新时间（snapshot / completedBar 时刷新 · trader 看行情新鲜度）
+    @State private var lastUpdateTime: Date? = nil
 
     /// v15.23 batch71 · K 线 cache · ChartScene 同款（重启秒回 + 真行情拉空时离线兜底）
     @Environment(\.storeManager) private var storeManager
@@ -154,6 +156,7 @@ struct MultiChartCellView: View {
                 snapshotReceived = true
                 liveBars = snapBars
                 dataState = .live
+                lastUpdateTime = Date()
                 // M5 持久化：snapshot 后异步 save 全量 · 链式串行（前一个 task 完成后再写 · 同 ChartScene）
                 if let store = storeManager?.kline {
                     let prev = klineSaveTask
@@ -165,6 +168,7 @@ struct MultiChartCellView: View {
             case .completedBar(let bar):
                 liveBars.append(bar)
                 if dataState != .live { dataState = .live }
+                lastUpdateTime = Date()
                 // M5 持久化：完成的单根 K 线异步 append · maxBars 按 period 动态（v12.9）· 链式串行保 K 线时间序
                 if let store = storeManager?.kline {
                     let prev = klineSaveTask
@@ -210,6 +214,14 @@ struct MultiChartCellView: View {
             .help("切换周期")
 
             dataStateDot
+
+            // v15.23 batch90 · 数据新鲜度（"5s 前" / "停滞"红 · trader 监控真行情连接质量）
+            if let fresh = freshnessText {
+                Text(fresh)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(freshnessColor)
+                    .help("距上一次行情更新（snapshot / completedBar）的时长 · > 5 分钟标红警告")
+            }
 
             // v15.23 batch83 · 末根 K 线倒计时（短周期 trader 节奏感 · 仅真行情 + ≤1h 周期）
             if let cd = countdownText {
@@ -309,6 +321,32 @@ struct MultiChartCellView: View {
                 .frame(width: 6, height: 6)
                 .help("Mock 兜底（行情不可达 / 合约暂不支持 · 仅 UI 演示）")
         }
+    }
+
+    /// v15.23 batch90 · 真行情数据新鲜度（lastUpdateTime → "5s 前" / "停滞" · trader 监控行情连接）
+    private var freshnessText: String? {
+        guard dataState == .live, let lastUpdate = lastUpdateTime else { return nil }
+        _ = tickSeed  // 让 view body 每秒重渲触发刷新
+        let elapsed = Int(Date().timeIntervalSince(lastUpdate))
+        if elapsed < 10 {
+            return "\(elapsed)s 前"
+        } else if elapsed < 60 {
+            return "\(elapsed)s 前"
+        } else if elapsed < 300 {
+            return "\(elapsed / 60)m 前"
+        } else {
+            return "停滞"  // 5 分钟无更新 · 行情可能断
+        }
+    }
+
+    private var freshnessColor: Color {
+        guard dataState == .live, let lastUpdate = lastUpdateTime else { return .secondary }
+        _ = tickSeed
+        let elapsed = Int(Date().timeIntervalSince(lastUpdate))
+        if elapsed < 10 { return .green.opacity(0.8) }
+        if elapsed < 30 { return .secondary }
+        if elapsed < 300 { return .orange.opacity(0.8) }
+        return .red.opacity(0.85)  // 停滞警告
     }
 
     /// v15.23 batch83 · 末根 K 线倒计时（短周期节奏感 · 仅 .live 真行情 + 周期 < 2h 时显示）

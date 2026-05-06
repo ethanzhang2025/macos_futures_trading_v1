@@ -211,16 +211,41 @@ public struct MaiLangCodeView: NSViewRepresentable {
             return false
         }
 
-        /// v15.22 batch12+13 · 括号 / 引号自动配对 + 配对字符 skip
+        /// v15.22 batch12+13+31 · 括号 / 引号自动配对 + 配对字符 skip + 智能大写关键字
         /// - 输入 `(` 自动补 `)` 光标停中间（5 类：( [ { ' "）
-        /// - 输入闭括号且光标右已是同字符 → 仅光标右移 1（trader 顺打完整 `MA(CLOSE,5)` 不会变 `))`）
+        /// - 输入闭括号且光标右已是同字符 → 仅光标右移 1
+        /// - batch31 · trigger 字符（空格/换行/分号/逗号/括号/运算符）触发前一个 word 智能大写
+        ///   （仅当 word 是麦语言保留字时 · 大小写不敏感匹配）
         /// 触发条件：单字符插入 + 无选中文本
         public func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange,
                              replacementString: String?) -> Bool {
             guard let s = replacementString, s.count == 1, affectedCharRange.length == 0 else { return true }
             let ns = textView.string as NSString
+            // batch31 · 智能大写：trigger 前的 word 是保留字 → uppercased 替换（在配对/skip 之前做）
+            let triggerSet: Set<Character> = [" ", "\t", "\n", ";", ",", "(", ")", "[", "]",
+                                              "+", "-", "*", "/", "=", "<", ">", "%", ":"]
+            if let ch = s.first, triggerSet.contains(ch) {
+                var wordStart = affectedCharRange.location
+                while wordStart > 0 {
+                    let c = ns.character(at: wordStart - 1)
+                    let isWord = (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A)
+                                 || (c >= 0x30 && c <= 0x39) || c == 0x5F
+                    if isWord { wordStart -= 1 } else { break }
+                }
+                if wordStart < affectedCharRange.location {
+                    let wordRange = NSRange(location: wordStart,
+                                            length: affectedCharRange.location - wordStart)
+                    let word = ns.substring(with: wordRange)
+                    let upper = word.uppercased()
+                    if word != upper, MaiLangSyntaxHighlighter.isReservedWord(word) {
+                        textView.insertText(upper, replacementRange: wordRange)
+                        // 替换完继续走默认 trigger 字符插入（return true 让 NSTextView 接管）
+                    }
+                }
+            }
             // batch13 · 闭括号 / 引号 skip · 光标右侧已同字符 → 仅右移
             let closers: Set<String> = [")", "]", "}", "'", "\""]
+            // 重新读 affectedCharRange.location（智能大写 word 长度等长 · 不偏移 · 安全）
             if closers.contains(s),
                affectedCharRange.location < ns.length,
                ns.substring(with: NSRange(location: affectedCharRange.location, length: 1)) == s {

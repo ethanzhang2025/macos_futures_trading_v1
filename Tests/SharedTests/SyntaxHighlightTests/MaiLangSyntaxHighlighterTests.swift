@@ -171,4 +171,23 @@ struct MaiLangSyntaxHighlighterTests {
         // 总数 ≥ 60（实际更多）
         #expect(all.count >= 60)
     }
+
+    @Test("v15.22 batch31 · isReservedWord · 大小写不敏感识别 3 类保留字")
+    func isReservedWord() {
+        // 关键字
+        #expect(MaiLangSyntaxHighlighter.isReservedWord("AND"))
+        #expect(MaiLangSyntaxHighlighter.isReservedWord("and"))
+        #expect(MaiLangSyntaxHighlighter.isReservedWord("If"))
+        // 函数
+        #expect(MaiLangSyntaxHighlighter.isReservedWord("ma"))
+        #expect(MaiLangSyntaxHighlighter.isReservedWord("MA"))
+        #expect(MaiLangSyntaxHighlighter.isReservedWord("close"))
+        // 绘图属性
+        #expect(MaiLangSyntaxHighlighter.isReservedWord("colorred"))
+        #expect(MaiLangSyntaxHighlighter.isReservedWord("LINETHICK2"))
+        // 用户标识符 / 空 / 不识别
+        #expect(!MaiLangSyntaxHighlighter.isReservedWord("MyVar"))
+        #expect(!MaiLangSyntaxHighlighter.isReservedWord(""))
+        #expect(!MaiLangSyntaxHighlighter.isReservedWord("abc123"))
+    }
 }

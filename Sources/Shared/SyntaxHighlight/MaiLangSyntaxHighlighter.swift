@@ -45,6 +45,15 @@ public enum MaiLangSyntaxHighlighter {
         Array(keywords).sorted() + Array(builtinFuncs).sorted() + Array(drawAttributesExact).sorted()
     }
 
+    /// v15.22 batch31 · 判断 word 是否为麦语言保留字（任一类 · 用于编辑器智能大写转换）
+    /// 大小写不敏感（内部 uppercased 后查表）
+    public static func isReservedWord(_ word: String) -> Bool {
+        let upper = word.uppercased()
+        return keywords.contains(upper)
+            || builtinFuncs.contains(upper)
+            || drawAttributesExact.contains(upper)
+    }
+
     /// 逻辑 / 控制流关键字（与 IndicatorCore.Lexer logicKeywords 一致 + IF/THEN/ELSE 控制流）
     static let keywords: Set<String> = [
         "AND", "OR", "NOT",

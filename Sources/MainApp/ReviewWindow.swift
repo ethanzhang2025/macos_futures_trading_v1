@@ -25,6 +25,8 @@ struct ReviewWindow: View {
     /// v15.20 batch65 · chartCard 全屏放大查看（trader 专注分析单张图）
     /// v15.21 batch123 · 加 index/total · 支持 ←/→ 切前后图
     @State private var zoomedCard: ZoomedCard?
+    /// v15.23 batch64 · 帮助面板（⌘⇧? · 4 大新窗口 UX 一致）
+    @State private var showHelpSheet: Bool = false
 
     private struct ZoomedCard: Identifiable {
         var id: String { title }
@@ -67,6 +69,78 @@ struct ReviewWindow: View {
         .sheet(item: $zoomedCard) { card in
             zoomedCardView(card)
         }
+        .sheet(isPresented: $showHelpSheet) {
+            helpSheet
+        }
+        .background(
+            Button("") { showHelpSheet = true }
+                .keyboardShortcut("?", modifiers: [.command, .shift])
+                .opacity(0)
+        )
+    }
+
+    // MARK: - v15.23 batch64 · 帮助面板（4 大新窗口 UX 一致）
+
+    private static let helpGroups: [(String, [(String, String)])] = [
+        ("📅 区间筛选", [
+            ("toolbar 区间 Menu", "全部 / 7 天 / 30 天 / 当月 / 月份 / 季度"),
+            ("Toast 反馈", "切换后顶部提示新区间数据量"),
+        ]),
+        ("📊 12 张图（v15.23 闭环）", [
+            ("月度盈亏", "按月聚合 · 总 PnL 趋势"),
+            ("分布直方", "PnL 桶 · 盈/亏笔数对比"),
+            ("胜率曲线", "累积胜率 · 终值"),
+            ("品种矩阵", "各合约绩效对比"),
+            ("持仓时间", "中位 / 平均 / 直方"),
+            ("最大回撤", "MDD 曲线"),
+            ("盈亏比", "ProfitLossRatio + 胜亏数"),
+            ("时段分析", "5 段交易时段绩效"),
+            ("连胜连败", "连续胜负曲线 · 极值"),
+            ("心理标签", "EmotionAutoTagger 6 类"),
+            ("日历热力图（v15.23 第 11）", "每日盈亏 · 周历网格"),
+            ("时长×盈亏（v15.23 第 12）", "散点图 · 多绿空蓝"),
+        ]),
+        ("🔍 全屏放大", [
+            ("点击 chartCard", "全屏放大查看（trader 专注分析）"),
+            ("← / →", "切前后图（循环 · 不必关闭再开）"),
+            ("Esc / 关闭", "退出全屏"),
+            ("PNG 导出", "全屏放大后一键保存图片"),
+        ]),
+    ]
+
+    @ViewBuilder
+    private var helpSheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("⌨️ 复盘工作台全功能").font(.title2).bold()
+                Spacer()
+                Button("关闭") { showHelpSheet = false }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(Self.helpGroups, id: \.0) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(group.0).font(.headline)
+                            ForEach(group.1, id: \.0) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(item.0)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 200, alignment: .leading)
+                                    Text(item.1).font(.system(size: 12))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 580, idealWidth: 680, minHeight: 480, idealHeight: 620)
     }
 
     /// v15.20 batch65/71 · 全屏放大 chartCard sheet（关闭 + PNG 导出 · trader 放大后立刻分享）

@@ -95,7 +95,8 @@ struct DrawingTemplateExporterTests {
         #expect(json.contains("\"exportedAt\""))
         #expect(json.contains("\"templates\""))
         #expect(json.contains("前高"))
-        // ISO8601 格式（2026-05-04T... · UTC Z）
-        #expect(json.contains("2026-05-04"))
+        // ISO8601 格式 · 检查 exportedAt 来自 now（1746360000 = 2025-05-04T12:00:00Z）
+        // 之前断言 "2026-05-04" 是 hardcoded bug · 巧合匹配 createdAt = Date() 的当天 · v15.22 batch26 修复
+        #expect(json.contains("2025-05-04T12:00:00Z"))
     }
 }

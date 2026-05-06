@@ -60,6 +60,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     var showIntegerLevels: Bool
     /// v15.23 batch97 · 涨跌停参考线（first close × ±10% 简化估算 · 中国期货特色 · 默认关）
     var showLimitLines: Bool
+    /// v15.23 batch98 · VWAP（成交量加权均价 · 机构 trader 必看 · 默认关）
+    var showVWAP: Bool
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
@@ -72,7 +74,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
          horizontalLines: [Double] = [],
          isTimeShareMode: Bool = false,
          showIntegerLevels: Bool = false,
-         showLimitLines: Bool = false) {
+         showLimitLines: Bool = false,
+         showVWAP: Bool = false) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
@@ -85,11 +88,12 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.isTimeShareMode = isTimeShareMode
         self.showIntegerLevels = showIntegerLevels
         self.showLimitLines = showLimitLines
+        self.showVWAP = showVWAP
     }
 
     /// Codable · 老 cellsJSON 缺新字段时按合理默认值
     enum CodingKeys: String, CodingKey {
-        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels, showLimitLines
+        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels, showLimitLines, showVWAP
     }
 
     init(from decoder: Decoder) throws {
@@ -111,6 +115,7 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.isTimeShareMode = try c.decodeIfPresent(Bool.self, forKey: .isTimeShareMode) ?? false
         self.showIntegerLevels = try c.decodeIfPresent(Bool.self, forKey: .showIntegerLevels) ?? false
         self.showLimitLines = try c.decodeIfPresent(Bool.self, forKey: .showLimitLines) ?? false
+        self.showVWAP = try c.decodeIfPresent(Bool.self, forKey: .showVWAP) ?? false
     }
 }
 

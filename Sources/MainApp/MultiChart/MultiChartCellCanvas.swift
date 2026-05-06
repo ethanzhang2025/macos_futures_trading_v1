@@ -42,6 +42,8 @@ struct MultiChartCellCanvas: View {
     let showIntegerLevels: Bool
     /// v15.23 batch97 · 涨跌停参考线（红=涨停 · 绿=跌停 · first close × ±10% 简化估算）
     let showLimitLines: Bool
+    /// v15.23 batch98 · VWAP 折线（成交量加权均价 · 机构 trader 必看）
+    let showVWAP: Bool
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
@@ -53,7 +55,8 @@ struct MultiChartCellCanvas: View {
          horizontalLines: [Double] = [],
          isTimeShareMode: Bool = false,
          showIntegerLevels: Bool = false,
-         showLimitLines: Bool = false) {
+         showLimitLines: Bool = false,
+         showVWAP: Bool = false) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
@@ -66,6 +69,7 @@ struct MultiChartCellCanvas: View {
         self.isTimeShareMode = isTimeShareMode
         self.showIntegerLevels = showIntegerLevels
         self.showLimitLines = showLimitLines
+        self.showVWAP = showVWAP
     }
 
     var body: some View {
@@ -117,6 +121,10 @@ struct MultiChartCellCanvas: View {
                 // v15.23 batch97 · 涨跌停参考线（中国期货特色 · 简化版 first close × ±10%）
                 if showLimitLines {
                     drawLimitLines(in: ctx, rect: priceRect)
+                }
+                // v15.23 batch98 · VWAP 折线（机构 trader 必看 · 成交量加权均价）
+                if showVWAP {
+                    drawVWAP(in: ctx, rect: priceRect)
                 }
                 if subHeight > 8 {
                     drawGrid(in: ctx, rect: subRect, lines: 2)
@@ -496,6 +504,44 @@ struct MultiChartCellCanvas: View {
         if close > upper { return .red.opacity(0.95) }
         if close < lower { return .green.opacity(0.95) }
         return nil
+    }
+
+    // MARK: - VWAP（v15.23 batch98 · 成交量加权均价 · 机构 trader 必看）
+
+    /// VWAP[i] = sum(close[0..i] × volume[0..i]) / sum(volume[0..i]) · 累积形式
+    /// 蓝色折线（与 MA 区分）· 反映"市场平均交易成本"· trader 看 close vs VWAP 多空力量
+    private func drawVWAP(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        guard n >= 2 else { return }
+        let closes = bars.map { ($0.close as NSDecimalNumber).doubleValue }
+        let volumes = bars.map { Double($0.volume) }
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let priceRange = maxHigh - minLow
+        let yFor: (Double) -> CGFloat = { p in
+            rect.maxY - CGFloat((p - minLow) / priceRange) * rect.height
+        }
+        var sumPV = 0.0
+        var sumV = 0.0
+        var path = Path()
+        var started = false
+        for i in 0..<n {
+            sumPV += closes[i] * volumes[i]
+            sumV += volumes[i]
+            guard sumV > 0 else { continue }
+            let vwap = sumPV / sumV
+            let centerX = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let pt = CGPoint(x: centerX, y: yFor(vwap))
+            if started {
+                path.addLine(to: pt)
+            } else {
+                path.move(to: pt)
+                started = true
+            }
+        }
+        // 蓝色实线（与 MA60 蓝区分 · 用 cyan 0.85 alpha）
+        ctx.stroke(path, with: .color(.cyan.opacity(0.85)), lineWidth: 1.2)
     }
 
     // MARK: - 涨跌停参考线（v15.23 batch97 · 简化版 first close × ±10%）

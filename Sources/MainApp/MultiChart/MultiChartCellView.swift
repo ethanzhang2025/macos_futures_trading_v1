@@ -40,6 +40,7 @@ struct MultiChartCellView: View {
     let onSARToggle: () -> Void
     let onIntegerLevelsToggle: () -> Void
     let onLimitLinesToggle: () -> Void
+    let onVWAPToggle: () -> Void
     let onSubChartTap: (MultiChartSubChartType) -> Void
     let onTimeShareToggle: () -> Void
     let onPushToMain: () -> Void
@@ -108,7 +109,8 @@ struct MultiChartCellView: View {
                 horizontalLines: state.horizontalLines,
                 isTimeShareMode: state.isTimeShareMode,
                 showIntegerLevels: state.showIntegerLevels,
-                showLimitLines: state.showLimitLines
+                showLimitLines: state.showLimitLines,
+                showVWAP: state.showVWAP
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -326,6 +328,11 @@ struct MultiChartCellView: View {
                 } label: {
                     Label("涨跌停参考线（±10%）", systemImage: state.showLimitLines ? "checkmark.circle.fill" : "circle")
                 }
+                Button {
+                    onVWAPToggle()
+                } label: {
+                    Label("VWAP 成交量加权均价", systemImage: state.showVWAP ? "checkmark.circle.fill" : "circle")
+                }
             } label: {
                 Image(systemName: indicatorMenuIcon)
                     .font(.system(size: 11))
@@ -431,9 +438,10 @@ struct MultiChartCellView: View {
                   + (state.showSAR ? 1 : 0)
                   + (state.showIntegerLevels ? 1 : 0)
                   + (state.showLimitLines ? 1 : 0)
+                  + (state.showVWAP ? 1 : 0)
         switch count {
         case 0: return .secondary
-        case 1, 2, 3: return .accentColor.opacity(0.75)
+        case 1...3: return .accentColor.opacity(0.75)
         default: return .accentColor
         }
     }

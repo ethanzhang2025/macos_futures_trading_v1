@@ -24,15 +24,19 @@ public struct MaiLangCodeView: NSViewRepresentable {
     let errorMarker: CodeErrorMarker?
     /// v15.22 batch11 · 光标位置回调（line/col 均 1-based · 用于 status bar 显示当前位置）
     let onCursorChange: ((Int, Int) -> Void)?
+    /// v15.22 batch23 · 选区范围回调（NSRange · 用于多行 ⌘/ 批量注释等需要 selection 的操作）
+    let onSelectionChange: ((NSRange) -> Void)?
 
     public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark,
                 fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil,
-                onCursorChange: ((Int, Int) -> Void)? = nil) {
+                onCursorChange: ((Int, Int) -> Void)? = nil,
+                onSelectionChange: ((NSRange) -> Void)? = nil) {
         self._text = text
         self.scheme = scheme
         self.fontSize = fontSize
         self.errorMarker = errorMarker
         self.onCursorChange = onCursorChange
+        self.onSelectionChange = onSelectionChange
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -90,14 +94,18 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
         /// v15.22 batch11 · 光标位置变化（含点击/方向键/选区调整）→ 报行/列给 status bar
         /// v15.22 batch21 · 同步刷新当前行浅背景高亮
+        /// v15.22 batch23 · 同步报选区范围（NSRange）给批量操作
         public func textViewDidChangeSelection(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             // batch21 · 光标移动时刷当前行高亮（不重 tokenize · 仅重 attribute · 短文档性能 OK）
             parent.applyHighlight(to: tv)
+            let range = tv.selectedRange()
             if let cb = parent.onCursorChange {
-                let loc = tv.selectedRange().location
-                let (line, col) = lineColumn(in: tv.string, at: loc)
+                let (line, col) = lineColumn(in: tv.string, at: range.location)
                 DispatchQueue.main.async { cb(line, col) }
+            }
+            if let cb = parent.onSelectionChange {
+                DispatchQueue.main.async { cb(range) }
             }
         }
 

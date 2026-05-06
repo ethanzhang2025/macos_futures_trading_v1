@@ -35,6 +35,8 @@ public struct FormulaEditorWindow: View {
     /// v15.22 batch11 · 当前光标位置（1-based · 显示在 status bar）
     @State private var cursorLine: Int = 1
     @State private var cursorCol: Int = 1
+    /// v15.22 batch23 · 当前选区范围（用于多行 ⌘/ 批量注释）
+    @State private var selectionRange: NSRange = NSRange(location: 0, length: 0)
 
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
@@ -50,7 +52,8 @@ public struct FormulaEditorWindow: View {
                             onCursorChange: { line, col in
                                 cursorLine = line
                                 cursorCol = col
-                            })
+                            },
+                            onSelectionChange: { range in selectionRange = range })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onChange(of: sourceText) { _ in
                     // v15.22 batch6 · 用户改动后清错误标注（防陈旧 marker 误导）
@@ -417,29 +420,66 @@ public struct FormulaEditorWindow: View {
         }
     }
 
-    /// v15.22 batch15 · 注释切换 · 当前行 toggle `// ` 前缀（保持原前置空白）
-    /// - 已有 `// ` 或 `//` → 去除（含尾随单个空格）
-    /// - 否则 → 在前置空白后加 `// `
-    /// 选中多行批量 toggle 暂不支持（最小实现 · 后续扩展）
+    /// v15.22 batch15+23 · 注释切换 · 单行（无选区）/ 多行（选区跨行）批量 toggle
+    /// - 多行：任一行未注释 → 全部加注释 · 否则全部去注释（VSCode 行为）
+    /// - 单行：cursorLine 所在行 toggle
     private func toggleLineComment() {
         let lines = sourceText.components(separatedBy: "\n")
         guard !lines.isEmpty else { return }
-        let idx = max(0, min(cursorLine - 1, lines.count - 1))
-        let line = lines[idx]
-        let leadingWS = line.prefix(while: { $0 == " " || $0 == "\t" })
-        let trimmed = line.dropFirst(leadingWS.count)
-        let newLine: String
-        if trimmed.hasPrefix("// ") {
-            newLine = String(leadingWS) + String(trimmed.dropFirst(3))
-        } else if trimmed.hasPrefix("//") {
-            newLine = String(leadingWS) + String(trimmed.dropFirst(2))
+
+        // 计算行范围 [firstLine, lastLine]（0-based · inclusive）
+        let firstLine: Int
+        let lastLine: Int
+        if selectionRange.length > 0 {
+            let nsStr = sourceText as NSString
+            firstLine = lineForUtf16(selectionRange.location, in: nsStr)
+            // 选区终点 -1 字符避免末尾恰为 \n 时多算下一行
+            let endIdx = max(selectionRange.location, NSMaxRange(selectionRange) - 1)
+            lastLine = lineForUtf16(endIdx, in: nsStr)
         } else {
-            newLine = String(leadingWS) + "// " + String(trimmed)
+            let idx = max(0, min(cursorLine - 1, lines.count - 1))
+            firstLine = idx
+            lastLine = idx
         }
+        let lineRange = max(0, firstLine)...min(lastLine, lines.count - 1)
+
+        // 决定 add/remove · 任一行未注释 → 全加（VSCode 行为）
+        let isAdding = lineRange.contains { i in
+            let line = lines[i]
+            let leading = line.prefix(while: { $0 == " " || $0 == "\t" })
+            return !line.dropFirst(leading.count).hasPrefix("//")
+        }
+
         var newLines = lines
-        newLines[idx] = newLine
+        for i in lineRange {
+            let line = lines[i]
+            let leading = line.prefix(while: { $0 == " " || $0 == "\t" })
+            let trimmed = line.dropFirst(leading.count)
+            if isAdding {
+                if !trimmed.hasPrefix("//") {
+                    newLines[i] = String(leading) + "// " + String(trimmed)
+                }
+            } else {
+                if trimmed.hasPrefix("// ") {
+                    newLines[i] = String(leading) + String(trimmed.dropFirst(3))
+                } else if trimmed.hasPrefix("//") {
+                    newLines[i] = String(leading) + String(trimmed.dropFirst(2))
+                }
+            }
+        }
         sourceText = newLines.joined(separator: "\n")
-        statusMessage = "已切换第 \(idx + 1) 行注释"
+        let count = lineRange.count
+        statusMessage = isAdding ? "已注释 \(count) 行" : "已取消注释 \(count) 行"
+    }
+
+    /// utf16 location → 0-based 行号
+    private func lineForUtf16(_ loc: Int, in s: NSString) -> Int {
+        var line = 0
+        let length = min(max(0, loc), s.length)
+        for i in 0..<length {
+            if s.character(at: i) == 0x0A { line += 1 }
+        }
+        return line
     }
 
     /// v15.22 batch17 · 删除当前光标所在行（⌘⇧K · 删空时保留 1 个空行避免 [].joined 异常）

@@ -60,6 +60,8 @@ struct MultiChartHost: View {
             toolbar
             Divider()
             grid
+            Divider()
+            statusBar
         }
         .frame(minWidth: 720, idealWidth: 1080, minHeight: 480, idealHeight: 720)
         .onAppear {
@@ -239,6 +241,52 @@ struct MultiChartHost: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - v15.23 batch65 · 底部状态栏
+
+    private var statusBar: some View {
+        HStack(spacing: 14) {
+            HStack(spacing: 4) {
+                Image(systemName: "rectangle.3.group")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                Text(preset.label)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            Divider().frame(height: 12)
+            Text("\(activeCellCount) 活跃 / \(cells.count) 总 cell")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+            Divider().frame(height: 12)
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(autoTickEnabled ? Color.green : Color.gray)
+                    .frame(width: 6, height: 6)
+                Text(autoTickEnabled ? "tick 实时" : "tick 暂停")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            Divider().frame(height: 12)
+            Text("\(savedLayouts.count) 个已保存预设")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            Spacer()
+            // active cell 标识（focus 时显示）
+            if let idx = focusedIdx {
+                Text("聚焦 #\(idx + 1) · \(cellAt(idx).instrumentID) · \(cellAt(idx).period.rawValue)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.accentColor)
+            } else {
+                Text("⌘⇧? 查看全部功能")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(Color.secondary.opacity(0.06))
     }
 
     // MARK: - Grid

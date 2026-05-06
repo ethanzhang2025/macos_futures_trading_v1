@@ -41,6 +41,8 @@ public struct FormulaEditorWindow: View {
     @State private var currentTokenSig: String? = nil
     /// v15.22 batch28 · 函数列表面板（⌘⇧L 切换 · 73 函数 9 分类）
     @State private var showFunctionsPanel: Bool = false
+    /// v15.22 batch35 · 函数库搜索过滤
+    @State private var funcSearchQuery: String = ""
     /// v15.22 batch29 · 跳转到行 sheet + 待跳转行号
     @State private var showGotoLineSheet: Bool = false
     @State private var gotoLineInput: String = ""
@@ -137,41 +139,45 @@ public struct FormulaEditorWindow: View {
             .padding(20)
             .frame(width: 320, height: 180)
         }
-        // v15.22 batch28 · 函数库 sheet（73 函数按 9 分类 List · 一键复制签名）
+        // v15.22 batch28+35 · 函数库 sheet（73 函数 · 9 分类 · 搜索过滤）
         .sheet(isPresented: $showFunctionsPanel) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text("📚 麦语言函数库").font(.title2).bold()
-                    Text("(\(MaiLangFunctionSignatures.entries.count) 个函数 · 9 大类)")
+                    Text("(\(MaiLangFunctionSignatures.entries.count) 个 · 9 大类)")
                         .font(.caption).foregroundColor(.secondary)
                     Spacer()
-                    Button("关闭") { showFunctionsPanel = false }
-                        .keyboardShortcut(.cancelAction)
+                    Button("关闭") { showFunctionsPanel = false }.keyboardShortcut(.cancelAction)
                 }
                 .padding(12)
+                // batch35 · 搜索框（按 name / summary 过滤）
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                    TextField("搜索函数名 / 摘要（如 \"ma\"、\"均线\"、\"穿\"）", text: $funcSearchQuery)
+                        .textFieldStyle(.plain)
+                    if !funcSearchQuery.isEmpty {
+                        Button { funcSearchQuery = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(.horizontal, 12).padding(.bottom, 8)
                 Divider()
                 List {
-                    ForEach(MaiLangFunctionSignatures.byCategory, id: \.0) { (cat, sigs) in
-                        Section(header: Text(cat.rawValue).font(.headline)) {
-                            ForEach(sigs, id: \.name) { sig in
-                                HStack(alignment: .top, spacing: 8) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(sig.formatted)
-                                            .font(.system(.body, design: .monospaced))
-                                            .foregroundColor(.accentColor)
-                                        Text(sig.summary)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    Spacer()
-                                    Button("复制") {
-                                        Pasteboard.copy(sig.formatted)
-                                        statusMessage = "已复制：\(sig.formatted)"
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .help("复制 \(sig.formatted) 到剪贴板（再粘贴到编辑器）")
-                                }
-                                .padding(.vertical, 2)
+                    if funcSearchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+                        ForEach(MaiLangFunctionSignatures.byCategory, id: \.0) { (cat, sigs) in
+                            Section(header: Text(cat.rawValue).font(.headline)) {
+                                ForEach(sigs, id: \.name) { sig in functionRow(sig) }
+                            }
+                        }
+                    } else {
+                        let results = MaiLangFunctionSignatures.search(funcSearchQuery)
+                        if results.isEmpty {
+                            Text("未匹配到函数").font(.callout).foregroundColor(.secondary).padding()
+                        } else {
+                            Section(header: Text("搜索结果（\(results.count) 个）").font(.headline)) {
+                                ForEach(results, id: \.name) { sig in functionRow(sig) }
                             }
                         }
                     }
@@ -748,6 +754,29 @@ public struct FormulaEditorWindow: View {
         }
         let count = last - first + 1
         statusMessage = up ? "上移 \(count) 行" : "下移 \(count) 行"
+    }
+
+    /// v15.22 batch28+35 · 函数库单行 row 渲染（搜索/分组共用）
+    @ViewBuilder
+    private func functionRow(_ sig: MaiLangFunctionSignature) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(sig.formatted)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(.accentColor)
+                Text(sig.summary)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Button("复制") {
+                Pasteboard.copy(sig.formatted)
+                statusMessage = "已复制：\(sig.formatted)"
+            }
+            .buttonStyle(.borderless)
+            .help("复制 \(sig.formatted) 到剪贴板")
+        }
+        .padding(.vertical, 2)
     }
 
     /// v15.22 batch34 · 编辑器快捷键全集 · 按主题分组（trader 学习参考）

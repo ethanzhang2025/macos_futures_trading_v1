@@ -135,6 +135,16 @@ public enum MaiLangFunctionSignatures {
         sig("OPI",    [], "持仓量",                                   .价量),
     ]
 
+    /// v15.22 batch35 · 模糊搜索（name 不区分大小写 + summary 中文匹配 · 空 query → 返回全部）
+    public static func search(_ query: String) -> [MaiLangFunctionSignature] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return entries }
+        let upper = trimmed.uppercased()
+        return entries.filter { sig in
+            sig.name.uppercased().contains(upper) || sig.summary.contains(trimmed)
+        }
+    }
+
     /// 按分类分组（用于函数列表面板有序渲染）
     public static var byCategory: [(MaiLangFunctionSignature.Category, [MaiLangFunctionSignature])] {
         let groups = Dictionary(grouping: entries, by: { $0.category })

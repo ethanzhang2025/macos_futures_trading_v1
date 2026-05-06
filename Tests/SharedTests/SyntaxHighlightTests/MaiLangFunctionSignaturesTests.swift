@@ -81,4 +81,38 @@ struct MaiLangFunctionSignaturesTests {
     func sizeReasonable() {
         #expect(MaiLangFunctionSignatures.entries.count >= 60)
     }
+
+    @Test("v15.22 batch35 · search · 空 query → 返回全部 entries")
+    func searchEmpty() {
+        #expect(MaiLangFunctionSignatures.search("").count == MaiLangFunctionSignatures.entries.count)
+        #expect(MaiLangFunctionSignatures.search("   ").count == MaiLangFunctionSignatures.entries.count)
+    }
+
+    @Test("v15.22 batch35 · search · name 不区分大小写匹配")
+    func searchByName() {
+        let r1 = MaiLangFunctionSignatures.search("ma")
+        let names1 = r1.map { $0.name }
+        #expect(names1.contains("MA"))
+        #expect(names1.contains("EMA"))
+        #expect(names1.contains("SMA"))
+        #expect(names1.contains("DMA"))
+        #expect(names1.contains("WMA"))
+        // 大小写不敏感
+        let r2 = MaiLangFunctionSignatures.search("MA")
+        #expect(r2.count == r1.count)
+    }
+
+    @Test("v15.22 batch35 · search · 中文 summary 匹配")
+    func searchBySummaryChinese() {
+        // 搜"移动平均" → MA/EMA/SMA/DMA/WMA 均匹配（summary 含"移动平均"）
+        let r = MaiLangFunctionSignatures.search("移动平均")
+        #expect(r.count >= 5)
+        #expect(r.contains { $0.name == "MA" })
+        #expect(r.contains { $0.name == "EMA" })
+    }
+
+    @Test("v15.22 batch35 · search · 不存在 → 空数组")
+    func searchNoMatch() {
+        #expect(MaiLangFunctionSignatures.search("ZZZZNoSuch").isEmpty)
+    }
 }

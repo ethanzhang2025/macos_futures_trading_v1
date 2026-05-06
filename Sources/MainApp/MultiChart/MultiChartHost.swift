@@ -529,6 +529,7 @@ struct MultiChartHost: View {
     }
 
     /// v15.23 batch54 · 单 cell 右键菜单
+    /// v15.23 batch91 · 加水平参考线快捷（标当前 close / 清空所有）
     @ViewBuilder
     private func cellContextMenu(idx: Int) -> some View {
         let total = effectivePreset.maxWindows
@@ -537,6 +538,20 @@ struct MultiChartHost: View {
         } label: {
             Label(focusedIdx == idx ? "退出聚焦" : "聚焦此 cell（双击）",
                   systemImage: focusedIdx == idx ? "viewfinder.slash" : "viewfinder")
+        }
+        Divider()
+        // v15.23 batch91 · 水平参考线（trader 标支撑/压力位）
+        Button {
+            addCurrentPriceAsHorizontalLine(idx: idx)
+        } label: {
+            Label("在当前价标水平线", systemImage: "minus")
+        }
+        if !cellAt(idx).horizontalLines.isEmpty {
+            Button(role: .destructive) {
+                clearHorizontalLines(idx: idx)
+            } label: {
+                Label("清空所有水平线（\(cellAt(idx).horizontalLines.count)）", systemImage: "xmark.circle")
+            }
         }
         Divider()
         // 与下一个 cell 交换
@@ -595,6 +610,30 @@ struct MultiChartHost: View {
             instrumentID: defaultInstrument(forIndex: idx),
             period: defaultPeriod(forIndex: idx)
         )
+        persistCells()
+    }
+
+    /// v15.23 batch91 · 在 cell 当前 close 价标记水平参考线（cellLiveBars 优先 · 空则 mock）
+    private func addCurrentPriceAsHorizontalLine(idx: Int) {
+        guard idx < cells.count else { return }
+        let state = cells[idx]
+        let bars: [KLine] = {
+            if let live = cellLiveBars[state.id], !live.isEmpty { return live }
+            return MultiChartMockData.bars(instrumentID: state.instrumentID,
+                                            period: state.period,
+                                            tickSeed: autoTickEnabled ? tickSeed : 0)
+        }()
+        guard let last = bars.last else { return }
+        let close = (last.close as NSDecimalNumber).doubleValue
+        // 去重（已有相同价位则跳过 · 容差 0.01）
+        if cells[idx].horizontalLines.contains(where: { abs($0 - close) < 0.01 }) { return }
+        cells[idx].horizontalLines.append(close)
+        persistCells()
+    }
+
+    private func clearHorizontalLines(idx: Int) {
+        guard idx < cells.count else { return }
+        cells[idx].horizontalLines = []
         persistCells()
     }
 
@@ -733,6 +772,7 @@ struct MultiChartHost: View {
             ("OI 持仓量副图（batch87）", "中国期货独有 · 增仓上涨=多头强势 · 增仓下跌=空头强势 · 减仓=多空回吐"),
             ("副图金叉/死叉点（batch82）", "KDJ K↑D 或 MACD DIF↑DEA = 红点（金叉买点）· 反向 = 绿点（死叉卖点）· 一眼定位"),
             ("点击主图指标 Menu（batch88）", "MA 4 均线（5/10/20/60 默认开）+ BOLL 上下轨（20 · 2σ 默认关）+ SAR 抛物线（Wilder 默认关）· 三选多"),
+            ("右键 → 标水平线（batch91）", "在当前 close 价画橙色虚线 · 标支撑/压力位 · 持久化 · 清空也在右键"),
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
             ("hover 时状态栏（batch75）", "OHLCV + M5/M20/M60 三条均线值（参考 cell #1 / focused cell · 当 cell 开启均线时显示）"),
             ("倒计时 ⏱ mm:ss（batch83）", "短周期 cell（1m/3m/5m/15m/30m/1h）· 真行情时显示距下根 K 线 close 剩余秒数 · trader 短线节奏感"),

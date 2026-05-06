@@ -34,6 +34,8 @@ struct MultiChartCellCanvas: View {
     let subChart: MultiChartSubChartType
     /// v15.23 batch86 · SAR 抛物线（默认关 · trader 短线趋势反转 + 跟踪止损）
     let showSAR: Bool
+    /// v15.23 batch91 · 用户手动标记的水平参考线（trader 关键价位 · 支撑/压力 · 标普跌停等）
+    let horizontalLines: [Double]
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
@@ -41,7 +43,8 @@ struct MultiChartCellCanvas: View {
          showIndicators: Bool = true,
          showBoll: Bool = false,
          subChart: MultiChartSubChartType = .volume,
-         showSAR: Bool = false) {
+         showSAR: Bool = false,
+         horizontalLines: [Double] = []) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
@@ -50,6 +53,7 @@ struct MultiChartCellCanvas: View {
         self.showBoll = showBoll
         self.subChart = subChart
         self.showSAR = showSAR
+        self.horizontalLines = horizontalLines
     }
 
     var body: some View {
@@ -84,6 +88,10 @@ struct MultiChartCellCanvas: View {
                 // v15.23 batch86 · SAR 抛物线（Wilder 0.02 step / 0.2 max · 默认关）
                 if showSAR {
                     drawSAR(in: ctx, rect: priceRect)
+                }
+                // v15.23 batch91 · 用户标记的水平参考线（trader 支撑/压力位 · 灰虚线 + 价格标签）
+                if !horizontalLines.isEmpty {
+                    drawHorizontalLines(in: ctx, rect: priceRect)
                 }
                 if subHeight > 8 {
                     drawGrid(in: ctx, rect: subRect, lines: 2)
@@ -380,6 +388,33 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
+    }
+
+    // MARK: - 水平参考线（v15.23 batch91 · trader 标支撑/压力价位）
+
+    /// 用户标记的水平参考线 · 灰白虚线 · 左上角小价格标签
+    private func drawHorizontalLines(in ctx: GraphicsContext, rect: CGRect) {
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let priceRange = maxHigh - minLow
+        for price in horizontalLines {
+            // 仅显示在可视价格范围内的（外侧不画 · 避免溢出）
+            guard price >= minLow - priceRange * 0.3, price <= maxHigh + priceRange * 0.3 else { continue }
+            let y = rect.maxY - CGFloat((price - minLow) / priceRange) * rect.height
+            // 钳制到 rect 内（极端价位时贴边显示）
+            let yClamped = max(rect.minY, min(rect.maxY, y))
+            var line = Path()
+            line.move(to: CGPoint(x: rect.minX, y: yClamped))
+            line.addLine(to: CGPoint(x: rect.maxX, y: yClamped))
+            ctx.stroke(line, with: .color(.orange.opacity(0.5)),
+                       style: StrokeStyle(lineWidth: 0.6, dash: [4, 3]))
+            let lbl = Text(String(format: "%.2f", price))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.orange.opacity(0.85))
+            ctx.draw(lbl, at: CGPoint(x: rect.minX + 24, y: yClamped - 6),
+                     anchor: .center)
+        }
     }
 
     // MARK: - OI 持仓量（v15.23 batch87 · 折线图 · 中国期货独有 · 主力意图）

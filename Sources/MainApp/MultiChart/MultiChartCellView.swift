@@ -86,7 +86,8 @@ struct MultiChartCellView: View {
                 showIndicators: state.showIndicators,
                 showBoll: state.showBoll,
                 subChart: state.subChart,
-                showSAR: state.showSAR
+                showSAR: state.showSAR,
+                horizontalLines: state.horizontalLines
             )
         }
         .background(Color(NSColor.windowBackgroundColor))

@@ -14,10 +14,11 @@ import SwiftUI
 import Foundation
 import Shared
 import DataCore
+import StoreCore
 
 enum MultiChartCellDataState: Equatable {
     case loading
-    case live      // 真行情（Sina pipeline 给了非空 snapshot）
+    case live      // 真行情（Sina pipeline 给了非空 snapshot · 含本地缓存 fast path）
     case mock      // Mock 兜底（pipeline 拉空 / 不支持的合约）
 }
 
@@ -47,6 +48,11 @@ struct MultiChartCellView: View {
 
     @State private var liveBars: [KLine] = []
     @State private var dataState: MultiChartCellDataState = .loading
+    /// v15.23 batch71 · 链式串行写 cache（保 K 线时间序 · 避免 race condition · 同 ChartScene 模式）
+    @State private var klineSaveTask: Task<Void, Never>? = nil
+
+    /// v15.23 batch71 · K 线 cache · ChartScene 同款（重启秒回 + 真行情拉空时离线兜底）
+    @Environment(\.storeManager) private var storeManager
 
     /// 真行情拉到则用真数据 · 否则 Mock 兜底（autoTick 让末根 K 线抖动）
     private var effectiveBars: [KLine] {
@@ -106,12 +112,22 @@ struct MultiChartCellView: View {
     private func streamRealMarket() async {
         liveBars = []
         dataState = .loading
+        let instrumentID = state.instrumentID
+        let period = state.period
         // 不支持的合约直接走 Mock · 不创建 pipeline 浪费网络
-        guard MarketDataPipeline.supportedContracts.contains(state.instrumentID) else {
+        guard MarketDataPipeline.supportedContracts.contains(instrumentID) else {
             dataState = .mock
             return
         }
-        let pipe = MarketDataPipeline(instrumentID: state.instrumentID, period: state.period)
+        // v15.23 batch71 · M5 cache fast path · 网络 fetch 前先 load 磁盘缓存 · 立即显示
+        // ChartScene 同模式 · 协议返 [KLine] 非 Optional · 单层 try? · isEmpty 跳过空缓存
+        if let store = storeManager?.kline,
+           let cached = try? await store.load(instrumentID: instrumentID, period: period),
+           !cached.isEmpty {
+            liveBars = cached
+            dataState = .live
+        }
+        let pipe = MarketDataPipeline(instrumentID: instrumentID, period: period)
         let stream = await pipe.start()
         var snapshotReceived = false
         // .task(id:) 取消（cell 销毁 / 切合约/周期）→ task isCancelled true · 检查后 break 出循环走 pipe.stop()
@@ -119,17 +135,37 @@ struct MultiChartCellView: View {
         for await update in stream {
             if Task.isCancelled { break }
             switch update {
-            case .snapshot(let bars):
-                if bars.isEmpty && !snapshotReceived {
-                    dataState = .mock
+            case .snapshot(let snapBars):
+                if snapBars.isEmpty && !snapshotReceived {
+                    // 真行情拉空 · 无 cache → Mock 兜底 · 有 cache → 保留 cache 数据（仍 .live · 离线模式）
+                    if liveBars.isEmpty {
+                        dataState = .mock
+                    }
                     continue
                 }
                 snapshotReceived = true
-                liveBars = bars
+                liveBars = snapBars
                 dataState = .live
+                // M5 持久化：snapshot 后异步 save 全量 · 链式串行（前一个 task 完成后再写 · 同 ChartScene）
+                if let store = storeManager?.kline {
+                    let prev = klineSaveTask
+                    klineSaveTask = Task {
+                        await prev?.value
+                        try? await store.save(snapBars, instrumentID: instrumentID, period: period)
+                    }
+                }
             case .completedBar(let bar):
                 liveBars.append(bar)
                 if dataState != .live { dataState = .live }
+                // M5 持久化：完成的单根 K 线异步 append · maxBars 按 period 动态（v12.9）· 链式串行保 K 线时间序
+                if let store = storeManager?.kline {
+                    let prev = klineSaveTask
+                    let maxBars = MarketDataPipeline.cacheMaxBars(for: period)
+                    klineSaveTask = Task {
+                        await prev?.value
+                        try? await store.append([bar], instrumentID: instrumentID, period: period, maxBars: maxBars)
+                    }
+                }
             }
         }
         await pipe.stop()
@@ -211,7 +247,7 @@ struct MultiChartCellView: View {
             Circle()
                 .fill(Color.green)
                 .frame(width: 6, height: 6)
-                .help("Sina 真行情（实时轮询）")
+                .help("Sina 真行情（实时轮询）/ 本地缓存（离线兜底）· 数据真实")
         case .mock:
             Circle()
                 .fill(Color.yellow)

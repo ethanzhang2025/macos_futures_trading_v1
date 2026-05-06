@@ -37,6 +37,7 @@ struct MultiChartCellView: View {
     let onVolumeToggle: () -> Void
     let onIndicatorsToggle: () -> Void
     let onBollToggle: () -> Void
+    let onSubChartTap: (MultiChartSubChartType) -> Void
     let onPushToMain: () -> Void
 
     static let instrumentPool: [String] = [
@@ -80,7 +81,8 @@ struct MultiChartCellView: View {
                 hoveredIndex: sharedHoveredIndex,
                 onHoverIndexChange: onHoverIndexChange,
                 showIndicators: state.showIndicators,
-                showBoll: state.showBoll
+                showBoll: state.showBoll,
+                subChart: state.subChart
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -211,14 +213,27 @@ struct MultiChartCellView: View {
 
             lastPriceText
 
-            Button {
-                onVolumeToggle()
+            // v15.23 batch79 · 副图 picker（量/KDJ/无 · 替换原 showVolume toggle · 兼容老配置）
+            Menu {
+                ForEach(MultiChartSubChartType.allCases, id: \.self) { sub in
+                    Button {
+                        onSubChartTap(sub)
+                    } label: {
+                        if state.subChart == sub {
+                            Label(sub.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(sub.displayName)
+                        }
+                    }
+                }
             } label: {
-                Image(systemName: state.showVolume ? "chart.bar.fill" : "chart.bar")
+                Image(systemName: subChartIcon)
                     .font(.system(size: 11))
+                    .foregroundColor(state.subChart == .none ? .secondary : .accentColor)
             }
-            .buttonStyle(.borderless)
-            .help(state.showVolume ? "隐藏成交量" : "显示成交量")
+            .menuStyle(.borderlessButton)
+            .frame(width: 26)
+            .help("副图：\(state.subChart.displayName)（点击切换 量 / KDJ / 无）")
 
             // v15.23 batch72-74 · MA 4 均线开关（5/10/20/60 · 短线标配）
             Button {
@@ -279,6 +294,15 @@ struct MultiChartCellView: View {
                 .fill(Color.yellow)
                 .frame(width: 6, height: 6)
                 .help("Mock 兜底（行情不可达 / 合约暂不支持 · 仅 UI 演示）")
+        }
+    }
+
+    /// v15.23 batch79 · 副图 Menu icon（按当前选择切换图标）
+    private var subChartIcon: String {
+        switch state.subChart {
+        case .none: return "chart.bar"            // 灰色 outline
+        case .volume: return "chart.bar.fill"    // 实心柱（量）
+        case .kdj: return "waveform.path.ecg"    // 心电图（KDJ）
         }
     }
 

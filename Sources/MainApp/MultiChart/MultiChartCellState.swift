@@ -12,35 +12,56 @@
 import Foundation
 import Shared
 
+/// v15.23 batch79 · cell 副图类型（量 / KDJ / 无）· trader 切换不同维度
+enum MultiChartSubChartType: String, Codable, Equatable, Hashable, CaseIterable {
+    case none = "none"      // 不显示副图（主图全屏）
+    case volume = "volume"  // 成交量（默认）
+    case kdj = "kdj"        // KDJ 随机指标（短线超买超卖）
+
+    var displayName: String {
+        switch self {
+        case .none: return "无副图"
+        case .volume: return "成交量"
+        case .kdj: return "KDJ"
+        }
+    }
+}
+
 /// 单 cell 配置（多窗口同屏共用）
 struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     var id: UUID
     var instrumentID: String
     var period: KLinePeriod
+    /// v15.23 batch52-78 · 副图开关（保留兼容老 cellsJSON · batch79 起改用 subChart 字段语义）
+    /// 老用户存量 showVolume=true → batch79 自动迁移为 subChart=.volume
     var showVolume: Bool
-    /// v15.23 batch72 · 主图 MA 双均线（MA5 + MA20）开关 · 中国期货短线标配
+    /// v15.23 batch72 · 主图 MA 4 均线（5/10/20/60）开关 · 中国期货短线经典标配
     /// 历史 cellsJSON 缺这个字段时按 true 解码（默认开 · trader 多周期共振直观）
     var showIndicators: Bool
     /// v15.23 batch78 · BOLL 上下轨开关（突破信号 · 默认关避免噪屏 · trader 主动开深入分析）
     var showBoll: Bool
+    /// v15.23 batch79 · 副图类型（量/KDJ/无 · 默认 .volume · 老用户由 showVolume 自动迁移）
+    var subChart: MultiChartSubChartType
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
          period: KLinePeriod = .minute15,
          showVolume: Bool = true,
          showIndicators: Bool = true,
-         showBoll: Bool = false) {
+         showBoll: Bool = false,
+         subChart: MultiChartSubChartType = .volume) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
         self.showVolume = showVolume
         self.showIndicators = showIndicators
         self.showBoll = showBoll
+        self.subChart = subChart
     }
 
-    /// Codable · 老 cellsJSON 反序列化时 showIndicators/showBoll 缺字段时按 true / false 默认
+    /// Codable · 老 cellsJSON 缺 showIndicators/showBoll/subChart 字段时按合理默认值
     enum CodingKeys: String, CodingKey {
-        case id, instrumentID, period, showVolume, showIndicators, showBoll
+        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart
     }
 
     init(from decoder: Decoder) throws {
@@ -51,6 +72,12 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.showVolume = try c.decode(Bool.self, forKey: .showVolume)
         self.showIndicators = try c.decodeIfPresent(Bool.self, forKey: .showIndicators) ?? true
         self.showBoll = try c.decodeIfPresent(Bool.self, forKey: .showBoll) ?? false
+        // 老用户 cellsJSON 没 subChart 字段 → 按 showVolume 迁移：true → .volume / false → .none
+        if let sub = try c.decodeIfPresent(MultiChartSubChartType.self, forKey: .subChart) {
+            self.subChart = sub
+        } else {
+            self.subChart = self.showVolume ? .volume : .none
+        }
     }
 }
 

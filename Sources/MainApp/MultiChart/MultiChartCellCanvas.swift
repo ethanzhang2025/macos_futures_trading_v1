@@ -19,6 +19,7 @@ import Shared
 struct MultiChartCellCanvas: View {
 
     let bars: [KLine]
+    /// 兼容字段（batch79 起用 subChart 决定副图）· 仍保留以避免上游 break
     let showVolume: Bool
     /// v15.23 batch68 · 共享悬停 K 线索引（0..count-1 · nil = 不悬停）
     /// 由父 MultiChartHost 跨 cell 同步 · 实现联动十字线
@@ -29,28 +30,33 @@ struct MultiChartCellCanvas: View {
     let showIndicators: Bool
     /// v15.23 batch78 · BOLL 上下轨开关（突破信号 · 默认关 · trader 主动开）
     let showBoll: Bool
+    /// v15.23 batch79 · 副图类型（量/KDJ/无 · trader 切换不同维度）
+    let subChart: MultiChartSubChartType
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
          onHoverIndexChange: ((Int?) -> Void)? = nil,
          showIndicators: Bool = true,
-         showBoll: Bool = false) {
+         showBoll: Bool = false,
+         subChart: MultiChartSubChartType = .volume) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
         self.onHoverIndexChange = onHoverIndexChange
         self.showIndicators = showIndicators
         self.showBoll = showBoll
+        self.subChart = subChart
     }
 
     var body: some View {
         GeometryReader { geo in
             Canvas { ctx, size in
                 guard !bars.isEmpty else { return }
-                let volumeHeight: CGFloat = showVolume ? size.height * 0.25 : 0
-                let priceHeight = size.height - volumeHeight - 4
+                // batch79 · subChart 接管副图区高度（none = 0 · 否则 25%）
+                let subHeight: CGFloat = subChart == .none ? 0 : size.height * 0.25
+                let priceHeight = size.height - subHeight - 4
                 let priceRect = CGRect(x: 0, y: 0, width: size.width, height: priceHeight)
-                let volumeRect = CGRect(x: 0, y: priceHeight + 4, width: size.width, height: volumeHeight)
+                let subRect = CGRect(x: 0, y: priceHeight + 4, width: size.width, height: subHeight)
 
                 drawGrid(in: ctx, rect: priceRect)
                 drawCandles(in: ctx, rect: priceRect)
@@ -71,9 +77,16 @@ struct MultiChartCellCanvas: View {
                 if showBoll {
                     drawBoll(in: ctx, rect: priceRect, period: 20, k: 2)
                 }
-                if showVolume, volumeHeight > 8 {
-                    drawGrid(in: ctx, rect: volumeRect, lines: 2)
-                    drawVolumes(in: ctx, rect: volumeRect)
+                if subHeight > 8 {
+                    drawGrid(in: ctx, rect: subRect, lines: 2)
+                    switch subChart {
+                    case .none:
+                        break
+                    case .volume:
+                        drawVolumes(in: ctx, rect: subRect)
+                    case .kdj:
+                        drawKDJ(in: ctx, rect: subRect)
+                    }
                 }
                 // v15.23 batch77 · 简洁 axis 标签（时间 3 + 价格 3 · 不喧宾夺主）
                 drawAxisLabels(in: ctx, priceRect: priceRect, bottomY: size.height)
@@ -352,6 +365,78 @@ struct MultiChartCellCanvas: View {
                    style: StrokeStyle(lineWidth: 0.8, dash: [3, 2]))
         ctx.stroke(lowerPath, with: .color(.cyan.opacity(0.6)),
                    style: StrokeStyle(lineWidth: 0.8, dash: [3, 2]))
+    }
+
+    // MARK: - KDJ（v15.23 batch79 · 标准 9-3-3 · 短线超买超卖 · trader 副图必备）
+
+    /// 计算并画 K/D/J 三条线 · 标准参数 N=9 · M1=3 · M2=3
+    /// - K 白色 · D 黄色 · J 紫色 · 80 / 20 水平参考线
+    private func drawKDJ(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        let N = 9
+        guard n >= N else { return }
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        let closes = bars.map { ($0.close as NSDecimalNumber).doubleValue }
+        var ks: [Double] = []
+        var ds: [Double] = []
+        var js: [Double] = []
+        var prevK = 50.0
+        var prevD = 50.0
+        for i in 0..<n {
+            if i < N - 1 {
+                ks.append(.nan)
+                ds.append(.nan)
+                js.append(.nan)
+                continue
+            }
+            let win = (i - N + 1)...i
+            let hh = highs[win].max() ?? 0
+            let ll = lows[win].min() ?? 0
+            let rsv = hh - ll > 0 ? (closes[i] - ll) / (hh - ll) * 100 : 50
+            let k = (2.0 / 3.0) * prevK + (1.0 / 3.0) * rsv
+            let d = (2.0 / 3.0) * prevD + (1.0 / 3.0) * k
+            let j = 3 * k - 2 * d
+            ks.append(k); ds.append(d); js.append(j)
+            prevK = k; prevD = d
+        }
+        // 画 80/20 参考虚线（KDJ 经典超买超卖位）
+        for ref in [80.0, 20.0] {
+            let y = rect.maxY - CGFloat(ref / 100) * rect.height
+            var path = Path()
+            path.move(to: CGPoint(x: rect.minX, y: y))
+            path.addLine(to: CGPoint(x: rect.maxX, y: y))
+            ctx.stroke(path, with: .color(.secondary.opacity(0.3)),
+                       style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+        }
+        // J 范围可超 0-100 · 钳制到 [0, 100] 显示（trader 看趋势 · 数值不重要）
+        // 三条线：K 白 / D 黄 / J 紫
+        drawKDJLine(in: ctx, rect: rect, values: ks, color: .white.opacity(0.85))
+        drawKDJLine(in: ctx, rect: rect, values: ds, color: .yellow.opacity(0.85))
+        drawKDJLine(in: ctx, rect: rect, values: js, color: .purple.opacity(0.85))
+    }
+
+    private func drawKDJLine(in ctx: GraphicsContext, rect: CGRect,
+                             values: [Double], color: Color) {
+        let n = values.count
+        guard n > 0, rect.height > 0 else { return }
+        var path = Path()
+        var started = false
+        for i in 0..<n {
+            let v = values[i]
+            guard !v.isNaN else { continue }
+            let clamped = max(0, min(100, v))
+            let centerX = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let y = rect.maxY - CGFloat(clamped / 100) * rect.height
+            let pt = CGPoint(x: centerX, y: y)
+            if started {
+                path.addLine(to: pt)
+            } else {
+                path.move(to: pt)
+                started = true
+            }
+        }
+        ctx.stroke(path, with: .color(color), lineWidth: 0.9)
     }
 
     // MARK: - Volume

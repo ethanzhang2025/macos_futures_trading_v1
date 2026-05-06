@@ -82,6 +82,10 @@ public struct MaiLangCodeView: NSViewRepresentable {
             tv.string = text
             tv.setSelectedRange(NSRange(location: min(cursor.location, text.utf16.count), length: 0))
         }
+        // v15.22 batch36 · 字号变化 → 同步 NSTextView.font（typing 字号 · applyHighlight 内会刷已有字符）
+        if abs((tv.font?.pointSize ?? 0) - fontSize) > 0.1 {
+            tv.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        }
         applyTheme(to: tv)
         applyHighlight(to: tv)
         // v15.22 batch20 · 主题/文本变化后刷行号

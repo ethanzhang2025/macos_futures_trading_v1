@@ -22,6 +22,8 @@ public struct FormulaEditorWindow: View {
         """
 
     @AppStorage("viewState.v1.formulaEditor.schemeRaw") private var schemeRaw: String = "dark"
+    /// v15.22 batch36 · 字体大小（持久化 · 默认 13 · 范围 [10, 28]）
+    @AppStorage("viewState.v1.formulaEditor.fontSize") private var fontSizeStored: Double = 13
     /// v15.22 batch7 · 片段库 · 用户自定义公式模板（JSON 持久化 · 跨会话保留）
     @AppStorage("viewState.v1.formulaEditor.snippets") private var snippetsJSON: String = ""
     @State private var statusMessage: String = "未保存修改"
@@ -60,7 +62,9 @@ public struct FormulaEditorWindow: View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            MaiLangCodeView(text: $sourceText, scheme: scheme, errorMarker: errorMarker,
+            MaiLangCodeView(text: $sourceText, scheme: scheme,
+                            fontSize: CGFloat(fontSizeStored),
+                            errorMarker: errorMarker,
                             onCursorChange: { line, col in
                                 cursorLine = line
                                 cursorCol = col
@@ -401,6 +405,26 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("?", modifiers: [.command, .shift])
             .help("查看所有编辑器快捷键（⌘⇧?）")
+            // v15.22 batch36 · 字体大小调节（⌘=放大 / ⌘-缩小 / ⌘0 重置 · 持久化）
+            Menu {
+                Button("放大字体（⌘=）") {
+                    fontSizeStored = min(28, fontSizeStored + 1)
+                }
+                .keyboardShortcut("=", modifiers: [.command])
+                Button("缩小字体（⌘-）") {
+                    fontSizeStored = max(10, fontSizeStored - 1)
+                }
+                .keyboardShortcut("-", modifiers: [.command])
+                Button("重置（⌘0 · 默认 13pt）") {
+                    fontSizeStored = 13
+                }
+                .keyboardShortcut("0", modifiers: [.command])
+                Divider()
+                Text("当前 \(Int(fontSizeStored))pt")
+            } label: {
+                Label("字体", systemImage: "textformat.size")
+            }
+            .help("字体大小（⌘= 放大 / ⌘- 缩小 / ⌘0 重置 · 持久化）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in

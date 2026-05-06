@@ -648,6 +648,31 @@ public struct FormulaEditorWindow: View {
     @ViewBuilder
     private var statusBar: some View {
         HStack(spacing: 12) {
+            // v15.23 batch61 · active tab 文件路径 + dirty marker（trader 知道当前是哪个文件）
+            if !tabs.isEmpty, activeIdx >= 0, activeIdx < tabs.count {
+                let active = tabs[activeIdx]
+                HStack(spacing: 4) {
+                    Image(systemName: active.fileURL == nil ? "doc" : "doc.text")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    if let url = active.fileURL {
+                        Text(url.lastPathComponent)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .help(url.path)
+                    } else {
+                        Text("未保存")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    if active.isDirty {
+                        Circle().fill(Color.orange).frame(width: 6, height: 6)
+                            .help("有未保存修改")
+                    }
+                }
+                Divider().frame(height: 12)
+            }
             // 字符数 / 行数
             let stats = textStats(sourceText)
             Text("行数 \(stats.lines)").font(.caption).foregroundColor(.secondary)

@@ -108,10 +108,32 @@ public struct MaiLangCodeView: NSViewRepresentable {
         }
 
         /// v15.22 batch10 · Tab 键插入 4 空格（替代默认 \t · 与 Swift 缩进习惯一致）
-        /// 仅在无补全 popup 时触发（popup 时 Tab 由 NSTextView 内部消化用于选中候选 · 不会进 doCommandBy）
+        /// v15.22 batch14 · Enter 键保持上一行缩进（trader 写多行公式省手动空格）
+        /// 仅在无补全 popup 时触发（popup 时由 NSTextView 内部消化）
         public func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.insertTab(_:)) {
                 textView.insertText("    ", replacementRange: textView.selectedRange())
+                return true
+            }
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                let ns = textView.string as NSString
+                let loc = textView.selectedRange().location
+                // 找当前行起始（loc 之前最近的 \n + 1，或文件开头）
+                var lineStart = loc
+                while lineStart > 0 && ns.character(at: lineStart - 1) != 0x0A {
+                    lineStart -= 1
+                }
+                // 抓前置空白（space / tab）作为新行缩进
+                var indent = ""
+                var i = lineStart
+                while i < loc {
+                    let ch = ns.character(at: i)
+                    if ch == 0x20 || ch == 0x09, let scalar = UnicodeScalar(ch) {
+                        indent.append(Character(scalar))
+                        i += 1
+                    } else { break }
+                }
+                textView.insertText("\n" + indent, replacementRange: textView.selectedRange())
                 return true
             }
             return false

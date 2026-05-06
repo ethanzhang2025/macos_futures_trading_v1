@@ -195,13 +195,16 @@ public struct FormulaEditorWindow: View {
             .keyboardShortcut("s", modifiers: [.command])
             .disabled(sourceText.isEmpty)
             .help("保存到 .wh / .txt 文件（⌘S）")
-            Button {
-                copyAllToPasteboard()
+            Menu {
+                Button("复制全文（纯文本）") { copyAllToPasteboard() }
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+                // v15.22 batch22 · 导出 Markdown 代码块（trader 分享聊天/笔记常用）
+                Button("复制为 Markdown 代码块") { copyAsMarkdown() }
+                    .keyboardShortcut("c", modifiers: [.command, .option])
             } label: {
-                Label("复制全文", systemImage: "doc.on.doc")
+                Label("复制", systemImage: "doc.on.doc")
             }
-            .keyboardShortcut("c", modifiers: [.command, .shift])
-            .help("复制全部公式到剪贴板（⌘⇧C）")
+            .help("复制公式（⌘⇧C 纯文本 / ⌘⌥C Markdown 代码块）")
             // v15.22 batch5 · 编译验证（⌘B · 走 IndicatorCore Lexer + Parser · 第一个错误精确定位）
             Button {
                 compileNow()
@@ -370,6 +373,14 @@ public struct FormulaEditorWindow: View {
     private func copyAllToPasteboard() {
         Pasteboard.copy(sourceText)
         statusMessage = "已复制 \(sourceText.count) 字符到剪贴板"
+    }
+
+    /// v15.22 batch22 · 复制为 Markdown 代码块（fenced ```mailang）
+    /// trader 分享公式到聊天/笔记 · 自带语言 hint 渲染高亮
+    private func copyAsMarkdown() {
+        let md = "```mailang\n" + sourceText + "\n```"
+        Pasteboard.copy(md)
+        statusMessage = "已复制为 Markdown · \(md.count) 字符"
     }
 
     /// v15.22 batch5 · 编译验证 · 走 IndicatorCore Lexer + Parser · 第一个错误精确定位

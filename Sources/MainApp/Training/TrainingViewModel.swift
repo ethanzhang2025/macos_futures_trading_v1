@@ -1,0 +1,113 @@
+// MainApp · WP-54 模拟训练 ViewModel（v15.23 batch9 · M5 节点 UI 收尾）
+//
+// 职责：
+// - 持有 DisciplineBook（规则集 · trader 自定义 5 类纪律）
+// - 持有 TrainingSessionLog（历史 session + 评分缓存）
+// - 持有当前进行中 session 的累积状态（startedAt/initialBalance/violations/scenarioName）
+// - 暴露 CRUD + Session 控制 + 推荐导入 4 类方法 · 子 Panel 共享同一 VM
+//
+// 设计要点：
+// - @MainActor 保证 UI 线程一致 · @Published 触发 SwiftUI 刷新
+// - book/log 为值类型副本（mutating 方法在本 VM 内统一封装）
+// - inProgressSession 仅在 active 模式下有值 · endSession 关闭后清空并 push 到 log
+
+#if canImport(SwiftUI) && os(macOS)
+
+import Foundation
+import SwiftUI
+import Shared
+import TradingCore
+
+@MainActor
+final class TrainingViewModel: ObservableObject {
+
+    // MARK: - 持久化状态（值类型 · 等后续接 viewState.v1）
+
+    @Published var book: DisciplineBook = .defaultRecommended
+    @Published var log: TrainingSessionLog = TrainingSessionLog()
+
+    // MARK: - 进行中 session
+
+    @Published var sessionStartedAt: Date? = nil
+    @Published var sessionInitialBalance: Decimal = 0
+    @Published var sessionScenarioName: String = ""
+    @Published var liveViolations: [DisciplineViolation] = []
+
+    /// 训练结束后弹 sheet 用 · endSession 写入 · 关闭 sheet 清空
+    @Published var lastFinishedSession: TrainingSession? = nil
+    @Published var lastFinishedScore: TrainingScore? = nil
+
+    var isSessionActive: Bool { sessionStartedAt != nil }
+
+    // MARK: - 规则 CRUD
+
+    func addRule(_ rule: DisciplineRule) {
+        book.addRule(rule)
+    }
+
+    func updateRule(_ rule: DisciplineRule) {
+        book.updateRule(rule)
+    }
+
+    func removeRule(id: UUID) {
+        book.removeRule(id: id)
+    }
+
+    func setEnabled(id: UUID, enabled: Bool) {
+        book.setEnabled(id: id, enabled: enabled)
+    }
+
+    /// 导入 5 条推荐配置（覆盖当前 book）· 空 book 一键启用最常用
+    func importRecommended() {
+        book = .defaultRecommended
+    }
+
+    /// 清空所有规则
+    func clearRules() {
+        book = DisciplineBook()
+    }
+
+    // MARK: - Session 控制（batch11 详细实现 · 此处仅占位接口）
+
+    func startSession(initialBalance: Decimal, scenarioName: String) {
+        sessionStartedAt = Date()
+        sessionInitialBalance = initialBalance
+        sessionScenarioName = scenarioName
+        liveViolations.removeAll()
+    }
+
+    /// 结束训练 · 评分 · push 到 log · 留 sheet 数据供 UI 弹
+    func endSession(finalBalance: Decimal, trades: [TradeRecord]) {
+        guard let startedAt = sessionStartedAt else { return }
+        let session = TrainingSession(
+            startedAt: startedAt,
+            endedAt: Date(),
+            initialBalance: sessionInitialBalance,
+            finalBalance: finalBalance,
+            trades: trades,
+            violations: liveViolations,
+            scenarioName: sessionScenarioName
+        )
+        let score = TrainingScorer.score(session)
+        log.addSession(session)
+        lastFinishedSession = session
+        lastFinishedScore = score
+        sessionStartedAt = nil
+        sessionInitialBalance = 0
+        sessionScenarioName = ""
+        liveViolations.removeAll()
+    }
+
+    func dismissLastFinishedSheet() {
+        lastFinishedSession = nil
+        lastFinishedScore = nil
+    }
+
+    // MARK: - Live violation 推流（batch10 接 engine.observe）
+
+    func pushLiveViolation(_ v: DisciplineViolation) {
+        liveViolations.insert(v, at: 0)
+    }
+}
+
+#endif

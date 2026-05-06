@@ -226,6 +226,14 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("k", modifiers: [.command, .shift])
             .help("删除当前光标所在行（⌘⇧K）")
+            // v15.22 batch18 · 复制当前行到下一行（⌘D · VSCode/Sublime 经典）
+            Button {
+                duplicateCurrentLine()
+            } label: {
+                Label("复制行", systemImage: "plus.rectangle.on.rectangle")
+            }
+            .keyboardShortcut("d", modifiers: [.command])
+            .help("复制当前光标所在行到下一行（⌘D）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in
@@ -426,6 +434,17 @@ public struct FormulaEditorWindow: View {
         if newLines.isEmpty { newLines = [""] }
         sourceText = newLines.joined(separator: "\n")
         statusMessage = "已删除第 \(idx + 1) 行"
+    }
+
+    /// v15.22 batch18 · 复制当前行到下一行（⌘D · trader 改参数前留备份常用）
+    private func duplicateCurrentLine() {
+        let lines = sourceText.components(separatedBy: "\n")
+        guard !lines.isEmpty else { return }
+        let idx = max(0, min(cursorLine - 1, lines.count - 1))
+        var newLines = lines
+        newLines.insert(lines[idx], at: idx + 1)
+        sourceText = newLines.joined(separator: "\n")
+        statusMessage = "已复制第 \(idx + 1) 行"
     }
 
     private func textStats(_ s: String) -> (chars: Int, lines: Int) {

@@ -43,6 +43,8 @@ struct MultiChartHost: View {
     @AppStorage("viewState.v1.multiChart.autoTick") private var autoTickEnabled: Bool = true
     /// v15.23 batch60 · 帮助面板（⌘⇧? · 22+ 操作清单 · trader 学习入口）
     @State private var showHelpSheet: Bool = false
+    /// v15.23 batch68 · 共享悬停 K 线索引 · 跨 cell 联动十字线
+    @State private var sharedHoveredIndex: Int? = nil
 
     private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -523,6 +525,7 @@ struct MultiChartHost: View {
             ("点击 #↗ 按钮", "推送到主 ChartScene 深入分析"),
             ("点击 cell 合约名/周期", "Menu 切换"),
             ("点击 chart.bar 图标", "切换是否显示成交量"),
+            ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
         ]),
         ("📦 批量操作", [
             ("toolbar 批量 Menu", "全部 cell 设为同一周期（多合约比对）"),
@@ -622,12 +625,14 @@ struct MultiChartHost: View {
     private func cellView(state: MultiChartCellState, idx: Int) -> some View {
         VStack(spacing: 0) {
             cellToolbar(state: state, idx: idx)
-            // K 线 Canvas（mock data + tick seed 让末根 K 线动起来）
+            // K 线 Canvas（mock data + tick seed 让末根 K 线动起来 + 跨 cell 联动十字线）
             MultiChartCellCanvas(
                 bars: MultiChartMockData.bars(instrumentID: state.instrumentID,
                                               period: state.period,
                                               tickSeed: autoTickEnabled ? tickSeed : 0),
-                showVolume: state.showVolume
+                showVolume: state.showVolume,
+                hoveredIndex: sharedHoveredIndex,
+                onHoverIndexChange: { idx in sharedHoveredIndex = idx }
             )
         }
         .background(Color(NSColor.windowBackgroundColor))

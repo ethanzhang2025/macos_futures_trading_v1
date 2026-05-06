@@ -20,21 +20,76 @@ struct MultiChartCellCanvas: View {
 
     let bars: [KLine]
     let showVolume: Bool
+    /// v15.23 batch68 · 共享悬停 K 线索引（0..count-1 · nil = 不悬停）
+    /// 由父 MultiChartHost 跨 cell 同步 · 实现联动十字线
+    let hoveredIndex: Int?
+    /// hover 回调：本 cell 内鼠标移动时上报当前 index 给父
+    let onHoverIndexChange: ((Int?) -> Void)?
+
+    init(bars: [KLine], showVolume: Bool,
+         hoveredIndex: Int? = nil,
+         onHoverIndexChange: ((Int?) -> Void)? = nil) {
+        self.bars = bars
+        self.showVolume = showVolume
+        self.hoveredIndex = hoveredIndex
+        self.onHoverIndexChange = onHoverIndexChange
+    }
 
     var body: some View {
-        Canvas { ctx, size in
-            guard !bars.isEmpty else { return }
+        GeometryReader { geo in
+            Canvas { ctx, size in
+                guard !bars.isEmpty else { return }
+                let volumeHeight: CGFloat = showVolume ? size.height * 0.25 : 0
+                let priceHeight = size.height - volumeHeight - 4
+                let priceRect = CGRect(x: 0, y: 0, width: size.width, height: priceHeight)
+                let volumeRect = CGRect(x: 0, y: priceHeight + 4, width: size.width, height: volumeHeight)
 
-            let volumeHeight: CGFloat = showVolume ? size.height * 0.25 : 0
-            let priceHeight = size.height - volumeHeight - 4
-            let priceRect = CGRect(x: 0, y: 0, width: size.width, height: priceHeight)
-            let volumeRect = CGRect(x: 0, y: priceHeight + 4, width: size.width, height: volumeHeight)
-
-            drawGrid(in: ctx, rect: priceRect)
-            drawCandles(in: ctx, rect: priceRect)
-            if showVolume, volumeHeight > 8 {
-                drawGrid(in: ctx, rect: volumeRect, lines: 2)
-                drawVolumes(in: ctx, rect: volumeRect)
+                drawGrid(in: ctx, rect: priceRect)
+                drawCandles(in: ctx, rect: priceRect)
+                if showVolume, volumeHeight > 8 {
+                    drawGrid(in: ctx, rect: volumeRect, lines: 2)
+                    drawVolumes(in: ctx, rect: volumeRect)
+                }
+                // v15.23 batch68 · 联动十字线（垂直 vertical line at hovered index · 跨 cell 同步）
+                if let hidx = hoveredIndex, hidx >= 0, hidx < bars.count {
+                    let centerX = priceRect.minX + (CGFloat(hidx) + 0.5) * priceRect.width / CGFloat(bars.count)
+                    var line = Path()
+                    line.move(to: CGPoint(x: centerX, y: 0))
+                    line.addLine(to: CGPoint(x: centerX, y: size.height))
+                    ctx.stroke(line, with: .color(.accentColor.opacity(0.6)),
+                               style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    // 顶部小标签：bar index + close
+                    let bar = bars[hidx]
+                    let close = (bar.close as NSDecimalNumber).doubleValue
+                    let label = "[\(hidx + 1)] \(String(format: "%.2f", close))"
+                    let labelText = Text(label)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.white)
+                    let resolved = ctx.resolve(labelText)
+                    let labelSize = resolved.measure(in: CGSize(width: 200, height: 20))
+                    let labelRect = CGRect(
+                        x: max(2, min(size.width - labelSize.width - 6, centerX - labelSize.width / 2 - 3)),
+                        y: 2,
+                        width: labelSize.width + 6,
+                        height: labelSize.height + 2
+                    )
+                    ctx.fill(Path(roundedRect: labelRect, cornerRadius: 2),
+                             with: .color(.accentColor.opacity(0.85)))
+                    ctx.draw(labelText, at: CGPoint(x: labelRect.midX, y: labelRect.midY), anchor: .center)
+                }
+            }
+            .onContinuousHover { phase in
+                guard let cb = onHoverIndexChange else { return }
+                switch phase {
+                case .active(let location):
+                    let n = bars.count
+                    guard n > 0, geo.size.width > 0 else { return }
+                    let normalized = max(0, min(1, location.x / geo.size.width))
+                    let idx = min(n - 1, Int(normalized * CGFloat(n)))
+                    cb(idx)
+                case .ended:
+                    cb(nil)
+                }
             }
         }
         .background(Color(NSColor.textBackgroundColor))

@@ -86,6 +86,8 @@ struct MultiChartCellCanvas: View {
                         drawVolumes(in: ctx, rect: subRect)
                     case .kdj:
                         drawKDJ(in: ctx, rect: subRect)
+                    case .macd:
+                        drawMACD(in: ctx, rect: subRect)
                     }
                 }
                 // v15.23 batch77 · 简洁 axis 标签（时间 3 + 价格 3 · 不喧宾夺主）
@@ -437,6 +439,104 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(color), lineWidth: 0.9)
+    }
+
+    // MARK: - MACD（v15.23 batch80 · 标准 12-26-9 · DIF/DEA 双线 + 红绿柱 · 中长线必看）
+
+    /// 计算并画 MACD：DIF（白）+ DEA（黄）+ MACD 柱（红/绿）
+    /// 标准参数：fast=12 · slow=26 · signal=9
+    private func drawMACD(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        guard n >= 26 + 9 else { return }
+        let closes = bars.map { ($0.close as NSDecimalNumber).doubleValue }
+        let ema12 = ema(closes, period: 12)
+        let ema26 = ema(closes, period: 26)
+        var dif: [Double] = Array(repeating: .nan, count: n)
+        for i in 0..<n where !ema12[i].isNaN && !ema26[i].isNaN {
+            dif[i] = ema12[i] - ema26[i]
+        }
+        let dea = ema(dif, period: 9)
+        var macd: [Double] = Array(repeating: .nan, count: n)
+        for i in 0..<n where !dif[i].isNaN && !dea[i].isNaN {
+            macd[i] = (dif[i] - dea[i]) * 2
+        }
+        // 找 max abs(value) for symmetric 0-axis layout（柱 + 双线）
+        let allVals = dif + dea + macd
+        let absMax = allVals.compactMap { $0.isNaN ? nil : abs($0) }.max() ?? 1
+        guard absMax > 0 else { return }
+        // 0 轴在 rect 中线 · 上半 = +absMax / 下半 = -absMax
+        let midY = rect.midY
+        let halfH = rect.height / 2
+        let yFor = { (v: Double) -> CGFloat in
+            midY - CGFloat(v / absMax) * halfH
+        }
+        // 0 轴参考线
+        var zeroPath = Path()
+        zeroPath.move(to: CGPoint(x: rect.minX, y: midY))
+        zeroPath.addLine(to: CGPoint(x: rect.maxX, y: midY))
+        ctx.stroke(zeroPath, with: .color(.secondary.opacity(0.4)),
+                   style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+        // MACD 柱（红涨 / 绿跌 · 中国习惯）
+        let barWidth = max(1.5, rect.width / CGFloat(n) * 0.7)
+        for i in 0..<n where !macd[i].isNaN {
+            let v = macd[i]
+            let centerX = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let y = yFor(v)
+            let h = abs(midY - y)
+            let color: Color = v >= 0 ? .red.opacity(0.7) : .green.opacity(0.7)
+            let r = CGRect(
+                x: centerX - barWidth / 2,
+                y: min(midY, y),
+                width: barWidth,
+                height: max(1, h)
+            )
+            ctx.fill(Path(r), with: .color(color))
+        }
+        // DIF 白线 + DEA 黄线
+        drawMACDLine(in: ctx, rect: rect, values: dif, yFor: yFor, color: .white.opacity(0.85))
+        drawMACDLine(in: ctx, rect: rect, values: dea, yFor: yFor, color: .yellow.opacity(0.85))
+    }
+
+    private func drawMACDLine(in ctx: GraphicsContext, rect: CGRect,
+                              values: [Double], yFor: (Double) -> CGFloat, color: Color) {
+        let n = values.count
+        var path = Path()
+        var started = false
+        for i in 0..<n {
+            let v = values[i]
+            guard !v.isNaN else { continue }
+            let centerX = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let pt = CGPoint(x: centerX, y: yFor(v))
+            if started {
+                path.addLine(to: pt)
+            } else {
+                path.move(to: pt)
+                started = true
+            }
+        }
+        ctx.stroke(path, with: .color(color), lineWidth: 0.9)
+    }
+
+    /// EMA 工具 · 首个非 NaN 值作 seed · 后续指数加权
+    /// 输入数组允许含 NaN（来自 dif 数组的 warmup 期）· 输出对齐索引
+    private func ema(_ values: [Double], period: Int) -> [Double] {
+        let n = values.count
+        var out: [Double] = Array(repeating: .nan, count: n)
+        let alpha = 2.0 / (Double(period) + 1)
+        var prev: Double? = nil
+        for i in 0..<n {
+            let v = values[i]
+            guard !v.isNaN else { continue }
+            if let p = prev {
+                let cur = v * alpha + p * (1 - alpha)
+                out[i] = cur
+                prev = cur
+            } else {
+                out[i] = v
+                prev = v
+            }
+        }
+        return out
     }
 
     // MARK: - Volume

@@ -17,12 +17,14 @@ enum MultiChartSubChartType: String, Codable, Equatable, Hashable, CaseIterable 
     case none = "none"      // 不显示副图（主图全屏）
     case volume = "volume"  // 成交量（默认）
     case kdj = "kdj"        // KDJ 随机指标（短线超买超卖）
+    case macd = "macd"      // MACD 双线 + 红绿柱（趋势 + 量能 · 中长线 trader 必看）
 
     var displayName: String {
         switch self {
         case .none: return "无副图"
         case .volume: return "成交量"
         case .kdj: return "KDJ"
+        case .macd: return "MACD"
         }
     }
 }

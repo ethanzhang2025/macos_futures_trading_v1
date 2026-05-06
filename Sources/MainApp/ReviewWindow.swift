@@ -234,6 +234,10 @@ struct ReviewWindow: View {
             .init(title: "日历热力图",
                   subtitle: "DailyPnL · \(s.dailyPnL.tradingDays) 交易日 · 盈\(s.dailyPnL.winningDays) 亏\(s.dailyPnL.losingDays)",
                   content: AnyView(dailyPnLHeatmap(s.dailyPnL))),
+            // v15.23 batch49 · 第 12 图 · 持仓时长 vs PnL 散点图（trader 检测"持仓越久越亏"模式）
+            .init(title: "时长 × 盈亏",
+                  subtitle: "Scatter · \(s.closedPositions.count) 笔 · 多空区分",
+                  content: AnyView(holdingPnLScatter(s.closedPositions))),
         ]
     }
 
@@ -804,6 +808,47 @@ struct ReviewWindow: View {
         f.dateFormat = "yyyy-MM-dd"
         f.timeZone = TimeZone(identifier: "Asia/Shanghai")
         return f.string(from: d)
+    }
+
+    /// v15.23 batch49 · 持仓时长 vs PnL 散点图（第 12 图）
+    /// X = 持仓分钟（线性 · 自适应范围）· Y = realizedPnL · 颜色按 side（多绿空蓝）
+    /// trader 用：判断"持仓越久越亏"（趋势线下倾）/ "持仓越久越赚"（趋势线上倾）
+    private func holdingPnLScatter(_ positions: [ClosedPosition]) -> some View {
+        Chart {
+            ForEach(positions) { p in
+                let minutes = p.holdingSeconds / 60
+                let pnl = (p.realizedPnL as NSDecimalNumber).doubleValue
+                PointMark(
+                    x: .value("分钟", minutes),
+                    y: .value("PnL", pnl)
+                )
+                .foregroundStyle(
+                    p.side == .long
+                        ? Color.green.opacity(0.65)
+                        : Color.blue.opacity(0.65)
+                )
+                .symbolSize(p.realizedPnL == 0 ? 30 : 60)
+            }
+            // 0 轴参考线
+            RuleMark(y: .value("0 轴", 0))
+                .foregroundStyle(Color.secondary.opacity(0.4))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        }
+        .chartLegend(position: .top, alignment: .leading) {
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Circle().fill(Color.green).frame(width: 8, height: 8)
+                    Text("多").font(.caption2)
+                }
+                HStack(spacing: 4) {
+                    Circle().fill(Color.blue).frame(width: 8, height: 8)
+                    Text("空").font(.caption2)
+                }
+                Text("X：持仓分钟 · Y：PnL").font(.caption2).foregroundColor(.secondary)
+            }
+        }
+        .chartXAxisLabel("分钟", position: .bottom)
+        .chartYAxisLabel("PnL", position: .leading)
     }
 
     /// v15.19 batch27 · 心理风险标签命中分布（读取缓存 · body 不重算）

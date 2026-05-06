@@ -18,6 +18,8 @@ public enum SimulatedTradingEvent: Sendable {
     case positionChanged(Position)
     /// 账户资金变更（保证金/盈亏/手续费 任意变化都会推送）
     case accountChanged(Account)
+    /// v15.23 batch8 · 纪律违规检测（onTick 后自动评估 · 仅新发现的 violation 推送 · 已推送过的不重复）
+    case disciplineViolation(DisciplineViolation)
 }
 
 /// 资金曲线时序点（v15.5 · accountChanged 时追加 · UI Canvas 画折线）

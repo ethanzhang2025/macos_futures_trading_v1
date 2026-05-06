@@ -48,6 +48,10 @@ public actor SimulatedTradingEngine {
     /// v15.16 hotfix #11：每合约最近 lastPrice 缓存 · 多合约浮盈正确计算
     /// 之前 recomputePositionPnL 用 openAvgPrice 当其他 instrument mark · 浮盈丢失
     private var instrumentLastPrice: [String: Decimal] = [:]
+    /// v15.23 batch8 · 已注入的纪律规则（仅自动评估 trades 类规则 · 持仓类留给外部 caller）
+    private var disciplineRules: [DisciplineRule] = []
+    /// 上次 evaluate 命中的违规 key（"ruleID:ruleKind" · 同 rule 不重复 push · 解除后下次可再触发）
+    private var lastViolationKeys: Set<String> = []
 
     // MARK: - 初始化
 
@@ -262,6 +266,38 @@ public actor SimulatedTradingEngine {
         }
         // 撮合后更新持仓盈亏 → 账户 positionPnL（共用同一 now · 曲线时间戳与 tick 同源）
         recomputePositionPnL(lastPrice: lastPrice, instrumentID: tick.instrumentID, now: now)
+        // v15.23 batch8 · 评估 trades 类纪律规则 · 仅 push 新违规（dedup by ruleID:ruleKind）
+        evaluateDisciplineAndBroadcast(now: now)
+    }
+
+    // MARK: - 纪律规则集成（v15.23 batch8）
+
+    /// 注入 / 替换纪律规则集合（每次 onTick 后自动评估 trades 类）
+    public func setDisciplineRules(_ rules: [DisciplineRule]) {
+        disciplineRules = rules
+        lastViolationKeys.removeAll()   // 切换规则集时清缓存 · 下次重新评估
+    }
+
+    public func currentDisciplineRules() -> [DisciplineRule] { disciplineRules }
+
+    /// 评估 trades 类规则（dailyMaxLoss / maxDailyTrades / maxAddPositions）
+    /// 持仓类规则（stopLossPercent / maxHoldingMinutes）留给外部 caller 周期评估（需要 openedAt）
+    private func evaluateDisciplineAndBroadcast(now: Date) {
+        guard !disciplineRules.isEmpty else { return }
+        let violations = DisciplineEvaluator.evaluateTrades(
+            rules: disciplineRules,
+            todayTrades: trades,
+            dailyRealizedPnL: account.closePnL,
+            now: now
+        )
+        let currentKeys = Set(violations.map { "\($0.ruleID):\($0.ruleKind.rawValue)" })
+        for v in violations {
+            let key = "\(v.ruleID):\(v.ruleKind.rawValue)"
+            if !lastViolationKeys.contains(key) {
+                broadcast(.disciplineViolation(v), now: now)
+            }
+        }
+        lastViolationKeys = currentKeys   // 仅记录当前 active · 解除后下次可重新触发
     }
 
     // MARK: - 私有：撮合

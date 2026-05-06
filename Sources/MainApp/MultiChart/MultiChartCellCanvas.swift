@@ -253,9 +253,11 @@ struct MultiChartCellCanvas: View {
             }
             // v15.23 batch76 · 末根 K 线高亮（白色 1px 描边 + 同色 dot · 强调最新数据）
             // v15.23 batch89 · 末根 close 永久水平虚线 from dot to maxX（trader 看 close vs MA 位置）
+            // v15.23 batch92 · BOLL 突破信号 · close 突破上轨 → 红边框（强多）· 突破下轨 → 绿边框（强空）
             if i == n - 1 {
+                let borderColor = breakoutBorderColor(close: close) ?? .white.opacity(0.85)
                 ctx.stroke(Path(bodyRect.insetBy(dx: -0.5, dy: -0.5)),
-                           with: .color(.white.opacity(0.85)),
+                           with: .color(borderColor),
                            lineWidth: 1)
                 let dotSize: CGFloat = 4
                 let yClose = yFor(close)
@@ -388,6 +390,25 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
+    }
+
+    // MARK: - BOLL 突破信号（v15.23 batch92 · 末根 close 突破上下轨时换边框色）
+
+    /// close > BOLL 上轨 → 红边框（突破多头）· < 下轨 → 绿边框（破位空头）· 否则 nil（默认白）
+    /// 仅 showBoll=true 时启用 · 与 drawBoll 用相同 period=20 / k=2 标准
+    private func breakoutBorderColor(close: Double) -> Color? {
+        guard showBoll, bars.count >= 20 else { return nil }
+        let n = bars.count
+        let period = 20
+        let closes = bars[(n - period)..<n].map { ($0.close as NSDecimalNumber).doubleValue }
+        let mean = closes.reduce(0, +) / Double(period)
+        let variance = closes.reduce(0) { $0 + pow($1 - mean, 2) } / Double(period)
+        let stdev = sqrt(variance)
+        let upper = mean + 2 * stdev
+        let lower = mean - 2 * stdev
+        if close > upper { return .red.opacity(0.95) }
+        if close < lower { return .green.opacity(0.95) }
+        return nil
     }
 
     // MARK: - 水平参考线（v15.23 batch91 · trader 标支撑/压力价位）

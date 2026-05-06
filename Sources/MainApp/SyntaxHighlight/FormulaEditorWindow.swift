@@ -682,18 +682,30 @@ public struct FormulaEditorWindow: View {
         return (max(0, first), min(last, lines.count - 1))
     }
 
-    /// v15.22 batch19 · 上下移动当前行（⌥↑/⌥↓ · trader 调整公式顺序常用）
+    /// v15.22 batch19+32 · 上下移动行（⌥↑/⌥↓ · 选区 = 整段批量移 · 无选区 = 单行）
     private func moveCurrentLine(up: Bool) {
         let lines = sourceText.components(separatedBy: "\n")
         guard lines.count > 1 else { return }
-        let idx = max(0, min(cursorLine - 1, lines.count - 1))
-        let target = up ? idx - 1 : idx + 1
-        guard target >= 0, target < lines.count else { return }
-        var newLines = lines
-        newLines.swapAt(idx, target)
-        sourceText = newLines.joined(separator: "\n")
-        cursorLine = target + 1   // 1-based · 跟随移动
-        statusMessage = up ? "第 \(idx + 1) 行上移" : "第 \(idx + 1) 行下移"
+        let (first, last) = selectedLineRange(in: lines)
+        if up {
+            guard first > 0 else { return }
+            let block = Array(lines[first...last])
+            var newLines = lines
+            newLines.removeSubrange(first...last)
+            newLines.insert(contentsOf: block, at: first - 1)
+            sourceText = newLines.joined(separator: "\n")
+            cursorLine = first   // 1-based · 上移后块起始 first → first-1 · 光标 first-1+1=first
+        } else {
+            guard last < lines.count - 1 else { return }
+            let block = Array(lines[first...last])
+            var newLines = lines
+            newLines.removeSubrange(first...last)
+            newLines.insert(contentsOf: block, at: first + 1)
+            sourceText = newLines.joined(separator: "\n")
+            cursorLine = last + 2   // 1-based · 下移后块末尾 last → last+1 · 光标 last+1+1=last+2
+        }
+        let count = last - first + 1
+        statusMessage = up ? "上移 \(count) 行" : "下移 \(count) 行"
     }
 
     private func textStats(_ s: String) -> (chars: Int, lines: Int) {

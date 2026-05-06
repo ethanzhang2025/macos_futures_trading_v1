@@ -641,27 +641,45 @@ public struct FormulaEditorWindow: View {
         return line
     }
 
-    /// v15.22 batch17 · 删除当前光标所在行（⌘⇧K · 删空时保留 1 个空行避免 [].joined 异常）
+    /// v15.22 batch17+32 · 删除当前行（⌘⇧K · 选区跨行 = 批量删 · 无选区 = 单行）
     private func deleteCurrentLine() {
         let lines = sourceText.components(separatedBy: "\n")
         guard !lines.isEmpty else { return }
-        let idx = max(0, min(cursorLine - 1, lines.count - 1))
+        let (firstLine, lastLine) = selectedLineRange(in: lines)
         var newLines = lines
-        newLines.remove(at: idx)
+        newLines.removeSubrange(firstLine...lastLine)
         if newLines.isEmpty { newLines = [""] }
         sourceText = newLines.joined(separator: "\n")
-        statusMessage = "已删除第 \(idx + 1) 行"
+        statusMessage = "已删除 \(lastLine - firstLine + 1) 行"
     }
 
-    /// v15.22 batch18 · 复制当前行到下一行（⌘D · trader 改参数前留备份常用）
+    /// v15.22 batch18+32 · 复制行（⌘D · 选区跨行 = 整段复制粘贴到下方 · 无选区 = 单行）
     private func duplicateCurrentLine() {
         let lines = sourceText.components(separatedBy: "\n")
         guard !lines.isEmpty else { return }
-        let idx = max(0, min(cursorLine - 1, lines.count - 1))
+        let (firstLine, lastLine) = selectedLineRange(in: lines)
+        let block = Array(lines[firstLine...lastLine])
         var newLines = lines
-        newLines.insert(lines[idx], at: idx + 1)
+        newLines.insert(contentsOf: block, at: lastLine + 1)
         sourceText = newLines.joined(separator: "\n")
-        statusMessage = "已复制第 \(idx + 1) 行"
+        statusMessage = "已复制 \(block.count) 行"
+    }
+
+    /// v15.22 batch32 · 解析选区跨行的 [firstLine, lastLine]（0-based · 复用于多行操作）
+    private func selectedLineRange(in lines: [String]) -> (Int, Int) {
+        let nsStr = sourceText as NSString
+        let first: Int
+        let last: Int
+        if selectionRange.length > 0 {
+            first = lineForUtf16(selectionRange.location, in: nsStr)
+            let endIdx = max(selectionRange.location, NSMaxRange(selectionRange) - 1)
+            last = lineForUtf16(endIdx, in: nsStr)
+        } else {
+            let idx = max(0, min(cursorLine - 1, lines.count - 1))
+            first = idx
+            last = idx
+        }
+        return (max(0, first), min(last, lines.count - 1))
     }
 
     /// v15.22 batch19 · 上下移动当前行（⌥↑/⌥↓ · trader 调整公式顺序常用）

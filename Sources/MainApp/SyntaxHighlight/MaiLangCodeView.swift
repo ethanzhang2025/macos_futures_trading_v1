@@ -115,6 +115,21 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 textView.insertText("    ", replacementRange: textView.selectedRange())
                 return true
             }
+            // v15.22 batch16 · 配对 backspace · `(|)` 按 backspace 同删两侧（与 batch12/13 闭环）
+            if commandSelector == #selector(NSResponder.deleteBackward(_:)) {
+                let ns = textView.string as NSString
+                let range = textView.selectedRange()
+                if range.length == 0, range.location > 0, range.location < ns.length {
+                    let prev = ns.substring(with: NSRange(location: range.location - 1, length: 1))
+                    let next = ns.substring(with: NSRange(location: range.location, length: 1))
+                    let pairs: [String: String] = ["(": ")", "[": "]", "{": "}", "'": "'", "\"": "\""]
+                    if let close = pairs[prev], close == next {
+                        textView.insertText("", replacementRange: NSRange(location: range.location - 1, length: 2))
+                        return true
+                    }
+                }
+                return false   // 非配对场景走默认 backspace
+            }
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
                 let ns = textView.string as NSString
                 let loc = textView.selectedRange().location

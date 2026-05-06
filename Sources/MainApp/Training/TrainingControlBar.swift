@@ -28,6 +28,8 @@ struct TrainingControlBar: View {
     @State private var pendingBalance: String = "100000"
     @State private var feedback: String? = nil
     @State private var nowTick: Date = Date()
+    /// v15.23 batch16 · 选中的预设场景（nil = 自定义）
+    @State private var selectedPresetID: UUID? = nil
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -115,8 +117,45 @@ struct TrainingControlBar: View {
             Text("开始模拟训练")
                 .font(.title3).fontWeight(.semibold)
 
+            // v15.23 batch16 · 推荐场景 picker（一键填充 scenarioName + initialBalance）
             HStack {
-                Text("场景").frame(width: 70, alignment: .leading)
+                Text("预设").frame(width: 70, alignment: .leading)
+                Menu {
+                    Button("自定义（不用预设）") {
+                        selectedPresetID = nil
+                    }
+                    Divider()
+                    ForEach(TrainingScenario.Difficulty.allCases, id: \.self) { difficulty in
+                        let scenarios = TrainingScenarios.presets(of: difficulty)
+                        if !scenarios.isEmpty {
+                            Section(difficulty.emoji + " " + difficulty.displayName) {
+                                ForEach(scenarios) { s in
+                                    Button(s.name) {
+                                        applyPreset(s)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text(selectedPresetLabel)
+                            .foregroundColor(selectedPresetID == nil ? .secondary : .primary)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            // 选中预设时显示场景描述卡
+            if let preset = selectedPreset {
+                presetDescription(preset)
+            }
+
+            HStack {
+                Text("场景名").frame(width: 70, alignment: .leading)
                 TextField("如：螺纹钢急涨急跌 2020-08-12", text: $pendingScenario)
                     .textFieldStyle(.roundedBorder)
             }
@@ -152,7 +191,50 @@ struct TrainingControlBar: View {
             }
         }
         .padding(20)
-        .frame(width: 400, height: 220)
+        .frame(width: 460, height: selectedPreset == nil ? 280 : 380)
+    }
+
+    // MARK: - v15.23 batch16 · 预设场景操作
+
+    private var selectedPreset: TrainingScenario? {
+        guard let id = selectedPresetID else { return nil }
+        return TrainingScenarios.defaultPresets.first { $0.id == id }
+    }
+
+    private var selectedPresetLabel: String {
+        if let preset = selectedPreset {
+            return "\(preset.difficulty.emoji) \(preset.name)"
+        }
+        return "自定义训练"
+    }
+
+    private func applyPreset(_ scenario: TrainingScenario) {
+        selectedPresetID = scenario.id
+        pendingScenario = scenario.name
+        pendingBalance = String(format: "%.0f", (scenario.initialBalance as NSDecimalNumber).doubleValue)
+    }
+
+    private func presetDescription(_ scenario: TrainingScenario) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(scenario.description)
+                .font(.system(size: 12))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 14) {
+                metricChip(label: "合约", value: scenario.instrumentID, color: .accentColor)
+                metricChip(label: "时长", value: scenario.durationDescription, color: .blue)
+                metricChip(label: "建议训练", value: "\(scenario.recommendedDurationMinutes) 分", color: .orange)
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func metricChip(label: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label).font(.system(size: 10)).foregroundColor(.secondary)
+            Text(value).font(.system(size: 12, design: .monospaced)).foregroundColor(color)
+        }
     }
 
     // MARK: - 业务

@@ -41,6 +41,10 @@ public struct FormulaEditorWindow: View {
     @State private var currentTokenSig: String? = nil
     /// v15.22 batch28 · 函数列表面板（⌘⇧L 切换 · 73 函数 9 分类）
     @State private var showFunctionsPanel: Bool = false
+    /// v15.22 batch29 · 跳转到行 sheet + 待跳转行号
+    @State private var showGotoLineSheet: Bool = false
+    @State private var gotoLineInput: String = ""
+    @State private var pendingGotoLine: Int? = nil
 
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
@@ -65,7 +69,8 @@ public struct FormulaEditorWindow: View {
                                 } else {
                                     currentTokenSig = nil
                                 }
-                            })
+                            },
+                            pendingGotoLine: $pendingGotoLine)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onChange(of: sourceText) { _ in
                     // v15.22 batch6 · 用户改动后清错误标注（防陈旧 marker 误导）
@@ -76,6 +81,28 @@ public struct FormulaEditorWindow: View {
             statusBar
         }
         .frame(minWidth: 720, idealWidth: 920, minHeight: 480, idealHeight: 640)
+        // v15.22 batch29 · 跳转到行 sheet
+        .sheet(isPresented: $showGotoLineSheet) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("跳转到行").font(.title2).bold()
+                let total = textStats(sourceText).lines
+                Text("总 \(total) 行 · 当前光标第 \(cursorLine) 行")
+                    .font(.caption).foregroundColor(.secondary)
+                TextField("行号（1-\(total)）", text: $gotoLineInput)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { commitGotoLine() }
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button("取消") { showGotoLineSheet = false }.keyboardShortcut(.cancelAction)
+                    Button("跳转") { commitGotoLine() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(Int(gotoLineInput) == nil)
+                }
+            }
+            .padding(20)
+            .frame(width: 320, height: 180)
+        }
         // v15.22 batch28 · 函数库 sheet（73 函数按 9 分类 List · 一键复制签名）
         .sheet(isPresented: $showFunctionsPanel) {
             VStack(alignment: .leading, spacing: 0) {
@@ -317,6 +344,15 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
             .help("浏览 73 个内置函数（⌘⇧L · 按分类 · 复制签名）")
+            // v15.22 batch29 · 跳转到行（⌘L · 与 batch20 行号/batch24 点击行号联动）
+            Button {
+                gotoLineInput = "\(cursorLine)"
+                showGotoLineSheet = true
+            } label: {
+                Label("跳转到行", systemImage: "arrow.right.to.line")
+            }
+            .keyboardShortcut("l", modifiers: [.command])
+            .help("跳转到指定行（⌘L · 输入行号）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in
@@ -583,6 +619,16 @@ public struct FormulaEditorWindow: View {
         sourceText = newLines.joined(separator: "\n")
         let count = lineRange.count
         statusMessage = delta > 0 ? "缩进 \(count) 行" : "反缩进 \(count) 行"
+    }
+
+    /// v15.22 batch29 · 跳转到输入行号（clamp 到 [1, total]）· 触发 MaiLangCodeView updateNSView 跳转
+    private func commitGotoLine() {
+        guard let raw = Int(gotoLineInput.trimmingCharacters(in: .whitespaces)) else { return }
+        let total = textStats(sourceText).lines
+        let target = max(1, min(raw, max(1, total)))
+        pendingGotoLine = target
+        statusMessage = "已跳转到第 \(target) 行"
+        showGotoLineSheet = false
     }
 
     /// utf16 location → 0-based 行号

@@ -28,12 +28,15 @@ public struct MaiLangCodeView: NSViewRepresentable {
     let onSelectionChange: ((NSRange) -> Void)?
     /// v15.22 batch27 · 当前光标处 token 文本回调（nil = 无 token · 用于 status bar 函数签名实时显示）
     let onTokenAtCursor: ((String?) -> Void)?
+    /// v15.22 batch29 · 跳转到指定行（1-based · 设非 nil 触发 updateNSView 跳转后自动清回 nil）
+    @Binding var pendingGotoLine: Int?
 
     public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark,
                 fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil,
                 onCursorChange: ((Int, Int) -> Void)? = nil,
                 onSelectionChange: ((NSRange) -> Void)? = nil,
-                onTokenAtCursor: ((String?) -> Void)? = nil) {
+                onTokenAtCursor: ((String?) -> Void)? = nil,
+                pendingGotoLine: Binding<Int?> = .constant(nil)) {
         self._text = text
         self.scheme = scheme
         self.fontSize = fontSize
@@ -41,6 +44,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
         self.onCursorChange = onCursorChange
         self.onSelectionChange = onSelectionChange
         self.onTokenAtCursor = onTokenAtCursor
+        self._pendingGotoLine = pendingGotoLine
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -79,6 +83,26 @@ public struct MaiLangCodeView: NSViewRepresentable {
         applyHighlight(to: tv)
         // v15.22 batch20 · 主题/文本变化后刷行号
         scrollView.verticalRulerView?.needsDisplay = true
+        // v15.22 batch29 · 处理跳转请求（行号 1-based）
+        if let target = pendingGotoLine, target > 0 {
+            let nsStr = tv.string as NSString
+            var currentLine = 1
+            var lineStart = 0
+            var i = 0
+            while i < nsStr.length && currentLine < target {
+                if nsStr.character(at: i) == 0x0A {
+                    currentLine += 1
+                    lineStart = i + 1
+                }
+                i += 1
+            }
+            if currentLine == target {
+                tv.setSelectedRange(NSRange(location: lineStart, length: 0))
+                tv.scrollRangeToVisible(NSRange(location: lineStart, length: 0))
+                tv.window?.makeFirstResponder(tv)
+            }
+            DispatchQueue.main.async { self.pendingGotoLine = nil }
+        }
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator(self) }

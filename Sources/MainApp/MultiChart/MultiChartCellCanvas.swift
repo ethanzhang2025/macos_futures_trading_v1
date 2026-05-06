@@ -67,6 +67,8 @@ struct MultiChartCellCanvas: View {
                     drawGrid(in: ctx, rect: volumeRect, lines: 2)
                     drawVolumes(in: ctx, rect: volumeRect)
                 }
+                // v15.23 batch77 · 简洁 axis 标签（时间 3 + 价格 3 · 不喧宾夺主）
+                drawAxisLabels(in: ctx, priceRect: priceRect, bottomY: size.height)
                 // v15.23 batch68 · 联动十字线（垂直 vertical line at hovered index · 跨 cell 同步）
                 if let hidx = hoveredIndex, hidx >= 0, hidx < bars.count {
                     let centerX = priceRect.minX + (CGFloat(hidx) + 0.5) * priceRect.width / CGFloat(bars.count)
@@ -194,6 +196,78 @@ struct MultiChartCellCanvas: View {
                            lineWidth: 0.7)
             }
         }
+    }
+
+    // MARK: - Axis labels（v15.23 batch77 · 时间 3 个 + 价格 3 个 · 极简版本）
+
+    private func drawAxisLabels(in ctx: GraphicsContext, priceRect: CGRect, bottomY: CGFloat) {
+        let n = bars.count
+        guard n >= 2 else { return }
+        // 价格 max/mid/min · 右侧
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        if let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow {
+            let mid = (maxHigh + minLow) / 2
+            let pricePts: [(Double, CGFloat)] = [
+                (maxHigh, priceRect.minY + 8),
+                (mid, priceRect.midY),
+                (minLow, priceRect.maxY - 8),
+            ]
+            for (price, y) in pricePts {
+                let txt = Text(String(format: "%.2f", price))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.9))
+                let resolved = ctx.resolve(txt)
+                let s = resolved.measure(in: CGSize(width: 80, height: 14))
+                ctx.draw(txt,
+                         at: CGPoint(x: priceRect.maxX - s.width / 2 - 3, y: y),
+                         anchor: .center)
+            }
+        }
+        // 时间 start/mid/end · 底部（紧贴 priceRect.maxY 上沿 · 不与 volume 冲突）
+        let timePts: [(Int, CGFloat)] = [
+            (0, priceRect.minX + 4),
+            (n / 2, priceRect.minX + priceRect.width / 2),
+            (n - 1, priceRect.maxX - 4),
+        ]
+        for (i, x) in timePts {
+            guard i >= 0, i < n else { continue }
+            let label = formatBarTime(bars[i].openTime)
+            let txt = Text(label)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.85))
+            let resolved = ctx.resolve(txt)
+            let s = resolved.measure(in: CGSize(width: 100, height: 14))
+            // 边界保护：首末 label 紧贴边缘 · 中间居中
+            let drawX: CGFloat
+            if i == 0 {
+                drawX = x + s.width / 2
+            } else if i == n - 1 {
+                drawX = x - s.width / 2
+            } else {
+                drawX = x
+            }
+            ctx.draw(txt,
+                     at: CGPoint(x: drawX, y: priceRect.maxY - 7),
+                     anchor: .center)
+        }
+    }
+
+    /// 时间格式按周期粒度（小周期分钟级 / 中周期日时 / 日线日期）
+    private func formatBarTime(_ t: Date) -> String {
+        let f = DateFormatter()
+        let period = bars.first?.period ?? .minute15
+        switch period {
+        case .minute1, .minute3, .minute5, .minute15, .minute30:
+            f.dateFormat = "MM/dd HH:mm"
+        case .hour1, .hour2, .hour4:
+            f.dateFormat = "MM/dd HH"
+        case .daily, .weekly, .monthly:
+            f.dateFormat = "yy/MM/dd"
+        default:
+            f.dateFormat = "MM/dd HH:mm"
+        }
+        return f.string(from: t)
     }
 
     // MARK: - MA（v15.23 batch72 · 简单移动平均线 · 复用蜡烛 minLow/maxHigh 价格映射）

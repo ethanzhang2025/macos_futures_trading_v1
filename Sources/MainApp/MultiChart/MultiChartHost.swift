@@ -47,6 +47,8 @@ struct MultiChartHost: View {
     @State private var sharedHoveredIndex: Int? = nil
     /// v15.23 batch70 · cell 真行情 bars 镜像（uuid → bars · cell 上报 · statusBar hoverOHLC 用）
     @State private var cellLiveBars: [UUID: [KLine]] = [:]
+    /// v15.23 batch100 · 截图导出整张 multichart 为 PNG（trader 复盘）
+    @State private var exportTrigger: UUID = UUID()
 
     private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -227,6 +229,16 @@ struct MultiChartHost: View {
             }
             .buttonStyle(.borderless)
             .help(autoTickEnabled ? "实时抖动开（每秒 mock tick）" : "已暂停 mock tick")
+
+            // v15.23 batch100 · 截图导出 PNG（trader 复盘工具）
+            Button {
+                exportSnapshot()
+            } label: {
+                Image(systemName: "camera")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("一键截图整张多图表为 PNG（trader 复盘 / 分享同事）")
 
             // v15.23 batch60 · 帮助面板
             Button {
@@ -790,6 +802,29 @@ struct MultiChartHost: View {
         return f.string(from: Date())
     }
 
+    /// v15.23 batch100 · 截图整张 multichart 为 PNG（trader 复盘工具）
+    /// 使用 ImageRenderer 渲染 grid view · NSSavePanel 选目录 + 文件名
+    @MainActor
+    private func exportSnapshot() {
+        let snapshotView = grid
+            .frame(width: 1280, height: 800)
+            .background(Color(NSColor.windowBackgroundColor))
+        let renderer = ImageRenderer(content: snapshotView)
+        renderer.scale = 2.0  // Retina 高清
+        guard let nsImage = renderer.nsImage else { return }
+        guard let tiff = nsImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return
+        }
+        let panel = NSSavePanel()
+        panel.title = "导出多图表截图"
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "multichart_\(currentDateText()).png"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? pngData.write(to: url)
+    }
+
     // v15.23 batch60 · 帮助面板内容
     private static let helpGroups: [(String, [(String, String)])] = [
         ("📐 布局切换", [
@@ -823,6 +858,7 @@ struct MultiChartHost: View {
             ("toolbar 批量 Menu", "全部 cell 设为同一周期（多合约比对）"),
             ("toolbar 批量 Menu", "全部 cell 设为同一合约（多周期比对）"),
             ("toolbar 重置 cells", "全部还原为默认合约 + 周期"),
+            ("toolbar 截图按钮（batch100）", "一键导出整张多图表为 PNG（NSSavePanel · trader 复盘 / 分享同事）"),
         ]),
         ("📚 布局预设", [
             ("toolbar 布局预设 → 保存", "命名当前布局（如\"日内全屏六宫\"）"),

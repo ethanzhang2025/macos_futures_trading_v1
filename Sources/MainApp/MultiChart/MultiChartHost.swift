@@ -26,9 +26,17 @@ struct MultiChartHost: View {
     @AppStorage("viewState.v1.multiChart.cellsJSON") private var cellsJSON: String = ""
 
     @State private var cells: [MultiChartCellState] = []
+    /// v15.23 batch53 · 双击 focus 时记下原 preset · 再次双击/Esc 恢复
+    @State private var focusedIdx: Int? = nil
+    @State private var presetBeforeFocus: WindowGridPreset? = nil
 
     private var preset: WindowGridPreset {
         WindowGridPreset(rawValue: presetRaw) ?? .grid2x2
+    }
+
+    /// 当前实际渲染的 preset（focus 时强制 single · 不持久化）
+    private var effectivePreset: WindowGridPreset {
+        focusedIdx == nil ? preset : .single
     }
 
     var body: some View {
@@ -41,6 +49,26 @@ struct MultiChartHost: View {
         .onAppear {
             loadCellsIfNeeded()
         }
+        // v15.23 batch53 · grid preset 快捷键 ⌘⌥1-6（隐藏 button 触发）
+        .background(
+            Group {
+                Button("") { applyPreset(.single) }
+                    .keyboardShortcut("1", modifiers: [.command, .option]).opacity(0)
+                Button("") { applyPreset(.horizontal2) }
+                    .keyboardShortcut("2", modifiers: [.command, .option]).opacity(0)
+                Button("") { applyPreset(.vertical2) }
+                    .keyboardShortcut("3", modifiers: [.command, .option]).opacity(0)
+                Button("") { applyPreset(.grid2x2) }
+                    .keyboardShortcut("4", modifiers: [.command, .option]).opacity(0)
+                Button("") { applyPreset(.grid2x3) }
+                    .keyboardShortcut("5", modifiers: [.command, .option]).opacity(0)
+                Button("") { applyPreset(.grid3x2) }
+                    .keyboardShortcut("6", modifiers: [.command, .option]).opacity(0)
+                Button("") { exitFocus() }
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .opacity(0)
+            }
+        )
     }
 
     // MARK: - Toolbar
@@ -52,10 +80,7 @@ struct MultiChartHost: View {
 
             Picker("布局", selection: Binding(
                 get: { preset },
-                set: { newPreset in
-                    presetRaw = newPreset.rawValue
-                    syncCellsToPreset(newPreset)
-                }
+                set: { applyPreset($0) }
             )) {
                 ForEach(WindowGridPreset.allCases, id: \.self) { p in
                     Text(p.label).tag(p)
@@ -69,7 +94,24 @@ struct MultiChartHost: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
+            // v15.23 batch53 · focus 模式提示
+            if let idx = focusedIdx {
+                HStack(spacing: 4) {
+                    Image(systemName: "viewfinder")
+                        .foregroundColor(.accentColor)
+                    Text("聚焦 #\(idx + 1) · Esc 或双击退出")
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                }
+            }
+
             Spacer()
+
+            // v15.23 batch53 · 快捷键提示（hover 显示）
+            Text("⌘⌥1-6 切布局")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .help("⌘⌥1=单图 / 2=横 / 3=纵 / 4=四宫 / 5=2×3 / 6=3×2 · 双击 cell 全屏 · Esc 退出")
 
             Button {
                 resetAllCells()
@@ -87,11 +129,14 @@ struct MultiChartHost: View {
 
     private var grid: some View {
         GeometryReader { geo in
-            let frames = preset.layout(forWindowCount: preset.maxWindows)
+            let p = effectivePreset
+            let frames = p.layout(forWindowCount: p.maxWindows)
             ZStack(alignment: .topLeading) {
                 ForEach(Array(frames.enumerated()), id: \.offset) { idx, frame in
-                    let cellState = cellAt(idx)
-                    cellView(state: cellState, idx: idx)
+                    // focus 时仅渲染 focused cell 内容（idx=0 槽 → focusedIdx 那个 state）
+                    let realIdx = focusedIdx ?? idx
+                    let cellState = cellAt(realIdx)
+                    cellView(state: cellState, idx: realIdx)
                         .frame(
                             width: max(0, geo.size.width * frame.width - 4),
                             height: max(0, geo.size.height * frame.height - 4)
@@ -100,6 +145,9 @@ struct MultiChartHost: View {
                             x: geo.size.width * frame.x + 2,
                             y: geo.size.height * frame.y + 2
                         )
+                        .onTapGesture(count: 2) {
+                            toggleFocus(idx: realIdx)
+                        }
                 }
             }
         }
@@ -243,6 +291,31 @@ struct MultiChartHost: View {
             }
         }
         persistCells()
+    }
+
+    /// v15.23 batch53 · 应用 preset（菜单 + 快捷键共用）
+    private func applyPreset(_ p: WindowGridPreset) {
+        // 切 preset 时退出 focus
+        focusedIdx = nil
+        presetBeforeFocus = nil
+        presetRaw = p.rawValue
+        syncCellsToPreset(p)
+    }
+
+    /// v15.23 batch53 · cell 双击 toggle focus（focus 时该 cell 全屏）
+    private func toggleFocus(idx: Int) {
+        if focusedIdx == idx {
+            exitFocus()
+        } else {
+            presetBeforeFocus = preset
+            focusedIdx = idx
+        }
+    }
+
+    /// 退出 focus 模式（Esc 或再次双击）· 不改 preset 只清 focus
+    private func exitFocus() {
+        focusedIdx = nil
+        presetBeforeFocus = nil
     }
 
     /// 还原所有 cell 为默认配置（不删 cells · 只重置 instrumentID/period）

@@ -47,6 +47,11 @@ public struct MaiLangCodeView: NSViewRepresentable {
         tv.isAutomaticTextReplacementEnabled = false
         tv.isAutomaticSpellingCorrectionEnabled = false
         tv.isContinuousSpellCheckingEnabled = false
+        // v15.22 batch20 · 行号 gutter（NSRulerView · 与编译错误"第 N 行"对齐）
+        let ruler = LineNumberRulerView(textView: tv, fontSize: fontSize)
+        scrollView.verticalRulerView = ruler
+        scrollView.hasVerticalRuler = true
+        scrollView.rulersVisible = true
         applyTheme(to: tv)
         // 初始文本
         tv.string = text
@@ -64,6 +69,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
         }
         applyTheme(to: tv)
         applyHighlight(to: tv)
+        // v15.22 batch20 · 主题/文本变化后刷行号
+        scrollView.verticalRulerView?.needsDisplay = true
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -249,6 +256,72 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
     private func nsColor(_ rgb: SyntaxRGB) -> NSColor {
         NSColor(red: CGFloat(rgb.r), green: CGFloat(rgb.g), blue: CGFloat(rgb.b), alpha: 1)
+    }
+
+    // MARK: - v15.22 batch20 · 行号 gutter（NSRulerView · 与编译错误"第 N 行"对齐 trader 一眼定位）
+
+    final class LineNumberRulerView: NSRulerView {
+        private weak var sourceTextView: NSTextView?
+        private let labelFont: NSFont
+
+        init(textView: NSTextView, fontSize: CGFloat) {
+            self.sourceTextView = textView
+            self.labelFont = NSFont.monospacedSystemFont(ofSize: max(10, fontSize - 1), weight: .regular)
+            super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
+            self.clientView = textView
+            self.ruleThickness = 40
+            NotificationCenter.default.addObserver(self, selector: #selector(needsRedraw),
+                name: NSText.didChangeNotification, object: textView)
+            if let sv = textView.enclosingScrollView {
+                sv.contentView.postsBoundsChangedNotifications = true
+                NotificationCenter.default.addObserver(self, selector: #selector(needsRedraw),
+                    name: NSView.boundsDidChangeNotification, object: sv.contentView)
+            }
+        }
+
+        required init(coder: NSCoder) { fatalError() }
+
+        @objc private func needsRedraw() { needsDisplay = true }
+
+        override func draw(_ dirtyRect: NSRect) {
+            NSColor.windowBackgroundColor.withAlphaComponent(0.5).setFill()
+            dirtyRect.fill()
+            NSColor.separatorColor.setFill()
+            NSRect(x: bounds.width - 0.5, y: 0, width: 0.5, height: bounds.height).fill()
+
+            guard let tv = sourceTextView,
+                  let lm = tv.layoutManager,
+                  let tc = tv.textContainer else { return }
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: labelFont,
+                .foregroundColor: NSColor.secondaryLabelColor,
+            ]
+            let visibleRect = scrollView?.contentView.bounds ?? tv.visibleRect
+            let nsStr = tv.string as NSString
+            let length = nsStr.length
+
+            // 每行起始字符索引（含末尾空行）
+            var lineStarts: [Int] = [0]
+            for i in 0..<length {
+                if nsStr.character(at: i) == 0x0A { lineStarts.append(i + 1) }
+            }
+            for (idx, start) in lineStarts.enumerated() {
+                // 末尾空行（start == length）glyphIndexForCharacter 返回 numberOfGlyphs · 用 extraLineFragmentRect
+                let glyphRect: NSRect
+                if start >= length {
+                    glyphRect = lm.extraLineFragmentRect.height > 0 ? lm.extraLineFragmentRect : .zero
+                } else {
+                    let glyphIndex = lm.glyphIndexForCharacter(at: start)
+                    glyphRect = lm.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+                }
+                let y = glyphRect.origin.y - visibleRect.origin.y + tv.textContainerOrigin.y + 2
+                if y + glyphRect.height < 0 || y > bounds.height { continue }
+                let str = "\(idx + 1)" as NSString
+                let size = str.size(withAttributes: attrs)
+                let x = ruleThickness - size.width - 6
+                str.draw(at: NSPoint(x: x, y: y), withAttributes: attrs)
+            }
+        }
     }
 
     /// v15.22 batch6 · 行/列（1-based）→ NSRange UTF-16 偏移 · 越界返回 nil

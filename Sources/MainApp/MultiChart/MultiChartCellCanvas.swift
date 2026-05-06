@@ -40,6 +40,8 @@ struct MultiChartCellCanvas: View {
     let isTimeShareMode: Bool
     /// v15.23 batch94 · 整数关口辅助线（trader 心理关口 · 灰虚线 · 默认关）
     let showIntegerLevels: Bool
+    /// v15.23 batch97 · 涨跌停参考线（红=涨停 · 绿=跌停 · first close × ±10% 简化估算）
+    let showLimitLines: Bool
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
@@ -50,7 +52,8 @@ struct MultiChartCellCanvas: View {
          showSAR: Bool = false,
          horizontalLines: [Double] = [],
          isTimeShareMode: Bool = false,
-         showIntegerLevels: Bool = false) {
+         showIntegerLevels: Bool = false,
+         showLimitLines: Bool = false) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
@@ -62,6 +65,7 @@ struct MultiChartCellCanvas: View {
         self.horizontalLines = horizontalLines
         self.isTimeShareMode = isTimeShareMode
         self.showIntegerLevels = showIntegerLevels
+        self.showLimitLines = showLimitLines
     }
 
     var body: some View {
@@ -109,6 +113,10 @@ struct MultiChartCellCanvas: View {
                 // v15.23 batch94 · 整数关口辅助线（trader 心理关口 · 自动按价位级别）
                 if showIntegerLevels {
                     drawIntegerLevels(in: ctx, rect: priceRect)
+                }
+                // v15.23 batch97 · 涨跌停参考线（中国期货特色 · 简化版 first close × ±10%）
+                if showLimitLines {
+                    drawLimitLines(in: ctx, rect: priceRect)
                 }
                 if subHeight > 8 {
                     drawGrid(in: ctx, rect: subRect, lines: 2)
@@ -488,6 +496,45 @@ struct MultiChartCellCanvas: View {
         if close > upper { return .red.opacity(0.95) }
         if close < lower { return .green.opacity(0.95) }
         return nil
+    }
+
+    // MARK: - 涨跌停参考线（v15.23 batch97 · 简化版 first close × ±10%）
+
+    /// 红色 = 涨停 · 绿色 = 跌停 · 简化估算（实际不同合约规则不同 · 5%/7%/10% 等）
+    /// 不同 K 线区间会"前结算价"漂移 · 此处用首根 close 当 reference 提供视觉参考
+    private func drawLimitLines(in ctx: GraphicsContext, rect: CGRect) {
+        guard let first = bars.first else { return }
+        let firstClose = (first.close as NSDecimalNumber).doubleValue
+        guard firstClose > 0 else { return }
+        let upperLimit = firstClose * 1.10
+        let lowerLimit = firstClose * 0.90
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let priceRange = maxHigh - minLow
+        let yFor: (Double) -> CGFloat = { p in
+            rect.maxY - CGFloat((p - minLow) / priceRange) * rect.height
+        }
+        // 仅当涨跌停在可视区间附近时画（±20% buffer · 远超出范围则隐藏避免溢出）
+        for (price, color, label) in [
+            (upperLimit, Color.red.opacity(0.4), "涨停 \(String(format: "%.2f", upperLimit))"),
+            (lowerLimit, Color.green.opacity(0.4), "跌停 \(String(format: "%.2f", lowerLimit))"),
+        ] {
+            guard price >= minLow - priceRange * 0.2,
+                  price <= maxHigh + priceRange * 0.2 else { continue }
+            let y = yFor(price)
+            let yClamped = max(rect.minY, min(rect.maxY, y))
+            var line = Path()
+            line.move(to: CGPoint(x: rect.minX, y: yClamped))
+            line.addLine(to: CGPoint(x: rect.maxX, y: yClamped))
+            ctx.stroke(line, with: .color(color),
+                       style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
+            let txt = Text(label)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(color.opacity(2))  // 翻倍透明度让 text 比线明显
+            ctx.draw(txt, at: CGPoint(x: rect.minX + 38, y: yClamped - 6),
+                     anchor: .center)
+        }
     }
 
     // MARK: - 整数关口辅助线（v15.23 batch94 · 自动按价位级别 · trader 心理关口）

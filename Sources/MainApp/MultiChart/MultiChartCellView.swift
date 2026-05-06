@@ -39,6 +39,7 @@ struct MultiChartCellView: View {
     let onBollToggle: () -> Void
     let onSARToggle: () -> Void
     let onIntegerLevelsToggle: () -> Void
+    let onLimitLinesToggle: () -> Void
     let onSubChartTap: (MultiChartSubChartType) -> Void
     let onTimeShareToggle: () -> Void
     let onPushToMain: () -> Void
@@ -106,7 +107,8 @@ struct MultiChartCellView: View {
                 showSAR: state.showSAR,
                 horizontalLines: state.horizontalLines,
                 isTimeShareMode: state.isTimeShareMode,
-                showIntegerLevels: state.showIntegerLevels
+                showIntegerLevels: state.showIntegerLevels,
+                showLimitLines: state.showLimitLines
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -319,6 +321,11 @@ struct MultiChartCellView: View {
                 } label: {
                     Label("整数关口辅助线", systemImage: state.showIntegerLevels ? "checkmark.circle.fill" : "circle")
                 }
+                Button {
+                    onLimitLinesToggle()
+                } label: {
+                    Label("涨跌停参考线（±10%）", systemImage: state.showLimitLines ? "checkmark.circle.fill" : "circle")
+                }
             } label: {
                 Image(systemName: indicatorMenuIcon)
                     .font(.system(size: 11))
@@ -423,9 +430,10 @@ struct MultiChartCellView: View {
                   + (state.showBoll ? 1 : 0)
                   + (state.showSAR ? 1 : 0)
                   + (state.showIntegerLevels ? 1 : 0)
+                  + (state.showLimitLines ? 1 : 0)
         switch count {
         case 0: return .secondary
-        case 1, 2: return .accentColor.opacity(0.75)
+        case 1, 2, 3: return .accentColor.opacity(0.75)
         default: return .accentColor
         }
     }

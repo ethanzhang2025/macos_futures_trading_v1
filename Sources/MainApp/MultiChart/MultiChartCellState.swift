@@ -58,6 +58,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     var isTimeShareMode: Bool
     /// v15.23 batch94 · 整数关口辅助线（trader 心理关口 · 自动按价位级别 step · 默认关）
     var showIntegerLevels: Bool
+    /// v15.23 batch97 · 涨跌停参考线（first close × ±10% 简化估算 · 中国期货特色 · 默认关）
+    var showLimitLines: Bool
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
@@ -69,7 +71,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
          showSAR: Bool = false,
          horizontalLines: [Double] = [],
          isTimeShareMode: Bool = false,
-         showIntegerLevels: Bool = false) {
+         showIntegerLevels: Bool = false,
+         showLimitLines: Bool = false) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
@@ -81,11 +84,12 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.horizontalLines = horizontalLines
         self.isTimeShareMode = isTimeShareMode
         self.showIntegerLevels = showIntegerLevels
+        self.showLimitLines = showLimitLines
     }
 
     /// Codable · 老 cellsJSON 缺新字段时按合理默认值
     enum CodingKeys: String, CodingKey {
-        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels
+        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels, showLimitLines
     }
 
     init(from decoder: Decoder) throws {
@@ -106,6 +110,7 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.horizontalLines = try c.decodeIfPresent([Double].self, forKey: .horizontalLines) ?? []
         self.isTimeShareMode = try c.decodeIfPresent(Bool.self, forKey: .isTimeShareMode) ?? false
         self.showIntegerLevels = try c.decodeIfPresent(Bool.self, forKey: .showIntegerLevels) ?? false
+        self.showLimitLines = try c.decodeIfPresent(Bool.self, forKey: .showLimitLines) ?? false
     }
 }
 

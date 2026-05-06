@@ -45,6 +45,8 @@ public struct FormulaEditorWindow: View {
     @State private var showGotoLineSheet: Bool = false
     @State private var gotoLineInput: String = ""
     @State private var pendingGotoLine: Int? = nil
+    /// v15.22 batch34 · 快捷键帮助面板
+    @State private var showHelpSheet: Bool = false
 
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
@@ -81,6 +83,38 @@ public struct FormulaEditorWindow: View {
             statusBar
         }
         .frame(minWidth: 720, idealWidth: 920, minHeight: 480, idealHeight: 640)
+        // v15.22 batch34 · 快捷键帮助面板（22+ 快捷键 · 按主题分组）
+        .sheet(isPresented: $showHelpSheet) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("⌨️ 编辑器快捷键").font(.title2).bold()
+                    Spacer()
+                    Button("关闭") { showHelpSheet = false }.keyboardShortcut(.cancelAction)
+                }
+                .padding(12)
+                Divider()
+                List {
+                    ForEach(Self.helpGroups, id: \.0) { (group, items) in
+                        Section(header: Text(group).font(.headline)) {
+                            ForEach(items, id: \.0) { item in
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(item.0)
+                                        .font(.system(.body, design: .monospaced))
+                                        .frame(width: 130, alignment: .leading)
+                                        .foregroundColor(.accentColor)
+                                    Text(item.1)
+                                        .font(.callout)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 1)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.sidebar)
+            }
+            .frame(minWidth: 520, idealWidth: 600, minHeight: 540, idealHeight: 680)
+        }
         // v15.22 batch29 · 跳转到行 sheet
         .sheet(isPresented: $showGotoLineSheet) {
             VStack(alignment: .leading, spacing: 12) {
@@ -353,6 +387,14 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("l", modifiers: [.command])
             .help("跳转到指定行（⌘L · 输入行号）")
+            // v15.22 batch34 · 快捷键帮助面板（⌘⇧? · trader 学习编辑器 22+ 快捷键）
+            Button {
+                showHelpSheet = true
+            } label: {
+                Label("帮助", systemImage: "questionmark.circle")
+            }
+            .keyboardShortcut("?", modifiers: [.command, .shift])
+            .help("查看所有编辑器快捷键（⌘⇧?）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in
@@ -707,6 +749,46 @@ public struct FormulaEditorWindow: View {
         let count = last - first + 1
         statusMessage = up ? "上移 \(count) 行" : "下移 \(count) 行"
     }
+
+    /// v15.22 batch34 · 编辑器快捷键全集 · 按主题分组（trader 学习参考）
+    private static let helpGroups: [(String, [(String, String)])] = [
+        ("📁 文件 / 复制", [
+            ("⌘O", "打开 .wh / .txt 文件"),
+            ("⌘S", "保存为 .wh / .txt"),
+            ("⌘⇧C", "复制全文（纯文本）"),
+            ("⌘⌥C", "复制为 Markdown 代码块（含 ```mailang fenced）"),
+        ]),
+        ("🔧 编译 / 学习", [
+            ("⌘B", "编译验证（IndicatorCore Lexer + Parser · 错误显示行列）"),
+            ("⌘⇧L", "函数库面板（73 函数 9 分类 · 复制签名）"),
+            ("⌘⇧?", "本帮助面板"),
+        ]),
+        ("✏️ 行级编辑（多行选区批量）", [
+            ("⌘/", "注释 / 取消注释"),
+            ("⌘⇧K", "删除整行"),
+            ("⌘D", "复制整行到下方"),
+            ("⌥↑ / ⌥↓", "上下移动"),
+            ("⌘] / ⌘[", "缩进 / 反缩进 4 空格"),
+        ]),
+        ("🎯 行级定位", [
+            ("⌘L", "跳转到指定行（输入行号）"),
+            ("点击行号", "选中整行（左侧 gutter）"),
+            ("status bar", "实时显示光标位置 行:列"),
+        ]),
+        ("🔍 查找", [
+            ("⌘F", "查找（NSTextView 内置 find bar · 增量）"),
+            ("⌘⌥F", "查找替换"),
+            ("⌘G / ⌘⇧G", "下一个 / 上一个匹配"),
+        ]),
+        ("⌨️ 输入辅助", [
+            ("Tab", "插入 4 空格（与 Swift 习惯一致）"),
+            ("Enter", "保持上一行缩进"),
+            ("Esc / F5", "弹出自动补全候选"),
+            ("输入 ( [ { ' \"", "自动补对应闭合（光标停中间）"),
+            ("⌫", "在配对中按删除 → 同时删两侧（如 (|) → 删空）"),
+            ("智能大写", "完整保留字 + 空格/逗号/括号 → 自动转大写"),
+        ]),
+    ]
 
     private func textStats(_ s: String) -> (chars: Int, lines: Int) {
         let chars = s.count

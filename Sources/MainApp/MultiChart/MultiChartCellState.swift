@@ -18,6 +18,7 @@ enum MultiChartSubChartType: String, Codable, Equatable, Hashable, CaseIterable 
     case volume = "volume"  // 成交量（默认）
     case kdj = "kdj"        // KDJ 随机指标（短线超买超卖）
     case macd = "macd"      // MACD 双线 + 红绿柱（趋势 + 量能 · 中长线 trader 必看）
+    case rsi = "rsi"        // RSI 14 相对强弱（独立判断超买/超卖 · 30/70 经典阈值）
 
     var displayName: String {
         switch self {
@@ -25,6 +26,7 @@ enum MultiChartSubChartType: String, Codable, Equatable, Hashable, CaseIterable 
         case .volume: return "成交量"
         case .kdj: return "KDJ"
         case .macd: return "MACD"
+        case .rsi: return "RSI"
         }
     }
 }

@@ -88,6 +88,8 @@ struct MultiChartCellCanvas: View {
                         drawKDJ(in: ctx, rect: subRect)
                     case .macd:
                         drawMACD(in: ctx, rect: subRect)
+                    case .rsi:
+                        drawRSI(in: ctx, rect: subRect)
                     }
                 }
                 // v15.23 batch77 · 简洁 axis 标签（时间 3 + 价格 3 · 不喧宾夺主）
@@ -444,6 +446,46 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(color), lineWidth: 0.9)
+    }
+
+    // MARK: - RSI（v15.23 batch84 · 标准 14 周期 · 30/70 超买超卖 · 趋势强弱）
+
+    /// RSI(14) = 100 - 100 / (1 + RS) · RS = avg_gain / avg_loss · Wilder 平滑
+    private func drawRSI(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        let N = 14
+        guard n >= N + 1 else { return }
+        let closes = bars.map { ($0.close as NSDecimalNumber).doubleValue }
+        var rsi: [Double] = Array(repeating: .nan, count: n)
+        // 首个 RSI[N] 用 simple average · 之后 Wilder 平滑
+        var gainSum = 0.0
+        var lossSum = 0.0
+        for i in 1...N {
+            let diff = closes[i] - closes[i - 1]
+            if diff >= 0 { gainSum += diff } else { lossSum -= diff }
+        }
+        var avgGain = gainSum / Double(N)
+        var avgLoss = lossSum / Double(N)
+        rsi[N] = avgLoss > 0 ? 100 - 100 / (1 + avgGain / avgLoss) : 100
+        for i in (N + 1)..<n {
+            let diff = closes[i] - closes[i - 1]
+            let g = diff >= 0 ? diff : 0
+            let l = diff < 0 ? -diff : 0
+            avgGain = (avgGain * Double(N - 1) + g) / Double(N)
+            avgLoss = (avgLoss * Double(N - 1) + l) / Double(N)
+            rsi[i] = avgLoss > 0 ? 100 - 100 / (1 + avgGain / avgLoss) : 100
+        }
+        // 70 / 30 参考虚线（经典超买/超卖位）
+        for ref in [70.0, 30.0] {
+            let y = rect.maxY - CGFloat(ref / 100) * rect.height
+            var path = Path()
+            path.move(to: CGPoint(x: rect.minX, y: y))
+            path.addLine(to: CGPoint(x: rect.maxX, y: y))
+            ctx.stroke(path, with: .color(.secondary.opacity(0.3)),
+                       style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+        }
+        // RSI 折线 · 青色
+        drawKDJLine(in: ctx, rect: rect, values: rsi, color: .cyan.opacity(0.85))
     }
 
     // MARK: - 金叉/死叉信号点（v15.23 batch82 · KDJ + MACD 共用 · trader 副图核心信号）

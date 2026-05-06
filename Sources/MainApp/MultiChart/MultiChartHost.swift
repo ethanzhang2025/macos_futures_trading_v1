@@ -380,6 +380,16 @@ struct MultiChartHost: View {
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(mIsUp ? .red.opacity(0.85) : .green.opacity(0.85))
                     }
+                case .rsi:
+                    if let r = Self.rsiAt(bars: bars, idx: idx) {
+                        // 70 上方红 · 30 下方绿 · 中间灰（经典超买/超卖配色）
+                        let color: Color = r >= 70 ? .red.opacity(0.85)
+                                          : r <= 30 ? .green.opacity(0.85)
+                                          : .cyan.opacity(0.85)
+                        Text(String(format: "RSI %.1f", r))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(color)
+                    }
                 case .volume, .none:
                     EmptyView()
                 }
@@ -424,6 +434,29 @@ struct MultiChartHost: View {
             }
         }
         return nil
+    }
+
+    /// v15.23 batch84 · RSI 14 标准 · bars[idx] 处的 RSI 值
+    static func rsiAt(bars: [KLine], idx: Int) -> Double? {
+        let N = 14
+        guard idx >= N, idx < bars.count else { return nil }
+        let closes = bars[0...idx].map { ($0.close as NSDecimalNumber).doubleValue }
+        var gainSum = 0.0
+        var lossSum = 0.0
+        for i in 1...N {
+            let diff = closes[i] - closes[i - 1]
+            if diff >= 0 { gainSum += diff } else { lossSum -= diff }
+        }
+        var avgGain = gainSum / Double(N)
+        var avgLoss = lossSum / Double(N)
+        for i in (N + 1)...idx {
+            let diff = closes[i] - closes[i - 1]
+            let g = diff >= 0 ? diff : 0
+            let l = diff < 0 ? -diff : 0
+            avgGain = (avgGain * Double(N - 1) + g) / Double(N)
+            avgLoss = (avgLoss * Double(N - 1) + l) / Double(N)
+        }
+        return avgLoss > 0 ? 100 - 100 / (1 + avgGain / avgLoss) : 100
     }
 
     /// v15.23 batch81 · MACD 12-26-9 · bars[idx] 处的 (DIF, DEA, MACD)
@@ -686,7 +719,7 @@ struct MultiChartHost: View {
             ("右键 cell", "聚焦/交换/复制配置/重置 4 类操作"),
             ("点击 #↗ 按钮", "推送到主 ChartScene 深入分析"),
             ("点击 cell 合约名/周期", "Menu 切换"),
-            ("点击副图图标（batch79-80）", "切换副图：量 / KDJ 9-3-3 超买超卖 / MACD 12-26-9 趋势量能 / 无（主图全屏）"),
+            ("点击副图图标（batch79-84）", "切换副图：量 / KDJ 9-3-3 / MACD 12-26-9 / RSI 14（超买 70 / 超卖 30）/ 无（主图全屏）"),
             ("副图金叉/死叉点（batch82）", "KDJ K↑D 或 MACD DIF↑DEA = 红点（金叉买点）· 反向 = 绿点（死叉卖点）· 一眼定位"),
             ("点击 chart.line 图标（batch72-74）", "切换 MA5（黄）+ MA10（粉）+ MA20（紫）+ MA60（蓝）四均线 · 中国期货短线经典标配"),
             ("点击 waveform 图标（batch78）", "切换 BOLL 上下轨（period=20 · k=2σ · 默认关 · 青色虚线 · 突破信号）"),

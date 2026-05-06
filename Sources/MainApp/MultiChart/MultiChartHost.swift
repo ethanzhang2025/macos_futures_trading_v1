@@ -692,6 +692,7 @@ struct MultiChartHost: View {
             ("点击 waveform 图标（batch78）", "切换 BOLL 上下轨（period=20 · k=2σ · 默认关 · 青色虚线 · 突破信号）"),
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
             ("hover 时状态栏（batch75）", "OHLCV + M5/M20/M60 三条均线值（参考 cell #1 / focused cell · 当 cell 开启均线时显示）"),
+            ("倒计时 ⏱ mm:ss（batch83）", "短周期 cell（1m/3m/5m/15m/30m/1h）· 真行情时显示距下根 K 线 close 剩余秒数 · trader 短线节奏感"),
         ]),
         ("📦 批量操作", [
             ("toolbar 批量 Menu", "全部 cell 设为同一周期（多合约比对）"),

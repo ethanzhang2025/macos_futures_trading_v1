@@ -209,6 +209,14 @@ struct MultiChartCellView: View {
 
             dataStateDot
 
+            // v15.23 batch83 · 末根 K 线倒计时（短周期 trader 节奏感 · 仅真行情 + ≤1h 周期）
+            if let cd = countdownText {
+                Text("⏱\(cd)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .help("距下根 \(state.period.rawValue) K 线 close（按本地系统时间对齐周期边界）")
+            }
+
             Spacer()
 
             lastPriceText
@@ -295,6 +303,22 @@ struct MultiChartCellView: View {
                 .frame(width: 6, height: 6)
                 .help("Mock 兜底（行情不可达 / 合约暂不支持 · 仅 UI 演示）")
         }
+    }
+
+    /// v15.23 batch83 · 末根 K 线倒计时（短周期节奏感 · 仅 .live 真行情 + 周期 < 2h 时显示）
+    /// 计算：next_bar_open = ceil(now / period_sec) × period_sec · remaining = next - now
+    private var countdownText: String? {
+        guard dataState == .live else { return nil }
+        let periodSec = state.period.seconds
+        // 仅短周期显示（1m/3m/5m/15m/30m/1h）· 4h+ 倒计时太长无意义
+        guard periodSec >= 60, periodSec <= 3600 else { return nil }
+        // 注：参与 tickSeed 引用 · 让 view body 每秒重渲触发倒计时刷新
+        _ = tickSeed
+        let now = Date().timeIntervalSince1970
+        let pSec = Double(periodSec)
+        let nextBar = (now / pSec).rounded(.up) * pSec
+        let remaining = max(0, Int(nextBar - now))
+        return String(format: "%02d:%02d", remaining / 60, remaining % 60)
     }
 
     /// v15.23 batch79-80 · 副图 Menu icon（按当前选择切换图标）

@@ -393,6 +393,14 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("b", modifiers: [.command])
             .help("用 IndicatorCore Lexer + Parser 验证公式 · 错误显示行列（⌘B）")
+            // v15.23 batch41 · 格式化公式（⌘⇧F · MaiLangFormatter 一键归一）
+            Button {
+                formatNow()
+            } label: {
+                Label("格式化", systemImage: "wand.and.stars")
+            }
+            .keyboardShortcut("f", modifiers: [.command, .shift])
+            .help("一键格式化公式 · 大写关键字 + 空白归一 + 逗号空格（⌘⇧F）")
             // v15.22 batch15 · 注释切换（⌘/ · 麦语言行注释 // · 当前行 toggle）
             Button {
                 toggleLineComment()
@@ -666,6 +674,21 @@ public struct FormulaEditorWindow: View {
         }
     }
 
+    /// v15.23 batch41 · 一键格式化公式（⌘⇧F · MaiLangFormatter 纯函数）
+    /// 已 idempotent · 二次调用结果不变 · 安全
+    private func formatNow() {
+        let formatted = MaiLangFormatter.format(sourceText)
+        if formatted == sourceText {
+            statusMessage = "已格式化 · 无变化"
+            return
+        }
+        sourceText = formatted
+        statusMessage = "已格式化"
+        // 编译结果可能仍有效 · 但内容变了 · 清掉避免误导
+        compileResult = nil
+        errorMarker = nil
+    }
+
     /// v15.22 batch15+23 · 注释切换 · 单行（无选区）/ 多行（选区跨行）批量 toggle
     /// - 多行：任一行未注释 → 全部加注释 · 否则全部去注释（VSCode 行为）
     /// - 单行：cursorLine 所在行 toggle
@@ -879,8 +902,9 @@ public struct FormulaEditorWindow: View {
             ("⌘⇧C", "复制全文（纯文本）"),
             ("⌘⌥C", "复制为 Markdown 代码块（含 ```mailang fenced）"),
         ]),
-        ("🔧 编译 / 学习", [
+        ("🔧 编译 / 格式化 / 学习", [
             ("⌘B", "编译验证（IndicatorCore Lexer + Parser · 错误显示行列）"),
+            ("⌘⇧F", "一键格式化（关键字大写 + 空白归一 + 逗号空格 · v15.23）"),
             ("⌘⇧L", "函数库面板（73 函数 9 分类 · 复制签名）"),
             ("⌘⇧?", "本帮助面板"),
         ]),

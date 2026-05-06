@@ -416,6 +416,11 @@ struct MultiChartCellCanvas: View {
         drawKDJLine(in: ctx, rect: rect, values: ks, color: .white.opacity(0.85))
         drawKDJLine(in: ctx, rect: rect, values: ds, color: .yellow.opacity(0.85))
         drawKDJLine(in: ctx, rect: rect, values: js, color: .purple.opacity(0.85))
+        // v15.23 batch82 · KDJ 金叉/死叉信号点（K 上穿/下穿 D · trader 短线核心信号）
+        drawCrossSignals(in: ctx, rect: rect, fast: ks, slow: ds) { v in
+            let clamped = max(0, min(100, v))
+            return rect.maxY - CGFloat(clamped / 100) * rect.height
+        }
     }
 
     private func drawKDJLine(in ctx: GraphicsContext, rect: CGRect,
@@ -439,6 +444,41 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(color), lineWidth: 0.9)
+    }
+
+    // MARK: - 金叉/死叉信号点（v15.23 batch82 · KDJ + MACD 共用 · trader 副图核心信号）
+
+    /// fast 上穿 slow → 金叉（红圆点）· fast 下穿 slow → 死叉（绿圆点）
+    /// - 圆点画在交叉点 · yFor closure 由调用方注入（KDJ/MACD 各自坐标系）
+    private func drawCrossSignals(in ctx: GraphicsContext, rect: CGRect,
+                                  fast: [Double], slow: [Double],
+                                  yFor: (Double) -> CGFloat) {
+        let n = min(fast.count, slow.count)
+        guard n >= 2 else { return }
+        let dotSize: CGFloat = 5
+        for i in 1..<n {
+            let f0 = fast[i - 1]
+            let f1 = fast[i]
+            let s0 = slow[i - 1]
+            let s1 = slow[i]
+            guard !f0.isNaN, !f1.isNaN, !s0.isNaN, !s1.isNaN else { continue }
+            let crossUp = f0 <= s0 && f1 > s1     // 金叉
+            let crossDown = f0 >= s0 && f1 < s1   // 死叉
+            guard crossUp || crossDown else { continue }
+            let centerX = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let y = yFor((f1 + s1) / 2)
+            let dot = CGRect(
+                x: centerX - dotSize / 2,
+                y: y - dotSize / 2,
+                width: dotSize,
+                height: dotSize
+            )
+            ctx.fill(Path(ellipseIn: dot),
+                     with: .color(crossUp ? .red : .green))
+            ctx.stroke(Path(ellipseIn: dot),
+                       with: .color(.white.opacity(0.9)),
+                       lineWidth: 0.6)
+        }
     }
 
     // MARK: - MACD（v15.23 batch80 · 标准 12-26-9 · DIF/DEA 双线 + 红绿柱 · 中长线必看）
@@ -495,6 +535,8 @@ struct MultiChartCellCanvas: View {
         // DIF 白线 + DEA 黄线
         drawMACDLine(in: ctx, rect: rect, values: dif, yFor: yFor, color: .white.opacity(0.85))
         drawMACDLine(in: ctx, rect: rect, values: dea, yFor: yFor, color: .yellow.opacity(0.85))
+        // v15.23 batch82 · MACD 金叉/死叉信号点（DIF 上穿/下穿 DEA · 趋势核心信号）
+        drawCrossSignals(in: ctx, rect: rect, fast: dif, slow: dea, yFor: yFor)
     }
 
     private func drawMACDLine(in ctx: GraphicsContext, rect: CGRect,

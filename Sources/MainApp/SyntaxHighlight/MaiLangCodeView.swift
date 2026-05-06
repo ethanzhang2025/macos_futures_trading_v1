@@ -89,12 +89,16 @@ public struct MaiLangCodeView: NSViewRepresentable {
         }
 
         /// v15.22 batch11 · 光标位置变化（含点击/方向键/选区调整）→ 报行/列给 status bar
+        /// v15.22 batch21 · 同步刷新当前行浅背景高亮
         public func textViewDidChangeSelection(_ notification: Notification) {
-            guard let tv = notification.object as? NSTextView,
-                  let cb = parent.onCursorChange else { return }
-            let loc = tv.selectedRange().location
-            let (line, col) = lineColumn(in: tv.string, at: loc)
-            DispatchQueue.main.async { cb(line, col) }
+            guard let tv = notification.object as? NSTextView else { return }
+            // batch21 · 光标移动时刷当前行高亮（不重 tokenize · 仅重 attribute · 短文档性能 OK）
+            parent.applyHighlight(to: tv)
+            if let cb = parent.onCursorChange {
+                let loc = tv.selectedRange().location
+                let (line, col) = lineColumn(in: tv.string, at: loc)
+                DispatchQueue.main.async { cb(line, col) }
+            }
         }
 
         /// utf16 location → (line, col) · 均 1-based · 越界 clamp 到末尾
@@ -237,6 +241,25 @@ public struct MaiLangCodeView: NSViewRepresentable {
             let safeRange = NSIntersectionRange(t.range, fullRange)
             if safeRange.length > 0 {
                 storage.addAttribute(.foregroundColor, value: color, range: safeRange)
+            }
+        }
+        // v15.22 batch21 · 当前光标所在行浅背景高亮（在错误标注之前 · 错误优先覆盖）
+        let cursorLoc = tv.selectedRange().location
+        let nsSource = source as NSString
+        if cursorLoc <= nsSource.length {
+            var lineStart = min(cursorLoc, nsSource.length)
+            while lineStart > 0 && nsSource.character(at: lineStart - 1) != 0x0A { lineStart -= 1 }
+            var lineEnd = min(cursorLoc, nsSource.length)
+            while lineEnd < nsSource.length && nsSource.character(at: lineEnd) != 0x0A { lineEnd += 1 }
+            let lineRange = NSRange(location: lineStart, length: lineEnd - lineStart)
+            let highlightColor: NSColor = scheme == .dark
+                ? NSColor.white.withAlphaComponent(0.06)
+                : NSColor.black.withAlphaComponent(0.05)
+            if lineRange.length > 0 {
+                let safe = NSIntersectionRange(lineRange, fullRange)
+                if safe.length > 0 {
+                    storage.addAttribute(.backgroundColor, value: highlightColor, range: safe)
+                }
             }
         }
         // v15.22 batch6 · 错误位置红色背景标注（编译失败后定位）

@@ -30,13 +30,16 @@ public struct MaiLangCodeView: NSViewRepresentable {
     let onTokenAtCursor: ((String?) -> Void)?
     /// v15.22 batch29 · 跳转到指定行（1-based · 设非 nil 触发 updateNSView 跳转后自动清回 nil）
     @Binding var pendingGotoLine: Int?
+    /// v15.22 batch39 · 插入文本到当前光标位置（设非 nil 触发 updateNSView 插入后自动清回 nil）
+    @Binding var pendingInsertText: String?
 
     public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark,
                 fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil,
                 onCursorChange: ((Int, Int) -> Void)? = nil,
                 onSelectionChange: ((NSRange) -> Void)? = nil,
                 onTokenAtCursor: ((String?) -> Void)? = nil,
-                pendingGotoLine: Binding<Int?> = .constant(nil)) {
+                pendingGotoLine: Binding<Int?> = .constant(nil),
+                pendingInsertText: Binding<String?> = .constant(nil)) {
         self._text = text
         self.scheme = scheme
         self.fontSize = fontSize
@@ -45,6 +48,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
         self.onSelectionChange = onSelectionChange
         self.onTokenAtCursor = onTokenAtCursor
         self._pendingGotoLine = pendingGotoLine
+        self._pendingInsertText = pendingInsertText
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -90,6 +94,12 @@ public struct MaiLangCodeView: NSViewRepresentable {
         applyHighlight(to: tv)
         // v15.22 batch20 · 主题/文本变化后刷行号
         scrollView.verticalRulerView?.needsDisplay = true
+        // v15.22 batch39 · 处理插入请求（在当前光标位置插入文本 · undo 单次回到原状）
+        if let snippet = pendingInsertText, !snippet.isEmpty {
+            tv.insertText(snippet, replacementRange: tv.selectedRange())
+            tv.window?.makeFirstResponder(tv)
+            DispatchQueue.main.async { self.pendingInsertText = nil }
+        }
         // v15.22 batch29 · 处理跳转请求（行号 1-based）
         if let target = pendingGotoLine, target > 0 {
             let nsStr = tv.string as NSString

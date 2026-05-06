@@ -49,6 +49,8 @@ public struct FormulaEditorWindow: View {
     @State private var showGotoLineSheet: Bool = false
     @State private var gotoLineInput: String = ""
     @State private var pendingGotoLine: Int? = nil
+    /// v15.22 batch39 · 待插入到光标位置的文本
+    @State private var pendingInsertText: String? = nil
     /// v15.22 batch34 · 快捷键帮助面板
     @State private var showHelpSheet: Bool = false
     /// v15.22 batch37 · 公式大纲面板（变量定义 + 行号 · 点击跳转）
@@ -80,7 +82,8 @@ public struct FormulaEditorWindow: View {
                                     currentTokenSig = nil
                                 }
                             },
-                            pendingGotoLine: $pendingGotoLine)
+                            pendingGotoLine: $pendingGotoLine,
+                            pendingInsertText: $pendingInsertText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onChange(of: sourceText) { _ in
                     // v15.22 batch6 · 用户改动后清错误标注（防陈旧 marker 误导）
@@ -836,7 +839,7 @@ public struct FormulaEditorWindow: View {
         statusMessage = up ? "上移 \(count) 行" : "下移 \(count) 行"
     }
 
-    /// v15.22 batch28+35 · 函数库单行 row 渲染（搜索/分组共用）
+    /// v15.22 batch28+35+39 · 函数库单行 row 渲染（搜索/分组共用）· 复制 + 插入到光标
     @ViewBuilder
     private func functionRow(_ sig: MaiLangFunctionSignature) -> some View {
         HStack(alignment: .top, spacing: 8) {
@@ -849,12 +852,21 @@ public struct FormulaEditorWindow: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
+            Button("插入") {
+                // batch39 · 插入到当前光标位置（用 name + 空括号 + 光标暂时停在末尾）
+                let snippet = sig.parameters.isEmpty ? sig.name : "\(sig.name)()"
+                pendingInsertText = snippet
+                showFunctionsPanel = false
+                statusMessage = "已插入：\(snippet)"
+            }
+            .buttonStyle(.borderless)
+            .help("插入 \(sig.formatted) 到当前光标位置（关闭面板）")
             Button("复制") {
                 Pasteboard.copy(sig.formatted)
                 statusMessage = "已复制：\(sig.formatted)"
             }
             .buttonStyle(.borderless)
-            .help("复制 \(sig.formatted) 到剪贴板")
+            .help("复制 \(sig.formatted) 到剪贴板（保持面板打开）")
         }
         .padding(.vertical, 2)
     }

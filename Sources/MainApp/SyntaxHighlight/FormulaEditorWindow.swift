@@ -218,6 +218,14 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("/", modifiers: [.command])
             .help("注释 / 取消注释当前行（⌘/）")
+            // v15.22 batch17 · 删除当前行（⌘⇧K · VSCode 经典）
+            Button {
+                deleteCurrentLine()
+            } label: {
+                Label("删除行", systemImage: "minus.rectangle")
+            }
+            .keyboardShortcut("k", modifiers: [.command, .shift])
+            .help("删除当前光标所在行（⌘⇧K）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in
@@ -406,6 +414,18 @@ public struct FormulaEditorWindow: View {
         newLines[idx] = newLine
         sourceText = newLines.joined(separator: "\n")
         statusMessage = "已切换第 \(idx + 1) 行注释"
+    }
+
+    /// v15.22 batch17 · 删除当前光标所在行（⌘⇧K · 删空时保留 1 个空行避免 [].joined 异常）
+    private func deleteCurrentLine() {
+        let lines = sourceText.components(separatedBy: "\n")
+        guard !lines.isEmpty else { return }
+        let idx = max(0, min(cursorLine - 1, lines.count - 1))
+        var newLines = lines
+        newLines.remove(at: idx)
+        if newLines.isEmpty { newLines = [""] }
+        sourceText = newLines.joined(separator: "\n")
+        statusMessage = "已删除第 \(idx + 1) 行"
     }
 
     private func textStats(_ s: String) -> (chars: Int, lines: Int) {

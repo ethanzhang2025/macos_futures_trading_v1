@@ -39,6 +39,8 @@ struct MultiChartHost: View {
     /// v15.23 batch56 · auto-tick · 每秒递增 · 注入 mock data 让末根 K 线微动
     @State private var tickSeed: UInt64 = 1
     @AppStorage("viewState.v1.multiChart.autoTick") private var autoTickEnabled: Bool = true
+    /// v15.23 batch60 · 帮助面板（⌘⇧? · 22+ 操作清单 · trader 学习入口）
+    @State private var showHelpSheet: Bool = false
 
     private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -70,6 +72,10 @@ struct MultiChartHost: View {
         // v15.23 batch55 · 保存预设 sheet
         .sheet(isPresented: $showSaveSheet) {
             saveLayoutSheet
+        }
+        // v15.23 batch60 · 帮助面板
+        .sheet(isPresented: $showHelpSheet) {
+            helpSheet
         }
         // v15.23 batch53 · grid preset 快捷键 ⌘⌥1-6（隐藏 button 触发）
         .background(
@@ -193,6 +199,16 @@ struct MultiChartHost: View {
             }
             .buttonStyle(.borderless)
             .help(autoTickEnabled ? "实时抖动开（每秒 mock tick）" : "已暂停 mock tick")
+
+            // v15.23 batch60 · 帮助面板
+            Button {
+                showHelpSheet = true
+            } label: {
+                Image(systemName: "questionmark.circle")
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut("?", modifiers: [.command, .shift])
+            .help("显示所有功能与快捷键（⌘⇧?）")
 
             // v15.23 batch53 · 快捷键提示（hover 显示）
             Text("⌘⌥1-6 切布局")
@@ -381,6 +397,83 @@ struct MultiChartHost: View {
         var layouts = savedLayouts
         layouts.removeAll { $0.id == id }
         persistLayouts(layouts)
+    }
+
+    // v15.23 batch60 · 帮助面板内容
+    private static let helpGroups: [(String, [(String, String)])] = [
+        ("📐 布局切换", [
+            ("⌘⌥1", "单图（全屏）"),
+            ("⌘⌥2", "1×2 横向"),
+            ("⌘⌥3", "2×1 纵向"),
+            ("⌘⌥4", "2×2 四宫"),
+            ("⌘⌥5", "2×3 六宫横"),
+            ("⌘⌥6", "3×2 六宫竖"),
+            ("toolbar 布局 Picker", "鼠标点选 6 种布局 · 与快捷键等同"),
+        ]),
+        ("🔍 cell 操作", [
+            ("双击 cell", "聚焦该 cell（临时全屏 · 不动 preset）"),
+            ("Esc / 再次双击", "退出聚焦"),
+            ("右键 cell", "聚焦/交换/复制配置/重置 4 类操作"),
+            ("点击 #↗ 按钮", "推送到主 ChartScene 深入分析"),
+            ("点击 cell 合约名/周期", "Menu 切换"),
+            ("点击 chart.bar 图标", "切换是否显示成交量"),
+        ]),
+        ("📦 批量操作", [
+            ("toolbar 批量 Menu", "全部 cell 设为同一周期（多合约比对）"),
+            ("toolbar 批量 Menu", "全部 cell 设为同一合约（多周期比对）"),
+            ("toolbar 重置 cells", "全部还原为默认合约 + 周期"),
+        ]),
+        ("📚 布局预设", [
+            ("toolbar 布局预设 → 保存", "命名当前布局（如\"日内全屏六宫\"）"),
+            ("toolbar 布局预设 → 加载", "一键还原已保存布局"),
+            ("toolbar 布局预设 → 删除", "清理过期预设"),
+        ]),
+        ("🎬 实时模拟", [
+            ("toolbar play/pause", "切换 mock tick 抖动开关（默认开 · 体验真盘）"),
+            ("末根 K 线", "每秒 ≤0.3× 波动率范围内随机 · close 价格闪动"),
+        ]),
+        ("💡 常用工作流", [
+            ("场景 A", "选 2×3 → 全部设为 RB0 → 周期 1m/5m/15m/1h/4h/D · 多周期共振"),
+            ("场景 B", "选 2×3 → 全部设为 15m → 6 主流商品横向比对趋势"),
+            ("场景 C", "保存常用组合为预设 → 一键切换日内/夜盘"),
+            ("场景 D", "看到异动 cell → 点 ↗ 按钮 → 主图深入"),
+        ]),
+    ]
+
+    @ViewBuilder
+    private var helpSheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("⌨️ 多图表全功能").font(.title2).bold()
+                Spacer()
+                Button("关闭") { showHelpSheet = false }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(Self.helpGroups, id: \.0) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(group.0)
+                                .font(.headline)
+                            ForEach(group.1, id: \.0) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(item.0)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 160, alignment: .leading)
+                                    Text(item.1)
+                                        .font(.system(size: 12))
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 540, idealWidth: 620, minHeight: 480, idealHeight: 600)
     }
 
     @ViewBuilder

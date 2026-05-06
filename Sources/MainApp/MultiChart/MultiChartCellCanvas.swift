@@ -244,14 +244,16 @@ struct MultiChartCellCanvas: View {
                 ctx.fill(Path(bodyRect), with: .color(color))
             }
             // v15.23 batch76 · 末根 K 线高亮（白色 1px 描边 + 同色 dot · 强调最新数据）
+            // v15.23 batch89 · 末根 close 永久水平虚线 from dot to maxX（trader 看 close vs MA 位置）
             if i == n - 1 {
                 ctx.stroke(Path(bodyRect.insetBy(dx: -0.5, dy: -0.5)),
                            with: .color(.white.opacity(0.85)),
                            lineWidth: 1)
                 let dotSize: CGFloat = 4
+                let yClose = yFor(close)
                 let dotRect = CGRect(
                     x: centerX - dotSize / 2,
-                    y: yFor(close) - dotSize / 2,
+                    y: yClose - dotSize / 2,
                     width: dotSize,
                     height: dotSize
                 )
@@ -259,6 +261,12 @@ struct MultiChartCellCanvas: View {
                 ctx.stroke(Path(ellipseIn: dotRect),
                            with: .color(.white.opacity(0.9)),
                            lineWidth: 0.7)
+                // 水平虚线 from dot 到画布右边 · 同蜡烛颜色 0.5 alpha · 不抢 MA 折线
+                var hLine = Path()
+                hLine.move(to: CGPoint(x: centerX + dotSize / 2 + 1, y: yClose))
+                hLine.addLine(to: CGPoint(x: rect.maxX, y: yClose))
+                ctx.stroke(hLine, with: .color(color.opacity(0.5)),
+                           style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
             }
         }
     }

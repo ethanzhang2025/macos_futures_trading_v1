@@ -591,8 +591,9 @@ struct MultiChartHost: View {
             ("v15.23 batch71", "K 线 cache 持久化 · 重启不再黑屏 · 节假日断网保留最后真行情数据"),
         ]),
         ("💡 常用工作流", [
-            ("场景 A", "选 2×3 → 全部设为 RB0 → 周期 1m/5m/15m/1h/4h/D · 多周期共振"),
-            ("场景 B", "选 2×3 → 全部设为 15m → 6 主流商品横向比对趋势"),
+            ("默认开局（batch73）", "首次打开 = RB0 多周期共振（1m/5m/15m/30m/1h/D · 教科书场景）· 立即看真行情"),
+            ("场景 A", "继续保留默认（同合约多周期共振 · 短线 trader 必看）"),
+            ("场景 B", "toolbar 批量 → 全部设为 15m → 6 主流商品横向比对趋势"),
             ("场景 C", "保存常用组合为预设 → 一键切换日内/夜盘"),
             ("场景 D", "看到异动 cell → 点 ↗ 按钮 → 主图深入"),
         ]),
@@ -798,15 +799,18 @@ struct MultiChartHost: View {
         }
     }
 
-    // MARK: - 默认值（按 cell index · 不同 cell 不同合约/周期 · trader 一开就有对比效果）
+    // MARK: - 默认值（v15.23 batch73 · 全 RB0 多周期共振 · 短线 trader 教科书场景）
+    // 6 cell 同合约不同周期 · 首次打开即可立即看真行情趋势 · 老用户 cellsJSON 已有则不覆盖
+    // 想看多合约对比 → toolbar"批量 Menu → 全部设为合约"一键切换（< 1 秒）
 
     private func defaultInstrument(forIndex idx: Int) -> String {
-        let pool = ["RB0", "IF0", "AU0", "CU0", "I0", "MA0"]
-        return pool[idx % pool.count]
+        // RB0 ∈ MarketDataPipeline.supportedContracts · 真行情立即生效
+        return "RB0"
     }
 
     private func defaultPeriod(forIndex idx: Int) -> KLinePeriod {
-        let pool: [KLinePeriod] = [.minute15, .minute5, .hour1, .daily, .minute1, .minute30]
+        // 6 周期梯度：1m → 5m → 15m → 30m → 1h → 日 · 短中长全栈共振
+        let pool: [KLinePeriod] = [.minute1, .minute5, .minute15, .minute30, .hour1, .daily]
         return pool[idx % pool.count]
     }
 }

@@ -314,6 +314,28 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
         @objc private func needsRedraw() { needsDisplay = true }
 
+        /// v15.22 batch24 · 点击行号选中整行（trader 看编译错误"第 N 行" → 直接点 N 定位）
+        override func mouseDown(with event: NSEvent) {
+            guard let tv = sourceTextView,
+                  let lm = tv.layoutManager,
+                  let tc = tv.textContainer else { return }
+            let p = convert(event.locationInWindow, from: nil)
+            let visibleRect = scrollView?.contentView.bounds ?? tv.visibleRect
+            // ruler y 坐标 → textView y 坐标（加上滚动偏移）
+            let yInTextView = p.y + visibleRect.origin.y - tv.textContainerOrigin.y
+            let glyphIndex = lm.glyphIndex(for: NSPoint(x: 0, y: yInTextView), in: tc)
+            let charIndex = lm.characterIndexForGlyph(at: glyphIndex)
+            let nsStr = tv.string as NSString
+            // 行起止
+            var lineStart = min(charIndex, nsStr.length)
+            while lineStart > 0 && nsStr.character(at: lineStart - 1) != 0x0A { lineStart -= 1 }
+            var lineEnd = lineStart
+            while lineEnd < nsStr.length && nsStr.character(at: lineEnd) != 0x0A { lineEnd += 1 }
+            tv.setSelectedRange(NSRange(location: lineStart, length: lineEnd - lineStart))
+            tv.scrollRangeToVisible(NSRange(location: lineStart, length: 0))
+            tv.window?.makeFirstResponder(tv)
+        }
+
         override func draw(_ dirtyRect: NSRect) {
             NSColor.windowBackgroundColor.withAlphaComponent(0.5).setFill()
             dirtyRect.fill()

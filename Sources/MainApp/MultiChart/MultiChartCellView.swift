@@ -245,38 +245,31 @@ struct MultiChartCellView: View {
             .frame(width: 26)
             .help("副图：\(state.subChart.displayName)（点击切换 量 / KDJ / 无）")
 
-            // v15.23 batch72-74 · MA 4 均线开关（5/10/20/60 · 短线标配）
-            Button {
-                onIndicatorsToggle()
+            // v15.23 batch88 · 主图指标 Menu 收纳（MA 4 均线 / BOLL / SAR 三选多 · 减少 toolbar 拥挤）
+            Menu {
+                Button {
+                    onIndicatorsToggle()
+                } label: {
+                    Label("MA 5/10/20/60 四均线", systemImage: state.showIndicators ? "checkmark.circle.fill" : "circle")
+                }
+                Button {
+                    onBollToggle()
+                } label: {
+                    Label("BOLL 上下轨（20 · 2σ）", systemImage: state.showBoll ? "checkmark.circle.fill" : "circle")
+                }
+                Button {
+                    onSARToggle()
+                } label: {
+                    Label("SAR 抛物线（0.02/0.2）", systemImage: state.showSAR ? "checkmark.circle.fill" : "circle")
+                }
             } label: {
-                Image(systemName: state.showIndicators ? "chart.line.uptrend.xyaxis" : "chart.line.flattrend.xyaxis")
+                Image(systemName: indicatorMenuIcon)
                     .font(.system(size: 11))
-                    .foregroundColor(state.showIndicators ? .accentColor : .secondary)
+                    .foregroundColor(indicatorMenuColor)
             }
-            .buttonStyle(.borderless)
-            .help(state.showIndicators ? "隐藏 MA5/10/20/60 四均线" : "显示 MA5/10/20/60 四均线（短线标配）")
-
-            // v15.23 batch78 · BOLL 上下轨开关（突破信号 · 默认关 · trader 主动开）
-            Button {
-                onBollToggle()
-            } label: {
-                Image(systemName: state.showBoll ? "waveform.path" : "waveform")
-                    .font(.system(size: 11))
-                    .foregroundColor(state.showBoll ? .cyan : .secondary)
-            }
-            .buttonStyle(.borderless)
-            .help(state.showBoll ? "隐藏 BOLL 上下轨" : "显示 BOLL 上下轨（period=20 · k=2σ · 突破信号）")
-
-            // v15.23 batch86 · SAR 抛物线开关（趋势反转 + 跟踪止损 · 默认关）
-            Button {
-                onSARToggle()
-            } label: {
-                Image(systemName: state.showSAR ? "circle.dotted" : "circle.dashed")
-                    .font(.system(size: 11))
-                    .foregroundColor(state.showSAR ? .cyan : .secondary)
-            }
-            .buttonStyle(.borderless)
-            .help(state.showSAR ? "隐藏 SAR 抛物线" : "显示 SAR 抛物线（Wilder 0.02/0.2 · 跟踪止损）")
+            .menuStyle(.borderlessButton)
+            .frame(width: 22)
+            .help("主图指标：MA \(state.showIndicators ? "✓" : "⬜") · BOLL \(state.showBoll ? "✓" : "⬜") · SAR \(state.showSAR ? "✓" : "⬜")")
 
             Button {
                 onPushToMain()
@@ -332,6 +325,23 @@ struct MultiChartCellView: View {
         let nextBar = (now / pSec).rounded(.up) * pSec
         let remaining = max(0, Int(nextBar - now))
         return String(format: "%02d:%02d", remaining / 60, remaining % 60)
+    }
+
+    /// v15.23 batch88 · 主图指标 Menu icon + 颜色（任一指标开则高亮）
+    private var indicatorMenuIcon: String {
+        // 任一指标开 → 上升趋势线图标（强调"有指标"）· 全关 → 平线
+        let anyOn = state.showIndicators || state.showBoll || state.showSAR
+        return anyOn ? "chart.line.uptrend.xyaxis" : "chart.line.flattrend.xyaxis"
+    }
+
+    private var indicatorMenuColor: Color {
+        // 全关 → 灰 · 部分开 → secondary accent · 全开 → 亮 accent
+        let count = (state.showIndicators ? 1 : 0) + (state.showBoll ? 1 : 0) + (state.showSAR ? 1 : 0)
+        switch count {
+        case 0: return .secondary
+        case 1, 2: return .accentColor.opacity(0.75)
+        default: return .accentColor
+        }
     }
 
     /// v15.23 batch79-87 · 副图 Menu icon（按当前选择切换图标）

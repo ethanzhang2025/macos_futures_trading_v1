@@ -723,6 +723,7 @@ struct MultiChartHost: View {
             ("副图金叉/死叉点（batch82）", "KDJ K↑D 或 MACD DIF↑DEA = 红点（金叉买点）· 反向 = 绿点（死叉卖点）· 一眼定位"),
             ("点击 chart.line 图标（batch72-74）", "切换 MA5（黄）+ MA10（粉）+ MA20（紫）+ MA60（蓝）四均线 · 中国期货短线经典标配"),
             ("点击 waveform 图标（batch78）", "切换 BOLL 上下轨（period=20 · k=2σ · 默认关 · 青色虚线 · 突破信号）"),
+            ("点击 circle.dashed 图标（batch86）", "切换 SAR 抛物线（Wilder 0.02 / 0.2 · 默认关 · 青色圆点 · 趋势反转 + 跟踪止损）"),
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
             ("hover 时状态栏（batch75）", "OHLCV + M5/M20/M60 三条均线值（参考 cell #1 / focused cell · 当 cell 开启均线时显示）"),
             ("倒计时 ⏱ mm:ss（batch83）", "短周期 cell（1m/3m/5m/15m/30m/1h）· 真行情时显示距下根 K 线 close 剩余秒数 · trader 短线节奏感"),
@@ -840,6 +841,7 @@ struct MultiChartHost: View {
             onVolumeToggle: { updateCell(idx) { $0.showVolume.toggle() } },
             onIndicatorsToggle: { updateCell(idx) { $0.showIndicators.toggle() } },
             onBollToggle: { updateCell(idx) { $0.showBoll.toggle() } },
+            onSARToggle: { updateCell(idx) { $0.showSAR.toggle() } },
             onSubChartTap: { sub in updateCell(idx) {
                 $0.subChart = sub
                 $0.showVolume = (sub == .volume)  // 同步 legacy 字段（兼容旧 path）

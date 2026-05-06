@@ -37,6 +37,7 @@ struct MultiChartCellView: View {
     let onVolumeToggle: () -> Void
     let onIndicatorsToggle: () -> Void
     let onBollToggle: () -> Void
+    let onSARToggle: () -> Void
     let onSubChartTap: (MultiChartSubChartType) -> Void
     let onPushToMain: () -> Void
 
@@ -82,7 +83,8 @@ struct MultiChartCellView: View {
                 onHoverIndexChange: onHoverIndexChange,
                 showIndicators: state.showIndicators,
                 showBoll: state.showBoll,
-                subChart: state.subChart
+                subChart: state.subChart,
+                showSAR: state.showSAR
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -264,6 +266,17 @@ struct MultiChartCellView: View {
             }
             .buttonStyle(.borderless)
             .help(state.showBoll ? "隐藏 BOLL 上下轨" : "显示 BOLL 上下轨（period=20 · k=2σ · 突破信号）")
+
+            // v15.23 batch86 · SAR 抛物线开关（趋势反转 + 跟踪止损 · 默认关）
+            Button {
+                onSARToggle()
+            } label: {
+                Image(systemName: state.showSAR ? "circle.dotted" : "circle.dashed")
+                    .font(.system(size: 11))
+                    .foregroundColor(state.showSAR ? .cyan : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(state.showSAR ? "隐藏 SAR 抛物线" : "显示 SAR 抛物线（Wilder 0.02/0.2 · 跟踪止损）")
 
             Button {
                 onPushToMain()

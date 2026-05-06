@@ -32,13 +32,16 @@ struct MultiChartCellCanvas: View {
     let showBoll: Bool
     /// v15.23 batch79 · 副图类型（量/KDJ/无 · trader 切换不同维度）
     let subChart: MultiChartSubChartType
+    /// v15.23 batch86 · SAR 抛物线（默认关 · trader 短线趋势反转 + 跟踪止损）
+    let showSAR: Bool
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
          onHoverIndexChange: ((Int?) -> Void)? = nil,
          showIndicators: Bool = true,
          showBoll: Bool = false,
-         subChart: MultiChartSubChartType = .volume) {
+         subChart: MultiChartSubChartType = .volume,
+         showSAR: Bool = false) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
@@ -46,6 +49,7 @@ struct MultiChartCellCanvas: View {
         self.showIndicators = showIndicators
         self.showBoll = showBoll
         self.subChart = subChart
+        self.showSAR = showSAR
     }
 
     var body: some View {
@@ -76,6 +80,10 @@ struct MultiChartCellCanvas: View {
                 // v15.23 batch78 · BOLL 上下轨（period=20 · k=2σ · trader 突破信号）
                 if showBoll {
                     drawBoll(in: ctx, rect: priceRect, period: 20, k: 2)
+                }
+                // v15.23 batch86 · SAR 抛物线（Wilder 0.02 step / 0.2 max · 默认关）
+                if showSAR {
+                    drawSAR(in: ctx, rect: priceRect)
                 }
                 if subHeight > 8 {
                     drawGrid(in: ctx, rect: subRect, lines: 2)
@@ -362,6 +370,81 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
+    }
+
+    // MARK: - SAR（v15.23 batch86 · Wilder Parabolic SAR · 标准 step=0.02 / max=0.2）
+
+    /// SAR 抛物线 · 蓝色 2.5px 圆点（每根 K 线一个 · up trend 在低位 / down trend 在高位）
+    /// 算法参考 Wilder 标准实现 · trader 短线趋势反转判断 + 跟踪止损位
+    private func drawSAR(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        guard n >= 3 else { return }
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        let closes = bars.map { ($0.close as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let priceRange = maxHigh - minLow
+        let yFor: (Double) -> CGFloat = { price in
+            rect.maxY - CGFloat((price - minLow) / priceRange) * rect.height
+        }
+        let afStep = 0.02
+        let afMax = 0.2
+        // 初始 trend 由前两根 close 大小判断
+        var isUp = closes[1] > closes[0]
+        var sar = isUp ? lows[0] : highs[0]
+        var ep = isUp ? highs[0] : lows[0]
+        var af = afStep
+        var sarValues: [Double] = [sar]
+        for i in 1..<n {
+            var nextSAR = sar + af * (ep - sar)
+            if isUp {
+                // SAR 不能高于上 2 根 low
+                let lowPrev1 = lows[i - 1]
+                let lowPrev2 = i >= 2 ? lows[i - 2] : lowPrev1
+                nextSAR = min(nextSAR, lowPrev1, lowPrev2)
+                if lows[i] < nextSAR {
+                    // 反转为 down · SAR = 上一段最高点 EP · EP = 当前 low · AF reset
+                    isUp = false
+                    sar = ep
+                    ep = lows[i]
+                    af = afStep
+                } else {
+                    sar = nextSAR
+                    if highs[i] > ep {
+                        ep = highs[i]
+                        af = min(afMax, af + afStep)
+                    }
+                }
+            } else {
+                // SAR 不能低于上 2 根 high
+                let highPrev1 = highs[i - 1]
+                let highPrev2 = i >= 2 ? highs[i - 2] : highPrev1
+                nextSAR = max(nextSAR, highPrev1, highPrev2)
+                if highs[i] > nextSAR {
+                    isUp = true
+                    sar = ep
+                    ep = highs[i]
+                    af = afStep
+                } else {
+                    sar = nextSAR
+                    if lows[i] < ep {
+                        ep = lows[i]
+                        af = min(afMax, af + afStep)
+                    }
+                }
+            }
+            sarValues.append(sar)
+        }
+        let dotSize: CGFloat = 2.5
+        for (i, v) in sarValues.enumerated() {
+            let centerX = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let y = yFor(v)
+            let dot = CGRect(x: centerX - dotSize / 2,
+                             y: y - dotSize / 2,
+                             width: dotSize,
+                             height: dotSize)
+            ctx.fill(Path(ellipseIn: dot), with: .color(.cyan.opacity(0.85)))
+        }
     }
 
     // MARK: - BOLL（v15.23 batch78 · 上下轨折线 · 标准 period=20 / k=2σ · 中轨复用 MA20 不重画）

@@ -46,6 +46,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     var showBoll: Bool
     /// v15.23 batch79 · 副图类型（量/KDJ/无 · 默认 .volume · 老用户由 showVolume 自动迁移）
     var subChart: MultiChartSubChartType
+    /// v15.23 batch86 · SAR 抛物线（趋势反转 + 跟踪止损 · 默认关 · 短线 trader 主动开）
+    var showSAR: Bool
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
@@ -53,7 +55,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
          showVolume: Bool = true,
          showIndicators: Bool = true,
          showBoll: Bool = false,
-         subChart: MultiChartSubChartType = .volume) {
+         subChart: MultiChartSubChartType = .volume,
+         showSAR: Bool = false) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
@@ -61,11 +64,12 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.showIndicators = showIndicators
         self.showBoll = showBoll
         self.subChart = subChart
+        self.showSAR = showSAR
     }
 
-    /// Codable · 老 cellsJSON 缺 showIndicators/showBoll/subChart 字段时按合理默认值
+    /// Codable · 老 cellsJSON 缺 showIndicators/showBoll/subChart/showSAR 字段时按合理默认值
     enum CodingKeys: String, CodingKey {
-        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart
+        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR
     }
 
     init(from decoder: Decoder) throws {
@@ -82,6 +86,7 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         } else {
             self.subChart = self.showVolume ? .volume : .none
         }
+        self.showSAR = try c.decodeIfPresent(Bool.self, forKey: .showSAR) ?? false
     }
 }
 

@@ -98,6 +98,8 @@ struct MultiChartCellCanvas: View {
                         drawMACD(in: ctx, rect: subRect)
                     case .rsi:
                         drawRSI(in: ctx, rect: subRect)
+                    case .oi:
+                        drawOI(in: ctx, rect: subRect)
                     }
                 }
                 // v15.23 batch77 · 简洁 axis 标签（时间 3 + 价格 3 · 不喧宾夺主）
@@ -370,6 +372,61 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
+    }
+
+    // MARK: - OI 持仓量（v15.23 batch87 · 折线图 · 中国期货独有 · 主力意图）
+
+    /// OI 折线（蓝色 · 折线在 OI 区间归一化 · 末根高亮 dot 强调最新）
+    /// trader 看 OI：增仓上涨 = 多头强势 · 增仓下跌 = 空头强势 · 减仓 = 多空回吐
+    private func drawOI(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        guard n >= 2 else { return }
+        let ois = bars.map { Double($0.openInterest) }
+        guard let maxOI = ois.max(), let minOI = ois.min() else { return }
+        // 全 0 数据（mock 老数据）→ 平线提示无 OI · 仅画一条灰线
+        guard maxOI > 0 else {
+            var path = Path()
+            path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            ctx.stroke(path, with: .color(.secondary.opacity(0.3)),
+                       style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+            let placeholder = Text("OI 数据未提供")
+                .font(.system(size: 9))
+                .foregroundColor(.secondary.opacity(0.7))
+            ctx.draw(placeholder, at: CGPoint(x: rect.midX, y: rect.midY - 6),
+                     anchor: .center)
+            return
+        }
+        let range = maxOI - minOI
+        let yFor: (Double) -> CGFloat = { v in
+            // range 极小 → 居中显示（避免 / 0 + 锯齿）
+            range > 0 ? rect.maxY - CGFloat((v - minOI) / range) * rect.height : rect.midY
+        }
+        var path = Path()
+        var started = false
+        for i in 0..<n {
+            let centerX = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let pt = CGPoint(x: centerX, y: yFor(ois[i]))
+            if started {
+                path.addLine(to: pt)
+            } else {
+                path.move(to: pt)
+                started = true
+            }
+        }
+        ctx.stroke(path, with: .color(.blue.opacity(0.8)), lineWidth: 1)
+        // 末根 OI dot 高亮 + 数值标签（万手单位 · trader 习惯）
+        if let lastOI = ois.last {
+            let centerX = rect.minX + (CGFloat(n - 1) + 0.5) * rect.width / CGFloat(n)
+            let y = yFor(lastOI)
+            let dot = CGRect(x: centerX - 2, y: y - 2, width: 4, height: 4)
+            ctx.fill(Path(ellipseIn: dot), with: .color(.blue))
+            let lbl = Text(String(format: "%.1f万", lastOI / 10000))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.blue.opacity(0.9))
+            ctx.draw(lbl, at: CGPoint(x: rect.maxX - 18, y: rect.minY + 6),
+                     anchor: .center)
+        }
     }
 
     // MARK: - SAR（v15.23 batch86 · Wilder Parabolic SAR · 标准 step=0.02 / max=0.2）
@@ -793,6 +850,11 @@ enum MultiChartMockData {
             let high = max(open, close) + Double.random(in: 0...wickRange, using: &rng)
             let low = min(open, close) - Double.random(in: 0...wickRange, using: &rng)
             let volume = Int.random(in: 800...4000, using: &rng)
+            // v15.23 batch87 · mock OI · 跟随趋势缓慢累积 + 随机抖动（让 OI 副图非平线）
+            // 真行情 Sina 提供 openInterest · mock 仅用于 UI demo
+            let oiBase = 100_000 + (i * 50) // 缓慢累积
+            let oiNoise = Int.random(in: -2000...3000, using: &rng)
+            let oi = max(0, oiBase + oiNoise)
             bars.append(KLine(
                 instrumentID: instrumentID,
                 period: period,
@@ -802,7 +864,7 @@ enum MultiChartMockData {
                 low: Decimal(low),
                 close: Decimal(close),
                 volume: volume,
-                openInterest: 0,
+                openInterest: oi,
                 turnover: 0
             ))
             price = close

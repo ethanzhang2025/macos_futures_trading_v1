@@ -390,6 +390,16 @@ struct MultiChartHost: View {
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(color)
                     }
+                case .oi:
+                    let oi = b.openInterest
+                    let prevOI = idx >= 1 ? bars[idx - 1].openInterest : oi
+                    let oiUp = oi >= prevOI
+                    Text(String(format: "OI %.1f万", Double(oi) / 10000))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.blue.opacity(0.9))
+                    Text(oiUp ? "↑增仓" : "↓减仓")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(oiUp ? .red.opacity(0.8) : .green.opacity(0.8))
                 case .volume, .none:
                     EmptyView()
                 }
@@ -719,7 +729,8 @@ struct MultiChartHost: View {
             ("右键 cell", "聚焦/交换/复制配置/重置 4 类操作"),
             ("点击 #↗ 按钮", "推送到主 ChartScene 深入分析"),
             ("点击 cell 合约名/周期", "Menu 切换"),
-            ("点击副图图标（batch79-84）", "切换副图：量 / KDJ 9-3-3 / MACD 12-26-9 / RSI 14（超买 70 / 超卖 30）/ 无（主图全屏）"),
+            ("点击副图图标（batch79-87）", "切换副图：量 / KDJ / MACD / RSI（超买 70/超卖 30）/ 持仓量 OI / 无（主图全屏）"),
+            ("OI 持仓量副图（batch87）", "中国期货独有 · 增仓上涨=多头强势 · 增仓下跌=空头强势 · 减仓=多空回吐"),
             ("副图金叉/死叉点（batch82）", "KDJ K↑D 或 MACD DIF↑DEA = 红点（金叉买点）· 反向 = 绿点（死叉卖点）· 一眼定位"),
             ("点击 chart.line 图标（batch72-74）", "切换 MA5（黄）+ MA10（粉）+ MA20（紫）+ MA60（蓝）四均线 · 中国期货短线经典标配"),
             ("点击 waveform 图标（batch78）", "切换 BOLL 上下轨（period=20 · k=2σ · 默认关 · 青色虚线 · 突破信号）"),

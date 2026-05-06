@@ -334,7 +334,7 @@ struct MultiChartCellView: View {
         return String(format: "%02d:%02d", remaining / 60, remaining % 60)
     }
 
-    /// v15.23 batch79-84 · 副图 Menu icon（按当前选择切换图标）
+    /// v15.23 batch79-87 · 副图 Menu icon（按当前选择切换图标）
     private var subChartIcon: String {
         switch state.subChart {
         case .none: return "chart.bar"               // 灰色 outline
@@ -342,6 +342,7 @@ struct MultiChartCellView: View {
         case .kdj: return "waveform.path.ecg"       // 心电图（KDJ）
         case .macd: return "chart.xyaxis.line"      // 趋势线（MACD）
         case .rsi: return "gauge.with.dots.needle.50percent"  // 仪表（RSI 强弱）
+        case .oi: return "person.3.fill"            // 三人（持仓量 · 主力意图）
         }
     }
 

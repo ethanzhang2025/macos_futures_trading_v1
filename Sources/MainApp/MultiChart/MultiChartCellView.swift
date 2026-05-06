@@ -52,6 +52,21 @@ struct MultiChartCellView: View {
         .minute1, .minute5, .minute15, .minute30, .hour1, .hour4, .daily,
     ]
 
+    /// v15.23 batch96 · 合约中文别名（trader 直观识别 · "螺纹" 比 "RB0" 更熟悉）
+    /// 主连续 + 主流商品 · 老用户合约符号也保留（hover 显示中文 + 代号）
+    static let instrumentDisplayName: [String: String] = [
+        "RB0": "螺纹钢",
+        "IF0": "沪深 300",
+        "AU0": "黄金",
+        "CU0": "沪铜",
+        "I0": "铁矿石",
+        "MA0": "甲醇",
+        "AG0": "白银",
+        "TA0": "PTA",
+        "ZN0": "沪锌",
+        "AL0": "沪铝",
+    ]
+
     @State private var liveBars: [KLine] = []
     @State private var dataState: MultiChartCellDataState = .loading
     /// v15.23 batch71 · 链式串行写 cache（保 K 线时间序 · 避免 race condition · 同 ChartScene 模式）
@@ -194,7 +209,16 @@ struct MultiChartCellView: View {
         HStack(spacing: 4) {
             Menu {
                 ForEach(Self.instrumentPool, id: \.self) { id in
-                    Button(id) { onContractTap(id) }
+                    Button {
+                        onContractTap(id)
+                    } label: {
+                        // batch96 · "RB0  螺纹钢" 双显示 · trader 一眼对应代号 + 品种
+                        if let cn = Self.instrumentDisplayName[id] {
+                            Text("\(id)  \(cn)")
+                        } else {
+                            Text(id)
+                        }
+                    }
                 }
             } label: {
                 Text(state.instrumentID)
@@ -203,7 +227,7 @@ struct MultiChartCellView: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 60)
-            .help("切换合约")
+            .help("切换合约（当前：\(Self.instrumentDisplayName[state.instrumentID] ?? state.instrumentID) · \(state.instrumentID)）")
 
             Menu {
                 ForEach(Self.periodPool, id: \.self) { p in

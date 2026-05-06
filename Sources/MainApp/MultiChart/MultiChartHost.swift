@@ -153,7 +153,16 @@ struct MultiChartHost: View {
                 Divider()
                 Section("全部设为合约") {
                     ForEach(Self.instrumentPool, id: \.self) { id in
-                        Button(id) { applyInstrumentToAll(id) }
+                        Button {
+                            applyInstrumentToAll(id)
+                        } label: {
+                            // batch96 · "RB0  螺纹钢" 双显示
+                            if let cn = MultiChartCellView.instrumentDisplayName[id] {
+                                Text("\(id)  \(cn)")
+                            } else {
+                                Text(id)
+                            }
+                        }
                     }
                 }
             } label: {

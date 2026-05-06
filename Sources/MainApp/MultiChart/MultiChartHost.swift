@@ -34,6 +34,11 @@ struct MultiChartHost: View {
     /// v15.23 batch53 · 双击 focus 时记下原 preset · 再次双击/Esc 恢复
     @State private var focusedIdx: Int? = nil
     @State private var presetBeforeFocus: WindowGridPreset? = nil
+    /// v15.23 batch56 · auto-tick · 每秒递增 · 注入 mock data 让末根 K 线微动
+    @State private var tickSeed: UInt64 = 1
+    @AppStorage("viewState.v1.multiChart.autoTick") private var autoTickEnabled: Bool = true
+
+    private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var preset: WindowGridPreset {
         WindowGridPreset(rawValue: presetRaw) ?? .grid2x2
@@ -53,6 +58,12 @@ struct MultiChartHost: View {
         .frame(minWidth: 720, idealWidth: 1080, minHeight: 480, idealHeight: 720)
         .onAppear {
             loadCellsIfNeeded()
+        }
+        .onReceive(tickTimer) { _ in
+            // v15.23 batch56 · auto-tick · 每秒抖动末根 K 线（仅当 autoTickEnabled 时）
+            if autoTickEnabled {
+                tickSeed &+= 1
+            }
         }
         // v15.23 batch55 · 保存预设 sheet
         .sheet(isPresented: $showSaveSheet) {
@@ -150,6 +161,16 @@ struct MultiChartHost: View {
             .menuStyle(.borderlessButton)
             .frame(width: 110)
             .help("保存 / 加载 / 删除自定义多图表布局")
+
+            // v15.23 batch56 · auto-tick toggle
+            Button {
+                autoTickEnabled.toggle()
+            } label: {
+                Image(systemName: autoTickEnabled ? "play.circle.fill" : "pause.circle")
+                    .foregroundColor(autoTickEnabled ? .green : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(autoTickEnabled ? "实时抖动开（每秒 mock tick）" : "已暂停 mock tick")
 
             // v15.23 batch53 · 快捷键提示（hover 显示）
             Text("⌘⌥1-6 切布局")
@@ -357,10 +378,11 @@ struct MultiChartHost: View {
     private func cellView(state: MultiChartCellState, idx: Int) -> some View {
         VStack(spacing: 0) {
             cellToolbar(state: state, idx: idx)
-            // K 线 Canvas（mock data · 后续 batch 接 SinaMarketDataProvider 真数据）
+            // K 线 Canvas（mock data + tick seed 让末根 K 线动起来）
             MultiChartCellCanvas(
                 bars: MultiChartMockData.bars(instrumentID: state.instrumentID,
-                                              period: state.period),
+                                              period: state.period,
+                                              tickSeed: autoTickEnabled ? tickSeed : 0),
                 showVolume: state.showVolume
             )
         }
@@ -434,7 +456,9 @@ struct MultiChartHost: View {
     /// 末根 K 线 close 显示在标题栏（mock）
     @ViewBuilder
     private func lastPriceText(state: MultiChartCellState) -> some View {
-        let bars = MultiChartMockData.bars(instrumentID: state.instrumentID, period: state.period)
+        let bars = MultiChartMockData.bars(instrumentID: state.instrumentID,
+                                            period: state.period,
+                                            tickSeed: autoTickEnabled ? tickSeed : 0)
         if let last = bars.last {
             let close = (last.close as NSDecimalNumber).doubleValue
             let prev = bars.count >= 2 ? (bars[bars.count - 2].close as NSDecimalNumber).doubleValue : close

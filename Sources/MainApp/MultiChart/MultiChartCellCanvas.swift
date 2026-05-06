@@ -139,7 +139,9 @@ struct MultiChartCellCanvas: View {
 enum MultiChartMockData {
 
     /// 按 instrumentID + period 生成稳定 mock K 线（120 根 · 不同合约/周期波动幅度有差异）
-    static func bars(instrumentID: String, period: KLinePeriod, count: Int = 120) -> [KLine] {
+    /// - Parameter tickSeed: v15.23 batch56 · 每秒变化的 seed offset · 让最末根 K 线 close 微动模拟 tick
+    static func bars(instrumentID: String, period: KLinePeriod, count: Int = 120,
+                     tickSeed: UInt64 = 0) -> [KLine] {
         let basePrice = basePriceFor(instrumentID)
         let volatility = volatilityFor(instrumentID, period: period)
         // 用 hashable 当 seed · 同 (id, period) 重新打开看到一样的图
@@ -151,7 +153,13 @@ enum MultiChartMockData {
         for i in 0..<count {
             let drift = Double.random(in: -volatility...volatility, using: &rng)
             let open = price
-            let close = max(basePrice * 0.5, price + drift)
+            var close = max(basePrice * 0.5, price + drift)
+            // v15.23 batch56 · 末根 K 线注入 tick 抖动（≤ 0.3×volatility · 不破坏整体走势）
+            if i == count - 1, tickSeed != 0 {
+                var tickRng = SeededRNG(seed: tickSeed ^ rng.state)
+                let tickDrift = Double.random(in: -volatility * 0.3...volatility * 0.3, using: &tickRng)
+                close = max(basePrice * 0.5, close + tickDrift)
+            }
             let wickRange = volatility * 0.6
             let high = max(open, close) + Double.random(in: 0...wickRange, using: &rng)
             let low = min(open, close) - Double.random(in: 0...wickRange, using: &rng)

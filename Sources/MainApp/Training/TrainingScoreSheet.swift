@@ -1,0 +1,253 @@
+// MainApp · WP-54 模拟训练 · 评分 Sheet（v15.23 batch12）
+//
+// 职责：
+// - 训练结束 / 历史回看时弹此 sheet
+// - 上方：grade emoji 大字 + totalScore 百分制
+// - 中部：pnl/纪律子分条（ProgressView 0-50）
+// - 下方：summary 中文文案 + 违规折叠列表
+// - 底部：关闭按钮（dismiss 触发 viewModel.dismissLastFinishedSheet 由 caller 处理）
+
+#if canImport(SwiftUI) && os(macOS)
+
+import SwiftUI
+import Foundation
+import TradingCore
+
+struct TrainingScoreSheet: View {
+
+    let session: TrainingSession
+    let score: TrainingScore
+    let onDismiss: () -> Void
+
+    @State private var showViolations: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            header
+
+            Divider()
+
+            scoreCard
+
+            Divider()
+
+            summaryBlock
+
+            if !session.violations.isEmpty {
+                violationsSection
+            }
+
+            Spacer(minLength: 8)
+
+            HStack {
+                Spacer()
+                Button("关闭") { onDismiss() }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(width: 520, height: showViolations ? 660 : 480)
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Text(score.grade.emoji)
+                .font(.system(size: 56))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("训练评分")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                HStack(alignment: .lastTextBaseline, spacing: 6) {
+                    Text("\(score.totalScore)")
+                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .foregroundColor(gradeColor(score.grade))
+                    Text("/ 100")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                    Text("· 等级 \(score.grade.displayName)")
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundColor(gradeColor(score.grade))
+                }
+                if !session.scenarioName.isEmpty {
+                    Text("场景：\(session.scenarioName)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            Spacer()
+        }
+    }
+
+    // MARK: - 子分条
+
+    private var scoreCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            subScoreBar(
+                label: "盈亏子分",
+                emoji: "💰",
+                value: score.pnlScore,
+                tint: pnlColor
+            )
+            subScoreBar(
+                label: "纪律子分",
+                emoji: "📋",
+                value: score.disciplineScore,
+                tint: disciplineColor
+            )
+
+            HStack(spacing: 16) {
+                metric(
+                    label: "盈亏率",
+                    value: String(format: "%.2f%%",
+                                  (session.pnlPercent as NSDecimalNumber).doubleValue),
+                    color: (session.pnl >= 0) ? .green : .red
+                )
+                metric(
+                    label: "交易数",
+                    value: "\(session.trades.count) 笔",
+                    color: .primary
+                )
+                metric(
+                    label: "时长",
+                    value: "\(session.durationMinutes) 分钟",
+                    color: .primary
+                )
+                metric(
+                    label: "违规",
+                    value: "\(errorCount) 违规 / \(warningCount) 警告",
+                    color: errorCount > 0 ? .red : (warningCount > 0 ? .orange : .secondary)
+                )
+            }
+        }
+    }
+
+    private func subScoreBar(label: String, emoji: String, value: Int, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("\(emoji) \(label)")
+                    .font(.caption)
+                Spacer()
+                Text("\(value) / 50")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(tint)
+            }
+            ProgressView(value: Double(value), total: 50)
+                .tint(tint)
+        }
+    }
+
+    private func metric(label: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundColor(.secondary)
+            Text(value).font(.system(size: 12, design: .monospaced)).foregroundColor(color)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Summary
+
+    private var summaryBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("📝 评价")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text(score.summary)
+                .font(.system(size: 13))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Violations
+
+    private var violationsSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation { showViolations.toggle() }
+            } label: {
+                HStack {
+                    Image(systemName: showViolations ? "chevron.down" : "chevron.right")
+                    Text("违规明细 · \(session.violations.count) 条")
+                        .font(.caption)
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+
+            if showViolations {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(session.violations) { v in
+                            violationRow(v)
+                        }
+                    }
+                }
+                .frame(height: 180)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+            }
+        }
+    }
+
+    private func violationRow(_ v: DisciplineViolation) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(v.severity == .error ? "🔴" : "🟡")
+                .font(.system(size: 11))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(v.ruleKind.displayName) · \(v.severity.displayName)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(v.severity == .error ? .red : .orange)
+                Text(v.message)
+                    .font(.system(size: 11))
+                    .foregroundColor(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+    }
+
+    // MARK: - Helpers
+
+    private var errorCount: Int {
+        session.violations.filter { $0.severity == .error }.count
+    }
+
+    private var warningCount: Int {
+        session.violations.filter { $0.severity == .warning }.count
+    }
+
+    private var pnlColor: Color {
+        switch score.pnlScore {
+        case 40...50: return .green
+        case 30..<40: return .blue
+        case 20..<30: return .orange
+        default:      return .red
+        }
+    }
+
+    private var disciplineColor: Color {
+        switch score.disciplineScore {
+        case 40...50: return .green
+        case 30..<40: return .blue
+        case 20..<30: return .orange
+        default:      return .red
+        }
+    }
+
+    private func gradeColor(_ grade: TrainingScore.Grade) -> Color {
+        switch grade {
+        case .S: return .purple
+        case .A: return .green
+        case .B: return .blue
+        case .C: return .orange
+        case .D: return .red
+        }
+    }
+}
+
+#endif

@@ -20,6 +20,8 @@ import Shared
 
 struct MultiChartHost: View {
 
+    @Environment(\.openWindow) private var openWindow
+
     // MARK: - 持久化状态
 
     @AppStorage("viewState.v1.multiChart.preset") private var presetRaw: String = WindowGridPreset.grid2x2.rawValue
@@ -292,6 +294,13 @@ struct MultiChartHost: View {
         persistCells()
     }
 
+    /// v15.23 batch58 · 推送 cell 到主 ChartScene（复用 WatchlistWindow 的 .watchlistInstrumentSelected 通道）
+    private func pushToMainChart(_ state: MultiChartCellState) {
+        openWindow(id: "chart")
+        NotificationCenter.default.post(name: .watchlistInstrumentSelected,
+                                        object: state.instrumentID)
+    }
+
     // MARK: - v15.23 batch55 · 命名布局预设操作
 
     private var savedLayouts: [MultiChartLayoutPreset] {
@@ -443,6 +452,16 @@ struct MultiChartHost: View {
             }
             .buttonStyle(.borderless)
             .help(state.showVolume ? "隐藏成交量" : "显示成交量")
+
+            // v15.23 batch58 · 推送到主 ChartScene 深入分析
+            Button {
+                pushToMainChart(state)
+            } label: {
+                Image(systemName: "arrow.up.right.square")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.borderless)
+            .help("在主图打开 \(state.instrumentID)（深入分析 · 完整指标/画线/复盘）")
 
             Text("#\(idx + 1)")
                 .font(.caption2)

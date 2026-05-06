@@ -36,6 +36,7 @@ struct MultiChartCellView: View {
     let onPeriodTap: (KLinePeriod) -> Void
     let onVolumeToggle: () -> Void
     let onIndicatorsToggle: () -> Void
+    let onBollToggle: () -> Void
     let onPushToMain: () -> Void
 
     static let instrumentPool: [String] = [
@@ -78,7 +79,8 @@ struct MultiChartCellView: View {
                 showVolume: state.showVolume,
                 hoveredIndex: sharedHoveredIndex,
                 onHoverIndexChange: onHoverIndexChange,
-                showIndicators: state.showIndicators
+                showIndicators: state.showIndicators,
+                showBoll: state.showBoll
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -218,7 +220,7 @@ struct MultiChartCellView: View {
             .buttonStyle(.borderless)
             .help(state.showVolume ? "隐藏成交量" : "显示成交量")
 
-            // v15.23 batch72 · MA 双均线开关（MA5 黄 / MA20 紫 · 短线标配）
+            // v15.23 batch72-74 · MA 4 均线开关（5/10/20/60 · 短线标配）
             Button {
                 onIndicatorsToggle()
             } label: {
@@ -228,6 +230,17 @@ struct MultiChartCellView: View {
             }
             .buttonStyle(.borderless)
             .help(state.showIndicators ? "隐藏 MA5/10/20/60 四均线" : "显示 MA5/10/20/60 四均线（短线标配）")
+
+            // v15.23 batch78 · BOLL 上下轨开关（突破信号 · 默认关 · trader 主动开）
+            Button {
+                onBollToggle()
+            } label: {
+                Image(systemName: state.showBoll ? "waveform.path" : "waveform")
+                    .font(.system(size: 11))
+                    .foregroundColor(state.showBoll ? .cyan : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(state.showBoll ? "隐藏 BOLL 上下轨" : "显示 BOLL 上下轨（period=20 · k=2σ · 突破信号）")
 
             Button {
                 onPushToMain()

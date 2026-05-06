@@ -602,6 +602,7 @@ struct MultiChartHost: View {
             ("点击 cell 合约名/周期", "Menu 切换"),
             ("点击 chart.bar 图标", "切换是否显示成交量"),
             ("点击 chart.line 图标（batch72-74）", "切换 MA5（黄）+ MA10（粉）+ MA20（紫）+ MA60（蓝）四均线 · 中国期货短线经典标配"),
+            ("点击 waveform 图标（batch78）", "切换 BOLL 上下轨（period=20 · k=2σ · 默认关 · 青色虚线 · 突破信号）"),
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
             ("hover 时状态栏（batch75）", "OHLCV + M5/M20/M60 三条均线值（参考 cell #1 / focused cell · 当 cell 开启均线时显示）"),
         ]),
@@ -717,6 +718,7 @@ struct MultiChartHost: View {
             onPeriodTap: { p in updateCell(idx) { $0.period = p } },
             onVolumeToggle: { updateCell(idx) { $0.showVolume.toggle() } },
             onIndicatorsToggle: { updateCell(idx) { $0.showIndicators.toggle() } },
+            onBollToggle: { updateCell(idx) { $0.showBoll.toggle() } },
             onPushToMain: { pushToMainChart(state) }
         )
     }

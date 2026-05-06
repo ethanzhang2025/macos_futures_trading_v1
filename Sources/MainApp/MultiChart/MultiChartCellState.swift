@@ -21,22 +21,26 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     /// v15.23 batch72 · 主图 MA 双均线（MA5 + MA20）开关 · 中国期货短线标配
     /// 历史 cellsJSON 缺这个字段时按 true 解码（默认开 · trader 多周期共振直观）
     var showIndicators: Bool
+    /// v15.23 batch78 · BOLL 上下轨开关（突破信号 · 默认关避免噪屏 · trader 主动开深入分析）
+    var showBoll: Bool
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
          period: KLinePeriod = .minute15,
          showVolume: Bool = true,
-         showIndicators: Bool = true) {
+         showIndicators: Bool = true,
+         showBoll: Bool = false) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
         self.showVolume = showVolume
         self.showIndicators = showIndicators
+        self.showBoll = showBoll
     }
 
-    /// Codable · 老 cellsJSON 反序列化时 showIndicators 缺字段 · 默认 true
+    /// Codable · 老 cellsJSON 反序列化时 showIndicators/showBoll 缺字段时按 true / false 默认
     enum CodingKeys: String, CodingKey {
-        case id, instrumentID, period, showVolume, showIndicators
+        case id, instrumentID, period, showVolume, showIndicators, showBoll
     }
 
     init(from decoder: Decoder) throws {
@@ -46,6 +50,7 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.period = try c.decode(KLinePeriod.self, forKey: .period)
         self.showVolume = try c.decode(Bool.self, forKey: .showVolume)
         self.showIndicators = try c.decodeIfPresent(Bool.self, forKey: .showIndicators) ?? true
+        self.showBoll = try c.decodeIfPresent(Bool.self, forKey: .showBoll) ?? false
     }
 }
 

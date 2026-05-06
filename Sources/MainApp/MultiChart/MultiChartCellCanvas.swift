@@ -25,18 +25,22 @@ struct MultiChartCellCanvas: View {
     let hoveredIndex: Int?
     /// hover 回调：本 cell 内鼠标移动时上报当前 index 给父
     let onHoverIndexChange: ((Int?) -> Void)?
-    /// v15.23 batch72 · MA 双均线开关（MA5 黄 + MA20 紫 · 中国期货短线标配）
+    /// v15.23 batch72-74 · MA 4 均线开关（MA5/10/20/60 · 中国期货短线经典标配）
     let showIndicators: Bool
+    /// v15.23 batch78 · BOLL 上下轨开关（突破信号 · 默认关 · trader 主动开）
+    let showBoll: Bool
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
          onHoverIndexChange: ((Int?) -> Void)? = nil,
-         showIndicators: Bool = true) {
+         showIndicators: Bool = true,
+         showBoll: Bool = false) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
         self.onHoverIndexChange = onHoverIndexChange
         self.showIndicators = showIndicators
+        self.showBoll = showBoll
     }
 
     var body: some View {
@@ -62,6 +66,10 @@ struct MultiChartCellCanvas: View {
                            color: .purple.opacity(0.85), lineWidth: 1)
                     drawMA(in: ctx, rect: priceRect, period: 60,
                            color: .blue.opacity(0.8), lineWidth: 1)
+                }
+                // v15.23 batch78 · BOLL 上下轨（period=20 · k=2σ · trader 突破信号）
+                if showBoll {
+                    drawBoll(in: ctx, rect: priceRect, period: 20, k: 2)
                 }
                 if showVolume, volumeHeight > 8 {
                     drawGrid(in: ctx, rect: volumeRect, lines: 2)
@@ -307,6 +315,43 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
+    }
+
+    // MARK: - BOLL（v15.23 batch78 · 上下轨折线 · 标准 period=20 / k=2σ · 中轨复用 MA20 不重画）
+
+    private func drawBoll(in ctx: GraphicsContext, rect: CGRect, period: Int, k: Double) {
+        let n = bars.count
+        guard n >= period else { return }
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let priceRange = maxHigh - minLow
+        let yFor = { (price: Double) -> CGFloat in
+            rect.maxY - CGFloat((price - minLow) / priceRange) * rect.height
+        }
+        var upperPath = Path()
+        var lowerPath = Path()
+        var startedU = false
+        var startedL = false
+        // 计算每根 K 线 [i-period+1..i] 窗口内 close 的 mean + stdev
+        let closes = bars.map { ($0.close as NSDecimalNumber).doubleValue }
+        for i in (period - 1)..<n {
+            let window = closes[(i - period + 1)...i]
+            let mean = window.reduce(0, +) / Double(period)
+            let variance = window.reduce(0) { $0 + pow($1 - mean, 2) } / Double(period)
+            let stdev = sqrt(variance)
+            let upper = mean + k * stdev
+            let lower = mean - k * stdev
+            let centerX = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let upperPt = CGPoint(x: centerX, y: yFor(upper))
+            let lowerPt = CGPoint(x: centerX, y: yFor(lower))
+            if startedU { upperPath.addLine(to: upperPt) } else { upperPath.move(to: upperPt); startedU = true }
+            if startedL { lowerPath.addLine(to: lowerPt) } else { lowerPath.move(to: lowerPt); startedL = true }
+        }
+        ctx.stroke(upperPath, with: .color(.cyan.opacity(0.6)),
+                   style: StrokeStyle(lineWidth: 0.8, dash: [3, 2]))
+        ctx.stroke(lowerPath, with: .color(.cyan.opacity(0.6)),
+                   style: StrokeStyle(lineWidth: 0.8, dash: [3, 2]))
     }
 
     // MARK: - Volume

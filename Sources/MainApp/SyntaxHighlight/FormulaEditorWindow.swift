@@ -234,6 +234,13 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("d", modifiers: [.command])
             .help("复制当前光标所在行到下一行（⌘D）")
+            // v15.22 batch19 · 上下移动当前行（⌥↑/⌥↓ · VSCode/Sublime 经典）
+            Button { moveCurrentLine(up: true) } label: { Image(systemName: "arrow.up.square") }
+                .keyboardShortcut(.upArrow, modifiers: [.option])
+                .help("当前行上移（⌥↑）")
+            Button { moveCurrentLine(up: false) } label: { Image(systemName: "arrow.down.square") }
+                .keyboardShortcut(.downArrow, modifiers: [.option])
+                .help("当前行下移（⌥↓）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in
@@ -445,6 +452,20 @@ public struct FormulaEditorWindow: View {
         newLines.insert(lines[idx], at: idx + 1)
         sourceText = newLines.joined(separator: "\n")
         statusMessage = "已复制第 \(idx + 1) 行"
+    }
+
+    /// v15.22 batch19 · 上下移动当前行（⌥↑/⌥↓ · trader 调整公式顺序常用）
+    private func moveCurrentLine(up: Bool) {
+        let lines = sourceText.components(separatedBy: "\n")
+        guard lines.count > 1 else { return }
+        let idx = max(0, min(cursorLine - 1, lines.count - 1))
+        let target = up ? idx - 1 : idx + 1
+        guard target >= 0, target < lines.count else { return }
+        var newLines = lines
+        newLines.swapAt(idx, target)
+        sourceText = newLines.joined(separator: "\n")
+        cursorLine = target + 1   // 1-based · 跟随移动
+        statusMessage = up ? "第 \(idx + 1) 行上移" : "第 \(idx + 1) 行下移"
     }
 
     private func textStats(_ s: String) -> (chars: Int, lines: Int) {

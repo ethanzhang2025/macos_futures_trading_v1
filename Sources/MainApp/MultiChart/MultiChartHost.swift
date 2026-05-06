@@ -129,6 +129,26 @@ struct MultiChartHost: View {
 
             Spacer()
 
+            // v15.23 batch59 · 批量同步 Menu（trader 一键多周期/多合约比对）
+            Menu {
+                Section("全部设为周期") {
+                    ForEach(Self.periodPool, id: \.self) { p in
+                        Button(p.rawValue) { applyPeriodToAll(p) }
+                    }
+                }
+                Divider()
+                Section("全部设为合约") {
+                    ForEach(Self.instrumentPool, id: \.self) { id in
+                        Button(id) { applyInstrumentToAll(id) }
+                    }
+                }
+            } label: {
+                Label("批量", systemImage: "rectangle.3.group")
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 80)
+            .help("一键把所有 cell 设为同周期（多合约比对）/ 同合约（多周期比对）")
+
             // v15.23 batch55 · 布局预设 Menu
             Menu {
                 Button {
@@ -299,6 +319,22 @@ struct MultiChartHost: View {
         openWindow(id: "chart")
         NotificationCenter.default.post(name: .watchlistInstrumentSelected,
                                         object: state.instrumentID)
+    }
+
+    // MARK: - v15.23 batch59 · 批量同步 cells
+
+    private func applyPeriodToAll(_ period: KLinePeriod) {
+        for i in 0..<cells.count {
+            cells[i].period = period
+        }
+        persistCells()
+    }
+
+    private func applyInstrumentToAll(_ instrumentID: String) {
+        for i in 0..<cells.count {
+            cells[i].instrumentID = instrumentID
+        }
+        persistCells()
     }
 
     // MARK: - v15.23 batch55 · 命名布局预设操作

@@ -152,6 +152,8 @@ struct MultiChartCellCanvas: View {
                     case .atr:
                         drawATR(in: ctx, rect: subRect)
                     }
+                    // batch101 · 副图左上角显示指标名称 + 参数（trader 一眼识别）
+                    drawSubChartLabel(in: ctx, rect: subRect)
                 }
                 // v15.23 batch77 · 简洁 axis 标签（时间 3 + 价格 3 · 不喧宾夺主）
                 drawAxisLabels(in: ctx, priceRect: priceRect, bottomY: size.height)
@@ -512,6 +514,27 @@ struct MultiChartCellCanvas: View {
         if close > upper { return .red.opacity(0.95) }
         if close < lower { return .green.opacity(0.95) }
         return nil
+    }
+
+    // MARK: - 副图标签（v15.23 batch101 · 左上角显示指标名 + 参数 · trader 一眼识别）
+
+    /// 副图左上角显示当前指标名称 + 标准参数（避免 trader 困惑当前看的是 KDJ(9,3,3) 还是 RSI(14)）
+    private func drawSubChartLabel(in ctx: GraphicsContext, rect: CGRect) {
+        let label: String
+        switch subChart {
+        case .none: return
+        case .volume: label = "量"
+        case .kdj: label = "KDJ(9,3,3)"
+        case .macd: label = "MACD(12,26,9)"
+        case .rsi: label = "RSI(14)"
+        case .oi: label = "OI 持仓量"
+        case .atr: label = "ATR(14)"
+        }
+        let txt = Text(label)
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundColor(.secondary.opacity(0.85))
+        ctx.draw(txt, at: CGPoint(x: rect.minX + 4, y: rect.minY + 6),
+                 anchor: .leading)
     }
 
     // MARK: - Fibonacci 黄金回撤（v15.23 batch99 · 区间高低 7 条水平线 · trader 经典回撤分析）

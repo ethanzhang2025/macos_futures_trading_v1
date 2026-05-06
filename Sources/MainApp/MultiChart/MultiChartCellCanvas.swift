@@ -50,13 +50,18 @@ struct MultiChartCellCanvas: View {
 
                 drawGrid(in: ctx, rect: priceRect)
                 drawCandles(in: ctx, rect: priceRect)
-                // v15.23 batch72 · 主图叠加 MA5 + MA20 双均线（中国期货短线最常用）
+                // v15.23 batch72-74 · 主图叠加 5/10/20/60 四均线（中国期货短线经典标配）
                 // bars 同坐标系 · 需用相同 minLow/maxHigh 映射价格→Y · 不重算价格区间
+                // 颜色梯度：快线偏黄/红 → 慢线偏紫/蓝（trader 一眼区分周期）
                 if showIndicators {
                     drawMA(in: ctx, rect: priceRect, period: 5,
-                           color: .yellow.opacity(0.85), lineWidth: 1)
+                           color: .yellow.opacity(0.9), lineWidth: 1)
+                    drawMA(in: ctx, rect: priceRect, period: 10,
+                           color: .pink.opacity(0.85), lineWidth: 1)
                     drawMA(in: ctx, rect: priceRect, period: 20,
                            color: .purple.opacity(0.85), lineWidth: 1)
+                    drawMA(in: ctx, rect: priceRect, period: 60,
+                           color: .blue.opacity(0.8), lineWidth: 1)
                 }
                 if showVolume, volumeHeight > 8 {
                     drawGrid(in: ctx, rect: volumeRect, lines: 2)

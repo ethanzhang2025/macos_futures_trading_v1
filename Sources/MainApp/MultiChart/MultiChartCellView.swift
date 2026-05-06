@@ -227,7 +227,7 @@ struct MultiChartCellView: View {
                     .foregroundColor(state.showIndicators ? .accentColor : .secondary)
             }
             .buttonStyle(.borderless)
-            .help(state.showIndicators ? "隐藏 MA5/MA20 双均线" : "显示 MA5/MA20 双均线")
+            .help(state.showIndicators ? "隐藏 MA5/10/20/60 四均线" : "显示 MA5/10/20/60 四均线（短线标配）")
 
             Button {
                 onPushToMain()

@@ -570,7 +570,7 @@ struct MultiChartHost: View {
             ("点击 #↗ 按钮", "推送到主 ChartScene 深入分析"),
             ("点击 cell 合约名/周期", "Menu 切换"),
             ("点击 chart.bar 图标", "切换是否显示成交量"),
-            ("点击 chart.line 图标（batch72）", "切换 MA5（黄）+ MA20（紫）双均线 · 中国期货短线标配"),
+            ("点击 chart.line 图标（batch72-74）", "切换 MA5（黄）+ MA10（粉）+ MA20（紫）+ MA60（蓝）四均线 · 中国期货短线经典标配"),
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
         ]),
         ("📦 批量操作", [

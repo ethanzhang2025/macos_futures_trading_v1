@@ -95,6 +95,7 @@ struct MultiChartCellCanvas: View {
                 // v15.23 batch77 · 简洁 axis 标签（时间 3 + 价格 3 · 不喧宾夺主）
                 drawAxisLabels(in: ctx, priceRect: priceRect, bottomY: size.height)
                 // v15.23 batch68 · 联动十字线（垂直 vertical line at hovered index · 跨 cell 同步）
+                // v15.23 batch85 · 加水平虚线 at close + 右侧价格 label（完整十字线 · trader 经典）
                 if let hidx = hoveredIndex, hidx >= 0, hidx < bars.count {
                     let centerX = priceRect.minX + (CGFloat(hidx) + 0.5) * priceRect.width / CGFloat(bars.count)
                     var line = Path()
@@ -102,9 +103,38 @@ struct MultiChartCellCanvas: View {
                     line.addLine(to: CGPoint(x: centerX, y: size.height))
                     ctx.stroke(line, with: .color(.accentColor.opacity(0.6)),
                                style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    // 顶部小标签：bar index + close
+                    // 水平虚线 at hover bar close（仅 priceRect 内 · 不跨副图）
                     let bar = bars[hidx]
                     let close = (bar.close as NSDecimalNumber).doubleValue
+                    let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+                    let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+                    if let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow {
+                        let priceRange = maxHigh - minLow
+                        let yClose = priceRect.maxY - CGFloat((close - minLow) / priceRange) * priceRect.height
+                        var hLine = Path()
+                        hLine.move(to: CGPoint(x: priceRect.minX, y: yClose))
+                        hLine.addLine(to: CGPoint(x: priceRect.maxX, y: yClose))
+                        ctx.stroke(hLine, with: .color(.accentColor.opacity(0.55)),
+                                   style: StrokeStyle(lineWidth: 0.6, dash: [3, 3]))
+                        // 右侧 close 价格标签（高亮 · 强调精确价格）
+                        let priceLbl = Text(String(format: "%.2f", close))
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.white)
+                        let resolvedP = ctx.resolve(priceLbl)
+                        let pSize = resolvedP.measure(in: CGSize(width: 80, height: 14))
+                        let pRect = CGRect(
+                            x: priceRect.maxX - pSize.width - 6,
+                            y: yClose - pSize.height / 2 - 1,
+                            width: pSize.width + 5,
+                            height: pSize.height + 2
+                        )
+                        ctx.fill(Path(roundedRect: pRect, cornerRadius: 2),
+                                 with: .color(.accentColor.opacity(0.85)))
+                        ctx.draw(priceLbl,
+                                 at: CGPoint(x: pRect.midX, y: pRect.midY),
+                                 anchor: .center)
+                    }
+                    // 顶部小标签：bar index + close
                     let label = "[\(hidx + 1)] \(String(format: "%.2f", close))"
                     let labelText = Text(label)
                         .font(.system(size: 9, design: .monospaced))

@@ -34,6 +34,8 @@ struct TrainingWindow: View {
     @StateObject private var viewModel = TrainingViewModel()
     @State private var tab: TrainingTab = .rules
     @State private var observeTask: Task<Void, Never>? = nil
+    /// v15.23 batch63 · 帮助面板（⌘⇧? · 三大新窗口 UX 一致）
+    @State private var showHelpSheet: Bool = false
 
     @Environment(\.simulatedTradingEngine) private var engine: SimulatedTradingEngine?
 
@@ -58,6 +60,84 @@ struct TrainingWindow: View {
                 viewModel.dismissLastFinishedSheet()
             }
         }
+        .sheet(isPresented: $showHelpSheet) {
+            helpSheet
+        }
+        .background(
+            Button("") { showHelpSheet = true }
+                .keyboardShortcut("?", modifiers: [.command, .shift])
+                .opacity(0)
+        )
+    }
+
+    // MARK: - v15.23 batch63 · 帮助面板
+
+    private static let helpGroups: [(String, [(String, String)])] = [
+        ("⏱ Session 控制", [
+            ("⌘⇧S", "开始训练（弹 sheet · 选场景 + 设资金）"),
+            ("⌘⇧E", "结束训练 + 评分（active 时）"),
+            ("Esc", "取消开始 sheet（在 sheet 中按）"),
+        ]),
+        ("📋 规则 Tab（7+ 操作）", [
+            ("加号按钮", "添加新规则（5 类纪律 · 阈值 + 备注）"),
+            ("⋯ 菜单 → 一键导入推荐", "trader 首次启用 · 5 条推荐配置"),
+            ("⋯ 菜单 → 清空所有", "重新开始"),
+            ("Toggle 开关", "启用 / 停用单条规则（不删）"),
+            ("✎ 编辑按钮 / 右键编辑", "改阈值 / 备注"),
+            ("右键 → 启用/停用", "快速 toggle"),
+            ("右键 → 删除", "永久移除"),
+        ]),
+        ("⚡ 实时 Tab", [
+            ("session active", "顶部计时 mm:ss + 违规/警告计数"),
+            ("严重度颜色", "🔴 error / 🟡 warning + 时间戳"),
+            ("清空 feed 按钮", "仅清当前显示 · 不影响 session 评分"),
+        ]),
+        ("📚 历史 Tab", [
+            ("等级分布横条", "5 段 S/A/B/C/D · 宽度按 session 数"),
+            ("最近 50 列表", "点击行 → 弹评分 sheet 回看"),
+            ("右键 → 删除", "移除单次记录"),
+            ("清空全部", "永久删除所有历史（带确认）"),
+        ]),
+        ("🎯 评分系统", [
+            ("总分 0-100", "盈亏 50 + 纪律 50"),
+            ("等级阶梯", "S(≥90) / A(≥80) / B(≥70) / C(≥60) / D(<60)"),
+            ("盈亏子分", ">5%=50 / >2%=40 / >0=30 / =0=20 / >-2%=10 / <-2%=0"),
+            ("纪律子分", "50 - error×10 - warning×3（clamp 0-50）"),
+        ]),
+    ]
+
+    @ViewBuilder
+    private var helpSheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("⌨️ 模拟训练全功能").font(.title2).bold()
+                Spacer()
+                Button("关闭") { showHelpSheet = false }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(Self.helpGroups, id: \.0) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(group.0).font(.headline)
+                            ForEach(group.1, id: \.0) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(item.0)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 180, alignment: .leading)
+                                    Text(item.1).font(.system(size: 12))
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 540, idealWidth: 640, minHeight: 480, idealHeight: 600)
     }
 
     // MARK: - Tab 切换栏

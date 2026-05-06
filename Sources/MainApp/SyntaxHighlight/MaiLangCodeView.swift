@@ -117,6 +117,19 @@ public struct MaiLangCodeView: NSViewRepresentable {
             return false
         }
 
+        /// v15.22 batch12 · 括号 / 引号自动配对（输入 `(` 自动补 `)` 光标停中间）
+        /// 配对集：( [ { ' " · 麦语言 `{}` 是块注释也合适
+        /// 触发条件：单字符插入 + 无选中文本（选中文本按括号 = 替换 · 不补对）
+        public func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange,
+                             replacementString: String?) -> Bool {
+            guard let s = replacementString, s.count == 1, affectedCharRange.length == 0 else { return true }
+            let pairs: [String: String] = ["(": ")", "[": "]", "{": "}", "'": "'", "\"": "\""]
+            guard let close = pairs[s] else { return true }
+            textView.insertText(s + close, replacementRange: affectedCharRange)
+            textView.setSelectedRange(NSRange(location: affectedCharRange.location + 1, length: 0))
+            return false
+        }
+
         /// v15.22 batch9 · 自动补全候选（NSTextView 默认 F5 / Esc 触发 popup）
         /// trader 输入"M" → Esc → 弹 MA / MAX / MIN / MEDIAN / MOD / MULAR 等候选
         public func textView(_ textView: NSTextView,

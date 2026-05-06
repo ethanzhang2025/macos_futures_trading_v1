@@ -60,6 +60,8 @@ public struct FormulaEditorWindow: View {
     /// 持久化：tabs 数组 JSON（除 active tab 内容由 sourceText 镜像）
     @AppStorage("viewState.v1.formulaEditor.tabsJSON") private var tabsJSON: String = ""
     @AppStorage("viewState.v1.formulaEditor.activeTabIdx") private var activeTabIdxStored: Int = 0
+    /// v15.23 batch45 · 保存时自动格式化（trader 习惯 · 关闭则按原样写盘）
+    @AppStorage("viewState.v1.formulaEditor.formatOnSave") private var formatOnSave: Bool = true
     /// 多 tab 状态（持久化 · 初始化在 .onAppear）
     @State private var tabs: [FormulaTab] = []
     @State private var activeIdx: Int = 0
@@ -593,6 +595,18 @@ public struct FormulaEditorWindow: View {
             }
             .help("保存当前公式为命名片段 / 加载已存片段（@AppStorage 持久化）")
             Spacer()
+            // v15.23 batch45 · 编辑器选项（保存自动格式化等）
+            Menu {
+                Toggle("保存时自动格式化", isOn: $formatOnSave)
+                Divider()
+                Button(formatOnSave ? "✓ 自动格式化已启用" : "▢ 自动格式化已关闭") { }
+                    .disabled(true)
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 32)
+            .help("编辑器选项 · 保存自动格式化等")
             // 主题切换
             Picker("主题", selection: $schemeRaw) {
                 Text("🌙 暗色").tag("dark")
@@ -692,7 +706,12 @@ public struct FormulaEditorWindow: View {
         }
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try sourceText.write(to: url, atomically: true, encoding: .utf8)
+            // v15.23 batch45 · 保存前自动格式化（toggle 关时写原样）
+            let textToSave: String = formatOnSave ? MaiLangFormatter.format(sourceText) : sourceText
+            if formatOnSave, textToSave != sourceText {
+                sourceText = textToSave
+            }
+            try textToSave.write(to: url, atomically: true, encoding: .utf8)
             // v15.23 batch44 · 保存后更新 tab 名/URL + 清 dirty
             if !tabs.isEmpty, activeIdx >= 0, activeIdx < tabs.count {
                 tabs[activeIdx].name = url.deletingPathExtension().lastPathComponent
@@ -700,7 +719,8 @@ public struct FormulaEditorWindow: View {
                 tabs[activeIdx].isDirty = false
                 persistTabs()
             }
-            statusMessage = "已保存到 \(url.lastPathComponent)"
+            let formatHint = formatOnSave ? " · 已格式化" : ""
+            statusMessage = "已保存到 \(url.lastPathComponent)\(formatHint)"
         } catch {
             statusMessage = "保存失败：\(error.localizedDescription)"
         }

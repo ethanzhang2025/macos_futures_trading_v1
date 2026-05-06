@@ -24,8 +24,13 @@ struct MultiChartHost: View {
 
     @AppStorage("viewState.v1.multiChart.preset") private var presetRaw: String = WindowGridPreset.grid2x2.rawValue
     @AppStorage("viewState.v1.multiChart.cellsJSON") private var cellsJSON: String = ""
+    /// v15.23 batch55 · 命名布局预设 JSON（trader 自定义命名组合）
+    @AppStorage("viewState.v1.multiChart.layoutsJSON") private var layoutsJSON: String = ""
 
     @State private var cells: [MultiChartCellState] = []
+    /// 保存预设 sheet
+    @State private var showSaveSheet: Bool = false
+    @State private var newLayoutName: String = ""
     /// v15.23 batch53 · 双击 focus 时记下原 preset · 再次双击/Esc 恢复
     @State private var focusedIdx: Int? = nil
     @State private var presetBeforeFocus: WindowGridPreset? = nil
@@ -48,6 +53,10 @@ struct MultiChartHost: View {
         .frame(minWidth: 720, idealWidth: 1080, minHeight: 480, idealHeight: 720)
         .onAppear {
             loadCellsIfNeeded()
+        }
+        // v15.23 batch55 · 保存预设 sheet
+        .sheet(isPresented: $showSaveSheet) {
+            saveLayoutSheet
         }
         // v15.23 batch53 · grid preset 快捷键 ⌘⌥1-6（隐藏 button 触发）
         .background(
@@ -106,6 +115,41 @@ struct MultiChartHost: View {
             }
 
             Spacer()
+
+            // v15.23 batch55 · 布局预设 Menu
+            Menu {
+                Button {
+                    newLayoutName = "我的布局 \(savedLayouts.count + 1)"
+                    showSaveSheet = true
+                } label: {
+                    Label("保存当前为预设…", systemImage: "square.and.arrow.down")
+                }
+                let layouts = savedLayouts
+                if !layouts.isEmpty {
+                    Divider()
+                    Section("加载") {
+                        ForEach(layouts) { layout in
+                            Button(layout.name) {
+                                applyLayout(layout)
+                            }
+                            .help("\(layout.preset.label) · \(layout.cells.count) cell")
+                        }
+                    }
+                    Divider()
+                    Menu("删除预设") {
+                        ForEach(layouts) { layout in
+                            Button(layout.name, role: .destructive) {
+                                deleteLayout(layout.id)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("布局预设", systemImage: "square.grid.3x3.square")
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 110)
+            .help("保存 / 加载 / 删除自定义多图表布局")
 
             // v15.23 batch53 · 快捷键提示（hover 显示）
             Text("⌘⌥1-6 切布局")
@@ -225,6 +269,87 @@ struct MultiChartHost: View {
             period: defaultPeriod(forIndex: idx)
         )
         persistCells()
+    }
+
+    // MARK: - v15.23 batch55 · 命名布局预设操作
+
+    private var savedLayouts: [MultiChartLayoutPreset] {
+        guard !layoutsJSON.isEmpty,
+              let data = layoutsJSON.data(using: .utf8),
+              let arr = try? JSONDecoder().decode([MultiChartLayoutPreset].self, from: data) else {
+            return []
+        }
+        return arr
+    }
+
+    private func persistLayouts(_ layouts: [MultiChartLayoutPreset]) {
+        if let data = try? JSONEncoder().encode(layouts),
+           let s = String(data: data, encoding: .utf8) {
+            layoutsJSON = s
+        }
+    }
+
+    private func saveCurrentAsLayout(name: String) {
+        var layouts = savedLayouts
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        // 同名覆盖
+        layouts.removeAll { $0.name == trimmed }
+        layouts.append(MultiChartLayoutPreset(
+            name: trimmed,
+            preset: preset,
+            cells: cells
+        ))
+        persistLayouts(layouts)
+    }
+
+    private func applyLayout(_ layout: MultiChartLayoutPreset) {
+        focusedIdx = nil
+        presetBeforeFocus = nil
+        presetRaw = layout.preset.rawValue
+        cells = layout.cells
+        persistCells()
+    }
+
+    private func deleteLayout(_ id: UUID) {
+        var layouts = savedLayouts
+        layouts.removeAll { $0.id == id }
+        persistLayouts(layouts)
+    }
+
+    @ViewBuilder
+    private var saveLayoutSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("保存当前布局为预设")
+                .font(.title3).fontWeight(.semibold)
+            HStack {
+                Text("名称").frame(width: 60, alignment: .leading)
+                TextField("如：日内全屏六宫", text: $newLayoutName)
+                    .textFieldStyle(.roundedBorder)
+            }
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .foregroundColor(.secondary)
+                Text("将保存当前 \(preset.label) + \(cells.count) cell 配置")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer(minLength: 4)
+            HStack {
+                Spacer()
+                Button("取消") { showSaveSheet = false }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") {
+                    saveCurrentAsLayout(name: newLayoutName)
+                    showSaveSheet = false
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(newLayoutName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 360, height: 180)
     }
 
     // MARK: - Cell view（batch52 加每 cell toolbar · 合约 picker + 周期切换 + 量开关）

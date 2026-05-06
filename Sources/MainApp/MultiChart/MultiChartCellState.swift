@@ -30,4 +30,24 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     }
 }
 
+// MARK: - v15.23 batch55 · 命名布局预设（trader 保存"日内 6 图"/"夜盘 2 图"等组合）
+
+struct MultiChartLayoutPreset: Codable, Equatable, Identifiable, Hashable {
+    var id: UUID
+    var name: String                       // trader 自定义名（如"日内全屏六宫"）
+    var preset: WindowGridPreset
+    var cells: [MultiChartCellState]      // 完整 cell 配置（6 个 · 多余的不用）
+    var createdAt: Date
+
+    init(id: UUID = UUID(), name: String,
+         preset: WindowGridPreset, cells: [MultiChartCellState],
+         createdAt: Date = Date()) {
+        self.id = id
+        self.name = name
+        self.preset = preset
+        self.cells = cells
+        self.createdAt = createdAt
+    }
+}
+
 #endif

@@ -105,26 +105,11 @@ struct MultiChartHost: View {
         }
     }
 
-    // MARK: - Cell view（batch51 接入 K 线 Canvas）
+    // MARK: - Cell view（batch52 加每 cell toolbar · 合约 picker + 周期切换 + 量开关）
 
     private func cellView(state: MultiChartCellState, idx: Int) -> some View {
         VStack(spacing: 0) {
-            // cell 顶部 mini-toolbar（合约 + 周期 · batch52 加 picker / 周期切换）
-            HStack(spacing: 6) {
-                Text(state.instrumentID)
-                    .font(.system(size: 12, weight: .semibold))
-                Text(state.period.rawValue)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-                Spacer()
-                lastPriceText(state: state)
-                Text("#\(idx + 1)")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.secondary.opacity(0.08))
+            cellToolbar(state: state, idx: idx)
             // K 线 Canvas（mock data · 后续 batch 接 SinaMarketDataProvider 真数据）
             MultiChartCellCanvas(
                 bars: MultiChartMockData.bars(instrumentID: state.instrumentID,
@@ -140,6 +125,65 @@ struct MultiChartHost: View {
         .cornerRadius(4)
     }
 
+    /// v15.23 batch52 · 每 cell 独立 toolbar
+    private func cellToolbar(state: MultiChartCellState, idx: Int) -> some View {
+        HStack(spacing: 4) {
+            // 合约 picker
+            Menu {
+                ForEach(Self.instrumentPool, id: \.self) { id in
+                    Button(id) {
+                        updateCell(idx) { $0.instrumentID = id }
+                    }
+                }
+            } label: {
+                Text(state.instrumentID)
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(minWidth: 40)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 60)
+            .help("切换合约")
+
+            // 周期切换 segmented
+            Menu {
+                ForEach(Self.periodPool, id: \.self) { p in
+                    Button(p.rawValue) {
+                        updateCell(idx) { $0.period = p }
+                    }
+                }
+            } label: {
+                Text(state.period.rawValue)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 50)
+            .help("切换周期")
+
+            Spacer()
+
+            // 末根 close（mock）
+            lastPriceText(state: state)
+
+            // 量开关
+            Button {
+                updateCell(idx) { $0.showVolume.toggle() }
+            } label: {
+                Image(systemName: state.showVolume ? "chart.bar.fill" : "chart.bar")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.borderless)
+            .help(state.showVolume ? "隐藏成交量" : "显示成交量")
+
+            Text("#\(idx + 1)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(Color.secondary.opacity(0.08))
+    }
+
     /// 末根 K 线 close 显示在标题栏（mock）
     @ViewBuilder
     private func lastPriceText(state: MultiChartCellState) -> some View {
@@ -153,6 +197,23 @@ struct MultiChartHost: View {
                 .foregroundColor(isUp ? .red : .green)
         }
     }
+
+    // MARK: - Cell 状态更新（持久化）
+
+    private func updateCell(_ idx: Int, mutate: (inout MultiChartCellState) -> Void) {
+        guard idx < cells.count else { return }
+        mutate(&cells[idx])
+        persistCells()
+    }
+
+    private static let instrumentPool: [String] = [
+        "RB0", "IF0", "AU0", "CU0", "I0", "MA0",
+        "AG0", "TA0", "ZN0", "AL0",
+    ]
+
+    private static let periodPool: [KLinePeriod] = [
+        .minute1, .minute5, .minute15, .minute30, .hour1, .hour4, .daily,
+    ]
 
     // MARK: - State 操作
 

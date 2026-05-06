@@ -301,6 +301,7 @@ struct MultiChartHost: View {
 
     /// v15.23 batch69 · hover 时显示某 cell 的 K 线 [idx] OHLC + volume
     /// v15.23 batch70 · 优先使用 cell 上报的真行情 bars · 无则 mock 兜底
+    /// v15.23 batch75 · 加 MA5/MA20/MA60 hover 数值（trader 看 K 线同时判断均线位置）
     @ViewBuilder
     private func hoverOHLCText(idx: Int, focusedCellIdx: Int? = nil) -> some View {
         // 显示哪个 cell 的数据：focus 模式 → focused cell · 否则 → cell #1（参考）
@@ -319,6 +320,9 @@ struct MultiChartHost: View {
             let l = (b.low as NSDecimalNumber).doubleValue
             let c = (b.close as NSDecimalNumber).doubleValue
             let isUp = c >= o
+            let ma5 = Self.maAt(bars: bars, idx: idx, period: 5)
+            let ma20 = Self.maAt(bars: bars, idx: idx, period: 20)
+            let ma60 = Self.maAt(bars: bars, idx: idx, period: 60)
             HStack(spacing: 6) {
                 Text("[\(idx + 1)/\(bars.count)]")
                     .font(.system(size: 10, design: .monospaced))
@@ -332,8 +336,35 @@ struct MultiChartHost: View {
                     .foregroundColor(isUp ? .red : .green)
                 Text("V \(b.volume)").font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary)
+                if state.showIndicators {
+                    if let m = ma5 {
+                        Text("M5 \(String(format: "%.2f", m))")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.yellow.opacity(0.9))
+                    }
+                    if let m = ma20 {
+                        Text("M20 \(String(format: "%.2f", m))")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.purple.opacity(0.9))
+                    }
+                    if let m = ma60 {
+                        Text("M60 \(String(format: "%.2f", m))")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.blue.opacity(0.9))
+                    }
+                }
             }
         }
+    }
+
+    /// v15.23 batch75 · 计算 bars[idx] 的 SMA(period) · 历史不足返 nil
+    static func maAt(bars: [KLine], idx: Int, period: Int) -> Double? {
+        guard period > 0, idx < bars.count, idx >= period - 1 else { return nil }
+        var sum: Double = 0
+        for i in (idx - period + 1)...idx {
+            sum += (bars[i].close as NSDecimalNumber).doubleValue
+        }
+        return sum / Double(period)
     }
 
     // MARK: - Grid
@@ -572,6 +603,7 @@ struct MultiChartHost: View {
             ("点击 chart.bar 图标", "切换是否显示成交量"),
             ("点击 chart.line 图标（batch72-74）", "切换 MA5（黄）+ MA10（粉）+ MA20（紫）+ MA60（蓝）四均线 · 中国期货短线经典标配"),
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
+            ("hover 时状态栏（batch75）", "OHLCV + M5/M20/M60 三条均线值（参考 cell #1 / focused cell · 当 cell 开启均线时显示）"),
         ]),
         ("📦 批量操作", [
             ("toolbar 批量 Menu", "全部 cell 设为同一周期（多合约比对）"),

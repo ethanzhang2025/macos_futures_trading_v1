@@ -22,13 +22,17 @@ public struct MaiLangCodeView: NSViewRepresentable {
     let scheme: SyntaxColorScheme
     let fontSize: CGFloat
     let errorMarker: CodeErrorMarker?
+    /// v15.22 batch11 · 光标位置回调（line/col 均 1-based · 用于 status bar 显示当前位置）
+    let onCursorChange: ((Int, Int) -> Void)?
 
     public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark,
-                fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil) {
+                fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil,
+                onCursorChange: ((Int, Int) -> Void)? = nil) {
         self._text = text
         self.scheme = scheme
         self.fontSize = fontSize
         self.errorMarker = errorMarker
+        self.onCursorChange = onCursorChange
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -75,6 +79,32 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 self.parent.text = tv.string
                 self.parent.applyHighlight(to: tv)
             }
+        }
+
+        /// v15.22 batch11 · 光标位置变化（含点击/方向键/选区调整）→ 报行/列给 status bar
+        public func textViewDidChangeSelection(_ notification: Notification) {
+            guard let tv = notification.object as? NSTextView,
+                  let cb = parent.onCursorChange else { return }
+            let loc = tv.selectedRange().location
+            let (line, col) = lineColumn(in: tv.string, at: loc)
+            DispatchQueue.main.async { cb(line, col) }
+        }
+
+        /// utf16 location → (line, col) · 均 1-based · 越界 clamp 到末尾
+        private func lineColumn(in source: String, at utf16Loc: Int) -> (Int, Int) {
+            let ns = source as NSString
+            let length = min(max(0, utf16Loc), ns.length)
+            var line = 1
+            var lineStart = 0
+            var i = 0
+            while i < length {
+                if ns.character(at: i) == 0x0A {
+                    line += 1
+                    lineStart = i + 1
+                }
+                i += 1
+            }
+            return (line, length - lineStart + 1)
         }
 
         /// v15.22 batch10 · Tab 键插入 4 空格（替代默认 \t · 与 Swift 缩进习惯一致）

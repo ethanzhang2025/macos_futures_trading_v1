@@ -32,6 +32,9 @@ public struct FormulaEditorWindow: View {
     @State private var compileSucceeded: Bool = false
     /// v15.22 batch6 · 错误位置 marker · 编辑器内红色背景标注 · 用户改动后清空
     @State private var errorMarker: CodeErrorMarker? = nil
+    /// v15.22 batch11 · 当前光标位置（1-based · 显示在 status bar）
+    @State private var cursorLine: Int = 1
+    @State private var cursorCol: Int = 1
 
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
@@ -43,7 +46,11 @@ public struct FormulaEditorWindow: View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            MaiLangCodeView(text: $sourceText, scheme: scheme, errorMarker: errorMarker)
+            MaiLangCodeView(text: $sourceText, scheme: scheme, errorMarker: errorMarker,
+                            onCursorChange: { line, col in
+                                cursorLine = line
+                                cursorCol = col
+                            })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onChange(of: sourceText) { _ in
                     // v15.22 batch6 · 用户改动后清错误标注（防陈旧 marker 误导）
@@ -267,6 +274,11 @@ public struct FormulaEditorWindow: View {
             let stats = textStats(sourceText)
             Text("行数 \(stats.lines)").font(.caption).foregroundColor(.secondary)
             Text("字符 \(stats.chars)").font(.caption).foregroundColor(.secondary)
+            // v15.22 batch11 · 当前光标位置（行:列 · 与编译错误的"第 N 行第 M 列"对齐 trader 直接定位）
+            Text("光标 \(cursorLine):\(cursorCol)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+                .help("当前光标位置（行:列 · 与编译错误定位对齐）")
             // token 数（与 highlighter 同源）
             let tokenCount = MaiLangSyntaxHighlighter.tokenize(sourceText).count
             Text("token \(tokenCount)").font(.caption).foregroundColor(.secondary)

@@ -247,6 +247,13 @@ public struct FormulaEditorWindow: View {
             Button { moveCurrentLine(up: false) } label: { Image(systemName: "arrow.down.square") }
                 .keyboardShortcut(.downArrow, modifiers: [.option])
                 .help("当前行下移（⌥↓）")
+            // v15.22 batch25 · 缩进/反缩进选中行（⌘]/⌘[ · VSCode 经典）
+            Button { indentLines(by: 1) } label: { Image(systemName: "increase.indent") }
+                .keyboardShortcut("]", modifiers: [.command])
+                .help("缩进选中行（⌘]）")
+            Button { indentLines(by: -1) } label: { Image(systemName: "decrease.indent") }
+                .keyboardShortcut("[", modifiers: [.command])
+                .help("反缩进选中行（⌘[）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in
@@ -470,6 +477,40 @@ public struct FormulaEditorWindow: View {
         sourceText = newLines.joined(separator: "\n")
         let count = lineRange.count
         statusMessage = isAdding ? "已注释 \(count) 行" : "已取消注释 \(count) 行"
+    }
+
+    /// v15.22 batch25 · 缩进 / 反缩进（⌘]/⌘[ · 选区 = 多行批量 · 无选区 = 当前行）
+    /// - delta > 0 → 每行前加 4 空格
+    /// - delta < 0 → 每行去前 4 空格（或 1 tab · 兼容旧文件）
+    private func indentLines(by delta: Int) {
+        let lines = sourceText.components(separatedBy: "\n")
+        guard !lines.isEmpty else { return }
+        let nsStr = sourceText as NSString
+        let firstLine: Int
+        let lastLine: Int
+        if selectionRange.length > 0 {
+            firstLine = lineForUtf16(selectionRange.location, in: nsStr)
+            let endIdx = max(selectionRange.location, NSMaxRange(selectionRange) - 1)
+            lastLine = lineForUtf16(endIdx, in: nsStr)
+        } else {
+            let idx = max(0, min(cursorLine - 1, lines.count - 1))
+            firstLine = idx
+            lastLine = idx
+        }
+        let lineRange = max(0, firstLine)...min(lastLine, lines.count - 1)
+        var newLines = lines
+        for i in lineRange {
+            let line = lines[i]
+            if delta > 0 {
+                newLines[i] = "    " + line
+            } else {
+                if line.hasPrefix("    ") { newLines[i] = String(line.dropFirst(4)) }
+                else if line.hasPrefix("\t") { newLines[i] = String(line.dropFirst(1)) }
+            }
+        }
+        sourceText = newLines.joined(separator: "\n")
+        let count = lineRange.count
+        statusMessage = delta > 0 ? "缩进 \(count) 行" : "反缩进 \(count) 行"
     }
 
     /// utf16 location → 0-based 行号

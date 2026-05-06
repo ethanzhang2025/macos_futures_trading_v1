@@ -62,6 +62,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     var showLimitLines: Bool
     /// v15.23 batch98 · VWAP（成交量加权均价 · 机构 trader 必看 · 默认关）
     var showVWAP: Bool
+    /// v15.23 batch99 · Fibonacci 黄金回撤（区间高低点 7 条水平线 · trader 经典回撤分析 · 默认关）
+    var showFibonacci: Bool
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
@@ -75,7 +77,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
          isTimeShareMode: Bool = false,
          showIntegerLevels: Bool = false,
          showLimitLines: Bool = false,
-         showVWAP: Bool = false) {
+         showVWAP: Bool = false,
+         showFibonacci: Bool = false) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
@@ -89,11 +92,12 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.showIntegerLevels = showIntegerLevels
         self.showLimitLines = showLimitLines
         self.showVWAP = showVWAP
+        self.showFibonacci = showFibonacci
     }
 
     /// Codable · 老 cellsJSON 缺新字段时按合理默认值
     enum CodingKeys: String, CodingKey {
-        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels, showLimitLines, showVWAP
+        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels, showLimitLines, showVWAP, showFibonacci
     }
 
     init(from decoder: Decoder) throws {
@@ -116,6 +120,7 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.showIntegerLevels = try c.decodeIfPresent(Bool.self, forKey: .showIntegerLevels) ?? false
         self.showLimitLines = try c.decodeIfPresent(Bool.self, forKey: .showLimitLines) ?? false
         self.showVWAP = try c.decodeIfPresent(Bool.self, forKey: .showVWAP) ?? false
+        self.showFibonacci = try c.decodeIfPresent(Bool.self, forKey: .showFibonacci) ?? false
     }
 }
 

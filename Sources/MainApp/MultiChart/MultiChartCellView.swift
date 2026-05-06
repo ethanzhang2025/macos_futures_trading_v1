@@ -41,6 +41,7 @@ struct MultiChartCellView: View {
     let onIntegerLevelsToggle: () -> Void
     let onLimitLinesToggle: () -> Void
     let onVWAPToggle: () -> Void
+    let onFibonacciToggle: () -> Void
     let onSubChartTap: (MultiChartSubChartType) -> Void
     let onTimeShareToggle: () -> Void
     let onPushToMain: () -> Void
@@ -110,7 +111,8 @@ struct MultiChartCellView: View {
                 isTimeShareMode: state.isTimeShareMode,
                 showIntegerLevels: state.showIntegerLevels,
                 showLimitLines: state.showLimitLines,
-                showVWAP: state.showVWAP
+                showVWAP: state.showVWAP,
+                showFibonacci: state.showFibonacci
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -333,6 +335,11 @@ struct MultiChartCellView: View {
                 } label: {
                     Label("VWAP 成交量加权均价", systemImage: state.showVWAP ? "checkmark.circle.fill" : "circle")
                 }
+                Button {
+                    onFibonacciToggle()
+                } label: {
+                    Label("Fibonacci 黄金回撤", systemImage: state.showFibonacci ? "checkmark.circle.fill" : "circle")
+                }
             } label: {
                 Image(systemName: indicatorMenuIcon)
                     .font(.system(size: 11))
@@ -439,6 +446,7 @@ struct MultiChartCellView: View {
                   + (state.showIntegerLevels ? 1 : 0)
                   + (state.showLimitLines ? 1 : 0)
                   + (state.showVWAP ? 1 : 0)
+                  + (state.showFibonacci ? 1 : 0)
         switch count {
         case 0: return .secondary
         case 1...3: return .accentColor.opacity(0.75)

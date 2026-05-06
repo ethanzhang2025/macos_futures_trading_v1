@@ -44,6 +44,8 @@ struct MultiChartCellCanvas: View {
     let showLimitLines: Bool
     /// v15.23 batch98 · VWAP 折线（成交量加权均价 · 机构 trader 必看）
     let showVWAP: Bool
+    /// v15.23 batch99 · Fibonacci 黄金回撤（区间 7 条水平线 · trader 经典回撤分析）
+    let showFibonacci: Bool
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
@@ -56,7 +58,8 @@ struct MultiChartCellCanvas: View {
          isTimeShareMode: Bool = false,
          showIntegerLevels: Bool = false,
          showLimitLines: Bool = false,
-         showVWAP: Bool = false) {
+         showVWAP: Bool = false,
+         showFibonacci: Bool = false) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
@@ -70,6 +73,7 @@ struct MultiChartCellCanvas: View {
         self.showIntegerLevels = showIntegerLevels
         self.showLimitLines = showLimitLines
         self.showVWAP = showVWAP
+        self.showFibonacci = showFibonacci
     }
 
     var body: some View {
@@ -125,6 +129,10 @@ struct MultiChartCellCanvas: View {
                 // v15.23 batch98 · VWAP 折线（机构 trader 必看 · 成交量加权均价）
                 if showVWAP {
                     drawVWAP(in: ctx, rect: priceRect)
+                }
+                // v15.23 batch99 · Fibonacci 黄金回撤（区间高低点 7 条水平线 · trader 经典）
+                if showFibonacci {
+                    drawFibonacci(in: ctx, rect: priceRect)
                 }
                 if subHeight > 8 {
                     drawGrid(in: ctx, rect: subRect, lines: 2)
@@ -504,6 +512,45 @@ struct MultiChartCellCanvas: View {
         if close > upper { return .red.opacity(0.95) }
         if close < lower { return .green.opacity(0.95) }
         return nil
+    }
+
+    // MARK: - Fibonacci 黄金回撤（v15.23 batch99 · 区间高低 7 条水平线 · trader 经典回撤分析）
+
+    /// 经典 Fib 比例：0% / 23.6% / 38.2% / 50% / 61.8% / 78.6% / 100%
+    /// 0% = 区间最低 · 100% = 区间最高 · 中间是回撤位
+    /// trader 看 close 在哪条 fib 线附近 → 经典买卖位（如 38.2/61.8 极强）
+    private func drawFibonacci(in ctx: GraphicsContext, rect: CGRect) {
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let priceRange = maxHigh - minLow
+        let yFor: (Double) -> CGFloat = { p in
+            rect.maxY - CGFloat((p - minLow) / priceRange) * rect.height
+        }
+        let levels: [(Double, String, Color)] = [
+            (0.0, "0", .blue.opacity(0.5)),
+            (0.236, "23.6", .gray.opacity(0.4)),
+            (0.382, "38.2", .yellow.opacity(0.6)),
+            (0.5, "50", .orange.opacity(0.55)),
+            (0.618, "61.8", .yellow.opacity(0.6)),       // 黄金分割
+            (0.786, "78.6", .gray.opacity(0.4)),
+            (1.0, "100", .blue.opacity(0.5)),
+        ]
+        for (ratio, label, color) in levels {
+            let price = minLow + ratio * priceRange
+            let y = yFor(price)
+            var line = Path()
+            line.move(to: CGPoint(x: rect.minX, y: y))
+            line.addLine(to: CGPoint(x: rect.maxX, y: y))
+            ctx.stroke(line, with: .color(color),
+                       style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
+            // 左下角标签：比例 + 价格
+            let txt = Text("\(label)% \(String(format: "%.2f", price))")
+                .font(.system(size: 8, design: .monospaced))
+                .foregroundColor(color.opacity(2))
+            ctx.draw(txt, at: CGPoint(x: rect.minX + 38, y: y - 5),
+                     anchor: .center)
+        }
     }
 
     // MARK: - VWAP（v15.23 batch98 · 成交量加权均价 · 机构 trader 必看）

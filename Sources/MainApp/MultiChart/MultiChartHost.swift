@@ -400,6 +400,16 @@ struct MultiChartHost: View {
                     Text(oiUp ? "↑增仓" : "↓减仓")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(oiUp ? .red.opacity(0.8) : .green.opacity(0.8))
+                case .atr:
+                    if let atr = Self.atrAt(bars: bars, idx: idx) {
+                        Text(String(format: "ATR %.2f", atr))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.orange.opacity(0.9))
+                        // 止损建议 close ± 2×ATR（trader 仓位管理常用倍数）
+                        Text(String(format: "止损±%.1f", atr * 2))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
                 case .volume, .none:
                     EmptyView()
                 }
@@ -444,6 +454,26 @@ struct MultiChartHost: View {
             }
         }
         return nil
+    }
+
+    /// v15.23 batch95 · ATR 14 Wilder 平滑 · bars[idx] 处的 ATR 值
+    static func atrAt(bars: [KLine], idx: Int) -> Double? {
+        let N = 14
+        guard idx >= N, idx < bars.count else { return nil }
+        let highs = bars[0...idx].map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars[0...idx].map { ($0.low as NSDecimalNumber).doubleValue }
+        let closes = bars[0...idx].map { ($0.close as NSDecimalNumber).doubleValue }
+        var trs: [Double] = []
+        for i in 1...idx {
+            let h = highs[i], l = lows[i], pc = closes[i - 1]
+            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+        }
+        guard trs.count >= N else { return nil }
+        var atr = trs[0..<N].reduce(0, +) / Double(N)
+        for i in N..<trs.count {
+            atr = (atr * Double(N - 1) + trs[i]) / Double(N)
+        }
+        return atr
     }
 
     /// v15.23 batch84 · RSI 14 标准 · bars[idx] 处的 RSI 值
@@ -768,7 +798,7 @@ struct MultiChartHost: View {
             ("右键 cell", "聚焦/交换/复制配置/重置 4 类操作"),
             ("点击 #↗ 按钮", "推送到主 ChartScene 深入分析"),
             ("点击 cell 合约名/周期", "Menu 切换"),
-            ("点击副图图标（batch79-87）", "切换副图：量 / KDJ / MACD / RSI（超买 70/超卖 30）/ 持仓量 OI / 无（主图全屏）"),
+            ("点击副图图标（batch79-95）", "切换副图：量 / KDJ / MACD / RSI / OI / ATR（波动率） / 无（主图全屏）"),
             ("OI 持仓量副图（batch87）", "中国期货独有 · 增仓上涨=多头强势 · 增仓下跌=空头强势 · 减仓=多空回吐"),
             ("副图金叉/死叉点（batch82）", "KDJ K↑D 或 MACD DIF↑DEA = 红点（金叉买点）· 反向 = 绿点（死叉卖点）· 一眼定位"),
             ("点击主图指标 Menu（batch88-94）", "MA 4 均线 + BOLL 上下轨 + SAR 抛物线 + 整数关口辅助线 · 四选多"),

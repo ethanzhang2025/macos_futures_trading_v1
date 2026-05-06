@@ -125,6 +125,8 @@ struct MultiChartCellCanvas: View {
                         drawRSI(in: ctx, rect: subRect)
                     case .oi:
                         drawOI(in: ctx, rect: subRect)
+                    case .atr:
+                        drawATR(in: ctx, rect: subRect)
                     }
                 }
                 // v15.23 batch77 · 简洁 axis 标签（时间 3 + 价格 3 · 不喧宾夺主）
@@ -544,6 +546,67 @@ struct MultiChartCellCanvas: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(.orange.opacity(0.85))
             ctx.draw(lbl, at: CGPoint(x: rect.minX + 24, y: yClamped - 6),
+                     anchor: .center)
+        }
+    }
+
+    // MARK: - ATR（v15.23 batch95 · Wilder 14 · trader 设止损 + 仓位管理）
+
+    /// ATR(14) 标准 Wilder 平滑 · 橙色折线 · 末根价值可用于止损位计算（如 close ± 2×ATR）
+    private func drawATR(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        let N = 14
+        guard n >= N + 1 else { return }
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        let closes = bars.map { ($0.close as NSDecimalNumber).doubleValue }
+        // 计算 TR 序列
+        var trs: [Double] = []
+        for i in 1..<n {
+            let h = highs[i], l = lows[i], pc = closes[i - 1]
+            let tr = max(h - l, abs(h - pc), abs(l - pc))
+            trs.append(tr)
+        }
+        // ATR Wilder 平滑（首 N 用 SMA · 后续 (prev × (N-1) + TR) / N）
+        var atrs: [Double] = Array(repeating: .nan, count: n)
+        let initialAvg = trs[0..<N].reduce(0, +) / Double(N)
+        atrs[N] = initialAvg
+        var prev = initialAvg
+        for i in (N + 1)..<n {
+            let cur = (prev * Double(N - 1) + trs[i - 1]) / Double(N)
+            atrs[i] = cur
+            prev = cur
+        }
+        // 归一化坐标 + 折线
+        let nonNan = atrs.compactMap { $0.isNaN ? nil : $0 }
+        guard let maxA = nonNan.max(), let minA = nonNan.min(), maxA > minA else { return }
+        let range = maxA - minA
+        let yFor: (Double) -> CGFloat = { v in
+            rect.maxY - CGFloat((v - minA) / range) * rect.height
+        }
+        var path = Path()
+        var started = false
+        for i in 0..<n where !atrs[i].isNaN {
+            let x = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let pt = CGPoint(x: x, y: yFor(atrs[i]))
+            if started {
+                path.addLine(to: pt)
+            } else {
+                path.move(to: pt)
+                started = true
+            }
+        }
+        ctx.stroke(path, with: .color(.orange.opacity(0.85)), lineWidth: 0.9)
+        // 末根 ATR dot 高亮 + 数值标签
+        if let lastATR = atrs.last, !lastATR.isNaN {
+            let x = rect.minX + (CGFloat(n - 1) + 0.5) * rect.width / CGFloat(n)
+            let y = yFor(lastATR)
+            let dot = CGRect(x: x - 2, y: y - 2, width: 4, height: 4)
+            ctx.fill(Path(ellipseIn: dot), with: .color(.orange))
+            let lbl = Text(String(format: "%.2f", lastATR))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.orange.opacity(0.9))
+            ctx.draw(lbl, at: CGPoint(x: rect.maxX - 18, y: rect.minY + 6),
                      anchor: .center)
         }
     }

@@ -305,6 +305,7 @@ struct FuturesTerminalApp: App {
                 OpenJournalButton()
                 OpenWorkspaceButton()
                 OpenTradingButton()
+                OpenTrainingButton()  // v15.23 batch14 · WP-54 模拟训练 ⌘⇧T
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -378,6 +379,14 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()  // v15.17 · 跟主图 chartTheme.v1 · sheet/popup 一致
         }
         .defaultSize(width: 1100, height: 720)
+
+        // v15.23 batch14 · 模拟训练（⌘⇧T · training · 纪律规则 + 评分 + 历史 · WP-54 M5 节点 UI 闭环）
+        WindowGroup("模拟训练", id: "training") {
+            TrainingWindow()
+                .environment(\.simulatedTradingEngine, simulatedTradingEngine)
+                .followingChartTheme()
+        }
+        .defaultSize(width: 880, height: 680)
 
         // v15.22 batch4 · 麦语言公式编辑器（WP-65 · syntax 高亮 + 编辑 + 保存）
         WindowGroup("公式编辑器", id: "formulaEditor") {
@@ -475,6 +484,15 @@ private struct OpenTradingButton: View {
     var body: some View {
         Button("模拟交易") { openWindow(id: "trading") }
             .keyboardShortcut("t", modifiers: [.command])
+    }
+}
+
+/// v15.23 batch14 · WP-54 模拟训练入口（⌘⇧T · 纪律规则 + 评分 + 历史）
+private struct OpenTrainingButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("模拟训练（⌘⇧T）") { openWindow(id: "training") }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
     }
 }
 

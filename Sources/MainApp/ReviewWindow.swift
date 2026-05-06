@@ -157,7 +157,8 @@ struct ReviewWindow: View {
             riskAdjusted: ReviewAnalytics.riskAdjustedMetrics(from: filtered),
             profitability: ReviewAnalytics.profitabilityMetrics(from: filtered),
             streakRunPoints: Self.computeStreakRunPoints(from: filtered),
-            psychTagCounts: Self.computePsychTagCounts(from: filtered)
+            psychTagCounts: Self.computePsychTagCounts(from: filtered),
+            dailyPnL: ReviewAnalytics.dailyPnL(from: filtered)
         )
     }
 
@@ -229,6 +230,10 @@ struct ReviewWindow: View {
             .init(title: "心理风险标签",
                   subtitle: "EmotionAutoTagger · 6 类自动建议",
                   content: AnyView(psychTagsChart(s.psychTagCounts))),
+            // v15.23 batch48 · 第 11 图 · 日历盈亏热力图（trader 一年盈亏直观）
+            .init(title: "日历热力图",
+                  subtitle: "DailyPnL · \(s.dailyPnL.tradingDays) 交易日 · 盈\(s.dailyPnL.winningDays) 亏\(s.dailyPnL.losingDays)",
+                  content: AnyView(dailyPnLHeatmap(s.dailyPnL))),
         ]
     }
 
@@ -669,6 +674,138 @@ struct ReviewWindow: View {
         .chartXAxis { Self.axisCategoryX() }
     }
 
+    /// v15.23 batch48 · 日历盈亏热力图（第 11 图 · 一格一天 · 颜色按 PnL 强度）
+    /// 布局：每周 7 列（周一→周日）· 行数自适应 · 鼠标悬停显示当日明细
+    /// 颜色：盈利绿色 / 亏损红色 / 平 / 无交易 灰色 · 强度按 |pnl| / maxAbs
+    private func dailyPnLHeatmap(_ daily: DailyPnL) -> some View {
+        let cellSize: CGFloat = 16
+        let cellSpacing: CGFloat = 3
+        let cal = Calendar(identifier: .gregorian)
+        let weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"]
+        let lookup: [Date: DailyPnLBucket] = Dictionary(
+            uniqueKeysWithValues: daily.buckets.map { ($0.day, $0) }
+        )
+        // 计算填充范围：从首日所在周一到末日所在周日
+        guard let first = daily.buckets.first?.day,
+              let last = daily.buckets.last?.day else {
+            return AnyView(
+                VStack {
+                    Spacer()
+                    Text("（暂无交易日数据）")
+                        .font(.caption).foregroundColor(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            )
+        }
+        let startWeekday = (cal.component(.weekday, from: first) + 5) % 7  // 一=0..日=6
+        let firstMonday = cal.date(byAdding: .day, value: -startWeekday, to: first) ?? first
+        let endWeekday = (cal.component(.weekday, from: last) + 5) % 7
+        let lastSunday = cal.date(byAdding: .day, value: 6 - endWeekday, to: last) ?? last
+        let totalDays = cal.dateComponents([.day], from: firstMonday, to: lastSunday).day ?? 0
+        let weekCount = (totalDays + 1) / 7
+        let maxAbsDouble = (daily.maxAbsPnL as NSDecimalNumber).doubleValue
+        return AnyView(
+            VStack(alignment: .leading, spacing: 6) {
+                // 顶部图例
+                HStack(spacing: 8) {
+                    Text("色阶：").font(.caption2).foregroundColor(.secondary)
+                    ForEach(0..<5) { level in
+                        Rectangle()
+                            .fill(heatColor(level: Double(level) / 4, isWin: true))
+                            .frame(width: 12, height: 12)
+                            .cornerRadius(2)
+                    }
+                    Text("盈").font(.caption2).foregroundColor(.green)
+                    Spacer().frame(width: 12)
+                    ForEach(0..<5) { level in
+                        Rectangle()
+                            .fill(heatColor(level: Double(level) / 4, isWin: false))
+                            .frame(width: 12, height: 12)
+                            .cornerRadius(2)
+                    }
+                    Text("亏").font(.caption2).foregroundColor(.red)
+                }
+                // 网格：行 = 周一-周日 / 列 = 周
+                HStack(alignment: .top, spacing: cellSpacing) {
+                    // 左侧周几标签
+                    VStack(alignment: .trailing, spacing: cellSpacing) {
+                        ForEach(0..<7, id: \.self) { i in
+                            Text(weekdayLabels[i])
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
+                                .frame(width: 14, height: cellSize)
+                        }
+                    }
+                    // 滚动区
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: cellSpacing) {
+                            ForEach(0..<weekCount, id: \.self) { week in
+                                VStack(spacing: cellSpacing) {
+                                    ForEach(0..<7, id: \.self) { weekday in
+                                        let day = cal.date(byAdding: .day, value: week * 7 + weekday, to: firstMonday) ?? firstMonday
+                                        let normalized = cal.startOfDay(for: day)
+                                        let bucket = lookup[normalized]
+                                        heatCell(bucket: bucket, day: day, maxAbs: maxAbsDouble, size: cellSize)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // 底部统计
+                HStack(spacing: 14) {
+                    Text("总计 \(daily.tradingDays) 交易日")
+                        .font(.caption).foregroundColor(.secondary)
+                    Text("总 PnL ¥\(signedDecimal(daily.totalPnL))")
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(daily.totalPnL >= 0 ? .green : .red)
+                    if daily.tradingDays > 0 {
+                        Text("胜率 \(daily.winningDays)/\(daily.tradingDays) = \(String(format: "%.1f", Double(daily.winningDays) / Double(daily.tradingDays) * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(8)
+        )
+    }
+
+    @ViewBuilder
+    private func heatCell(bucket: DailyPnLBucket?, day: Date, maxAbs: Double, size: CGFloat) -> some View {
+        let bgColor: Color
+        let toolTip: String
+        if let b = bucket {
+            let pnl = (b.realizedPnL as NSDecimalNumber).doubleValue
+            let level = maxAbs > 0 ? min(1.0, abs(pnl) / maxAbs) : 0
+            bgColor = heatColor(level: level, isWin: b.realizedPnL > 0)
+            let dateStr = Self.formatDay(day)
+            toolTip = "\(dateStr) · \(b.tradeCount) 笔 · ¥\(signedDecimal(b.realizedPnL))"
+        } else {
+            bgColor = Color.secondary.opacity(0.08)
+            toolTip = Self.formatDay(day) + " · 无交易"
+        }
+        Rectangle()
+            .fill(bgColor)
+            .frame(width: size, height: size)
+            .cornerRadius(2)
+            .help(toolTip)
+    }
+
+    private func heatColor(level: Double, isWin: Bool) -> Color {
+        let opacity = 0.15 + level * 0.85
+        return isWin
+            ? Color.green.opacity(opacity)
+            : Color.red.opacity(opacity)
+    }
+
+    private static func formatDay(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        return f.string(from: d)
+    }
+
     /// v15.19 batch27 · 心理风险标签命中分布（读取缓存 · body 不重算）
     private func psychTagsChart(_ entries: [(tag: EmotionAutoTagger.Tag, count: Int)]) -> some View {
         Chart {
@@ -899,6 +1036,8 @@ private struct ReviewSummary {
     /// 累积缓存 · 防 chartCard 每次 body re-eval 重算（10K 持仓时显著）
     let streakRunPoints: [(idx: Int, run: Int)]
     let psychTagCounts: [(tag: EmotionAutoTagger.Tag, count: Int)]
+    /// v15.23 batch48 · 第 11 图 · 日历盈亏热力图
+    let dailyPnL: DailyPnL
 }
 
 // MARK: - Mock Trades 生成器（v1 演示 · M5 替换为 JournalStore 真数据）

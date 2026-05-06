@@ -93,6 +93,34 @@ public enum ReviewAnalytics {
 
     // MARK: - 2. 分布直方
 
+    // MARK: - WP-50 v15.23 batch48 · 11. 日历盈亏（每日聚合 · 用于热力图）
+
+    /// 按当日 startOfDay 聚合 · timeZone 默认 Asia/Shanghai · 仅返回有交易的日子
+    public static func dailyPnL(
+        from positions: [ClosedPosition],
+        timeZone: TimeZone = defaultTimeZone
+    ) -> DailyPnL {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        var byDay: [Date: (pnl: Decimal, count: Int)] = [:]
+
+        for position in positions {
+            let day = calendar.startOfDay(for: position.closeTime)
+            var pair = byDay[day] ?? (Decimal(0), 0)
+            pair.pnl += position.realizedPnL
+            pair.count += 1
+            byDay[day] = pair
+        }
+        let buckets = byDay
+            .sorted { $0.key < $1.key }
+            .map { DailyPnLBucket(day: $0.key, realizedPnL: $0.value.pnl, tradeCount: $0.value.count) }
+        let maxAbs = buckets.reduce(Decimal(0)) { acc, b in
+            let abs = b.realizedPnL < 0 ? -b.realizedPnL : b.realizedPnL
+            return abs > acc ? abs : acc
+        }
+        return DailyPnL(buckets: buckets, maxAbsPnL: maxAbs)
+    }
+
     /// - Parameter binSize: 单桶宽度（如 100 = 每桶 100 元盈亏区间）
     public static func pnlDistribution(
         from positions: [ClosedPosition],

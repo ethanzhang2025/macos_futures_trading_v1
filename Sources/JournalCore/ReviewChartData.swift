@@ -287,3 +287,37 @@ public struct SessionPnL: Sendable, Codable, Equatable {
         self.buckets = buckets
     }
 }
+
+// MARK: - WP-50 v15.23 batch48 · 第 11 图 · 日历盈亏热力图（Calendar Heatmap）
+
+/// 单日盈亏统计桶（用于日历热力图）
+public struct DailyPnLBucket: Sendable, Codable, Equatable, Hashable {
+    public let day: Date            // 当日 00:00:00（按 calendar.startOfDay 计算）
+    public let realizedPnL: Decimal
+    public let tradeCount: Int
+
+    public init(day: Date, realizedPnL: Decimal, tradeCount: Int) {
+        self.day = day
+        self.realizedPnL = realizedPnL
+        self.tradeCount = tradeCount
+    }
+
+    public var isWin: Bool { realizedPnL > 0 }
+    public var isLoss: Bool { realizedPnL < 0 }
+}
+
+/// 日历盈亏（每日一桶 · 按日期升序）
+public struct DailyPnL: Sendable, Codable, Equatable {
+    public let buckets: [DailyPnLBucket]
+    public let maxAbsPnL: Decimal     // 用于热力图色阶归一化
+
+    public init(buckets: [DailyPnLBucket], maxAbsPnL: Decimal) {
+        self.buckets = buckets
+        self.maxAbsPnL = maxAbsPnL
+    }
+
+    public var totalPnL: Decimal { buckets.reduce(0) { $0 + $1.realizedPnL } }
+    public var winningDays: Int { buckets.filter { $0.isWin }.count }
+    public var losingDays: Int { buckets.filter { $0.isLoss }.count }
+    public var tradingDays: Int { buckets.count }
+}

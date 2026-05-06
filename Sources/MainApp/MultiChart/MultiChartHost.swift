@@ -148,9 +148,83 @@ struct MultiChartHost: View {
                         .onTapGesture(count: 2) {
                             toggleFocus(idx: realIdx)
                         }
+                        // v15.23 batch54 · cell 右键菜单
+                        .contextMenu {
+                            cellContextMenu(idx: realIdx)
+                        }
                 }
             }
         }
+    }
+
+    /// v15.23 batch54 · 单 cell 右键菜单
+    @ViewBuilder
+    private func cellContextMenu(idx: Int) -> some View {
+        let total = effectivePreset.maxWindows
+        Button {
+            toggleFocus(idx: idx)
+        } label: {
+            Label(focusedIdx == idx ? "退出聚焦" : "聚焦此 cell（双击）",
+                  systemImage: focusedIdx == idx ? "viewfinder.slash" : "viewfinder")
+        }
+        Divider()
+        // 与下一个 cell 交换
+        if total > 1 {
+            Button {
+                swapCells(idx, with: (idx + 1) % total)
+            } label: {
+                Label("与 #\((idx + 1) % total + 1) 交换", systemImage: "arrow.left.arrow.right")
+            }
+            Button {
+                swapCells(idx, with: (idx - 1 + total) % total)
+            } label: {
+                Label("与 #\((idx - 1 + total) % total + 1) 交换", systemImage: "arrow.left.arrow.right.circle")
+            }
+        }
+        // 复制到指定 slot（下拉子菜单）
+        if total > 1 {
+            Menu("复制配置到…") {
+                ForEach(0..<total, id: \.self) { target in
+                    if target != idx {
+                        Button("Cell #\(target + 1)（\(cellAt(target).instrumentID) · \(cellAt(target).period.rawValue)）") {
+                            copyCell(from: idx, to: target)
+                        }
+                    }
+                }
+            }
+        }
+        Divider()
+        Button(role: .destructive) {
+            resetCellToDefault(idx)
+        } label: {
+            Label("重置此 cell", systemImage: "arrow.counterclockwise")
+        }
+    }
+
+    // MARK: - v15.23 batch54 · cell 操作
+
+    private func swapCells(_ a: Int, with b: Int) {
+        guard a != b, a < cells.count, b < cells.count else { return }
+        cells.swapAt(a, b)
+        persistCells()
+    }
+
+    private func copyCell(from src: Int, to dest: Int) {
+        guard src < cells.count, dest < cells.count, src != dest else { return }
+        cells[dest].instrumentID = cells[src].instrumentID
+        cells[dest].period = cells[src].period
+        cells[dest].showVolume = cells[src].showVolume
+        persistCells()
+    }
+
+    private func resetCellToDefault(_ idx: Int) {
+        guard idx < cells.count else { return }
+        cells[idx] = MultiChartCellState(
+            id: cells[idx].id,
+            instrumentID: defaultInstrument(forIndex: idx),
+            period: defaultPeriod(forIndex: idx)
+        )
+        persistCells()
     }
 
     // MARK: - Cell view（batch52 加每 cell toolbar · 合约 picker + 周期切换 + 量开关）

@@ -353,6 +353,36 @@ struct MultiChartHost: View {
                             .foregroundColor(.blue.opacity(0.9))
                     }
                 }
+                // v15.23 batch81 · 副图数值（KDJ K/D/J 或 MACD DIF/DEA/M）· trader 顶/底背离判断
+                switch state.subChart {
+                case .kdj:
+                    if let kdj = Self.kdjAt(bars: bars, idx: idx) {
+                        Text(String(format: "K %.1f", kdj.k))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.85))
+                        Text(String(format: "D %.1f", kdj.d))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.yellow.opacity(0.85))
+                        Text(String(format: "J %.1f", kdj.j))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.purple.opacity(0.85))
+                    }
+                case .macd:
+                    if let m = Self.macdAt(bars: bars, idx: idx) {
+                        let mIsUp = m.macd >= 0
+                        Text(String(format: "DIF %.2f", m.dif))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.85))
+                        Text(String(format: "DEA %.2f", m.dea))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.yellow.opacity(0.85))
+                        Text(String(format: "M %+.2f", m.macd))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(mIsUp ? .red.opacity(0.85) : .green.opacity(0.85))
+                    }
+                case .volume, .none:
+                    EmptyView()
+                }
             }
         }
     }
@@ -365,6 +395,62 @@ struct MultiChartHost: View {
             sum += (bars[i].close as NSDecimalNumber).doubleValue
         }
         return sum / Double(period)
+    }
+
+    /// v15.23 batch81 · KDJ 9-3-3 标准算法 · bars[idx] 处的 (K, D, J)
+    static func kdjAt(bars: [KLine], idx: Int) -> (k: Double, d: Double, j: Double)? {
+        let N = 9
+        guard idx < bars.count, idx >= N - 1 else { return nil }
+        var prevK = 50.0
+        var prevD = 50.0
+        for i in (N - 1)...idx {
+            var hh = -Double.infinity
+            var ll = Double.infinity
+            for j in (i - N + 1)...i {
+                let h = (bars[j].high as NSDecimalNumber).doubleValue
+                let l = (bars[j].low as NSDecimalNumber).doubleValue
+                if h > hh { hh = h }
+                if l < ll { ll = l }
+            }
+            let close = (bars[i].close as NSDecimalNumber).doubleValue
+            let rsv = hh - ll > 0 ? (close - ll) / (hh - ll) * 100 : 50
+            let k = (2.0 / 3.0) * prevK + (1.0 / 3.0) * rsv
+            let d = (2.0 / 3.0) * prevD + (1.0 / 3.0) * k
+            prevK = k
+            prevD = d
+            if i == idx {
+                let j = 3 * k - 2 * d
+                return (k, d, j)
+            }
+        }
+        return nil
+    }
+
+    /// v15.23 batch81 · MACD 12-26-9 · bars[idx] 处的 (DIF, DEA, MACD)
+    static func macdAt(bars: [KLine], idx: Int) -> (dif: Double, dea: Double, macd: Double)? {
+        guard idx >= 26 + 9 - 1, idx < bars.count else { return nil }
+        let closes = bars[0...idx].map { ($0.close as NSDecimalNumber).doubleValue }
+        var ema12 = closes[0]
+        var ema26 = closes[0]
+        let a12 = 2.0 / 13
+        let a26 = 2.0 / 27
+        let a9 = 2.0 / 10
+        var dea: Double? = nil
+        var lastDif: Double = 0
+        for i in 0...idx {
+            let c = closes[i]
+            ema12 = c * a12 + ema12 * (1 - a12)
+            ema26 = c * a26 + ema26 * (1 - a26)
+            let dif = ema12 - ema26
+            lastDif = dif
+            if let d = dea {
+                dea = dif * a9 + d * (1 - a9)
+            } else {
+                dea = dif
+            }
+        }
+        guard let d = dea else { return nil }
+        return (lastDif, d, (lastDif - d) * 2)
     }
 
     // MARK: - Grid

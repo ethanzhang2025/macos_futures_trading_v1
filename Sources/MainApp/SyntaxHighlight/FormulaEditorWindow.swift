@@ -62,6 +62,8 @@ public struct FormulaEditorWindow: View {
     @AppStorage("viewState.v1.formulaEditor.activeTabIdx") private var activeTabIdxStored: Int = 0
     /// v15.23 batch45 · 保存时自动格式化（trader 习惯 · 关闭则按原样写盘）
     @AppStorage("viewState.v1.formulaEditor.formatOnSave") private var formatOnSave: Bool = true
+    /// v15.23 batch47 · 最近文件历史（最新在前 · cap 5 · JSON 持久化）
+    @AppStorage("viewState.v1.formulaEditor.recentFiles") private var recentFilesJSON: String = ""
     /// 多 tab 状态（持久化 · 初始化在 .onAppear）
     @State private var tabs: [FormulaTab] = []
     @State private var activeIdx: Int = 0
@@ -428,6 +430,27 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("o", modifiers: [.command])
             .help("从 .wh / .txt 文件加载（⌘O）")
+            // v15.23 batch47 · 最近文件 Menu（cap 5 · 最新在前）
+            Menu {
+                let recents = recentFiles
+                if recents.isEmpty {
+                    Button("（暂无最近文件）") { }.disabled(true)
+                } else {
+                    ForEach(recents, id: \.self) { url in
+                        Button(url.lastPathComponent) {
+                            loadRecentFile(url)
+                        }
+                        .help(url.path)
+                    }
+                    Divider()
+                    Button("清空最近") { clearRecentFiles() }
+                }
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 32)
+            .help("最近文件（最多 5 · 点击直接加载到当前 tab）")
             Button {
                 saveFile()
             } label: {
@@ -685,6 +708,8 @@ public struct FormulaEditorWindow: View {
                 tabs[activeIdx].isDirty = false
                 persistTabs()
             }
+            // v15.23 batch47 · 加最近文件
+            pushRecentFile(url)
             statusMessage = "已加载 \(url.lastPathComponent) · \(text.count) 字符"
         } catch {
             statusMessage = "打开失败：\(error.localizedDescription)"
@@ -720,6 +745,8 @@ public struct FormulaEditorWindow: View {
                 tabs[activeIdx].isDirty = false
                 persistTabs()
             }
+            // v15.23 batch47 · 加最近文件
+            pushRecentFile(url)
             let formatHint = formatOnSave ? " · 已格式化" : ""
             statusMessage = "已保存到 \(url.lastPathComponent)\(formatHint)"
         } catch {
@@ -998,9 +1025,10 @@ public struct FormulaEditorWindow: View {
     private static let helpGroups: [(String, [(String, String)])] = [
         ("📁 文件 / 复制", [
             ("⌘O", "打开 .wh / .txt 文件"),
-            ("⌘S", "保存为 .wh / .txt"),
+            ("⌘S", "保存为 .wh / .txt（默认自动格式化 · 可在齿轮菜单关闭）"),
             ("⌘⇧C", "复制全文（纯文本）"),
             ("⌘⌥C", "复制为 Markdown 代码块（含 ```mailang fenced）"),
+            ("最近文件", "toolbar 时钟图标 · 最近 5 个 · 一键加载到当前 tab"),
         ]),
         ("📑 多 tab（v15.23）", [
             ("⌘⇧N", "新建 tab"),
@@ -1165,6 +1193,61 @@ public struct FormulaEditorWindow: View {
         tabs[idx].name = newName
         persistTabs()
         statusMessage = "已重命名为 \(newName)"
+    }
+
+    // MARK: - v15.23 batch47 · 最近文件历史
+
+    /// 当前最近文件列表（JSON 反序列化）· 最新在前 · cap 5
+    var recentFiles: [URL] {
+        guard !recentFilesJSON.isEmpty,
+              let data = recentFilesJSON.data(using: .utf8),
+              let arr = try? JSONDecoder().decode([URL].self, from: data) else {
+            return []
+        }
+        return arr
+    }
+
+    /// 把 url push 到最近文件（已存在则提到首位 · cap 5）
+    func pushRecentFile(_ url: URL) {
+        var list = recentFiles
+        list.removeAll { $0 == url }
+        list.insert(url, at: 0)
+        if list.count > 5 { list = Array(list.prefix(5)) }
+        if let data = try? JSONEncoder().encode(list),
+           let s = String(data: data, encoding: .utf8) {
+            recentFilesJSON = s
+        }
+    }
+
+    /// 加载指定路径到当前 tab（不影响其他 tab）· 文件不存在 → 状态栏提示
+    func loadRecentFile(_ url: URL) {
+        do {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            sourceText = text
+            if !tabs.isEmpty, activeIdx >= 0, activeIdx < tabs.count {
+                tabs[activeIdx].name = url.deletingPathExtension().lastPathComponent
+                tabs[activeIdx].fileURL = url
+                tabs[activeIdx].isDirty = false
+                persistTabs()
+            }
+            pushRecentFile(url)
+            statusMessage = "已加载最近 · \(url.lastPathComponent)"
+        } catch {
+            statusMessage = "加载失败：\(error.localizedDescription) · 已从最近列表移除"
+            // 清掉无效条目
+            var list = recentFiles
+            list.removeAll { $0 == url }
+            if let data = try? JSONEncoder().encode(list),
+               let s = String(data: data, encoding: .utf8) {
+                recentFilesJSON = s
+            }
+        }
+    }
+
+    /// 清空最近文件列表
+    func clearRecentFiles() {
+        recentFilesJSON = ""
+        statusMessage = "已清空最近文件"
     }
 }
 

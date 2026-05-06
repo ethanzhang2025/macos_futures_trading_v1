@@ -96,14 +96,14 @@ public struct FormulaEditorWindow: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text("📋 公式大纲").font(.title2).bold()
-                    let outline = parseOutline()
+                    let outline = MaiLangOutline.parse(sourceText)
                     Text("(\(outline.count) 个变量定义)").font(.caption).foregroundColor(.secondary)
                     Spacer()
                     Button("关闭") { showOutlineSheet = false }.keyboardShortcut(.cancelAction)
                 }
                 .padding(12)
                 Divider()
-                let outline = parseOutline()
+                let outline = MaiLangOutline.parse(sourceText)
                 if outline.isEmpty {
                     Spacer()
                     HStack { Spacer(); Text("公式中暂无变量定义\n（NAME:=expr 或 NAME:expr,attr;）")
@@ -834,60 +834,6 @@ public struct FormulaEditorWindow: View {
         }
         let count = last - first + 1
         statusMessage = up ? "上移 \(count) 行" : "下移 \(count) 行"
-    }
-
-    /// v15.22 batch37 · 公式大纲条目（变量定义 + 1-based 行号 + 是否输出）
-    private struct OutlineEntry: Equatable {
-        let name: String
-        let line: Int
-        let isOutput: Bool   // : 输出（绘图）/ := 中间变量
-    }
-
-    /// v15.22 batch37 · 解析当前公式的变量定义大纲
-    /// - 行级解析（不深度词法 · tolerant）
-    /// - 跳过 // 行注释 / { 块注释开头行
-    /// - 匹配 `NAME:=expr;`（中间变量）/ `NAME:expr[,attr...];`（输出绘图）
-    /// - NAME 必须是合法标识符（字母数字下划线 · 首位非数字 · 排除保留字以减误报）
-    private func parseOutline() -> [OutlineEntry] {
-        let lines = sourceText.components(separatedBy: "\n")
-        var result: [OutlineEntry] = []
-        var inBlockComment = false
-        for (idx, raw) in lines.enumerated() {
-            let trimmed = raw.trimmingCharacters(in: .whitespaces)
-            if inBlockComment {
-                if trimmed.contains("}") { inBlockComment = false }
-                continue
-            }
-            if trimmed.hasPrefix("//") { continue }
-            if trimmed.hasPrefix("{") {
-                if !trimmed.contains("}") { inBlockComment = true }
-                continue
-            }
-            if trimmed.isEmpty { continue }
-            // 找最早的 : 或 :=（优先 :=）
-            let assignRange: Range<String.Index>?
-            let isOutput: Bool
-            if let r = trimmed.range(of: ":=") {
-                assignRange = r
-                isOutput = false
-            } else if let r = trimmed.range(of: ":") {
-                assignRange = r
-                isOutput = true
-            } else {
-                continue
-            }
-            guard let r = assignRange else { continue }
-            let name = String(trimmed[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
-            // 合法标识符校验
-            guard !name.isEmpty,
-                  let first = name.first, first.isLetter || first == "_",
-                  name.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" })
-            else { continue }
-            // 排除保留字（防 IF:THEN 等被误识别 · CLOSE 等价量字段也排除）
-            if MaiLangSyntaxHighlighter.isReservedWord(name) { continue }
-            result.append(OutlineEntry(name: name, line: idx + 1, isOutput: isOutput))
-        }
-        return result
     }
 
     /// v15.22 batch28+35 · 函数库单行 row 渲染（搜索/分组共用）

@@ -269,17 +269,26 @@ struct MultiChartCellView: View {
         }
     }
 
-    /// 末根 K 线 close · 涨红跌绿
+    /// 末根 K 线 close · 涨红跌绿 + v15.23 batch76 区间涨跌幅
     @ViewBuilder
     private var lastPriceText: some View {
         let bars = effectiveBars
-        if let last = bars.last {
+        if let last = bars.last, let first = bars.first {
             let close = (last.close as NSDecimalNumber).doubleValue
+            let firstClose = (first.close as NSDecimalNumber).doubleValue
             let prev = bars.count >= 2 ? (bars[bars.count - 2].close as NSDecimalNumber).doubleValue : close
             let isUp = close >= prev
-            Text(String(format: "%.2f", close))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(isUp ? .red : .green)
+            let pct = firstClose > 0 ? (close - firstClose) / firstClose * 100 : 0
+            let pctIsUp = pct >= 0
+            HStack(spacing: 4) {
+                Text(String(format: "%.2f", close))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(isUp ? .red : .green)
+                Text(String(format: "%+.2f%%", pct))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(pctIsUp ? .red.opacity(0.8) : .green.opacity(0.8))
+                    .help("区间累计涨跌幅（(末根 close - 首根 close) / 首根 close）")
+            }
         }
     }
 }

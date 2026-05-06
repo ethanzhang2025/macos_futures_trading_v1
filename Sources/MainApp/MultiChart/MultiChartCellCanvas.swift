@@ -176,6 +176,23 @@ struct MultiChartCellCanvas: View {
                 // 跌：填充实心绿（中国习惯）· 与上影线同色
                 ctx.fill(Path(bodyRect), with: .color(color))
             }
+            // v15.23 batch76 · 末根 K 线高亮（白色 1px 描边 + 同色 dot · 强调最新数据）
+            if i == n - 1 {
+                ctx.stroke(Path(bodyRect.insetBy(dx: -0.5, dy: -0.5)),
+                           with: .color(.white.opacity(0.85)),
+                           lineWidth: 1)
+                let dotSize: CGFloat = 4
+                let dotRect = CGRect(
+                    x: centerX - dotSize / 2,
+                    y: yFor(close) - dotSize / 2,
+                    width: dotSize,
+                    height: dotSize
+                )
+                ctx.fill(Path(ellipseIn: dotRect), with: .color(color))
+                ctx.stroke(Path(ellipseIn: dotRect),
+                           with: .color(.white.opacity(0.9)),
+                           lineWidth: 0.7)
+            }
         }
     }
 

@@ -36,6 +36,8 @@ struct MultiChartCellCanvas: View {
     let showSAR: Bool
     /// v15.23 batch91 · 用户手动标记的水平参考线（trader 关键价位 · 支撑/压力 · 标普跌停等）
     let horizontalLines: [Double]
+    /// v15.23 batch93 · 主图视图模式（false=K 线 蜡烛 · true=分时 折线）
+    let isTimeShareMode: Bool
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
@@ -44,7 +46,8 @@ struct MultiChartCellCanvas: View {
          showBoll: Bool = false,
          subChart: MultiChartSubChartType = .volume,
          showSAR: Bool = false,
-         horizontalLines: [Double] = []) {
+         horizontalLines: [Double] = [],
+         isTimeShareMode: Bool = false) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
@@ -54,6 +57,7 @@ struct MultiChartCellCanvas: View {
         self.subChart = subChart
         self.showSAR = showSAR
         self.horizontalLines = horizontalLines
+        self.isTimeShareMode = isTimeShareMode
     }
 
     var body: some View {
@@ -67,7 +71,12 @@ struct MultiChartCellCanvas: View {
                 let subRect = CGRect(x: 0, y: priceHeight + 4, width: size.width, height: subHeight)
 
                 drawGrid(in: ctx, rect: priceRect)
-                drawCandles(in: ctx, rect: priceRect)
+                if isTimeShareMode {
+                    // batch93 · 分时折线模式（close 红线 + 累计均价黄线 + 红色底纹）
+                    drawTimeShareLine(in: ctx, rect: priceRect)
+                } else {
+                    drawCandles(in: ctx, rect: priceRect)
+                }
                 // v15.23 batch72-74 · 主图叠加 5/10/20/60 四均线（中国期货短线经典标配）
                 // bars 同坐标系 · 需用相同 minLow/maxHigh 映射价格→Y · 不重算价格区间
                 // 颜色梯度：快线偏黄/红 → 慢线偏紫/蓝（trader 一眼区分周期）
@@ -390,6 +399,66 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
+    }
+
+    // MARK: - 分时折线（v15.23 batch93 · close 红线 + 累计均价黄线 + 红色底纹 · trader 真盘看图）
+
+    /// 分时图：每根 K 线 close 折线 · 累计均价虚线 · close 折线下方红色底纹强调强弱
+    private func drawTimeShareLine(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        guard n >= 2 else { return }
+        let closes = bars.map { ($0.close as NSDecimalNumber).doubleValue }
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let priceRange = maxHigh - minLow
+        let yFor: (Double) -> CGFloat = { p in
+            rect.maxY - CGFloat((p - minLow) / priceRange) * rect.height
+        }
+        var closePath = Path()
+        var avgPath = Path()
+        var avg: Double = 0
+        var startedClose = false
+        var startedAvg = false
+        for i in 0..<n {
+            let x = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let yC = yFor(closes[i])
+            if startedClose {
+                closePath.addLine(to: CGPoint(x: x, y: yC))
+            } else {
+                closePath.move(to: CGPoint(x: x, y: yC))
+                startedClose = true
+            }
+            avg = (avg * Double(i) + closes[i]) / Double(i + 1)
+            let yA = yFor(avg)
+            if startedAvg {
+                avgPath.addLine(to: CGPoint(x: x, y: yA))
+            } else {
+                avgPath.move(to: CGPoint(x: x, y: yA))
+                startedAvg = true
+            }
+        }
+        // 红色底纹（close 折线下方填充 · 高亮强度）
+        var fillPath = closePath
+        let lastX = rect.minX + (CGFloat(n - 1) + 0.5) * rect.width / CGFloat(n)
+        fillPath.addLine(to: CGPoint(x: lastX, y: rect.maxY))
+        fillPath.addLine(to: CGPoint(x: rect.minX + 0.5 * rect.width / CGFloat(n), y: rect.maxY))
+        fillPath.closeSubpath()
+        ctx.fill(fillPath, with: .color(.red.opacity(0.12)))
+        // close 红线
+        ctx.stroke(closePath, with: .color(.red.opacity(0.9)), lineWidth: 1.2)
+        // 累计均价黄虚线
+        ctx.stroke(avgPath, with: .color(.yellow.opacity(0.7)),
+                   style: StrokeStyle(lineWidth: 0.8, dash: [3, 2]))
+        // 末根 close dot 高亮（同 K 线模式）
+        if let last = closes.last {
+            let x = rect.minX + (CGFloat(n - 1) + 0.5) * rect.width / CGFloat(n)
+            let y = yFor(last)
+            let dot = CGRect(x: x - 2, y: y - 2, width: 4, height: 4)
+            ctx.fill(Path(ellipseIn: dot), with: .color(.red))
+            ctx.stroke(Path(ellipseIn: dot),
+                       with: .color(.white.opacity(0.9)), lineWidth: 0.7)
+        }
     }
 
     // MARK: - BOLL 突破信号（v15.23 batch92 · 末根 close 突破上下轨时换边框色）

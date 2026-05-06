@@ -39,6 +39,7 @@ struct MultiChartCellView: View {
     let onBollToggle: () -> Void
     let onSARToggle: () -> Void
     let onSubChartTap: (MultiChartSubChartType) -> Void
+    let onTimeShareToggle: () -> Void
     let onPushToMain: () -> Void
 
     static let instrumentPool: [String] = [
@@ -87,7 +88,8 @@ struct MultiChartCellView: View {
                 showBoll: state.showBoll,
                 subChart: state.subChart,
                 showSAR: state.showSAR,
-                horizontalLines: state.horizontalLines
+                horizontalLines: state.horizontalLines,
+                isTimeShareMode: state.isTimeShareMode
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -257,6 +259,17 @@ struct MultiChartCellView: View {
             .menuStyle(.borderlessButton)
             .frame(width: 26)
             .help("副图：\(state.subChart.displayName)（点击切换 量 / KDJ / 无）")
+
+            // v15.23 batch93 · K 线 ⇋ 分时折线切换（trader 真盘工具）
+            Button {
+                onTimeShareToggle()
+            } label: {
+                Image(systemName: state.isTimeShareMode ? "waveform" : "chart.bar.doc.horizontal")
+                    .font(.system(size: 11))
+                    .foregroundColor(state.isTimeShareMode ? .red.opacity(0.85) : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(state.isTimeShareMode ? "切回 K 线（蜡烛图）" : "切到分时折线（trader 真盘看图）")
 
             // v15.23 batch88 · 主图指标 Menu 收纳（MA 4 均线 / BOLL / SAR 三选多 · 减少 toolbar 拥挤）
             Menu {

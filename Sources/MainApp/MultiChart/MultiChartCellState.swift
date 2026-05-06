@@ -52,6 +52,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     var showSAR: Bool
     /// v15.23 batch91 · 用户手动标记的水平参考线（支撑/压力位 · 价格 list · trader 标关键价位）
     var horizontalLines: [Double]
+    /// v15.23 batch93 · 主图视图模式（K 线 / 分时折线 · trader 真盘切换）
+    var isTimeShareMode: Bool
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
@@ -61,7 +63,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
          showBoll: Bool = false,
          subChart: MultiChartSubChartType = .volume,
          showSAR: Bool = false,
-         horizontalLines: [Double] = []) {
+         horizontalLines: [Double] = [],
+         isTimeShareMode: Bool = false) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
@@ -71,11 +74,12 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.subChart = subChart
         self.showSAR = showSAR
         self.horizontalLines = horizontalLines
+        self.isTimeShareMode = isTimeShareMode
     }
 
     /// Codable · 老 cellsJSON 缺新字段时按合理默认值
     enum CodingKeys: String, CodingKey {
-        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines
+        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode
     }
 
     init(from decoder: Decoder) throws {
@@ -94,6 +98,7 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         }
         self.showSAR = try c.decodeIfPresent(Bool.self, forKey: .showSAR) ?? false
         self.horizontalLines = try c.decodeIfPresent([Double].self, forKey: .horizontalLines) ?? []
+        self.isTimeShareMode = try c.decodeIfPresent(Bool.self, forKey: .isTimeShareMode) ?? false
     }
 }
 

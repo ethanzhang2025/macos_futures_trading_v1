@@ -774,6 +774,7 @@ struct MultiChartHost: View {
             ("点击主图指标 Menu（batch88）", "MA 4 均线（5/10/20/60 默认开）+ BOLL 上下轨（20 · 2σ 默认关）+ SAR 抛物线（Wilder 默认关）· 三选多"),
             ("右键 → 标水平线（batch91）", "在当前 close 价画橙色虚线 · 标支撑/压力位 · 持久化 · 清空也在右键"),
             ("BOLL 突破信号（batch92）", "开 BOLL 时 · close > 上轨 → 末根红边框（强多）· close < 下轨 → 末根绿边框（强空）· 一眼定位"),
+            ("K 线 ⇋ 分时切换（batch93）", "点击 chart.bar.doc 图标 · K 线（蜡烛）↔ 分时（close 红线 + 累计均价黄虚线 + 红色底纹）"),
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
             ("hover 时状态栏（batch75）", "OHLCV + M5/M20/M60 三条均线值（参考 cell #1 / focused cell · 当 cell 开启均线时显示）"),
             ("倒计时 ⏱ mm:ss（batch83）", "短周期 cell（1m/3m/5m/15m/30m/1h）· 真行情时显示距下根 K 线 close 剩余秒数 · trader 短线节奏感"),
@@ -893,6 +894,7 @@ struct MultiChartHost: View {
             onIndicatorsToggle: { updateCell(idx) { $0.showIndicators.toggle() } },
             onBollToggle: { updateCell(idx) { $0.showBoll.toggle() } },
             onSARToggle: { updateCell(idx) { $0.showSAR.toggle() } },
+            onTimeShareToggle: { updateCell(idx) { $0.isTimeShareMode.toggle() } },
             onSubChartTap: { sub in updateCell(idx) {
                 $0.subChart = sub
                 $0.showVolume = (sub == .volume)  // 同步 legacy 字段（兼容旧 path）

@@ -51,6 +51,8 @@ public struct FormulaEditorWindow: View {
     @State private var pendingGotoLine: Int? = nil
     /// v15.22 batch34 · 快捷键帮助面板
     @State private var showHelpSheet: Bool = false
+    /// v15.22 batch37 · 公式大纲面板（变量定义 + 行号 · 点击跳转）
+    @State private var showOutlineSheet: Bool = false
 
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
@@ -89,6 +91,52 @@ public struct FormulaEditorWindow: View {
             statusBar
         }
         .frame(minWidth: 720, idealWidth: 920, minHeight: 480, idealHeight: 640)
+        // v15.22 batch37 · 公式大纲面板（变量定义 + 行号 · 点击跳转）
+        .sheet(isPresented: $showOutlineSheet) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("📋 公式大纲").font(.title2).bold()
+                    let outline = parseOutline()
+                    Text("(\(outline.count) 个变量定义)").font(.caption).foregroundColor(.secondary)
+                    Spacer()
+                    Button("关闭") { showOutlineSheet = false }.keyboardShortcut(.cancelAction)
+                }
+                .padding(12)
+                Divider()
+                let outline = parseOutline()
+                if outline.isEmpty {
+                    Spacer()
+                    HStack { Spacer(); Text("公式中暂无变量定义\n（NAME:=expr 或 NAME:expr,attr;）")
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .font(.callout); Spacer() }
+                    Spacer()
+                } else {
+                    List(outline, id: \.line) { entry in
+                        HStack {
+                            Text("\(entry.line)").font(.caption.monospacedDigit())
+                                .foregroundColor(.secondary)
+                                .frame(width: 32, alignment: .trailing)
+                            Text(entry.name)
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundColor(.accentColor)
+                            Text(entry.isOutput ? "(输出)" : "(中间)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("跳转") {
+                                pendingGotoLine = entry.line
+                                showOutlineSheet = false
+                                statusMessage = "跳转到 \(entry.name) · 第 \(entry.line) 行"
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                    .listStyle(.sidebar)
+                }
+            }
+            .frame(minWidth: 420, idealWidth: 480, minHeight: 460, idealHeight: 600)
+        }
         // v15.22 batch34 · 快捷键帮助面板（22+ 快捷键 · 按主题分组）
         .sheet(isPresented: $showHelpSheet) {
             VStack(alignment: .leading, spacing: 0) {
@@ -405,6 +453,14 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("?", modifiers: [.command, .shift])
             .help("查看所有编辑器快捷键（⌘⇧?）")
+            // v15.22 batch37 · 公式大纲（⌘⇧O · 解析变量定义 · 点击跳转）
+            Button {
+                showOutlineSheet = true
+            } label: {
+                Label("大纲", systemImage: "list.bullet.indent")
+            }
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+            .help("公式大纲（⌘⇧O · 变量定义列表 · 点击跳转）")
             // v15.22 batch36 · 字体大小调节（⌘=放大 / ⌘-缩小 / ⌘0 重置 · 持久化）
             Menu {
                 Button("放大字体（⌘=）") {
@@ -778,6 +834,60 @@ public struct FormulaEditorWindow: View {
         }
         let count = last - first + 1
         statusMessage = up ? "上移 \(count) 行" : "下移 \(count) 行"
+    }
+
+    /// v15.22 batch37 · 公式大纲条目（变量定义 + 1-based 行号 + 是否输出）
+    private struct OutlineEntry: Equatable {
+        let name: String
+        let line: Int
+        let isOutput: Bool   // : 输出（绘图）/ := 中间变量
+    }
+
+    /// v15.22 batch37 · 解析当前公式的变量定义大纲
+    /// - 行级解析（不深度词法 · tolerant）
+    /// - 跳过 // 行注释 / { 块注释开头行
+    /// - 匹配 `NAME:=expr;`（中间变量）/ `NAME:expr[,attr...];`（输出绘图）
+    /// - NAME 必须是合法标识符（字母数字下划线 · 首位非数字 · 排除保留字以减误报）
+    private func parseOutline() -> [OutlineEntry] {
+        let lines = sourceText.components(separatedBy: "\n")
+        var result: [OutlineEntry] = []
+        var inBlockComment = false
+        for (idx, raw) in lines.enumerated() {
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            if inBlockComment {
+                if trimmed.contains("}") { inBlockComment = false }
+                continue
+            }
+            if trimmed.hasPrefix("//") { continue }
+            if trimmed.hasPrefix("{") {
+                if !trimmed.contains("}") { inBlockComment = true }
+                continue
+            }
+            if trimmed.isEmpty { continue }
+            // 找最早的 : 或 :=（优先 :=）
+            let assignRange: Range<String.Index>?
+            let isOutput: Bool
+            if let r = trimmed.range(of: ":=") {
+                assignRange = r
+                isOutput = false
+            } else if let r = trimmed.range(of: ":") {
+                assignRange = r
+                isOutput = true
+            } else {
+                continue
+            }
+            guard let r = assignRange else { continue }
+            let name = String(trimmed[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+            // 合法标识符校验
+            guard !name.isEmpty,
+                  let first = name.first, first.isLetter || first == "_",
+                  name.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" })
+            else { continue }
+            // 排除保留字（防 IF:THEN 等被误识别 · CLOSE 等价量字段也排除）
+            if MaiLangSyntaxHighlighter.isReservedWord(name) { continue }
+            result.append(OutlineEntry(name: name, line: idx + 1, isOutput: isOutput))
+        }
+        return result
     }
 
     /// v15.22 batch28+35 · 函数库单行 row 渲染（搜索/分组共用）

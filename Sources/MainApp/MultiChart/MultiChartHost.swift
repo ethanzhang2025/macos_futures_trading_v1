@@ -294,6 +294,9 @@ struct MultiChartHost: View {
                     .foregroundColor(.secondary)
             }
             Divider().frame(height: 12)
+            // v15.23 batch104 · 6 cell 综合多空总览（trader 全景看市场情绪）
+            cellsBullSummaryView
+            Divider().frame(height: 12)
             Text("\(savedLayouts.count) 个已保存预设")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
@@ -318,6 +321,50 @@ struct MultiChartHost: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .background(Color.secondary.opacity(0.06))
+    }
+
+    /// v15.23 batch104 · 综合 6 cell 多空评级总览（trader 全景看市场情绪 · 强多/震荡/强空 数量）
+    @ViewBuilder
+    private var cellsBullSummaryView: some View {
+        var bull = 0, neutral = 0, bear = 0
+        let cellCount = activeCellCount
+        for i in 0..<cellCount {
+            let cell = cellAt(i)
+            let bars: [KLine] = {
+                if let live = cellLiveBars[cell.id], !live.isEmpty { return live }
+                return MultiChartMockData.bars(instrumentID: cell.instrumentID,
+                                                period: cell.period,
+                                                tickSeed: autoTickEnabled ? tickSeed : 0)
+            }()
+            guard bars.count >= 61 else { continue }
+            let s = Self.bullScoreAt(bars: bars, idx: bars.count - 1)
+            if s >= 4 { bull += 1 }
+            else if s >= 0, s <= 2 { bear += 1 }
+            else if s == 3 { neutral += 1 }
+        }
+        HStack(spacing: 5) {
+            if bull > 0 {
+                Text("📈\(bull)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.red)
+            }
+            if neutral > 0 {
+                Text("→\(neutral)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            if bear > 0 {
+                Text("📉\(bear)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.green)
+            }
+            if bull == 0 && neutral == 0 && bear == 0 {
+                Text("评级中…")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .help("综合评级总览（cell 数）：📈 偏多+强多（4-7 分）/ → 震荡（3 分）/ 📉 偏空+强空（0-2 分）")
     }
 
     /// v15.23 batch69 · hover 时显示某 cell 的 K 线 [idx] OHLC + volume
@@ -891,6 +938,7 @@ struct MultiChartHost: View {
             ("右键 → 标水平线（batch91）", "在当前 close 价画橙色虚线 · 标支撑/压力位 · 持久化 · 清空也在右键"),
             ("BOLL 突破信号（batch92）", "开 BOLL 时 · close > 上轨 → 末根红边框（强多）· close < 下轨 → 末根绿边框（强空）· 一眼定位"),
             ("综合多空评级（batch103）", "cell toolbar emoji+中文：📈强多/↗偏多/→震荡/↘偏空/📉强空（综合 MA/KDJ/MACD 7 项 · 0-7 分）"),
+            ("statusBar 综合总览（batch104）", "底部 statusBar 显示 6 cell 多空汇总：📈N → N 📉 N · trader 全景市场情绪"),
             ("K 线 ⇋ 分时切换（batch93）", "点击 chart.bar.doc 图标 · K 线（蜡烛）↔ 分时（close 红线 + 累计均价黄虚线 + 红色底纹）"),
             ("鼠标悬停 cell（v15.23）", "全部 cell 同步显示同 index K 线虚线 + close 价（跨周期/合约比对杀手键）"),
             ("hover 时状态栏（batch75）", "OHLCV + M5/M20/M60 三条均线值（参考 cell #1 / focused cell · 当 cell 开启均线时显示）"),

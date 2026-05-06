@@ -327,6 +327,13 @@ public struct MaiLangCodeView: NSViewRepresentable {
             if safeRange.length > 0 {
                 storage.addAttribute(.foregroundColor, value: color, range: safeRange)
             }
+            // v15.23 batch42 · hover popover · 已知函数 token 加 toolTip 属性
+            // NSTextView 内置悬停提示（系统 ~1s 延迟自动显示）· 不需 NSTrackingArea
+            if t.kind == .builtinFunc, safeRange.length > 0,
+               let sig = MaiLangFunctionSignatures.all[t.text.uppercased()] {
+                let tip = "\(sig.formatted)\n\n📂 \(sig.category.rawValue)\n📝 \(sig.summary)"
+                storage.addAttribute(.toolTip, value: tip as NSString, range: safeRange)
+            }
         }
         // v15.22 batch21 · 当前光标所在行浅背景高亮（在错误标注之前 · 错误优先覆盖）
         let cursorLoc = tv.selectedRange().location

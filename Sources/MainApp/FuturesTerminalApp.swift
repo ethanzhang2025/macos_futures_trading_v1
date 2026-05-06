@@ -306,6 +306,7 @@ struct FuturesTerminalApp: App {
                 OpenWorkspaceButton()
                 OpenTradingButton()
                 OpenTrainingButton()  // v15.23 batch14 · WP-54 模拟训练 ⌘⇧T
+                OpenMultiChartButton() // v15.23 batch50 · WP-44 多图表 ⌘⌥M
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -387,6 +388,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 880, height: 680)
+
+        // v15.23 batch50 · 多图表（⌘⌥M · multichart · 6 grid preset · WP-44 UI 启用）
+        WindowGroup("多图表", id: "multichart") {
+            MultiChartHost()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1080, height: 720)
 
         // v15.22 batch4 · 麦语言公式编辑器（WP-65 · syntax 高亮 + 编辑 + 保存）
         WindowGroup("公式编辑器", id: "formulaEditor") {
@@ -493,6 +501,15 @@ private struct OpenTrainingButton: View {
     var body: some View {
         Button("模拟训练（⌘⇧T）") { openWindow(id: "training") }
             .keyboardShortcut("t", modifiers: [.command, .shift])
+    }
+}
+
+/// v15.23 batch50 · WP-44 多图表入口（⌘⌥M · 6 grid preset · 数据层 v1 → UI 启用）
+private struct OpenMultiChartButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("多图表（⌘⌥M）") { openWindow(id: "multichart") }
+            .keyboardShortcut("m", modifiers: [.command, .option])
     }
 }
 

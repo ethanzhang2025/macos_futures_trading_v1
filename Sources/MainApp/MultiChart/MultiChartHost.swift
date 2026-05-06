@@ -105,11 +105,11 @@ struct MultiChartHost: View {
         }
     }
 
-    // MARK: - Cell stub view（batch51 替换为 mini-K 线）
+    // MARK: - Cell view（batch51 接入 K 线 Canvas）
 
     private func cellView(state: MultiChartCellState, idx: Int) -> some View {
         VStack(spacing: 0) {
-            // cell 顶部 mini-toolbar（占位 · batch52 替换为合约 picker + 周期切换）
+            // cell 顶部 mini-toolbar（合约 + 周期 · batch52 加 picker / 周期切换）
             HStack(spacing: 6) {
                 Text(state.instrumentID)
                     .font(.system(size: 12, weight: .semibold))
@@ -117,21 +117,20 @@ struct MultiChartHost: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
                 Spacer()
-                Text("Cell #\(idx + 1)")
+                lastPriceText(state: state)
+                Text("#\(idx + 1)")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Color.secondary.opacity(0.08))
-            // 占位主体（batch51 → mini K 线 Canvas）
-            ZStack {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.05))
-                Text("📈 \(state.instrumentID) · \(state.period.rawValue)")
-                    .font(.system(size: 14, design: .monospaced))
-                    .foregroundColor(.secondary)
-            }
+            // K 线 Canvas（mock data · 后续 batch 接 SinaMarketDataProvider 真数据）
+            MultiChartCellCanvas(
+                bars: MultiChartMockData.bars(instrumentID: state.instrumentID,
+                                              period: state.period),
+                showVolume: state.showVolume
+            )
         }
         .background(Color(NSColor.windowBackgroundColor))
         .overlay(
@@ -139,6 +138,20 @@ struct MultiChartHost: View {
                 .stroke(Color.secondary.opacity(0.3), lineWidth: 0.5)
         )
         .cornerRadius(4)
+    }
+
+    /// 末根 K 线 close 显示在标题栏（mock）
+    @ViewBuilder
+    private func lastPriceText(state: MultiChartCellState) -> some View {
+        let bars = MultiChartMockData.bars(instrumentID: state.instrumentID, period: state.period)
+        if let last = bars.last {
+            let close = (last.close as NSDecimalNumber).doubleValue
+            let prev = bars.count >= 2 ? (bars[bars.count - 2].close as NSDecimalNumber).doubleValue : close
+            let isUp = close >= prev
+            Text(String(format: "%.2f", close))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(isUp ? .red : .green)
+        }
     }
 
     // MARK: - State 操作

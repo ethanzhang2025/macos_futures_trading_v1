@@ -26,17 +26,21 @@ public struct MaiLangCodeView: NSViewRepresentable {
     let onCursorChange: ((Int, Int) -> Void)?
     /// v15.22 batch23 · 选区范围回调（NSRange · 用于多行 ⌘/ 批量注释等需要 selection 的操作）
     let onSelectionChange: ((NSRange) -> Void)?
+    /// v15.22 batch27 · 当前光标处 token 文本回调（nil = 无 token · 用于 status bar 函数签名实时显示）
+    let onTokenAtCursor: ((String?) -> Void)?
 
     public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark,
                 fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil,
                 onCursorChange: ((Int, Int) -> Void)? = nil,
-                onSelectionChange: ((NSRange) -> Void)? = nil) {
+                onSelectionChange: ((NSRange) -> Void)? = nil,
+                onTokenAtCursor: ((String?) -> Void)? = nil) {
         self._text = text
         self.scheme = scheme
         self.fontSize = fontSize
         self.errorMarker = errorMarker
         self.onCursorChange = onCursorChange
         self.onSelectionChange = onSelectionChange
+        self.onTokenAtCursor = onTokenAtCursor
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -106,6 +110,13 @@ public struct MaiLangCodeView: NSViewRepresentable {
             }
             if let cb = parent.onSelectionChange {
                 DispatchQueue.main.async { cb(range) }
+            }
+            // batch27 · 找当前光标处 token（短文档 tokenize 性能 OK · 长文档可后续做 cache 优化）
+            if let cb = parent.onTokenAtCursor {
+                let loc = range.location
+                let tokens = MaiLangSyntaxHighlighter.tokenize(tv.string)
+                let tk = tokens.first { NSLocationInRange(loc, $0.range) || NSMaxRange($0.range) == loc }
+                DispatchQueue.main.async { cb(tk?.text) }
             }
         }
 

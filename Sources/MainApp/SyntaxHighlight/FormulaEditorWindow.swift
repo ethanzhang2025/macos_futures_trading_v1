@@ -37,6 +37,8 @@ public struct FormulaEditorWindow: View {
     @State private var cursorCol: Int = 1
     /// v15.22 batch23 · 当前选区范围（用于多行 ⌘/ 批量注释）
     @State private var selectionRange: NSRange = NSRange(location: 0, length: 0)
+    /// v15.22 batch27 · 当前光标 token 的函数签名（nil = 当前位置不是已知函数）
+    @State private var currentTokenSig: String? = nil
 
     private var scheme: SyntaxColorScheme {
         schemeRaw == "light" ? .light : .dark
@@ -53,7 +55,15 @@ public struct FormulaEditorWindow: View {
                                 cursorLine = line
                                 cursorCol = col
                             },
-                            onSelectionChange: { range in selectionRange = range })
+                            onSelectionChange: { range in selectionRange = range },
+                            onTokenAtCursor: { name in
+                                if let n = name?.uppercased(),
+                                   let s = MaiLangFunctionSignatures.all[n] {
+                                    currentTokenSig = s.formatted
+                                } else {
+                                    currentTokenSig = nil
+                                }
+                            })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onChange(of: sourceText) { _ in
                     // v15.22 batch6 · 用户改动后清错误标注（防陈旧 marker 误导）
@@ -323,6 +333,15 @@ public struct FormulaEditorWindow: View {
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
                 .help("当前光标位置（行:列 · 与编译错误定位对齐）")
+            // v15.22 batch27 · 当前光标 token 函数签名（与 batch26 静态表联动 · IDE 教学体验）
+            if let sig = currentTokenSig {
+                Text("📖 \(sig)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.accentColor)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help("当前光标处函数签名（参考 batch26 内置签名表 · 73 个函数）")
+            }
             // token 数（与 highlighter 同源）
             let tokenCount = MaiLangSyntaxHighlighter.tokenize(sourceText).count
             Text("token \(tokenCount)").font(.caption).foregroundColor(.secondary)

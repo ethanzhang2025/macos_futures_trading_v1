@@ -128,4 +128,104 @@ struct DisciplineEvaluatorTests {
         let ctx = PositionContext(position: makeLong(3000), openedAt: now, currentPrice: 3000)
         #expect(DisciplineEvaluator.evaluatePositions(rules: [], positions: [ctx], now: now).isEmpty)
     }
+
+    // MARK: - batch3 trades 类规则
+
+    private func makeTrade(_ ref: String, _ inst: String = "rb2410",
+                           dir: Direction = .buy, offset: OffsetFlag = .open) -> TradeRecord {
+        TradeRecord(tradeID: "T-\(ref)", orderRef: ref, instrumentID: inst,
+                    direction: dir, offsetFlag: offset, price: 3000, volume: 1,
+                    tradeTime: "2026-05-05 10:00:00", commission: 5)
+    }
+
+    @Test("maxDailyTrades · 11 笔超过 10 笔阈值 → warning · message 含 11/10")
+    func maxDailyTradesTriggered() {
+        let rule = DisciplineRule(kind: .maxDailyTrades, threshold: 10)
+        let trades = (1...11).map { makeTrade("O-\($0)") }
+        let v = DisciplineEvaluator.evaluateTrades(rules: [rule], todayTrades: trades, dailyRealizedPnL: 0, now: now)
+        #expect(v.count == 1)
+        #expect(v[0].severity == .warning)
+        #expect(v[0].message.contains("11"))
+        #expect(v[0].message.contains("10"))
+        #expect(v[0].relatedOrderRefs.count == 11)
+    }
+
+    @Test("maxDailyTrades · 10 笔正好等于 10 不触发（> 阈值才触发）")
+    func maxDailyTradesAtThreshold() {
+        let rule = DisciplineRule(kind: .maxDailyTrades, threshold: 10)
+        let trades = (1...10).map { makeTrade("O-\($0)") }
+        #expect(DisciplineEvaluator.evaluateTrades(rules: [rule], todayTrades: trades, dailyRealizedPnL: 0, now: now).isEmpty)
+    }
+
+    @Test("dailyMaxLoss · 亏损 8000 元超过 5000 阈值 → error · message 含金额")
+    func dailyMaxLossTriggered() {
+        let rule = DisciplineRule(kind: .dailyMaxLoss, threshold: 5000)
+        let v = DisciplineEvaluator.evaluateTrades(rules: [rule], todayTrades: [], dailyRealizedPnL: -8000, now: now)
+        #expect(v.count == 1)
+        #expect(v[0].severity == .error)
+        #expect(v[0].message.contains("8000"))
+        #expect(v[0].message.contains("5000"))
+    }
+
+    @Test("dailyMaxLoss · 盈利 +1000 元 → 不触发")
+    func dailyMaxLossProfit() {
+        let rule = DisciplineRule(kind: .dailyMaxLoss, threshold: 5000)
+        #expect(DisciplineEvaluator.evaluateTrades(rules: [rule], todayTrades: [], dailyRealizedPnL: 1000, now: now).isEmpty)
+    }
+
+    @Test("dailyMaxLoss · 亏损刚好达 5000 → 触发（>= 阈值）")
+    func dailyMaxLossAtThreshold() {
+        let rule = DisciplineRule(kind: .dailyMaxLoss, threshold: 5000)
+        let v = DisciplineEvaluator.evaluateTrades(rules: [rule], todayTrades: [], dailyRealizedPnL: -5000, now: now)
+        #expect(v.count == 1)
+    }
+
+    @Test("maxAddPositions · 同合约同方向 4 次开仓超过 3 次阈值 → warning")
+    func maxAddPositionsTriggered() {
+        let rule = DisciplineRule(kind: .maxAddPositions, threshold: 3)
+        let trades = (1...4).map { makeTrade("O-\($0)", dir: .buy, offset: .open) }
+        let v = DisciplineEvaluator.evaluateTrades(rules: [rule], todayTrades: trades, dailyRealizedPnL: 0, now: now)
+        #expect(v.count == 1)
+        #expect(v[0].severity == .warning)
+        #expect(v[0].message.contains("rb2410"))
+        #expect(v[0].message.contains("买"))
+        #expect(v[0].message.contains("4"))
+    }
+
+    @Test("maxAddPositions · 平仓清零后再开 3 次不算超阈值")
+    func maxAddPositionsClosesReset() {
+        let rule = DisciplineRule(kind: .maxAddPositions, threshold: 3)
+        let trades: [TradeRecord] = [
+            makeTrade("O-1", dir: .buy, offset: .open),
+            makeTrade("O-2", dir: .buy, offset: .open),
+            makeTrade("O-3", dir: .buy, offset: .close),     // 平仓清零
+            makeTrade("O-4", dir: .buy, offset: .open),       // 重新开始
+            makeTrade("O-5", dir: .buy, offset: .open),
+            makeTrade("O-6", dir: .buy, offset: .open),       // 累计 3 次 · 不超
+        ]
+        #expect(DisciplineEvaluator.evaluateTrades(rules: [rule], todayTrades: trades, dailyRealizedPnL: 0, now: now).isEmpty)
+    }
+
+    @Test("maxAddPositions · 多空双方向独立计数")
+    func maxAddPositionsBidirectional() {
+        let rule = DisciplineRule(kind: .maxAddPositions, threshold: 3)
+        let trades: [TradeRecord] = [
+            makeTrade("O-1", dir: .buy, offset: .open),
+            makeTrade("O-2", dir: .buy, offset: .open),
+            makeTrade("O-3", dir: .sell, offset: .open),
+            makeTrade("O-4", dir: .sell, offset: .open),
+        ]
+        // 买方 2 次 · 卖方 2 次 · 都不超阈值
+        #expect(DisciplineEvaluator.evaluateTrades(rules: [rule], todayTrades: trades, dailyRealizedPnL: 0, now: now).isEmpty)
+    }
+
+    @Test("evaluateTrades · 持仓类规则（stopLossPercent）跳过 不报错")
+    func tradesEvalSkipsPositionRules() {
+        let rules = [
+            DisciplineRule(kind: .stopLossPercent, threshold: 2.0),
+            DisciplineRule(kind: .maxHoldingMinutes, threshold: 30),
+        ]
+        let trades = [makeTrade("O-1")]
+        #expect(DisciplineEvaluator.evaluateTrades(rules: rules, todayTrades: trades, dailyRealizedPnL: -10000, now: now).isEmpty)
+    }
 }

@@ -45,7 +45,34 @@ public enum DisciplineEvaluator {
             case .maxHoldingMinutes:
                 result.append(contentsOf: evalHoldingTime(rule: rule, positions: positions, now: now))
             case .maxAddPositions, .dailyMaxLoss, .maxDailyTrades:
-                continue  // batch3 trades 相关 · 走 evaluateTrades（本 batch 暂未实现）
+                continue  // 走 evaluateTrades
+            }
+        }
+        return result
+    }
+
+    /// v15.23 batch3 · 评估 trades 相关规则（maxDailyTrades / dailyMaxLoss / maxAddPositions）
+    /// - rules：候选规则集 · 自动跳过 disabled 与不属于 trades 类的 kind
+    /// - todayTrades：今日成交记录（调用方按 tradeTime 过滤好）
+    /// - dailyRealizedPnL：今日已实现盈亏（盈利为正 · 亏损为负 · 调用方算好）
+    /// - now：评估时刻
+    public static func evaluateTrades(
+        rules: [DisciplineRule],
+        todayTrades: [TradeRecord],
+        dailyRealizedPnL: Decimal,
+        now: Date
+    ) -> [DisciplineViolation] {
+        var result: [DisciplineViolation] = []
+        for rule in rules where rule.enabled {
+            switch rule.kind {
+            case .maxDailyTrades:
+                result.append(contentsOf: evalMaxDailyTrades(rule: rule, trades: todayTrades, now: now))
+            case .dailyMaxLoss:
+                result.append(contentsOf: evalDailyMaxLoss(rule: rule, dailyPnL: dailyRealizedPnL, now: now))
+            case .maxAddPositions:
+                result.append(contentsOf: evalMaxAddPositions(rule: rule, trades: todayTrades, now: now))
+            case .stopLossPercent, .maxHoldingMinutes:
+                continue  // 走 evaluatePositions
             }
         }
         return result
@@ -94,6 +121,69 @@ public enum DisciplineEvaluator {
                 occurredAt: now,
                 severity: .warning,
                 message: msg
+            ))
+        }
+        return result
+    }
+
+    // MARK: - trades 类规则（batch3）
+
+    private static func evalMaxDailyTrades(rule: DisciplineRule,
+                                           trades: [TradeRecord],
+                                           now: Date) -> [DisciplineViolation] {
+        let count = trades.count
+        let threshold = (rule.threshold as NSDecimalNumber).intValue
+        guard count > threshold else { return [] }
+        return [DisciplineViolation(
+            ruleID: rule.id,
+            ruleKind: rule.kind,
+            occurredAt: now,
+            severity: .warning,
+            message: "今日已交易 \(count) 笔 超过上限 \(threshold) 笔",
+            relatedOrderRefs: trades.map { $0.orderRef }
+        )]
+    }
+
+    private static func evalDailyMaxLoss(rule: DisciplineRule,
+                                         dailyPnL: Decimal,
+                                         now: Date) -> [DisciplineViolation] {
+        let lossAmount = -dailyPnL  // 盈利为负 · 亏损为正
+        guard lossAmount >= rule.threshold else { return [] }
+        return [DisciplineViolation(
+            ruleID: rule.id,
+            ruleKind: rule.kind,
+            occurredAt: now,
+            severity: .error,
+            message: "今日累计亏损 \(formatDecimal2(lossAmount)) 元 超过上限 \(formatDecimal2(rule.threshold)) 元"
+        )]
+    }
+
+    /// 同合约同方向连续开仓累计 · 平仓清零（避免开-平-开-平也算"加仓"）
+    private static func evalMaxAddPositions(rule: DisciplineRule,
+                                            trades: [TradeRecord],
+                                            now: Date) -> [DisciplineViolation] {
+        var counts: [String: Int] = [:]   // key = "instrumentID:directionRaw"
+        for trade in trades {
+            let key = "\(trade.instrumentID):\(trade.direction.rawValue)"
+            if trade.offsetFlag == .open {
+                counts[key, default: 0] += 1
+            } else {
+                counts[key] = 0   // 平仓清零（含 close/closeToday/closeYesterday/forceClose）
+            }
+        }
+        let threshold = (rule.threshold as NSDecimalNumber).intValue
+        var result: [DisciplineViolation] = []
+        for (key, count) in counts where count > threshold {
+            let parts = key.split(separator: ":")
+            let instrumentID = parts.first.map(String.init) ?? "unknown"
+            let dirRaw = parts.count > 1 ? String(parts[1]) : ""
+            let dirText = Direction(rawValue: dirRaw)?.displayName ?? dirRaw
+            result.append(DisciplineViolation(
+                ruleID: rule.id,
+                ruleKind: rule.kind,
+                occurredAt: now,
+                severity: .warning,
+                message: "\(instrumentID) \(dirText) 当日加仓 \(count) 次 超过上限 \(threshold) 次"
             ))
         }
         return result

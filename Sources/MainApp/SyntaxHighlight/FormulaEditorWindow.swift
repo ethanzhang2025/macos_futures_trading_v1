@@ -821,6 +821,7 @@ public struct FormulaEditorWindow: View {
             let tokenCount = MaiLangSyntaxHighlighter.tokenize(sourceText).count
             Text("token \(tokenCount)").font(.caption).foregroundColor(.secondary)
             // v15.22 batch5 · 编译状态 chip
+            // v15.23 batch124 · 编译失败时加「复制错误」按钮（trader 直接粘贴求助 ChatGPT）
             if let result = compileResult {
                 Image(systemName: compileSucceeded ? "checkmark.circle.fill" : "xmark.octagon.fill")
                     .foregroundColor(compileSucceeded ? .green : .red)
@@ -829,6 +830,19 @@ public struct FormulaEditorWindow: View {
                     .foregroundColor(compileSucceeded ? .green : .red)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                if !compileSucceeded {
+                    Button {
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(result, forType: .string)
+                        statusMessage = "已复制错误信息（\(result.count) 字符）"
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("复制错误信息（粘贴到搜索/AI 求助）")
+                }
             }
             Spacer()
             Text(statusMessage)

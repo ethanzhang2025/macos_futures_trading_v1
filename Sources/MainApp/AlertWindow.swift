@@ -193,9 +193,18 @@ struct AlertWindow: View {
         // v15.23 batch193 · 帮助面板（⌘⇧? · 主窗口 UX 一致补完）
         .sheet(isPresented: $showHelpSheet) { helpSheet }
         .background(
-            Button("") { showHelpSheet = true }
-                .keyboardShortcut("?", modifiers: [.command, .shift])
-                .opacity(0)
+            Group {
+                Button("") { showHelpSheet = true }
+                    .keyboardShortcut("?", modifiers: [.command, .shift])
+                // v15.23 batch204 · ⌘1/⌘2/⌘3 切 tab（与 JournalWindow/TrainingWindow 模式一致）
+                Button("") { selectedTab = .list }
+                    .keyboardShortcut("1", modifiers: [.command])
+                Button("") { selectedTab = .history }
+                    .keyboardShortcut("2", modifiers: [.command])
+                Button("") { selectedTab = .console }
+                    .keyboardShortcut("3", modifiers: [.command])
+            }
+            .opacity(0)
         )
     }
 
@@ -203,7 +212,10 @@ struct AlertWindow: View {
 
     private static let helpGroups: [(String, [(String, String)])] = [
         ("📑 Tab 切换", [
-            ("段控制", "列表 / 历史（顶部 Picker）"),
+            ("⌘1 (batch204)", "切到「预警列表」"),
+            ("⌘2 (batch204)", "切到「触发历史」"),
+            ("⌘3 (batch204)", "切到「通知日志」"),
+            ("段控制 Picker", "顶部 segmented picker 直接点击"),
         ]),
         ("➕ 添加 / 编辑预警", [
             ("➕ 按钮", "添加新预警（弹 sheet · 价格 / 指标 / 区间 / 复合 4 类条件）"),

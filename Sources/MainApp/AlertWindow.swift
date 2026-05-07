@@ -89,6 +89,9 @@ struct AlertWindow: View {
     @State private var alertSearchText: String = ""
     @FocusState private var isAlertSearchFocused: Bool
 
+    /// v15.23 batch193 · 帮助面板（⌘⇧? · 主窗口 UX 一致补完）
+    @State private var showHelpSheet: Bool = false
+
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
     @Environment(\.alertEvaluator) private var alertEvaluator
@@ -186,6 +189,78 @@ struct AlertWindow: View {
                 }
             }
         }
+        // v15.23 batch193 · 帮助面板（⌘⇧? · 主窗口 UX 一致补完）
+        .sheet(isPresented: $showHelpSheet) { helpSheet }
+        .background(
+            Button("") { showHelpSheet = true }
+                .keyboardShortcut("?", modifiers: [.command, .shift])
+                .opacity(0)
+        )
+    }
+
+    // MARK: - v15.23 batch193 · 帮助面板（与 ReviewWindow / WorkspaceWindow / JournalWindow / WatchlistWindow 模式一致）
+
+    private static let helpGroups: [(String, [(String, String)])] = [
+        ("📑 Tab 切换", [
+            ("段控制", "列表 / 历史（顶部 Picker）"),
+        ]),
+        ("➕ 添加 / 编辑预警", [
+            ("➕ 按钮", "添加新预警（弹 sheet · 价格 / 指标 / 区间 / 复合 4 类条件）"),
+            ("contextMenu", "编辑 / 暂停 / 复制 / 删除"),
+            ("跨窗口创建", "ChartScene 画线后右键创建预警（v13.18+）"),
+        ]),
+        ("🔍 搜索 / 筛选", [
+            ("⌘F", "聚焦搜索框（list 或 history tab · 自动判断当前）"),
+            ("Esc", "清空搜索 + 选择"),
+            ("instrument filter", "WatchlistWindow / ChartScene 触发跨窗口 filter（v15.21 batch128）"),
+        ]),
+        ("📦 批量操作", [
+            ("AlertBatchOperator", "批量启用 / 暂停 / setChannels / setCooldown（v15.21 batch127）"),
+            ("contextMenu 多选", "右键批量操作"),
+        ]),
+        ("📊 统计与反馈", [
+            ("header stat", "总数 / 活跃 / 已触发 / 已暂停 + 24h / 本周触发活跃度"),
+            ("toast 反馈", "添加 / 删除 / 暂停 等操作 toast 提示（v15.21 batch134）"),
+            ("测距三态 toast", "触发 / 关闭 / 误差超限"),
+        ]),
+        ("⌨️ 通用", [
+            ("⌘⇧?", "唤出本帮助面板（v15.23 batch193）"),
+        ]),
+    ]
+
+    @ViewBuilder
+    private var helpSheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("⌨️ 预警面板全功能").font(.title2).bold()
+                Spacer()
+                Button("关闭") { showHelpSheet = false }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(Self.helpGroups, id: \.0) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(group.0).font(.headline)
+                            ForEach(group.1, id: \.0) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(item.0)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 200, alignment: .leading)
+                                    Text(item.1).font(.system(size: 12))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 580, idealWidth: 680, minHeight: 480, idealHeight: 600)
     }
 
     // MARK: - 顶部 stats

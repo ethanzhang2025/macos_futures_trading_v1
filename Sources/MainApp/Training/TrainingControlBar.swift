@@ -80,9 +80,22 @@ struct TrainingControlBar: View {
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(violationColor)
             } else {
-                Text(idleHint)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                // v15.23 batch147 · idle 时显示今日已练（次数 + 总时长）替代单一 idleHint
+                let today = todayTally
+                if today.count > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sun.max.fill")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 11))
+                        Text("今日已练 \(today.count) 次 · \(today.minutes) 分")
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    Text(idleHint)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
             Spacer()
@@ -339,6 +352,15 @@ struct TrainingControlBar: View {
         guard let d = Double(pendingBalance.trimmingCharacters(in: .whitespaces)) else { return nil }
         guard d.isFinite, d > 0 else { return nil }
         return Decimal(d)
+    }
+
+    /// v15.23 batch147 · 今日训练 tally（次数 + 总分钟数）· idle 时 ControlBar 显示
+    private var todayTally: (count: Int, minutes: Int) {
+        let cal = Calendar(identifier: .gregorian)
+        let startOfToday = cal.startOfDay(for: Date())
+        let todays = viewModel.log.sessions.filter { $0.startedAt >= startOfToday }
+        let mins = todays.map { $0.durationMinutes }.reduce(0, +)
+        return (todays.count, mins)
     }
 
     private var elapsedSeconds: Int {

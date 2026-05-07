@@ -55,7 +55,8 @@ struct TrainingScoreSheet: View {
                     } label: {
                         Label("再练同形态", systemImage: "arrow.clockwise")
                     }
-                    .help("立即开始一次同形态训练（\(pattern.emoji) \(pattern.displayName)）")
+                    .keyboardShortcut("r", modifiers: [.command])
+                    .help("立即开始一次同形态训练（⌘R · \(pattern.emoji) \(pattern.displayName)）")
                 }
                 // v15.23 batch155 · 随机形态训练（探索弱项 · trader 跳出舒适区）
                 if let cb = onRetrain {
@@ -67,7 +68,8 @@ struct TrainingScoreSheet: View {
                     } label: {
                         Label("随机练", systemImage: "die.face.5")
                     }
-                    .help("随机选一种形态（避开当前形态）训练 · 探索弱项 / 跳出舒适区")
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .help("随机选一种形态（⌘⇧R · 避开当前形态）· 探索弱项")
                 }
                 // v15.23 batch133 · 复制本次分析为 markdown（trader 求点评 / 笔记）
                 Button {
@@ -79,7 +81,8 @@ struct TrainingScoreSheet: View {
                 } label: {
                     Label("复制分析", systemImage: "doc.on.doc")
                 }
-                .help("复制本次训练详细 markdown · 粘贴到笔记 / 师傅 / AI 求点评")
+                .keyboardShortcut("c", modifiers: [.command])
+                .help("复制本次训练详细 markdown（⌘C · 粘贴到笔记 / AI 求点评）")
                 // v15.23 batch146 · 截图为 PNG 分享（朋友圈晒分）
                 Button {
                     copyScreenshotToPasteboard()
@@ -87,7 +90,8 @@ struct TrainingScoreSheet: View {
                 } label: {
                     Label("截图分享", systemImage: "camera")
                 }
-                .help("把当前评分卡截图为 PNG · 复制到剪贴板 · 直接粘贴到微信/朋友圈")
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .help("评分卡截图为 PNG（⌘⇧C · 粘贴到微信/朋友圈）")
                 // v15.23 batch150 · 反馈提示（3 秒消失）
                 if let feedback = actionFeedback {
                     Text(feedback)

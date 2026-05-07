@@ -195,19 +195,26 @@ public struct FormulaEditorWindow: View {
             }
         )
         // v15.22 batch37 · 公式大纲面板（变量定义 + 行号 · 点击跳转）
+        // v15.23 batch120 · 加 lint warnings Section · 一站式结构 + 健康度
         .sheet(isPresented: $showOutlineSheet) {
+            let outline = MaiLangOutline.parse(sourceText)
+            let lintWarns = MaiLangLint.analyze(sourceText)
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text("📋 公式大纲").font(.title2).bold()
-                    let outline = MaiLangOutline.parse(sourceText)
-                    Text("(\(outline.count) 个变量定义)").font(.caption).foregroundColor(.secondary)
+                    Text("(\(outline.count) 变量")
+                        .font(.caption).foregroundColor(.secondary)
+                    if !lintWarns.isEmpty {
+                        Text("· \(lintWarns.count) 警告")
+                            .font(.caption).foregroundColor(.orange)
+                    }
+                    Text(")").font(.caption).foregroundColor(.secondary)
                     Spacer()
                     Button("关闭") { showOutlineSheet = false }.keyboardShortcut(.cancelAction)
                 }
                 .padding(12)
                 Divider()
-                let outline = MaiLangOutline.parse(sourceText)
-                if outline.isEmpty {
+                if outline.isEmpty && lintWarns.isEmpty {
                     Spacer()
                     HStack { Spacer(); Text("公式中暂无变量定义\n（NAME:=expr 或 NAME:expr,attr;）")
                         .multilineTextAlignment(.center)
@@ -215,30 +222,62 @@ public struct FormulaEditorWindow: View {
                         .font(.callout); Spacer() }
                     Spacer()
                 } else {
-                    List(outline, id: \.line) { entry in
-                        HStack {
-                            Text("\(entry.line)").font(.caption.monospacedDigit())
-                                .foregroundColor(.secondary)
-                                .frame(width: 32, alignment: .trailing)
-                            Text(entry.name)
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundColor(.accentColor)
-                            Text(entry.isOutput ? "(输出)" : "(中间)")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Button("跳转") {
-                                pendingGotoLine = entry.line
-                                showOutlineSheet = false
-                                statusMessage = "跳转到 \(entry.name) · 第 \(entry.line) 行"
+                    List {
+                        if !outline.isEmpty {
+                            Section(header: Text("变量定义").font(.headline)) {
+                                ForEach(outline, id: \.line) { entry in
+                                    HStack {
+                                        Text("\(entry.line)").font(.caption.monospacedDigit())
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 32, alignment: .trailing)
+                                        Text(entry.name)
+                                            .font(.system(.body, design: .monospaced))
+                                            .foregroundColor(.accentColor)
+                                        Text(entry.isOutput ? "(输出)" : "(中间)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                        Button("跳转") {
+                                            pendingGotoLine = entry.line
+                                            showOutlineSheet = false
+                                            statusMessage = "跳转到 \(entry.name) · 第 \(entry.line) 行"
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
+                                }
                             }
-                            .buttonStyle(.borderless)
+                        }
+                        if !lintWarns.isEmpty {
+                            Section(header: HStack {
+                                Text("⚠ Lint 警告").font(.headline).foregroundColor(.orange)
+                                Text("(\(lintWarns.count))").font(.caption).foregroundColor(.secondary)
+                            }) {
+                                ForEach(Array(lintWarns.enumerated()), id: \.offset) { _, warn in
+                                    HStack {
+                                        Text("\(warn.line)").font(.caption.monospacedDigit())
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 32, alignment: .trailing)
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                            .font(.system(size: 11))
+                                        Text(warn.message)
+                                            .font(.system(size: 12))
+                                        Spacer()
+                                        Button("跳转") {
+                                            pendingGotoLine = warn.line
+                                            showOutlineSheet = false
+                                            statusMessage = "跳转到第 \(warn.line) 行 · \(warn.message)"
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
+                                }
+                            }
                         }
                     }
                     .listStyle(.sidebar)
                 }
             }
-            .frame(minWidth: 420, idealWidth: 480, minHeight: 460, idealHeight: 600)
+            .frame(minWidth: 460, idealWidth: 540, minHeight: 460, idealHeight: 600)
         }
         // v15.22 batch34 · 快捷键帮助面板（22+ 快捷键 · 按主题分组）
         .sheet(isPresented: $showHelpSheet) {

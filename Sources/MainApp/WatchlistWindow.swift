@@ -80,6 +80,9 @@ struct WatchlistWindow: View {
     @State private var aggregatedSearchText: String = ""
     @FocusState private var isAggregatedSearchFocused: Bool
 
+    /// v15.23 batch192 · 帮助面板（⌘⇧? · 主窗口 UX 一致补完）
+    @State private var showHelpSheet: Bool = false
+
     /// v15.20 batch59 · 排序字段（v15.20 batch60 · @AppStorage 持久化 · 重启保留）
     /// 默认 .manual 保持用户拖拽顺序 · 反序失败 fallback .manual
     @AppStorage("viewState.v1.watchlist.sortFieldRaw") private var sortFieldRaw: String = WatchlistSortField.manual.rawValue
@@ -195,6 +198,78 @@ struct WatchlistWindow: View {
         } message: { id in
             Text("\(id) 暂不支持主图查看 · 当前主图仅支持 \(MarketDataPipeline.supportedContracts.joined(separator: " / "))")
         }
+        // v15.23 batch192 · 帮助面板（⌘⇧? · 主窗口 UX 一致补完）
+        .sheet(isPresented: $showHelpSheet) { helpSheet }
+        .background(
+            Button("") { showHelpSheet = true }
+                .keyboardShortcut("?", modifiers: [.command, .shift])
+                .opacity(0)
+        )
+    }
+
+    // MARK: - v15.23 batch192 · 帮助面板（与 ReviewWindow / WorkspaceWindow / JournalWindow 模式一致）
+
+    private static let helpGroups: [(String, [(String, String)])] = [
+        ("📁 分组管理", [
+            ("⌘⇧G", "添加分组"),
+            ("⌘1-9", "切换 sidebar 第 N 个分组（v15.21 batch110）"),
+            ("contextMenu", "重命名 / 删除分组"),
+            ("拖拽排序", "同一分组内合约拖动重排"),
+        ]),
+        ("📥 加合约 / 导入", [
+            ("⌘⇧I", "添加合约到当前分组"),
+            ("⌘⇧V", "快速粘贴合约（任意分隔符 · 自动解析）"),
+            ("导入 .txt / .csv", "文华格式 / 自由表格 · 双击末尾空白也可加合约（v15.21 batch88）"),
+            ("跨窗口加合约", "ChartScene → 自选 通过 .watchlistAddInstrument 通知（v15.21 batch131）"),
+        ]),
+        ("📊 报价 / 排序", [
+            ("⌘R", "立即刷新报价（不等 5s 周期）"),
+            ("排序", "manual / 涨幅 ↓ / 涨幅 ↑ / 价格 / 持仓 / 成交（持久化）"),
+            ("聚合视图", "跨分组合并 · 一键扫盘涨幅榜（v15.20 batch61/76）"),
+        ]),
+        ("🔍 搜索 / 筛选", [
+            ("⌘F", "聚焦聚合视图搜索框（v15.21 batch101 · 合约名 contains）"),
+            ("Esc", "清空搜索"),
+        ]),
+        ("⌨️ 通用", [
+            ("⌘⇧?", "唤出本帮助面板（v15.23 batch192）"),
+            ("行 contextMenu", "ChartScene 主图打开 / 加预警 / 复制行 / 跨窗口联动"),
+        ]),
+    ]
+
+    @ViewBuilder
+    private var helpSheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("⌨️ 自选窗口全功能").font(.title2).bold()
+                Spacer()
+                Button("关闭") { showHelpSheet = false }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(Self.helpGroups, id: \.0) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(group.0).font(.headline)
+                            ForEach(group.1, id: \.0) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(item.0)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 180, alignment: .leading)
+                                    Text(item.1).font(.system(size: 12))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 580, idealWidth: 680, minHeight: 480, idealHeight: 600)
     }
 
     private var deleteConfirmBinding: Binding<Bool> {

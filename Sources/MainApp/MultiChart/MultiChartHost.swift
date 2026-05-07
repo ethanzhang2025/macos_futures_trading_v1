@@ -733,14 +733,23 @@ struct MultiChartHost: View {
 
     /// v15.23 batch54 · 单 cell 右键菜单
     /// v15.23 batch91 · 加水平参考线快捷（标当前 close / 清空所有）
+    /// v15.23 batch156 · 加 lock toggle · 锁定时隐藏 swap/copy/reset
     @ViewBuilder
     private func cellContextMenu(idx: Int) -> some View {
         let total = effectivePreset.maxWindows
+        let isLocked = cellAt(idx).isLocked
         Button {
             toggleFocus(idx: idx)
         } label: {
             Label(focusedIdx == idx ? "退出聚焦" : "聚焦此 cell（双击）",
                   systemImage: focusedIdx == idx ? "viewfinder.slash" : "viewfinder")
+        }
+        // v15.23 batch156 · 锁定 toggle
+        Button {
+            updateCell(idx) { $0.isLocked.toggle() }
+        } label: {
+            Label(isLocked ? "解锁 cell" : "锁定 cell（防误操作）",
+                  systemImage: isLocked ? "lock.open" : "lock.fill")
         }
         Divider()
         // v15.23 batch91 · 水平参考线（trader 标支撑/压力位）
@@ -756,37 +765,40 @@ struct MultiChartHost: View {
                 Label("清空所有水平线（\(cellAt(idx).horizontalLines.count)）", systemImage: "xmark.circle")
             }
         }
-        Divider()
-        // 与下一个 cell 交换
-        if total > 1 {
-            Button {
-                swapCells(idx, with: (idx + 1) % total)
-            } label: {
-                Label("与 #\((idx + 1) % total + 1) 交换", systemImage: "arrow.left.arrow.right")
+        // 锁定时下面 swap/copy/reset 全部隐藏（防误操作）
+        if !isLocked {
+            Divider()
+            // 与下一个 cell 交换
+            if total > 1 {
+                Button {
+                    swapCells(idx, with: (idx + 1) % total)
+                } label: {
+                    Label("与 #\((idx + 1) % total + 1) 交换", systemImage: "arrow.left.arrow.right")
+                }
+                Button {
+                    swapCells(idx, with: (idx - 1 + total) % total)
+                } label: {
+                    Label("与 #\((idx - 1 + total) % total + 1) 交换", systemImage: "arrow.left.arrow.right.circle")
+                }
             }
-            Button {
-                swapCells(idx, with: (idx - 1 + total) % total)
-            } label: {
-                Label("与 #\((idx - 1 + total) % total + 1) 交换", systemImage: "arrow.left.arrow.right.circle")
-            }
-        }
-        // 复制到指定 slot（下拉子菜单）
-        if total > 1 {
-            Menu("复制配置到…") {
-                ForEach(0..<total, id: \.self) { target in
-                    if target != idx {
-                        Button("Cell #\(target + 1)（\(cellAt(target).instrumentID) · \(cellAt(target).period.rawValue)）") {
-                            copyCell(from: idx, to: target)
+            // 复制到指定 slot（下拉子菜单）
+            if total > 1 {
+                Menu("复制配置到…") {
+                    ForEach(0..<total, id: \.self) { target in
+                        if target != idx {
+                            Button("Cell #\(target + 1)（\(cellAt(target).instrumentID) · \(cellAt(target).period.rawValue)）") {
+                                copyCell(from: idx, to: target)
+                            }
                         }
                     }
                 }
             }
-        }
-        Divider()
-        Button(role: .destructive) {
-            resetCellToDefault(idx)
-        } label: {
-            Label("重置此 cell", systemImage: "arrow.counterclockwise")
+            Divider()
+            Button(role: .destructive) {
+                resetCellToDefault(idx)
+            } label: {
+                Label("重置此 cell", systemImage: "arrow.counterclockwise")
+            }
         }
     }
 
@@ -991,7 +1003,8 @@ struct MultiChartHost: View {
         ("🔍 cell 操作", [
             ("双击 cell", "聚焦该 cell（临时全屏 · 不动 preset）"),
             ("Esc / 再次双击", "退出聚焦"),
-            ("右键 cell", "聚焦/交换/复制配置/重置 4 类操作"),
+            ("右键 cell", "聚焦/锁定/交换/复制配置/重置 5 类操作"),
+            ("锁定 cell（batch156）", "右键 → 锁定 · cell toolbar 左侧出现 🔒 · 隐藏 swap/copy/reset 防误操作 · trader 配好黄金组合后保护"),
             ("点击 #↗ 按钮", "推送到主 ChartScene 深入分析"),
             ("点击 cell 合约名/周期", "Menu 切换"),
             ("点击副图图标（batch79-137）", "切换副图：量 / KDJ / MACD / RSI / OI / ATR / CCI / W%R / 无（主图全屏）"),

@@ -215,6 +215,13 @@ struct MultiChartCellView: View {
 
     private var cellToolbar: some View {
         HStack(spacing: 4) {
+            // v15.23 batch156 · 锁定 cell 视觉指示（左侧 lock icon）
+            if state.isLocked {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.orange)
+                    .help("已锁定 · 右键解锁")
+            }
             Menu {
                 ForEach(Self.instrumentPool, id: \.self) { id in
                     Button {

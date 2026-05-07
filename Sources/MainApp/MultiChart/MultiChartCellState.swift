@@ -71,6 +71,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     /// v15.23 batch149 · Pivot Points 枢轴点（5 线 R2/R1/PP/S1/S2 · 短线支撑/压力 · 默认关）
     /// 简化版：用 bars[0] 作"前一周期" H/L/C 计算 · 区间内静态参考线
     var showPivotPoints: Bool
+    /// v15.23 batch156 · 锁定 cell 防误操作（context menu 隐藏 swap/copy/reset）
+    var isLocked: Bool
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
@@ -86,7 +88,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
          showLimitLines: Bool = false,
          showVWAP: Bool = false,
          showFibonacci: Bool = false,
-         showPivotPoints: Bool = false) {
+         showPivotPoints: Bool = false,
+         isLocked: Bool = false) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
@@ -102,11 +105,12 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.showVWAP = showVWAP
         self.showFibonacci = showFibonacci
         self.showPivotPoints = showPivotPoints
+        self.isLocked = isLocked
     }
 
     /// Codable · 老 cellsJSON 缺新字段时按合理默认值
     enum CodingKeys: String, CodingKey {
-        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels, showLimitLines, showVWAP, showFibonacci, showPivotPoints
+        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels, showLimitLines, showVWAP, showFibonacci, showPivotPoints, isLocked
     }
 
     init(from decoder: Decoder) throws {
@@ -131,6 +135,7 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.showVWAP = try c.decodeIfPresent(Bool.self, forKey: .showVWAP) ?? false
         self.showFibonacci = try c.decodeIfPresent(Bool.self, forKey: .showFibonacci) ?? false
         self.showPivotPoints = try c.decodeIfPresent(Bool.self, forKey: .showPivotPoints) ?? false
+        self.isLocked = try c.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
     }
 }
 

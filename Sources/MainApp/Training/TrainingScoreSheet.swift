@@ -63,6 +63,13 @@ struct TrainingScoreSheet: View {
                     Label("复制分析", systemImage: "doc.on.doc")
                 }
                 .help("复制本次训练详细 markdown · 粘贴到笔记 / 师傅 / AI 求点评")
+                // v15.23 batch146 · 截图为 PNG 分享（朋友圈晒分）
+                Button {
+                    copyScreenshotToPasteboard()
+                } label: {
+                    Label("截图分享", systemImage: "camera")
+                }
+                .help("把当前评分卡截图为 PNG · 复制到剪贴板 · 直接粘贴到微信/朋友圈")
                 Spacer()
                 Button("关闭") { onDismiss() }
                     .keyboardShortcut(.defaultAction)
@@ -282,6 +289,32 @@ struct TrainingScoreSheet: View {
         case .C: return .orange
         case .D: return .red
         }
+    }
+
+    // MARK: - v15.23 batch146 · 评分卡截图分享
+
+    /// 渲染 header + scoreCard + summaryBlock 为 PNG · 写入剪贴板
+    private func copyScreenshotToPasteboard() {
+        let shareCard = VStack(alignment: .leading, spacing: 14) {
+            header
+            Divider()
+            scoreCard
+            Divider()
+            summaryBlock
+        }
+        .padding(20)
+        .frame(width: 480)
+        .background(Color(NSColor.windowBackgroundColor))
+
+        let renderer = ImageRenderer(content: shareCard)
+        renderer.scale = 2  // retina
+        guard let nsImage = renderer.nsImage,
+              let tiff = nsImage.tiffRepresentation,
+              let bmp = NSBitmapImageRep(data: tiff),
+              let png = bmp.representation(using: .png, properties: [:]) else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setData(png, forType: .png)
     }
 }
 

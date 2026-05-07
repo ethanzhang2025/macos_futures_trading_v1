@@ -33,6 +33,8 @@ final class TrainingViewModel: ObservableObject {
     @Published var sessionScenarioName: String = ""
     /// v15.23 batch118 · 训练形态（preset 启动时记录 · history panel thumbnail 用）
     @Published var sessionScenarioPattern: TrainingScenarioPattern? = nil
+    /// v15.23 batch138 · 推荐训练时长（来自 preset · 用于 ControlBar 进度条）· 自定义训练为 nil
+    @Published var sessionRecommendedMinutes: Int? = nil
     @Published var liveViolations: [DisciplineViolation] = []
     /// v15.23 batch132 · 「再练同形态」请求（score sheet → controlBar 监听 · 触发后清回 nil）
     @Published var pendingRetrainPattern: TrainingScenarioPattern? = nil
@@ -74,11 +76,13 @@ final class TrainingViewModel: ObservableObject {
     // MARK: - Session 控制（batch11 详细实现 · 此处仅占位接口）
 
     func startSession(initialBalance: Decimal, scenarioName: String,
-                      scenarioPattern: TrainingScenarioPattern? = nil) {
+                      scenarioPattern: TrainingScenarioPattern? = nil,
+                      recommendedMinutes: Int? = nil) {
         sessionStartedAt = Date()
         sessionInitialBalance = initialBalance
         sessionScenarioName = scenarioName
         sessionScenarioPattern = scenarioPattern
+        sessionRecommendedMinutes = recommendedMinutes
         liveViolations.removeAll()
     }
 
@@ -103,6 +107,7 @@ final class TrainingViewModel: ObservableObject {
         sessionInitialBalance = 0
         sessionScenarioName = ""
         sessionScenarioPattern = nil
+        sessionRecommendedMinutes = nil
         liveViolations.removeAll()
     }
 

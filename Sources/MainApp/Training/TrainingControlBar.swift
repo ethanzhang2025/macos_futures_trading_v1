@@ -43,6 +43,24 @@ struct TrainingControlBar: View {
                     .foregroundColor(.accentColor)
                     .frame(minWidth: 70, alignment: .leading)
 
+                // v15.23 batch138 · 推荐时长进度条（仅 preset session · 自定义无）
+                if let rec = viewModel.sessionRecommendedMinutes, rec > 0 {
+                    let elapsedMin = elapsedSeconds / 60
+                    let progress = min(Double(elapsedMin) / Double(rec), 1.5)  // 超时 1.5x cap
+                    let isOvertime = elapsedMin > rec
+                    HStack(spacing: 4) {
+                        ProgressView(value: min(progress, 1.0), total: 1.0)
+                            .frame(width: 80)
+                            .tint(isOvertime ? .orange : .accentColor)
+                        Text(isOvertime
+                             ? "\(elapsedMin)/\(rec)分 ⚠超时"
+                             : "\(elapsedMin)/\(rec)分")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(isOvertime ? .orange : .secondary)
+                    }
+                    .help("推荐时长 \(rec) 分钟 · 已练 \(elapsedMin) 分 · 超时表示可结束")
+                }
+
                 Text("违规 \(errorCount) · 警告 \(warningCount)")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(violationColor)
@@ -273,7 +291,8 @@ struct TrainingControlBar: View {
         }
         viewModel.startSession(initialBalance: balance,
                                scenarioName: pendingScenario,
-                               scenarioPattern: selectedPreset?.pattern)
+                               scenarioPattern: selectedPreset?.pattern,
+                               recommendedMinutes: selectedPreset?.recommendedDurationMinutes)
         showStart = false
         flash("训练已开始 · 实时纪律评估生效")
     }
@@ -307,9 +326,13 @@ struct TrainingControlBar: View {
         return Decimal(d)
     }
 
+    private var elapsedSeconds: Int {
+        guard let start = viewModel.sessionStartedAt else { return 0 }
+        return Int(nowTick.timeIntervalSince(start))
+    }
+
     private var elapsedText: String {
-        guard let start = viewModel.sessionStartedAt else { return "00:00" }
-        let secs = Int(nowTick.timeIntervalSince(start))
+        let secs = elapsedSeconds
         let m = secs / 60
         let s = secs % 60
         return String(format: "%02d:%02d", m, s)

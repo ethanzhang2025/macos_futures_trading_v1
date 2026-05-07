@@ -61,6 +61,16 @@ public struct FormulaEditorWindow: View {
     @State private var showOutlineSheet: Bool = false
     /// v15.23 batch139 · outline sheet 搜索框 · filter 变量名（大小写不敏感）
     @State private var outlineSearchQuery: String = ""
+    /// v15.23 batch140 · outline sheet 仅显示输出变量 toggle
+    @State private var outlineShowOutputsOnly: Bool = false
+    /// v15.23 batch140 · outline sheet 排序键
+    @State private var outlineSortKey: OutlineSortKey = .lineAsc
+
+    enum OutlineSortKey: String, CaseIterable {
+        case lineAsc = "行号 ↑"
+        case nameAsc = "变量名 A→Z"
+        case typeFirst = "输出在前"
+    }
 
     // v15.23 batch43-44 · 多 tab 支持（多公式同窗口编辑 · 切换不丢内容）
     /// 持久化：tabs 数组 JSON（除 active tab 内容由 sourceText 镜像）
@@ -240,8 +250,25 @@ public struct FormulaEditorWindow: View {
             let allLintWarns = MaiLangLint.analyze(sourceText)
             // v15.23 batch139 · 搜索过滤（query 大小写不敏感 · 命中变量名/警告 message）
             let q = outlineSearchQuery.trimmingCharacters(in: .whitespaces).lowercased()
-            let outline = q.isEmpty ? allOutline
+            var filteredOutline = q.isEmpty ? allOutline
                           : allOutline.filter { $0.name.lowercased().contains(q) }
+            // v15.23 batch140 · 仅输出 toggle
+            if outlineShowOutputsOnly {
+                filteredOutline = filteredOutline.filter { $0.isOutput }
+            }
+            // v15.23 batch140 · 排序
+            let outline: [MaiLangOutlineEntry]
+            switch outlineSortKey {
+            case .lineAsc:
+                outline = filteredOutline  // 已是行号升序
+            case .nameAsc:
+                outline = filteredOutline.sorted { $0.name.lowercased() < $1.name.lowercased() }
+            case .typeFirst:
+                outline = filteredOutline.sorted { (a, b) in
+                    if a.isOutput != b.isOutput { return a.isOutput && !b.isOutput }
+                    return a.line < b.line
+                }
+            }
             let lintWarns = q.isEmpty ? allLintWarns
                           : allLintWarns.filter { $0.message.lowercased().contains(q) }
             let deps = MaiLangDependencies.analyze(sourceText)
@@ -258,6 +285,22 @@ public struct FormulaEditorWindow: View {
                     }
                     Text(")").font(.caption).foregroundColor(.secondary)
                     Spacer()
+                    // v15.23 batch140 · 排序 + 仅输出 toggle
+                    Menu {
+                        Section("排序") {
+                            ForEach(OutlineSortKey.allCases, id: \.self) { k in
+                                let isOn = outlineSortKey == k
+                                Button("\(isOn ? "✓ " : "")\(k.rawValue)") { outlineSortKey = k }
+                            }
+                        }
+                        Divider()
+                        Toggle("仅显示输出变量", isOn: $outlineShowOutputsOnly)
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down.circle")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .frame(width: 28)
+                    .help("排序选项 + 仅显示输出变量过滤")
                     Button("关闭") { showOutlineSheet = false }.keyboardShortcut(.cancelAction)
                 }
                 .padding(12)

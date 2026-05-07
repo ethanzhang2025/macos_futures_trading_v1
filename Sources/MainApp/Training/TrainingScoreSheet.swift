@@ -77,8 +77,20 @@ struct TrainingScoreSheet: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                if let pattern = session.scenarioPattern {
+                    Text("形态：\(pattern.displayName)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
             Spacer()
+            // v15.23 batch119 · 评分 sheet 顶部显示场景 thumbnail（trader 看分时回顾刚练的形态）
+            if let pattern = session.scenarioPattern {
+                let seed = UInt64(bitPattern: Int64(session.id.hashValue))
+                TrainingScenarioThumbnail(pattern: pattern,
+                                          seed: seed,
+                                          size: CGSize(width: 110, height: 56))
+            }
         }
     }
 

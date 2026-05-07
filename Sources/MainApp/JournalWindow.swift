@@ -39,6 +39,25 @@ private enum JournalViewMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// MARK: - 成交记录排序（v15.23 batch174）
+
+private enum TradeSortKey: String, CaseIterable, Identifiable {
+    case timeDesc   = "时间 ↓"
+    case timeAsc    = "时间 ↑"
+    case priceDesc  = "成交价 ↓"
+    case volumeDesc = "数量 ↓"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .timeDesc, .timeAsc: return "clock"
+        case .priceDesc:          return "yensign.circle"
+        case .volumeDesc:         return "number"
+        }
+    }
+}
+
 // MARK: - 日志排序（v15.23 batch164 · 与 TrainingHistory sortKey 对齐）
 
 private enum JournalSortKey: String, CaseIterable, Identifiable {
@@ -143,6 +162,10 @@ struct JournalWindow: View {
 
     // v15.23 batch171 · trades 表合约 filter（nil = 全部 · 自动列举现有 instrumentIDs）
     @State private var filterTradeInstrument: String? = nil
+
+    // v15.23 batch174 · trades 表排序（@AppStorage 持久化）
+    @AppStorage("viewState.v1.journal.tradeSortKey") private var tradeSortKeyRaw: String = TradeSortKey.timeDesc.rawValue
+    private var tradeSortKey: TradeSortKey { TradeSortKey(rawValue: tradeSortKeyRaw) ?? .timeDesc }
 
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
@@ -418,6 +441,20 @@ struct JournalWindow: View {
             .help("合约筛选（自动从导入的成交列举）")
             .disabled(trades.isEmpty)
 
+            // v15.23 batch174 · 排序 Menu（4 档 · 持久化）
+            Menu {
+                ForEach(TradeSortKey.allCases) { k in
+                    let isOn = tradeSortKey == k
+                    Button("\(isOn ? "✓ " : "")\(k.rawValue)") { tradeSortKeyRaw = k.rawValue }
+                }
+            } label: {
+                Label(tradeSortKey.rawValue, systemImage: tradeSortKey.icon)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 120)
+            .help("成交排序方式（4 档 · 持久化）")
+            .disabled(trades.isEmpty)
+
             Spacer()
 
             Text("\(filteredTrades.count) / \(trades.count) 笔")
@@ -429,10 +466,20 @@ struct JournalWindow: View {
         .padding(.vertical, 8)
     }
 
-    /// v15.23 batch171 · 应用合约 filter（与 trades 表绑定）
+    /// v15.23 batch171/174 · 应用合约 filter + 排序
     private var filteredTrades: [Trade] {
-        guard let id = filterTradeInstrument else { return trades }
-        return trades.filter { $0.instrumentID == id }
+        let base: [Trade]
+        if let id = filterTradeInstrument {
+            base = trades.filter { $0.instrumentID == id }
+        } else {
+            base = trades
+        }
+        switch tradeSortKey {
+        case .timeDesc:   return base.sorted { $0.timestamp > $1.timestamp }
+        case .timeAsc:    return base.sorted { $0.timestamp < $1.timestamp }
+        case .priceDesc:  return base.sorted { $0.price > $1.price }
+        case .volumeDesc: return base.sorted { $0.volume > $1.volume }
+        }
     }
 
     // MARK: - 交易日志 Tab 容器（toolbar + Table）
@@ -910,8 +957,9 @@ struct JournalWindow: View {
             ("⌘2", "切到「交易日志」"),
             ("⌘⇧?", "唤出本面板"),
         ]),
-        ("📊 成交记录（v15.23 batch171）", [
+        ("📊 成交记录（v15.23 batch171/174）", [
             ("合约 filter Menu", "全部 / 各合约（自动列举 + 各合约笔数）"),
+            ("排序 Menu", "时间 ↓/↑ · 成交价 ↓ · 数量 ↓（4 档 · 持久化）"),
             ("过滤计数", "右上角显示「N / 总数 笔」"),
         ]),
         ("📥 导入 / 导出 / 自动生成", [

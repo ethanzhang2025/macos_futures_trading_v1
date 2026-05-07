@@ -63,6 +63,8 @@ public struct MinimapView: View {
     // batch113 双击检测内部 state（300ms 窗口 · 5pt 距离）
     @State private var lastClickAt: Date = .distantPast
     @State private var lastClickLocation: CGPoint = .zero
+    /// batch114 · 鼠标悬停行号（1-based · nil = 鼠标不在 minimap 上）
+    @State private var hoveredLine: Int? = nil
 
     public var body: some View {
         GeometryReader { geo in
@@ -76,6 +78,32 @@ public struct MinimapView: View {
                     .foregroundColor(.secondary.opacity(0.3)),
                 alignment: .leading
             )
+            // batch114 · hover 行号 tooltip（跟随鼠标 y · 左上贴边显示 "L42"）
+            .overlay(alignment: .topLeading) {
+                if let h = hoveredLine {
+                    let total = max(1, lineCount)
+                    let lineH = computedLineHeight(canvasH: geo.size.height, totalLines: total)
+                    Text("L\(h)")
+                        .font(.system(size: 9, design: .monospaced))
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(Color.black.opacity(0.75))
+                        .foregroundColor(.white)
+                        .cornerRadius(2)
+                        .offset(x: 3, y: max(0, CGFloat(h - 1) * lineH - 2))
+                        .allowsHitTesting(false)
+                }
+            }
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let loc):
+                    let total = max(1, lineCount)
+                    let lineH = computedLineHeight(canvasH: geo.size.height, totalLines: total)
+                    let raw = Int(loc.y / lineH) + 1
+                    hoveredLine = min(max(1, raw), total)
+                case .ended:
+                    hoveredLine = nil
+                }
+            }
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in

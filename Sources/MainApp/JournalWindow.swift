@@ -303,6 +303,27 @@ struct JournalWindow: View {
                     }
                 }
                 .keyboardShortcut("d", modifiers: [.command])
+                // v15.23 batch182 · ⌘E 编辑选中 journal（list 模式 · 单选）
+                Button("") {
+                    if selectedTab == .journals,
+                       journalViewMode == .list,
+                       selectedJournalIDs.count == 1,
+                       let id = selectedJournalIDs.first,
+                       let j = journals.first(where: { $0.id == id }) {
+                        journalSheetState = .editJournal(j)
+                    }
+                }
+                .keyboardShortcut("e", modifiers: [.command])
+                // v15.23 batch182 · ⌘L 跳转选中 trade 关联日志（trades tab · 单选）
+                Button("") {
+                    if selectedTab == .trades,
+                       selectedTradeIDs.count == 1,
+                       let id = selectedTradeIDs.first,
+                       let trade = trades.first(where: { $0.id == id }) {
+                        showRelatedJournals(for: trade)
+                    }
+                }
+                .keyboardShortcut("l", modifiers: [.command])
             }
             .opacity(0)
         )
@@ -1102,6 +1123,7 @@ struct JournalWindow: View {
             ("行右键 → 查看关联日志", "切到日志 tab + 紫色 chip · ✕ 清除"),
             ("⌘D / 右键 → 建关联日志 (batch178)", "选中 N 笔后 ⌘D · 弹新建 sheet 预填 tradeIDs"),
             ("「导出 filter」按钮 (batch180)", "导出当前 filter / 搜索后的 trades CSV（含 BOM）"),
+            ("⌘L (batch182)", "跳转选中 trade 关联日志（单选 · 等价右键查看关联）"),
         ]),
         ("📥 导入 / 导出 / 自动生成", [
             ("⌘⇧M", "导入交割单 CSV（文华 / 通用）"),
@@ -1123,6 +1145,7 @@ struct JournalWindow: View {
         ]),
         ("✏️ 列表操作", [
             ("contextMenu", "编辑 / 复制单篇分析 / 删除"),
+            ("⌘E (batch182)", "编辑选中单篇日志（list 模式 · 单选）"),
             ("⌘⇧C", "复制选中单篇 markdown 到剪贴板（v15.23 batch168）"),
         ]),
         ("📝 编辑 Sheet（v15.23 batch173/176）", [

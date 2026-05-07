@@ -67,9 +67,21 @@ struct TrainingWindow: View {
             helpSheet
         }
         .background(
-            Button("") { showHelpSheet = true }
-                .keyboardShortcut("?", modifiers: [.command, .shift])
-                .opacity(0)
+            Group {
+                Button("") { showHelpSheet = true }
+                    .keyboardShortcut("?", modifiers: [.command, .shift])
+                    .opacity(0)
+                // v15.23 batch151 · ⌘1/⌘2/⌘3 切 tab
+                Button("") { tab = .rules }
+                    .keyboardShortcut("1", modifiers: [.command])
+                    .opacity(0)
+                Button("") { tab = .live }
+                    .keyboardShortcut("2", modifiers: [.command])
+                    .opacity(0)
+                Button("") { tab = .history }
+                    .keyboardShortcut("3", modifiers: [.command])
+                    .opacity(0)
+            }
         )
     }
 
@@ -80,6 +92,7 @@ struct TrainingWindow: View {
             ("⌘⇧S", "开始训练（弹 sheet · 选场景 + 设资金）"),
             ("⌘⇧E", "结束训练 + 评分（active 时）"),
             ("Esc", "取消开始 sheet（在 sheet 中按）"),
+            ("⌘1 / ⌘2 / ⌘3", "切 Tab（规则 / 实时 / 历史 · v15.23 batch151）"),
         ]),
         ("📋 规则 Tab（7+ 操作）", [
             ("加号按钮", "添加新规则（5 类纪律 · 阈值 + 备注）"),
@@ -170,6 +183,15 @@ struct TrainingWindow: View {
                                 .padding(.vertical, 1)
                                 .background(Capsule().fill(Color.secondary.opacity(0.3)))
                                 .foregroundColor(.primary)
+                        }
+                        // v15.23 batch151 · 规则数 badge（已配置纪律数）
+                        if t == .rules, viewModel.book.rules.count > 0 {
+                            Text("\(viewModel.book.rules.count)")
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(Color.green.opacity(0.7)))
+                                .foregroundColor(.white)
                         }
                     }
                     .padding(.horizontal, 14)

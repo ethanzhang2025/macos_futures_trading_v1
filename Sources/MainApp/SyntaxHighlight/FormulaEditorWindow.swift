@@ -929,11 +929,17 @@ public struct FormulaEditorWindow: View {
             let stats = textStats(sourceText)
             Text("行数 \(stats.lines)").font(.caption).foregroundColor(.secondary)
             Text("字符 \(stats.chars)").font(.caption).foregroundColor(.secondary)
-            // v15.23 batch111/145 · lint 警告 chip · 按类型细分计数（未使用 + 重复定义）
+            // v15.23 batch111/145/148 · lint 警告 chip · 按类型细分（未使用/重复/无颜色）
             let lintWarnings = MaiLangLint.analyze(sourceText)
             if !lintWarnings.isEmpty {
                 let unusedCount = lintWarnings.filter { $0.kind == .unusedVariable }.count
                 let dupCount = lintWarnings.filter { $0.kind == .duplicateDefinition }.count
+                let colorCount = lintWarnings.filter { $0.kind == .missingColorAttribute }.count
+                var parts: [String] = []
+                if unusedCount > 0 { parts.append("\(unusedCount) 未用") }
+                if dupCount > 0 { parts.append("\(dupCount) 重复") }
+                if colorCount > 0 { parts.append("\(colorCount) 无色") }
+                let chipText = parts.joined(separator: " · ")
                 Button {
                     pendingGotoLine = lintWarnings.first?.line
                 } label: {
@@ -941,20 +947,9 @@ public struct FormulaEditorWindow: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 10))
                             .foregroundColor(.orange)
-                        // batch145 · 细分显示 · 仅一类时简化为「N 警告」
-                        if unusedCount > 0 && dupCount > 0 {
-                            Text("\(unusedCount) 未用 · \(dupCount) 重复")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(.orange)
-                        } else if unusedCount > 0 {
-                            Text("\(unusedCount) 未用")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(.orange)
-                        } else {
-                            Text("\(dupCount) 重复")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(.orange)
-                        }
+                        Text(chipText)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.orange)
                     }
                 }
                 .buttonStyle(.borderless)

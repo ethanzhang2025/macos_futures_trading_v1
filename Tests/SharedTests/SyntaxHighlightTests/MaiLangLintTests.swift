@@ -32,7 +32,7 @@ struct MaiLangLintTests {
         let src = """
         DIF:=EMA(CLOSE,12)-EMA(CLOSE,26);
         DEA:=EMA(DIF,9);
-        MACD:(DIF-DEA)*2;
+        MACD:(DIF-DEA)*2,COLORRED;
         """
         #expect(MaiLangLint.analyze(src).isEmpty)
     }
@@ -47,7 +47,7 @@ struct MaiLangLintTests {
     func caseInsensitiveReference() {
         let src = """
         DIF:=EMA(CLOSE,12)-EMA(CLOSE,26);
-        OUT:dif*2;
+        OUT:dif*2,COLORRED;
         """
         // OUT 引用了小写 dif · 应识别为已引用
         #expect(MaiLangLint.analyze(src).isEmpty)
@@ -94,6 +94,37 @@ struct MaiLangLintTests {
         let dupes = warns.filter { $0.kind == .duplicateDefinition }
         #expect(dupes.count == 1)
         #expect(dupes[0].line == 2)
+    }
+
+    @Test("输出变量未指定 COLOR → 警告（batch148）")
+    func missingColorAttribute() {
+        let src = """
+        DIF:=EMA(CLOSE,12);
+        OUT:DIF*2;
+        """
+        let warns = MaiLangLint.analyze(src)
+        let missing = warns.filter { $0.kind == .missingColorAttribute }
+        #expect(missing.count == 1)
+        #expect(missing[0].line == 2)
+        #expect(missing[0].message.contains("OUT"))
+        #expect(missing[0].message.contains("COLORRED"))
+    }
+
+    @Test("输出变量含 COLORRED → 不警告")
+    func colorPresent() {
+        let src = "OUT:CLOSE,COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let missing = warns.filter { $0.kind == .missingColorAttribute }
+        #expect(missing.isEmpty)
+    }
+
+    @Test("中间变量未指定 COLOR → 不警告（仅输出变量适用此规则）")
+    func intermediateNotChecked() {
+        let src = "TEMP:=MA(CLOSE,5);"
+        let warns = MaiLangLint.analyze(src)
+        // TEMP 是中间变量 · 不是输出 · 不会触发 missingColor
+        let missing = warns.filter { $0.kind == .missingColorAttribute }
+        #expect(missing.isEmpty)
     }
 
     @Test("注释中提到的变量名不算引用")

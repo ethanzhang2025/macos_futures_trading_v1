@@ -20,6 +20,7 @@ public struct MaiLangLintWarning: Sendable, Equatable {
     public enum Kind: String, Sendable, Equatable {
         case unusedVariable        // 中间变量定义但全文无其他引用
         case duplicateDefinition   // 同名变量被定义两次及以上（可能是 typo · 后续覆盖前定义）
+        case missingColorAttribute // 输出变量未指定 COLORxxx 属性（默认色不醒目）
     }
 
     public init(line: Int, kind: Kind, message: String) {
@@ -71,6 +72,20 @@ public enum MaiLangLint {
                     message: "重复定义：\(entry.name)（首次定义在第 \(firstLine) 行）"))
             } else {
                 firstSeenLine[key] = entry.line
+            }
+        }
+
+        // 规则 3：输出变量未指定 COLORxxx 属性（默认色不醒目 · 多输出时难区分）
+        let lines = source.components(separatedBy: "\n")
+        for entry in outline where entry.isOutput {
+            let lineIdx = entry.line - 1
+            guard lineIdx >= 0 && lineIdx < lines.count else { continue }
+            let upperLine = lines[lineIdx].uppercased()
+            if !upperLine.contains("COLOR") {
+                warnings.append(MaiLangLintWarning(
+                    line: entry.line,
+                    kind: .missingColorAttribute,
+                    message: "输出变量 \(entry.name) 未指定颜色（建议加 COLORRED / COLORBLUE 等）"))
             }
         }
 

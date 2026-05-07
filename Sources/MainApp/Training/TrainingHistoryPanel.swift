@@ -18,6 +18,8 @@ struct TrainingHistoryPanel: View {
     @ObservedObject var viewModel: TrainingViewModel
     @State private var selectedSessionID: TrainingSession.ID? = nil
     @State private var showClearConfirm: Bool = false
+    /// v15.23 batch144 · 本周训练目标（次数 · 默认 5）· 持久化
+    @AppStorage("viewState.v1.training.weeklyGoal") private var weeklyGoal: Int = 5
     /// v15.23 batch122 · 形态筛选（nil = 全部 · 选中后只显示该形态训练）
     @State private var filterPattern: TrainingScenarioPattern? = nil
     /// v15.23 batch130 · 时间段筛选（默认全部 · 与形态 filter 互补 · 同时 AND）
@@ -236,9 +238,45 @@ struct TrainingHistoryPanel: View {
 
             // v15.23 batch125 · 形态分布 chip 行（点击 chip 等同选 filter · 视觉看练习偏向）
             patternDistributionRow
+
+            // v15.23 batch144 · 本周目标进度（鼓励 trader 维持训练频率）
+            weeklyGoalRow
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+    }
+
+    /// v15.23 batch144 · 本周训练目标进度（达到目标 → 绿色 ✓ · 未达成 → 进度条）
+    private var weeklyGoalRow: some View {
+        let cal = Calendar(identifier: .gregorian)
+        let weekStart = cal.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+        let thisWeekCount = viewModel.log.sessions.filter { $0.startedAt >= weekStart }.count
+        let progress = min(Double(thisWeekCount) / Double(max(1, weeklyGoal)), 1.0)
+        let achieved = thisWeekCount >= weeklyGoal
+        return HStack(spacing: 6) {
+            Image(systemName: achieved ? "checkmark.seal.fill" : "target")
+                .foregroundColor(achieved ? .green : .accentColor)
+                .font(.system(size: 11))
+            Text("本周 \(thisWeekCount)/\(weeklyGoal) 次")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(achieved ? .green : .secondary)
+            ProgressView(value: progress, total: 1.0)
+                .frame(width: 100)
+                .tint(achieved ? .green : .accentColor)
+            Spacer()
+            Menu {
+                ForEach([3, 5, 7, 10, 15], id: \.self) { n in
+                    let isOn = (weeklyGoal == n)
+                    Button("\(isOn ? "✓ " : "")\(n) 次/周") { weeklyGoal = n }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 11))
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 22)
+            .help("调整本周训练目标（3/5/7/10/15 次）")
+        }
     }
 
     /// v15.23 batch125 · 形态分布 chip（9 形态 emoji + 计数 · 点击切 filter）

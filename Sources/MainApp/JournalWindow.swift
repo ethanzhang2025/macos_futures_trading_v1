@@ -132,6 +132,9 @@ struct JournalWindow: View {
     // v15.23 batch165 · 情绪 filter（nil = 全部 · 与 TrainingHistory pattern filter 对齐）
     @State private var filterEmotion: JournalEmotion? = nil
 
+    // v15.23 batch166 · 偏差 filter（nil = 全部）
+    @State private var filterDeviation: JournalDeviation? = nil
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -372,6 +375,22 @@ struct JournalWindow: View {
             .frame(width: 110)
             .help("情绪筛选（5 类 · 全部）")
 
+            // v15.23 batch166 · 偏差 filter Menu（8 类 + 全部）
+            Menu {
+                Button("\(filterDeviation == nil ? "✓ " : "")全部") { filterDeviation = nil }
+                Divider()
+                ForEach(JournalDeviation.allCases, id: \.self) { d in
+                    let isOn = filterDeviation == d
+                    Button("\(isOn ? "✓ " : "")\(d.displayName)") { filterDeviation = d }
+                }
+            } label: {
+                Label(filterDeviation?.displayName ?? "全部偏差", systemImage: "exclamationmark.triangle")
+                    .foregroundColor(filterDeviation == nil ? .secondary : (filterDeviation == .asPlanned ? .green : .orange))
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 110)
+            .help("偏差筛选（8 类 · 全部）")
+
             Spacer()
 
             // v15.23 batch164 · 排序 Menu（5 档 · 仅列表模式有意义 · 月度模式按月份排序固定）
@@ -575,6 +594,9 @@ struct JournalWindow: View {
         }
         if let e = filterEmotion {
             base = base.filter { $0.emotion == e }
+        }
+        if let d = filterDeviation {
+            base = base.filter { $0.deviation == d }
         }
         return Self.sortJournals(base, by: sortKey)
     }

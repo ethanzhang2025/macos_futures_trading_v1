@@ -26,7 +26,8 @@ let package = Package(
         .library(name: "ReplayCore", targets: ["ReplayCore"]),
         .library(name: "WorkspaceCore", targets: ["WorkspaceCore"]),
         .library(name: "TradingCore", targets: ["TradingCore"]),
-        .library(name: "StoreCore", targets: ["StoreCore"])
+        .library(name: "StoreCore", targets: ["StoreCore"]),
+        .library(name: "SyncCore", targets: ["SyncCore"])
     ],
     dependencies: [],
     targets: [
@@ -96,6 +97,13 @@ let package = Package(
             path: "Sources/StoreCore"
         ),
         .testTarget(name: "StoreCoreTests", dependencies: ["StoreCore"], path: "Tests/StoreCoreTests"),
+
+        // MARK: - SyncCore · WP-60 多端同步抽象层（M1-M6 预埋 · M7 启用）
+        // D2/D4 G1 分级存储方案 A：CloudKit 存非敏感（自选/工作区/UI 偏好）· 阿里云自建存敏感（日志/预警·Stage B）
+        // 本模块 = 厂商无关抽象层：SyncableRecord 协议 · SyncBackend 协议 · SyncEngine LWW · MockSyncBackend
+        // CloudKitSyncBackend 在 #if canImport(CloudKit) 隔离（Linux 跳过 · Mac 切机时联调）
+        .target(name: "SyncCore", dependencies: ["Shared"], path: "Sources/SyncCore"),
+        .testTarget(name: "SyncCoreTests", dependencies: ["SyncCore"], path: "Tests/SyncCoreTests"),
 
         // MARK: - MainApp · macOS App 主框架（demo → 真 App · M5 集成入口）
         // SwiftUI App 协议 · WindowGroup × 2（K 线图表 / 自选合约）· Settings Scene · 主菜单 .commands

@@ -95,6 +95,7 @@ struct AlertWindow: View {
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
     @Environment(\.alertEvaluator) private var alertEvaluator
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -208,6 +209,7 @@ struct AlertWindow: View {
             ("➕ 按钮", "添加新预警（弹 sheet · 价格 / 指标 / 区间 / 复合 4 类条件）"),
             ("contextMenu", "编辑 / 暂停 / 复制 / 删除"),
             ("跨窗口创建", "ChartScene 画线后右键创建预警（v13.18+）"),
+            ("跨窗口查看 (batch201)", "右键 → 在主图查看「instrumentID」· 切 ChartScene + 联动合约"),
         ]),
         ("🔍 搜索 / 筛选", [
             ("⌘F", "聚焦搜索框（list 或 history tab · 自动判断当前）"),
@@ -679,6 +681,8 @@ struct AlertWindow: View {
             Divider()
             Button("编辑…（双击 row 也行）") { sheetState = .edit(a) }
             Button("复制 alert 名") { copyAlertName(a) }
+            // v15.23 batch201 · 在主图查看（切到 ChartScene + post .watchlistInstrumentSelected）
+            Button("在主图查看「\(a.instrumentID)」") { openInstrumentInChart(a.instrumentID) }
             Divider()
             if selectedAlertIDs.contains(a.id) {
                 Button("从选中移除") { selectedAlertIDs.remove(a.id) }
@@ -698,6 +702,14 @@ struct AlertWindow: View {
     /// v15.20 batch73 · 复制 alert 名到剪贴板
     private func copyAlertName(_ a: Alert) {
         Pasteboard.copy(a.name)
+    }
+
+    /// v15.23 batch201 · 在主图查看（切到 ChartScene + 触发合约联动 · 与 WatchlistWindow openInstrumentInChart 同模式）
+    @MainActor
+    private func openInstrumentInChart(_ instrumentID: String) {
+        openWindow(id: "chart")
+        NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: instrumentID)
+        Toast.info("已切到主图", "\(instrumentID)")
     }
 
     @ViewBuilder

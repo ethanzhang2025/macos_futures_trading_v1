@@ -68,6 +68,8 @@ public struct FormulaEditorWindow: View {
     @AppStorage("viewState.v1.formulaEditor.recentFiles") private var recentFilesJSON: String = ""
     /// v15.23 batch105 · minimap 缩略图开关（IDE 级长公式快速导航 · 默认开 · ⌘⇧M 切换）
     @AppStorage("viewState.v1.formulaEditor.showMinimap") private var showMinimap: Bool = true
+    /// v15.23 batch109 · minimap 宽度 4 档（80 窄 / 100 中 / 120 宽 / 160 超宽 · 默认 100 · 持久化）
+    @AppStorage("viewState.v1.formulaEditor.minimapWidth") private var minimapWidth: Double = 100
     /// v15.23 batch106 · 主编辑器当前可视行（1-based · minimap viewport 高亮 + 滚动同步）
     @State private var visibleStartLine: Int = 1
     @State private var visibleEndLine: Int = 1
@@ -133,7 +135,7 @@ public struct FormulaEditorWindow: View {
                                 selectionEndLine: selRange?.1,
                                 errorLine: errorMarker?.line,
                                 onClickLine: { line in pendingScrollToLine = line })
-                        .frame(width: 100)
+                        .frame(width: CGFloat(minimapWidth))
                 }
             }
             .onChange(of: sourceText) { _ in
@@ -583,15 +585,26 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("o", modifiers: [.command, .shift])
             .help("公式大纲（⌘⇧O · 变量定义列表 · 点击跳转）")
-            // v15.23 batch105 · minimap 缩略图开关（IDE 级 · 长公式快速导航 · 拖动跳转）
-            Button {
-                showMinimap.toggle()
+            // v15.23 batch105/109 · minimap 缩略图（⌘⇧M 切换 + Menu 选宽度 4 档）
+            Menu {
+                Button(showMinimap ? "▣ 隐藏 minimap" : "▢ 显示 minimap") {
+                    showMinimap.toggle()
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+                if showMinimap {
+                    Divider()
+                    Picker("宽度", selection: $minimapWidth) {
+                        Text("窄（80pt）").tag(80.0)
+                        Text("中（100pt · 默认）").tag(100.0)
+                        Text("宽（120pt）").tag(120.0)
+                        Text("超宽（160pt）").tag(160.0)
+                    }
+                }
             } label: {
                 Label("缩略图",
                       systemImage: showMinimap ? "rectangle.righthalf.inset.filled" : "rectangle.righthalf.inset")
             }
-            .keyboardShortcut("m", modifiers: [.command, .shift])
-            .help("切换 minimap 缩略图（⌘⇧M · IDE 级 · 拖动跳转 · 持久化）")
+            .help("minimap 缩略图（⌘⇧M 切换 · 宽度 4 档 · 拖动跳转 · 持久化）")
             // v15.22 batch36 · 字体大小调节（⌘=放大 / ⌘-缩小 / ⌘0 重置 · 持久化）
             Menu {
                 Button("放大字体（⌘=）") {

@@ -31,6 +31,8 @@ final class TrainingViewModel: ObservableObject {
     @Published var sessionStartedAt: Date? = nil
     @Published var sessionInitialBalance: Decimal = 0
     @Published var sessionScenarioName: String = ""
+    /// v15.23 batch118 · 训练形态（preset 启动时记录 · history panel thumbnail 用）
+    @Published var sessionScenarioPattern: TrainingScenarioPattern? = nil
     @Published var liveViolations: [DisciplineViolation] = []
 
     /// 训练结束后弹 sheet 用 · endSession 写入 · 关闭 sheet 清空
@@ -69,10 +71,12 @@ final class TrainingViewModel: ObservableObject {
 
     // MARK: - Session 控制（batch11 详细实现 · 此处仅占位接口）
 
-    func startSession(initialBalance: Decimal, scenarioName: String) {
+    func startSession(initialBalance: Decimal, scenarioName: String,
+                      scenarioPattern: TrainingScenarioPattern? = nil) {
         sessionStartedAt = Date()
         sessionInitialBalance = initialBalance
         sessionScenarioName = scenarioName
+        sessionScenarioPattern = scenarioPattern
         liveViolations.removeAll()
     }
 
@@ -86,7 +90,8 @@ final class TrainingViewModel: ObservableObject {
             finalBalance: finalBalance,
             trades: trades,
             violations: liveViolations,
-            scenarioName: sessionScenarioName
+            scenarioName: sessionScenarioName,
+            scenarioPattern: sessionScenarioPattern
         )
         let score = TrainingScorer.score(session)
         log.addSession(session)
@@ -95,6 +100,7 @@ final class TrainingViewModel: ObservableObject {
         sessionStartedAt = nil
         sessionInitialBalance = 0
         sessionScenarioName = ""
+        sessionScenarioPattern = nil
         liveViolations.removeAll()
     }
 

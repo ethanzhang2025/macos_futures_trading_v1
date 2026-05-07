@@ -178,6 +178,16 @@ struct TrainingHistoryPanel: View {
                 .font(.system(size: 18))
                 .frame(width: 28)
 
+            // v15.23 batch118 · 场景 mini thumbnail（pattern 非 nil 时显示 · 32×20pt）
+            if let pattern = session.scenarioPattern {
+                let seed = UInt64(bitPattern: Int64(session.id.hashValue))
+                TrainingScenarioThumbnail(pattern: pattern,
+                                          seed: seed,
+                                          size: CGSize(width: 36, height: 22))
+            } else {
+                Color.clear.frame(width: 36, height: 22)
+            }
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.scenarioName.isEmpty ? "未命名训练" : session.scenarioName)
                     .font(.system(size: 13, weight: .medium))

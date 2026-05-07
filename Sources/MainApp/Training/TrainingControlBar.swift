@@ -258,7 +258,9 @@ struct TrainingControlBar: View {
         if let engine {
             await engine.setDisciplineRules(viewModel.book.enabledRules)
         }
-        viewModel.startSession(initialBalance: balance, scenarioName: pendingScenario)
+        viewModel.startSession(initialBalance: balance,
+                               scenarioName: pendingScenario,
+                               scenarioPattern: selectedPreset?.pattern)
         showStart = false
         flash("训练已开始 · 实时纪律评估生效")
     }

@@ -23,11 +23,14 @@ public struct TrainingSession: Sendable, Codable, Equatable, Identifiable {
     public let trades: [TradeRecord]
     public let violations: [DisciplineViolation]
     public let scenarioName: String        // 训练场景名（如"螺纹钢急涨急跌 2020-08-12"）
+    /// v15.23 batch118 · 训练场景形态（用于 history panel mini thumbnail · Optional 兼容老 session JSON）
+    public let scenarioPattern: TrainingScenarioPattern?
 
     public init(id: UUID = UUID(), startedAt: Date, endedAt: Date,
                 initialBalance: Decimal, finalBalance: Decimal,
                 trades: [TradeRecord] = [], violations: [DisciplineViolation] = [],
-                scenarioName: String = "") {
+                scenarioName: String = "",
+                scenarioPattern: TrainingScenarioPattern? = nil) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -36,6 +39,7 @@ public struct TrainingSession: Sendable, Codable, Equatable, Identifiable {
         self.trades = trades
         self.violations = violations
         self.scenarioName = scenarioName
+        self.scenarioPattern = scenarioPattern
     }
 
     public var pnl: Decimal { finalBalance - initialBalance }

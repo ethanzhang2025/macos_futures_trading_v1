@@ -98,4 +98,46 @@ struct TrainingMarkdownReportTests {
         #expect(md.contains("## 形态分布"))
         #expect(md.contains("## 最近训练"))
     }
+
+    @Test("filterPattern 仅含该形态 session（batch131）")
+    func filterPatternApplied() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "震荡 1", pattern: .oscillation))
+        log.addSession(makeSession(scenarioName: "趋势 1", pattern: .uptrend))
+        log.addSession(makeSession(scenarioName: "震荡 2", pattern: .oscillation))
+        let md = TrainingMarkdownReport.generate(log, filterPattern: .oscillation)
+        #expect(md.contains("震荡 1"))
+        #expect(md.contains("震荡 2"))
+        #expect(!md.contains("趋势 1"))
+        #expect(md.contains("总训练次数：**2**"))
+    }
+
+    @Test("filterCutoff 仅含 startedAt >= cutoff（batch131）")
+    func filterCutoffApplied() {
+        var log = TrainingSessionLog()
+        // 2 个老 session（startedAt = 0）+ 1 个新 session（startedAt = now）
+        let oldDate = Date(timeIntervalSince1970: 0)
+        let newDate = Date()
+        log.addSession(TrainingSession(
+            startedAt: oldDate, endedAt: oldDate.addingTimeInterval(3600),
+            initialBalance: 100_000, finalBalance: 100_000,
+            scenarioName: "古早", scenarioPattern: .uptrend))
+        log.addSession(TrainingSession(
+            startedAt: newDate.addingTimeInterval(-300), endedAt: newDate,
+            initialBalance: 100_000, finalBalance: 105_000,
+            scenarioName: "今日", scenarioPattern: .uptrend))
+        // cutoff = 1 小时前 · 应仅含「今日」
+        let cutoff = newDate.addingTimeInterval(-3600)
+        let md = TrainingMarkdownReport.generate(log, filterCutoff: cutoff)
+        #expect(md.contains("今日"))
+        #expect(!md.contains("古早"))
+        #expect(md.contains("总训练次数：**1**"))
+    }
+
+    @Test("filterLabel 出现在标题后缀（batch131）")
+    func filterLabelInTitle() {
+        let md = TrainingMarkdownReport.generate(
+            TrainingSessionLog(), filterLabel: "本月 · 震荡")
+        #expect(md.contains("（本月 · 震荡）"))
+    }
 }

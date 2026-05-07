@@ -15,32 +15,48 @@ public enum TrainingMarkdownReport {
     /// 生成 markdown 文本
     /// - Parameters:
     ///   - log: 训练历史
+    ///   - filterPattern: 仅含该形态（nil = 全部）· batch131
+    ///   - filterCutoff: 仅含 startedAt >= cutoff 的 session（nil = 全部）· batch131
+    ///   - filterLabel: 标题后追加的过滤说明（如 "本月 · 震荡"）· batch131
     ///   - title: 报告标题（默认 "训练月报"）
     ///   - generatedAt: 报告时间戳（默认 now · 测试可注入）
     ///   - recentLimit: 最近训练表格行数（默认 30）
     public static func generate(_ log: TrainingSessionLog,
+                                filterPattern: TrainingScenarioPattern? = nil,
+                                filterCutoff: Date? = nil,
+                                filterLabel: String? = nil,
                                 title: String = "训练月报",
                                 generatedAt: Date = Date(),
                                 recentLimit: Int = 30) -> String {
-        var md = ""
+        // batch131 · 应用 filter（同时支持 pattern + cutoff · AND）
+        var sessions = log.sessions
+        if let p = filterPattern { sessions = sessions.filter { $0.scenarioPattern == p } }
+        if let cutoff = filterCutoff { sessions = sessions.filter { $0.startedAt >= cutoff } }
+        let scores = sessions.compactMap { log.score(for: $0.id) }
 
-        md += "# \(title)\n\n"
+        var md = ""
+        let titleSuffix = filterLabel.map { "（\($0)）" } ?? ""
+        md += "# \(title)\(titleSuffix)\n\n"
         md += "> 生成时间：\(formatDateTime(generatedAt))\n\n"
 
-        // 概览
+        // 概览（基于 filtered sessions）
         md += "## 概览\n\n"
-        md += "- 总训练次数：**\(log.sessionCount)**\n"
-        md += "- 平均分：**\(String(format: "%.1f", log.averageScore))**\n"
-        if let best = log.bestScore {
+        md += "- 总训练次数：**\(sessions.count)**\n"
+        let avg = scores.isEmpty ? 0.0
+                  : Double(scores.map { $0.totalScore }.reduce(0, +)) / Double(scores.count)
+        md += "- 平均分：**\(String(format: "%.1f", avg))**\n"
+        if let best = scores.max(by: { $0.totalScore < $1.totalScore }) {
             md += "- 最佳：**\(best.totalScore)** 分（\(best.grade.emoji) \(best.grade.displayName) 级）\n"
         } else {
             md += "- 最佳：—\n"
         }
         md += "\n"
 
-        // 等级分布
+        // 等级分布（基于 filtered scores）
         md += "## 等级分布\n\n"
-        let dist = log.gradeDistribution
+        var dist: [TrainingScore.Grade: Int] = [:]
+        for g in TrainingScore.Grade.allCases { dist[g] = 0 }
+        for s in scores { dist[s.grade, default: 0] += 1 }
         md += "| 等级 | 次数 |\n"
         md += "|------|------|\n"
         for grade in TrainingScore.Grade.allCases {
@@ -48,13 +64,15 @@ public enum TrainingMarkdownReport {
         }
         md += "\n"
 
-        // 形态分布
+        // 形态分布（基于 filtered sessions）
         md += "## 形态分布\n\n"
-        md += patternDistributionMarkdown(log)
+        md += patternDistributionMarkdown(sessions: sessions, log: log)
 
-        // 最近训练
+        // 最近训练（filtered sessions desc by endedAt · 取前 recentLimit）
         md += "## 最近训练\n\n"
-        let recent = log.recentSessions(limit: recentLimit)
+        let recent = sessions
+            .sorted { $0.endedAt > $1.endedAt }
+            .prefix(max(0, recentLimit))
         if recent.isEmpty {
             md += "_暂无训练记录_\n"
         } else {
@@ -76,10 +94,11 @@ public enum TrainingMarkdownReport {
         return md
     }
 
-    /// 形态分布表（计数 + 平均分 · 仅显示 count > 0 的形态）
-    private static func patternDistributionMarkdown(_ log: TrainingSessionLog) -> String {
+    /// 形态分布表（计数 + 平均分 · 仅显示 count > 0 的形态）· batch131 改用 sessions 子集
+    private static func patternDistributionMarkdown(sessions: [TrainingSession],
+                                                    log: TrainingSessionLog) -> String {
         var counts: [TrainingScenarioPattern: (count: Int, totalScore: Int)] = [:]
-        for s in log.sessions {
+        for s in sessions {
             guard let p = s.scenarioPattern else { continue }
             let scoreVal = log.score(for: s.id)?.totalScore ?? 0
             let cur = counts[p] ?? (0, 0)

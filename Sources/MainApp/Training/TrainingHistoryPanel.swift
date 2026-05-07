@@ -398,8 +398,25 @@ struct TrainingHistoryPanel: View {
 
     // MARK: - v15.23 batch126 · 月报导出
 
+    /// v15.23 batch131 · 当前 filter 拼成 label（用于报告标题后缀）
+    private var filterLabel: String? {
+        var parts: [String] = []
+        if filterPeriod != .all { parts.append(filterPeriod.rawValue) }
+        if let p = filterPattern { parts.append("\(p.emoji) \(p.displayName)") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private func generateMarkdown() -> String {
+        TrainingMarkdownReport.generate(
+            viewModel.log,
+            filterPattern: filterPattern,
+            filterCutoff: filterPeriod.cutoff,
+            filterLabel: filterLabel
+        )
+    }
+
     private func copyReportToPasteboard() {
-        let md = TrainingMarkdownReport.generate(viewModel.log)
+        let md = generateMarkdown()
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(md, forType: .string)
@@ -413,7 +430,7 @@ struct TrainingHistoryPanel: View {
         dateFmt.dateFormat = "yyyyMMdd_HHmm"
         panel.nameFieldStringValue = "训练月报_\(dateFmt.string(from: Date())).md"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let md = TrainingMarkdownReport.generate(viewModel.log)
+        let md = generateMarkdown()
         try? md.write(to: url, atomically: true, encoding: .utf8)
     }
 }

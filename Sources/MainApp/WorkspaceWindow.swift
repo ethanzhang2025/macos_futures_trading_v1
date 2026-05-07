@@ -57,6 +57,10 @@ struct WorkspaceWindow: View {
     /// v15.23 batch190 · 帮助面板（⌘⇧? · 5 大新窗口 UX 一致）
     @State private var showHelpSheet: Bool = false
 
+    /// v15.23 batch191 · 模板名搜索（左栏 filter · ⌘F 聚焦）
+    @State private var templateSearchText: String = ""
+    @FocusState private var searchFocused: Bool
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 book mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -189,6 +193,8 @@ struct WorkspaceWindow: View {
         ]),
         ("⌨️ 快捷键", [
             ("⌘⇧?", "唤出本帮助面板（v15.23 batch190）"),
+            ("⌘F", "聚焦左栏搜索框（v15.23 batch191 · 多 query AND）"),
+            ("⌘⇧K", "添加空白模板"),
             ("自定义模板快捷键", "ShortcutEditorSheet 设置 · 全局唤起对应模板"),
         ]),
         ("🎯 v15.19 batch38 场景预设", [
@@ -259,7 +265,9 @@ struct WorkspaceWindow: View {
             HStack(spacing: 8) {
                 Text("工作区模板").font(.headline)
                 Spacer()
-                Text("\(book.templates.count) 个")
+                let filteredCount = filteredTemplates.count
+                let totalCount = book.templates.count
+                Text(filteredCount == totalCount ? "\(totalCount) 个" : "\(filteredCount) / \(totalCount)")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                 Button {
@@ -296,11 +304,34 @@ struct WorkspaceWindow: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
+            // v15.23 batch191 · 模板名搜索框（⌘F 聚焦 · 空格 AND）
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("搜索模板（⌘F）", text: $templateSearchText)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
+                    .focused($searchFocused)
+                if !templateSearchText.isEmpty {
+                    Button {
+                        templateSearchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 6)
+
             Divider()
 
             List(selection: $selectedTemplateID) {
                 ForEach(WorkspaceTemplate.Kind.allCases, id: \.self) { kind in
-                    let templates = book.templates(of: kind)
+                    let templates = filteredTemplates.filter { $0.kind == kind }
                     if !templates.isEmpty {
                         Section(kind.displayName) {
                             ForEach(templates) { template in
@@ -312,6 +343,31 @@ struct WorkspaceWindow: View {
                 }
             }
             .listStyle(.sidebar)
+            .overlay {
+                if filteredTemplates.isEmpty && !templateSearchText.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass.circle")
+                            .font(.system(size: 28))
+                            .foregroundColor(.secondary.opacity(0.5))
+                        Text("无匹配的模板").font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .background(
+            // v15.23 batch191 · ⌘F 聚焦搜索框
+            Button("") { searchFocused = true }
+                .keyboardShortcut("f", modifiers: [.command])
+                .opacity(0)
+        )
+    }
+
+    /// v15.23 batch191 · 应用搜索 filter（多 query AND · 大小写不敏感 · 搜模板名）
+    private var filteredTemplates: [WorkspaceTemplate] {
+        let queries = templateSearchText.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !queries.isEmpty else { return book.templates }
+        return book.templates.filter { template in
+            queries.allSatisfy { template.name.localizedCaseInsensitiveContains($0) }
         }
     }
 

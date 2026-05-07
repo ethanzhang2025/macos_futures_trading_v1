@@ -98,7 +98,8 @@ public struct FormulaEditorWindow: View {
                 onSwitch: { idx in switchToTab(idx) },
                 onNew: { newTab() },
                 onClose: { idx in closeTab(idx) },
-                onRename: { idx, newName in renameTab(idx, to: newName) }
+                onRename: { idx, newName in renameTab(idx, to: newName) },
+                onReorder: { persistTabs() }
             )
             Divider()
             // v15.23 batch105 · 编辑器 + 右侧 minimap 缩略图（HStack 横排 · ⌘⇧M 切换）
@@ -1143,6 +1144,7 @@ public struct FormulaEditorWindow: View {
             ("⌘⌥→", "下一个 tab（循环）"),
             ("点击 tab", "切换 · 内容自动保存"),
             ("双击 tab", "重命名（Enter 保存 · Esc 取消）"),
+            ("长按拖动", "重排序 tabs（v15.23 · 拖到目标位置释放）"),
         ]),
         ("🔧 编译 / 格式化 / 学习", [
             ("⌘B", "编译验证（IndicatorCore Lexer + Parser · 错误显示行列）"),
@@ -1397,10 +1399,14 @@ struct FormulaTabBar: View {
     let onNew: () -> Void
     let onClose: (Int) -> Void
     let onRename: (Int, String) -> Void
+    /// v15.23 batch117 · 重排序后回调（持久化 tabsJSON · 父视图实现）
+    var onReorder: (() -> Void)? = nil
 
     /// v15.23 batch46 · 当前重命名中的 tab 索引（nil = 无）
     @State private var renamingIdx: Int? = nil
     @State private var renameDraft: String = ""
+    /// v15.23 batch117 · 拖动中的 tab（nil = 无 · 用于 DropDelegate 识别 source）
+    @State private var draggedTab: FormulaTab? = nil
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -1460,6 +1466,7 @@ struct FormulaTabBar: View {
                     ? Color.accentColor.opacity(0.18)
                     : Color.secondary.opacity(0.06))
         .cornerRadius(5)
+        .opacity(draggedTab?.id == tab.id ? 0.4 : 1)
         .onTapGesture(count: 2) {
             // v15.23 batch46 · 双击进入重命名
             startRename(idx, current: tab.name)
@@ -1467,6 +1474,17 @@ struct FormulaTabBar: View {
         .onTapGesture {
             if !isRenaming { onSwitch(idx) }
         }
+        // v15.23 batch117 · 长按拖动重排序（不与 tap/double-tap 冲突 · NSItemProvider 标准 drag）
+        .onDrag {
+            draggedTab = tab
+            return NSItemProvider(object: tab.id.uuidString as NSString)
+        }
+        .onDrop(of: ["public.text"],
+                delegate: TabReorderDropDelegate(item: tab,
+                                                 tabs: $tabs,
+                                                 draggedTab: $draggedTab,
+                                                 activeIdx: $activeIdx,
+                                                 onReorderEnd: { onReorder?() }))
     }
 
     // MARK: - v15.23 batch46 · 重命名操作
@@ -1488,6 +1506,42 @@ struct FormulaTabBar: View {
     private func cancelRename() {
         renamingIdx = nil
         renameDraft = ""
+    }
+}
+
+// MARK: - v15.23 batch117 · Tab 拖动重排序 DropDelegate
+
+private struct TabReorderDropDelegate: DropDelegate {
+    let item: FormulaTab
+    @Binding var tabs: [FormulaTab]
+    @Binding var draggedTab: FormulaTab?
+    @Binding var activeIdx: Int
+    let onReorderEnd: () -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let dragged = draggedTab,
+              dragged.id != item.id,
+              let from = tabs.firstIndex(where: { $0.id == dragged.id }),
+              let to = tabs.firstIndex(where: { $0.id == item.id }) else { return }
+        // 维持 active tab：先记录其 ID · 移动后再 firstIndex 查回新位置
+        let activeID: UUID? = (activeIdx >= 0 && activeIdx < tabs.count) ? tabs[activeIdx].id : nil
+        withAnimation(.easeInOut(duration: 0.15)) {
+            tabs.move(fromOffsets: IndexSet(integer: from),
+                      toOffset: to > from ? to + 1 : to)
+        }
+        if let aid = activeID, let newIdx = tabs.firstIndex(where: { $0.id == aid }) {
+            activeIdx = newIdx
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedTab = nil
+        onReorderEnd()
+        return true
     }
 }
 

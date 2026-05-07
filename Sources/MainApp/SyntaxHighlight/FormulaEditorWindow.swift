@@ -360,6 +360,13 @@ public struct FormulaEditorWindow: View {
                                             }
                                             .buttonStyle(.borderless)
                                         }
+                                        // batch163 · 双击行任何位置直接跳转
+                                        .contentShape(Rectangle())
+                                        .onTapGesture(count: 2) {
+                                            pendingGotoLine = entry.line
+                                            showOutlineSheet = false
+                                            statusMessage = "跳转到 \(entry.name) · 第 \(entry.line) 行"
+                                        }
                                         // batch134 · 依赖关系（紧凑显示在变量行下方）
                                         if let d = dep, !d.uses.isEmpty || !d.usedBy.isEmpty {
                                             HStack(spacing: 8) {

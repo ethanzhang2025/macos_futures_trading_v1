@@ -167,6 +167,12 @@ struct MultiChartHost: View {
                         }
                     }
                 }
+                Divider()
+                // v15.23 batch157 · 批量锁定/解锁
+                Section("批量锁定") {
+                    Button("🔒 全部锁定") { applyLockToAll(true) }
+                    Button("🔓 全部解锁") { applyLockToAll(false) }
+                }
             } label: {
                 Label("批量", systemImage: "rectangle.3.group")
             }
@@ -871,6 +877,14 @@ struct MultiChartHost: View {
     private func applyInstrumentToAll(_ instrumentID: String) {
         for i in 0..<cells.count {
             cells[i].instrumentID = instrumentID
+        }
+        persistCells()
+    }
+
+    /// v15.23 batch157 · 批量锁定/解锁全部 cell
+    private func applyLockToAll(_ locked: Bool) {
+        for i in 0..<cells.count {
+            cells[i].isLocked = locked
         }
         persistCells()
     }

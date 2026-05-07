@@ -17,11 +17,23 @@ struct IPadRootView: View {
     @State private var selectedPeriod: KLinePeriod = .minute1
     @State private var enabledIndicators: Set<String> = []
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showSettings = false
+    @StateObject private var syncCoordinator = SyncCoordinator_iOS.makeDefault()
+    @AppStorage("ipad.theme") private var theme: String = AppTheme.auto.rawValue
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             WatchlistView_iOS(selection: $selectedInstrumentID)
                 .navigationTitle("自选")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                    }
+                }
         } detail: {
             iPadDetailContent(
                 instrumentID: selectedInstrumentID,
@@ -30,6 +42,10 @@ struct IPadRootView: View {
             )
         }
         .navigationSplitViewStyle(.balanced)
+        .sheet(isPresented: $showSettings) {
+            SettingsSheet_iOS(coordinator: syncCoordinator)
+        }
+        .preferredColorScheme(AppTheme(rawValue: theme)?.colorScheme)
     }
 }
 

@@ -39,6 +39,25 @@ private enum JournalViewMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// MARK: - 时间段过滤（v15.23 batch188 · 与 TrainingHistory PeriodFilter 对齐）
+
+private enum JournalPeriodFilter: String, CaseIterable, Hashable {
+    case all   = "全部"
+    case today = "今天"
+    case week  = "本周"
+    case month = "本月"
+
+    var cutoff: Date? {
+        let cal = Calendar(identifier: .gregorian)
+        switch self {
+        case .all:   return nil
+        case .today: return cal.startOfDay(for: Date())
+        case .week:  return cal.date(byAdding: .day, value: -7, to: Date())
+        case .month: return cal.date(byAdding: .month, value: -1, to: Date())
+        }
+    }
+}
+
 // MARK: - 成交记录排序（v15.23 batch174）
 
 private enum TradeSortKey: String, CaseIterable, Identifiable {
@@ -162,6 +181,9 @@ struct JournalWindow: View {
 
     // v15.23 batch170 · 月度卡片点击跳 list + 月份 filter（"yyyy-MM" 格式 · nil 不限）
     @State private var filterMonth: String? = nil
+
+    // v15.23 batch188 · 时间段 filter（today / week / month / all · 由 chip 点击触发）
+    @State private var filterPeriod: JournalPeriodFilter = .all
 
     // v15.23 batch171 · trades 表合约 filter（nil = 全部 · 自动列举现有 instrumentIDs）
     @State private var filterTradeInstrument: String? = nil
@@ -408,6 +430,7 @@ struct JournalWindow: View {
     }
 
     /// v15.23 batch172 · 今日 + 本周 chip（trader 看节奏 · trades 按 timestamp · journals 按 updatedAt）
+    /// v15.23 batch188 · chip 点击 → 切 journals tab + 设 period filter
     @ViewBuilder
     private var todayWeekChips: some View {
         let cal = Calendar(identifier: .gregorian)
@@ -420,24 +443,42 @@ struct JournalWindow: View {
         let journalsWeek = journals.filter { $0.updatedAt >= weekStart }.count
 
         HStack(spacing: 6) {
-            chipPill("☀ 今日", "\(tradesToday) 成 / \(journalsToday) 日", color: .orange,
-                     active: tradesToday > 0 || journalsToday > 0)
-            chipPill("📅 本周", "\(tradesWeek) 成 / \(journalsWeek) 日", color: .blue,
-                     active: tradesWeek > 0 || journalsWeek > 0)
+            chipButton("☀ 今日", "\(tradesToday) 成 / \(journalsToday) 日", color: .orange,
+                       active: tradesToday > 0 || journalsToday > 0,
+                       period: .today)
+            chipButton("📅 本周", "\(tradesWeek) 成 / \(journalsWeek) 日", color: .blue,
+                       active: tradesWeek > 0 || journalsWeek > 0,
+                       period: .week)
         }
     }
 
-    private func chipPill(_ leading: String, _ trailing: String, color: Color, active: Bool) -> some View {
-        HStack(spacing: 4) {
-            Text(leading).font(.caption2).bold()
-            Text(trailing).font(.caption2).monospacedDigit()
+    /// v15.23 batch188 · 可点击 chip · click → 切 journals tab + 设 period filter
+    private func chipButton(_ leading: String, _ trailing: String,
+                            color: Color, active: Bool,
+                            period: JournalPeriodFilter) -> some View {
+        Button {
+            selectedTab = .journals
+            journalViewMode = .list
+            filterPeriod = period
+            // 清掉互斥的 month filter（period 优先）
+            filterMonth = nil
+            let n = journals.filter { j in
+                if let cutoff = period.cutoff { return j.updatedAt >= cutoff } else { return true }
+            }.count
+            Toast.info("已切到日志（\(period.rawValue)）", "\(n) 篇")
+        } label: {
+            HStack(spacing: 4) {
+                Text(leading).font(.caption2).bold()
+                Text(trailing).font(.caption2).monospacedDigit()
+            }
+            .foregroundColor(active ? color : .secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background((active ? color : .gray).opacity(active ? 0.15 : 0.08))
+            .clipShape(Capsule())
         }
-        .foregroundColor(active ? color : .secondary)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .background((active ? color : .gray).opacity(active ? 0.15 : 0.08))
-        .clipShape(Capsule())
-        .help("\(leading) · 成交 / 日志（成交按 timestamp · 日志按 updatedAt · 本周近 7 天）")
+        .buttonStyle(.plain)
+        .help("\(leading) · 成交 / 日志（点击跳转日志 + filter \(period.rawValue)）")
     }
 
     // MARK: - Tab 栏
@@ -630,11 +671,11 @@ struct JournalWindow: View {
         }
     }
 
-    /// v15.23 batch185 · journals 列表 empty state（区分 0 篇 vs filter 空）
+    /// v15.23 batch185/188 · journals 列表 empty state（区分 0 篇 vs filter 空）
     @ViewBuilder
     private var journalsEmptyState: some View {
         let hasFilter = !searchText.isEmpty || filterEmotion != nil || filterDeviation != nil
-            || filterMonth != nil || filterTradeID != nil
+            || filterMonth != nil || filterTradeID != nil || filterPeriod != .all
         VStack(spacing: 12) {
             Image(systemName: hasFilter ? "magnifyingglass.circle" : "book.closed")
                 .font(.system(size: 42))
@@ -652,6 +693,7 @@ struct JournalWindow: View {
                     filterDeviation = nil
                     filterMonth = nil
                     filterTradeID = nil
+                    filterPeriod = .all
                 }
                 .controlSize(.small)
                 .padding(.top, 4)
@@ -788,6 +830,29 @@ struct JournalWindow: View {
                 .background(Color.purple.opacity(0.15))
                 .clipShape(Capsule())
                 .help("仅显示关联此成交的日志 · ✕ 清除")
+            }
+
+            // v15.23 batch188 · period filter chip（today/week/month · 点击 X 清除）
+            if filterPeriod != .all {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.badge.checkmark")
+                        .font(.caption2)
+                    Text(filterPeriod.rawValue)
+                        .font(.caption2)
+                    Button {
+                        filterPeriod = .all
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .foregroundColor(.orange)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.orange.opacity(0.15))
+                .clipShape(Capsule())
+                .help("时间段过滤 · 点 ✕ 清除")
             }
 
             // v15.23 batch170 · 月份 filter chip（点击 X 清除）
@@ -1124,6 +1189,10 @@ struct JournalWindow: View {
         // v15.23 batch175 · trade ID filter（仅含关联该 trade 的日志）
         if let tid = filterTradeID {
             base = base.filter { $0.tradeIDs.contains(tid) }
+        }
+        // v15.23 batch188 · 时间段 filter（基于 updatedAt · today/week/month）
+        if let cutoff = filterPeriod.cutoff {
+            base = base.filter { $0.updatedAt >= cutoff }
         }
         return Self.sortJournals(base, by: sortKey)
     }

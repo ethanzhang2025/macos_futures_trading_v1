@@ -118,6 +118,21 @@ public enum TrainingScenarioPattern: String, Sendable, Codable, Equatable, CaseI
     case gapAndHalt      // 跳空 + 熔断（极端行情 · 训练清仓决策）
     case nightRally      // 夜盘急拉（训练快速反应 + 不追高）
     case multiPhase      // 4 段综合（震荡→突破→趋势→反转 · 综合考核）
+
+    /// thumbnail 提示用中文短名
+    public var displayName: String {
+        switch self {
+        case .oscillation:  return "震荡"
+        case .uptrend:      return "上升趋势"
+        case .downtrend:    return "下降趋势"
+        case .vReversal:    return "V 反转"
+        case .breakout:     return "突破"
+        case .fakeBreakout: return "假突破"
+        case .gapAndHalt:   return "跳空熔断"
+        case .nightRally:   return "夜盘急拉"
+        case .multiPhase:   return "4 段综合"
+        }
+    }
 }
 
 /// 静态推荐场景库（v15.23 batch15 · 8 个典型期货训练场景）

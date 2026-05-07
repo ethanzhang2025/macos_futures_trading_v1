@@ -191,7 +191,8 @@ struct TrainingControlBar: View {
             }
         }
         .padding(20)
-        .frame(width: 460, height: selectedPreset == nil ? 280 : 380)
+        // batch116 · 加 K 线 thumbnail 后 preset 卡略高 · 460→500 给 thumbnail 喘息空间
+        .frame(width: 500, height: selectedPreset == nil ? 280 : 410)
     }
 
     // MARK: - v15.23 batch16 · 预设场景操作
@@ -215,14 +216,27 @@ struct TrainingControlBar: View {
     }
 
     private func presetDescription(_ scenario: TrainingScenario) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(scenario.description)
-                .font(.system(size: 12))
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 14) {
-                metricChip(label: "合约", value: scenario.instrumentID, color: .accentColor)
-                metricChip(label: "时长", value: scenario.durationDescription, color: .blue)
-                metricChip(label: "建议训练", value: "\(scenario.recommendedDurationMinutes) 分", color: .orange)
+        // v15.23 batch116 · 顶部 HStack：左边描述+chip · 右边 K 线 thumbnail
+        let seed = UInt64(bitPattern: Int64(scenario.id.hashValue))
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(scenario.description)
+                        .font(.system(size: 12))
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 14) {
+                        metricChip(label: "合约", value: scenario.instrumentID, color: .accentColor)
+                        metricChip(label: "时长", value: scenario.durationDescription, color: .blue)
+                        metricChip(label: "建议训练", value: "\(scenario.recommendedDurationMinutes) 分", color: .orange)
+                    }
+                    Text("形态：\(scenario.pattern.displayName)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Spacer(minLength: 4)
+                TrainingScenarioThumbnail(pattern: scenario.pattern,
+                                          seed: seed,
+                                          size: CGSize(width: 110, height: 50))
             }
         }
         .padding(10)

@@ -238,6 +238,17 @@ struct JournalWindow: View {
                     .keyboardShortcut("2", modifiers: [.command])
                 Button("") { showHelpSheet = true }
                     .keyboardShortcut("?", modifiers: [.command, .shift])
+                // v15.23 batch168 · ⌘⇧C 复制选中日志的 markdown（避开 ⌘C 与 Table 默认复制冲突）
+                Button("") {
+                    if selectedTab == .journals,
+                       journalViewMode == .list,
+                       selectedJournalIDs.count == 1,
+                       let id = selectedJournalIDs.first,
+                       let j = journals.first(where: { $0.id == id }) {
+                        copySingleJournalMarkdown(j)
+                    }
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
             }
             .opacity(0)
         )
@@ -559,12 +570,25 @@ struct JournalWindow: View {
                 Button("编辑") {
                     journalSheetState = .editJournal(journal)
                 }
+                // v15.23 batch168 · 复制单篇 markdown 到剪贴板（trader 一键发微信群 / 笔记）
+                Button("复制单篇分析（Markdown）") {
+                    copySingleJournalMarkdown(journal)
+                }
                 Divider()
                 Button("删除", role: .destructive) {
                     pendingDeleteJournal = journal
                 }
             }
         }
+    }
+
+    /// v15.23 batch168 · 复制单篇 markdown 到剪贴板（NSPasteboard）
+    private func copySingleJournalMarkdown(_ journal: TradeJournal) {
+        let md = JournalMarkdownReport.generateSingle(journal, trades: trades)
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(md, forType: .string)
+        Toast.info("已复制单篇分析", "\(journal.title) · \(md.count) 字")
     }
 
     // MARK: - 月度视图（commit 4/4）
@@ -711,7 +735,8 @@ struct JournalWindow: View {
             ("月度", "按 createdAt 月份聚合 · 情绪/偏差/标签 top5"),
         ]),
         ("✏️ 列表操作", [
-            ("contextMenu", "编辑 / 删除（多选 supported）"),
+            ("contextMenu", "编辑 / 复制单篇分析 / 删除"),
+            ("⌘⇧C", "复制选中单篇 markdown 到剪贴板（v15.23 batch168）"),
         ]),
     ]
 

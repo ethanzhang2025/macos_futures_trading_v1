@@ -130,6 +130,7 @@ public struct FormulaEditorWindow: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 if showMinimap {
                     let selRange = minimapSelectionLineRange()
+                    let warns = MaiLangLint.analyze(sourceText)
                     MinimapView(text: sourceText, scheme: scheme,
                                 visibleStartLine: visibleStartLine,
                                 visibleEndLine: visibleEndLine,
@@ -138,6 +139,7 @@ public struct FormulaEditorWindow: View {
                                 selectionEndLine: selRange?.1,
                                 errorLine: errorMarker?.line,
                                 highlightedToken: currentTokenText,
+                                warningLines: warns.map { $0.line },
                                 onClickLine: { line in pendingScrollToLine = line })
                         .frame(width: CGFloat(minimapWidth))
                 }
@@ -735,6 +737,26 @@ public struct FormulaEditorWindow: View {
             let stats = textStats(sourceText)
             Text("行数 \(stats.lines)").font(.caption).foregroundColor(.secondary)
             Text("字符 \(stats.chars)").font(.caption).foregroundColor(.secondary)
+            // v15.23 batch111 · lint 警告 chip（未使用变量等 · 点击跳转第一个 warning · minimap 同步橙条）
+            let lintWarnings = MaiLangLint.analyze(sourceText)
+            if !lintWarnings.isEmpty {
+                Button {
+                    pendingGotoLine = lintWarnings.first?.line
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.orange)
+                        Text("\(lintWarnings.count) 警告")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.orange)
+                    }
+                }
+                .buttonStyle(.borderless)
+                .help(lintWarnings.prefix(5).map { "第 \($0.line) 行 · \($0.message)" }
+                      .joined(separator: "\n") +
+                      (lintWarnings.count > 5 ? "\n... 还有 \(lintWarnings.count - 5) 个" : ""))
+            }
             // v15.22 batch11 · 当前光标位置（行:列 · 与编译错误的"第 N 行第 M 列"对齐 trader 直接定位）
             Text("光标 \(cursorLine):\(cursorCol)")
                 .font(.system(size: 11, design: .monospaced))

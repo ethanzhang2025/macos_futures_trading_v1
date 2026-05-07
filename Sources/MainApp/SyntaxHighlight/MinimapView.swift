@@ -30,6 +30,8 @@ public struct MinimapView: View {
     /// v15.23 batch110 · 当前光标处 token 文本（用于 minimap 全文同名引用高亮 · IDE 级 symbol references）
     /// nil 或空串 → 不高亮 · 长度 < 2 也不高亮（避免单字符噪音）
     let highlightedToken: String?
+    /// v15.23 batch111 · lint 警告行（1-based · 橙色横条 · 与 errorLine 红色区分）· trader 一眼看 dead code
+    let warningLines: [Int]
     /// 用户点击/拖到第 N 行（1-based）回调 · 主编辑器据此跳转
     let onClickLine: (Int) -> Void
 
@@ -39,6 +41,7 @@ public struct MinimapView: View {
                 selectionStartLine: Int? = nil, selectionEndLine: Int? = nil,
                 errorLine: Int? = nil,
                 highlightedToken: String? = nil,
+                warningLines: [Int] = [],
                 onClickLine: @escaping (Int) -> Void) {
         self.text = text
         self.scheme = scheme
@@ -49,6 +52,7 @@ public struct MinimapView: View {
         self.selectionEndLine = selectionEndLine
         self.errorLine = errorLine
         self.highlightedToken = highlightedToken
+        self.warningLines = warningLines
         self.onClickLine = onClickLine
     }
 
@@ -197,6 +201,16 @@ public struct MinimapView: View {
             let y = CGFloat(cl - 1) * lineH
             let rect = CGRect(x: 0, y: y, width: size.width, height: max(lineH, 1.5))
             ctx.fill(Path(rect), with: .color(Color.accentColor.opacity(0.55)))
+        }
+
+        // batch111 lint 警告行橙色横条（中等优先级 · 在错误之下 · 与编译错误红条区分）
+        for wl in warningLines where wl >= 1 && wl <= totalLines {
+            let y = CGFloat(wl - 1) * lineH
+            let rect = CGRect(x: 0, y: y, width: size.width, height: max(lineH, 1.8))
+            ctx.fill(Path(rect), with: .color(Color.orange.opacity(0.55)))
+            // 左侧 2pt 浓橙 indicator · 与红条左条对称
+            let leftBar = CGRect(x: 0, y: y, width: 2.0, height: max(lineH, 1.8))
+            ctx.fill(Path(leftBar), with: .color(Color.orange))
         }
 
         // batch108 编译错误行红色横条（最高优先级覆盖 · trader 编译失败一眼定位）

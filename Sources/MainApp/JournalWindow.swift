@@ -1042,6 +1042,11 @@ struct JournalWindow: View {
             ("contextMenu", "编辑 / 复制单篇分析 / 删除"),
             ("⌘⇧C", "复制选中单篇 markdown 到剪贴板（v15.23 batch168）"),
         ]),
+        ("📝 编辑 Sheet（v15.23 batch173/176）", [
+            ("常用标签 chip", "点击追加历史 top 10 高频标签（自动空格分隔）"),
+            ("⌘S / Return", "保存（标题非空才生效 · IDE 习惯 batch176）"),
+            ("Esc", "取消"),
+        ]),
     ]
 
     @ViewBuilder
@@ -1614,15 +1619,31 @@ private struct JournalEditorSheet: View {
                 Button("取消") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(editing == nil ? "保存" : "更新") {
-                    onSave(draft.toJournal(existing: editing))
-                    dismiss()
+                    saveAndDismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!isValidForSave)
             }
         }
         .padding(20)
         .frame(width: 620, height: 720)
+        // v15.23 batch176 · ⌘S 保存（IDE 习惯）· 标题为空时按键无效
+        .background(
+            Button("") {
+                if isValidForSave { saveAndDismiss() }
+            }
+            .keyboardShortcut("s", modifiers: [.command])
+            .opacity(0)
+        )
+    }
+
+    private var isValidForSave: Bool {
+        !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func saveAndDismiss() {
+        onSave(draft.toJournal(existing: editing))
+        dismiss()
     }
 
     private func bindingForTrade(_ id: UUID) -> Binding<Bool> {

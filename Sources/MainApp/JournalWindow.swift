@@ -472,8 +472,40 @@ struct JournalWindow: View {
         VStack(spacing: 0) {
             tradesToolbar
             Divider()
-            tradesTable
+            if filteredTrades.isEmpty {
+                tradesEmptyState
+            } else {
+                tradesTable
+            }
         }
+    }
+
+    /// v15.23 batch186 · trades 列表 empty state（区分 0 笔 vs filter 空）
+    @ViewBuilder
+    private var tradesEmptyState: some View {
+        let hasFilter = !tradeSearchText.isEmpty || filterTradeInstrument != nil
+        VStack(spacing: 12) {
+            Image(systemName: hasFilter ? "magnifyingglass.circle" : "tray")
+                .font(.system(size: 42))
+                .foregroundColor(.secondary.opacity(0.5))
+            if trades.isEmpty {
+                Text("还没有成交记录").font(.title3).foregroundColor(.secondary)
+                Text("⌘⇧M 导入交割单 CSV（文华 / 通用 · BOM Excel 友好）")
+                    .font(.caption).foregroundColor(.secondary)
+            } else if hasFilter {
+                Text("没有匹配的成交").font(.title3).foregroundColor(.secondary)
+                Text("当前 filter / 搜索下无结果").font(.caption).foregroundColor(.secondary)
+                Button("清除 filter + 搜索") {
+                    tradeSearchText = ""
+                    filterTradeInstrument = nil
+                }
+                .controlSize(.small)
+                .padding(.top, 4)
+            } else {
+                Text("无成交可显示").font(.title3).foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// v15.23 batch171 · 合约 filter Menu · 自动从 trades 列举唯一 instrumentIDs

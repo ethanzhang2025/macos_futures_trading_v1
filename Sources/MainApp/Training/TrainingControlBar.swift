@@ -130,7 +130,8 @@ struct TrainingControlBar: View {
                         if !scenarios.isEmpty {
                             Section(difficulty.emoji + " " + difficulty.displayName) {
                                 ForEach(scenarios) { s in
-                                    Button(s.name) {
+                                    // v15.23 batch121 · 形态 emoji 前缀（〰️📈📉✓🚀↪️⚡️🌙🎯）
+                                    Button("\(s.pattern.emoji) \(s.name)") {
                                         applyPreset(s)
                                     }
                                 }
@@ -204,7 +205,8 @@ struct TrainingControlBar: View {
 
     private var selectedPresetLabel: String {
         if let preset = selectedPreset {
-            return "\(preset.difficulty.emoji) \(preset.name)"
+            // batch121 · 难度 + 形态双 emoji 前缀
+            return "\(preset.difficulty.emoji)\(preset.pattern.emoji) \(preset.name)"
         }
         return "自定义训练"
     }

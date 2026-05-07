@@ -133,6 +133,21 @@ public enum TrainingScenarioPattern: String, Sendable, Codable, Equatable, CaseI
         case .multiPhase:   return "4 段综合"
         }
     }
+
+    /// 形态 emoji（trader Menu 选项视觉前缀 · 快速识别走势类型）
+    public var emoji: String {
+        switch self {
+        case .oscillation:  return "〰️"
+        case .uptrend:      return "📈"
+        case .downtrend:    return "📉"
+        case .vReversal:    return "✓"
+        case .breakout:     return "🚀"
+        case .fakeBreakout: return "↪️"
+        case .gapAndHalt:   return "⚡️"
+        case .nightRally:   return "🌙"
+        case .multiPhase:   return "🎯"
+        }
+    }
 }
 
 /// 静态推荐场景库（v15.23 batch15 · 8 个典型期货训练场景）

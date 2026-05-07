@@ -57,6 +57,18 @@ struct TrainingScoreSheet: View {
                     }
                     .help("立即开始一次同形态训练（\(pattern.emoji) \(pattern.displayName)）")
                 }
+                // v15.23 batch155 · 随机形态训练（探索弱项 · trader 跳出舒适区）
+                if let cb = onRetrain {
+                    Button {
+                        let candidates = TrainingScenarioPattern.allCases.filter { $0 != session.scenarioPattern }
+                        let pick = candidates.randomElement() ?? .oscillation
+                        onDismiss()
+                        cb(pick)
+                    } label: {
+                        Label("随机练", systemImage: "die.face.5")
+                    }
+                    .help("随机选一种形态（避开当前形态）训练 · 探索弱项 / 跳出舒适区")
+                }
                 // v15.23 batch133 · 复制本次分析为 markdown（trader 求点评 / 笔记）
                 Button {
                     let md = TrainingMarkdownReport.generateSingleSession(session, score: score)

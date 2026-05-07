@@ -140,6 +140,9 @@ struct JournalWindow: View {
     @State private var pendingDeleteJournal: TradeJournal?
     @State private var selectedJournalIDs: Set<TradeJournal.ID> = []
 
+    // v15.23 batch178 · 新建日志时的预选 tradeIDs（trades tab 选中后 ⌘N 弹出预填）
+    @State private var pendingNewJournalTradeIDs: Set<UUID> = []
+
     // 搜索 + 视图模式（commit 4/4）
     @State private var searchText: String = ""
     @State private var journalViewMode: JournalViewMode = .list
@@ -245,7 +248,13 @@ struct JournalWindow: View {
         .sheet(item: $journalSheetState) { state in
             switch state {
             case .createJournal:
-                JournalEditorSheet(editing: nil, trades: trades, existingTagsByFrequency: tagsByFrequency) { saveJournal($0) }
+                // v15.23 batch178 · 新建时支持预选 tradeIDs（trades tab 选中后 ⌘D · 一键建关联日志）
+                JournalEditorSheet(editing: nil, trades: trades,
+                                   existingTagsByFrequency: tagsByFrequency,
+                                   preselectedTradeIDs: pendingNewJournalTradeIDs) {
+                    saveJournal($0)
+                    pendingNewJournalTradeIDs = []
+                }
             case .editJournal(let journal):
                 JournalEditorSheet(editing: journal, trades: trades, existingTagsByFrequency: tagsByFrequency) { updateJournal($0) }
             case .generatorPreview(let drafts):
@@ -287,6 +296,13 @@ struct JournalWindow: View {
                     }
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
+                // v15.23 batch178 · trades tab ⌘D 一键建关联日志（D = Diary · 选中行后预填 tradeIDs）
+                Button("") {
+                    if selectedTab == .trades, !selectedTradeIDs.isEmpty {
+                        createJournalFromSelectedTrades()
+                    }
+                }
+                .keyboardShortcut("d", modifiers: [.command])
             }
             .opacity(0)
         )
@@ -733,7 +749,7 @@ struct JournalWindow: View {
             .width(min: 60, ideal: 70)
         }
         .font(.system(.body, design: .monospaced))
-        // v15.23 batch175 · 单选成交时右键查看关联日志
+        // v15.23 batch175/178 · 成交右键操作
         .contextMenu(forSelectionType: Trade.ID.self) { ids in
             if ids.count == 1, let id = ids.first, let trade = trades.first(where: { $0.id == id }) {
                 let count = journals.filter { $0.tradeIDs.contains(id) }.count
@@ -742,7 +758,20 @@ struct JournalWindow: View {
                 }
                 .disabled(count == 0)
             }
+            if !ids.isEmpty {
+                Button("建关联日志（\(ids.count) 笔 · ⌘D）") {
+                    pendingNewJournalTradeIDs = ids
+                    journalSheetState = .createJournal
+                }
+            }
         }
+    }
+
+    /// v15.23 batch178 · 选中 N 笔成交一键建关联日志（⌘D · contextMenu）
+    private func createJournalFromSelectedTrades() {
+        guard !selectedTradeIDs.isEmpty else { return }
+        pendingNewJournalTradeIDs = selectedTradeIDs
+        journalSheetState = .createJournal
     }
 
     /// v15.23 batch175 · 切到 journals tab + 设 trade filter（高亮关联日志）
@@ -1033,11 +1062,13 @@ struct JournalWindow: View {
             ("⌘2", "切到「交易日志」"),
             ("⌘⇧?", "唤出本面板"),
         ]),
-        ("📊 成交记录（v15.23 batch171/174/175）", [
+        ("📊 成交记录（v15.23 batch171/174/175/177/178）", [
+            ("搜索框 (batch177)", "合约 / 方向 / 开平 / 来源 · 空格 AND"),
             ("合约 filter Menu", "全部 / 各合约（自动列举 + 各合约笔数）"),
             ("排序 Menu", "时间 ↓/↑ · 成交价 ↓ · 数量 ↓（4 档 · 持久化）"),
             ("过滤计数", "右上角显示「N / 总数 笔」"),
             ("行右键 → 查看关联日志", "切到日志 tab + 紫色 chip · ✕ 清除"),
+            ("⌘D / 右键 → 建关联日志 (batch178)", "选中 N 笔后 ⌘D · 弹新建 sheet 预填 tradeIDs"),
         ]),
         ("📥 导入 / 导出 / 自动生成", [
             ("⌘⇧M", "导入交割单 CSV（文华 / 通用）"),
@@ -1481,12 +1512,20 @@ private struct JournalEditorSheet: View {
     init(editing: TradeJournal?,
          trades: [Trade],
          existingTagsByFrequency: [String] = [],
+         preselectedTradeIDs: Set<UUID> = [],
          onSave: @escaping (TradeJournal) -> Void) {
         self.editing = editing
         self.trades = trades
         self.onSave = onSave
-        self._draft = State(initialValue: JournalDraft(from: editing))
-        self._tradesExpanded = State(initialValue: editing?.tradeIDs.isEmpty == false)
+        // v15.23 batch178 · 新建模式 + 预选 → 用 preselectedTradeIDs 初始化 draft
+        var initialDraft = JournalDraft(from: editing)
+        if editing == nil, !preselectedTradeIDs.isEmpty {
+            initialDraft.tradeIDs = preselectedTradeIDs
+        }
+        self._draft = State(initialValue: initialDraft)
+        self._tradesExpanded = State(
+            initialValue: editing?.tradeIDs.isEmpty == false || !preselectedTradeIDs.isEmpty
+        )
         self.suggestedHistoryTags = existingTagsByFrequency
         // 预算一次 · 后续 body 重渲只查 dict
         let (closed, _) = PositionMatcher.match(trades: trades)

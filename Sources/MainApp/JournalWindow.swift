@@ -167,6 +167,12 @@ struct JournalWindow: View {
     @AppStorage("viewState.v1.journal.tradeSortKey") private var tradeSortKeyRaw: String = TradeSortKey.timeDesc.rawValue
     private var tradeSortKey: TradeSortKey { TradeSortKey(rawValue: tradeSortKeyRaw) ?? .timeDesc }
 
+    // v15.23 batch175 · trade ID filter（点击 trade 行查看关联日志 · 仅显示 tradeIDs.contains 的 journals）
+    @State private var filterTradeID: UUID? = nil
+
+    // v15.23 batch175 · trades 表选中（用于行级 contextMenu）
+    @State private var selectedTradeIDs: Set<Trade.ID> = []
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -600,6 +606,29 @@ struct JournalWindow: View {
                     .foregroundColor(.secondary)
             }
 
+            // v15.23 batch175 · trade filter chip（点击 X 清除 · 高亮关联日志来自 trades 跳转）
+            if let tid = filterTradeID, let trade = trades.first(where: { $0.id == tid }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "link.circle.fill")
+                        .font(.caption2)
+                    Text("关联：\(trade.instrumentID) \(trade.direction.displayName)\(trade.offsetFlag.displayName)")
+                        .font(.caption2)
+                    Button {
+                        filterTradeID = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .foregroundColor(.purple)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.purple.opacity(0.15))
+                .clipShape(Capsule())
+                .help("仅显示关联此成交的日志 · ✕ 清除")
+            }
+
             // v15.23 batch170 · 月份 filter chip（点击 X 清除）
             if let m = filterMonth {
                 HStack(spacing: 4) {
@@ -631,7 +660,7 @@ struct JournalWindow: View {
     // MARK: - 成交记录 Tab
 
     private var tradesTable: some View {
-        Table(filteredTrades) {
+        Table(filteredTrades, selection: $selectedTradeIDs) {
             TableColumn("合约") { t in
                 Text(t.instrumentID).fontWeight(.medium)
             }
@@ -685,6 +714,30 @@ struct JournalWindow: View {
             .width(min: 60, ideal: 70)
         }
         .font(.system(.body, design: .monospaced))
+        // v15.23 batch175 · 单选成交时右键查看关联日志
+        .contextMenu(forSelectionType: Trade.ID.self) { ids in
+            if ids.count == 1, let id = ids.first, let trade = trades.first(where: { $0.id == id }) {
+                let count = journals.filter { $0.tradeIDs.contains(id) }.count
+                Button("查看关联日志（\(count) 篇）") {
+                    showRelatedJournals(for: trade)
+                }
+                .disabled(count == 0)
+            }
+        }
+    }
+
+    /// v15.23 batch175 · 切到 journals tab + 设 trade filter（高亮关联日志）
+    private func showRelatedJournals(for trade: Trade) {
+        filterTradeID = trade.id
+        // 清掉其他 filter 避免空集
+        filterMonth = nil
+        filterEmotion = nil
+        filterDeviation = nil
+        searchText = ""
+        journalViewMode = .list
+        selectedTab = .journals
+        let count = journals.filter { $0.tradeIDs.contains(trade.id) }.count
+        Toast.info("已切到关联日志", "\(trade.instrumentID) · \(count) 篇")
     }
 
     // MARK: - 交易日志 Tab
@@ -879,6 +932,10 @@ struct JournalWindow: View {
         if let m = filterMonth {
             base = base.filter { Self.monthFormatter.string(from: $0.createdAt) == m }
         }
+        // v15.23 batch175 · trade ID filter（仅含关联该 trade 的日志）
+        if let tid = filterTradeID {
+            base = base.filter { $0.tradeIDs.contains(tid) }
+        }
         return Self.sortJournals(base, by: sortKey)
     }
 
@@ -957,10 +1014,11 @@ struct JournalWindow: View {
             ("⌘2", "切到「交易日志」"),
             ("⌘⇧?", "唤出本面板"),
         ]),
-        ("📊 成交记录（v15.23 batch171/174）", [
+        ("📊 成交记录（v15.23 batch171/174/175）", [
             ("合约 filter Menu", "全部 / 各合约（自动列举 + 各合约笔数）"),
             ("排序 Menu", "时间 ↓/↑ · 成交价 ↓ · 数量 ↓（4 档 · 持久化）"),
             ("过滤计数", "右上角显示「N / 总数 笔」"),
+            ("行右键 → 查看关联日志", "切到日志 tab + 紫色 chip · ✕ 清除"),
         ]),
         ("📥 导入 / 导出 / 自动生成", [
             ("⌘⇧M", "导入交割单 CSV（文华 / 通用）"),

@@ -433,6 +433,19 @@ struct TrainingHistoryPanel: View {
                     }
                     .contextMenu {
                         Button("查看评分") { selectedSessionID = session.id }
+                        // v15.23 batch158 · 单 session 分享（复用 batch133 + batch146）
+                        if let score = viewModel.log.score(for: session.id) {
+                            Divider()
+                            Button {
+                                let md = TrainingMarkdownReport.generateSingleSession(
+                                    session, score: score)
+                                let pb = NSPasteboard.general
+                                pb.clearContents()
+                                pb.setString(md, forType: .string)
+                            } label: {
+                                Label("复制单次分析（markdown）", systemImage: "doc.on.doc")
+                            }
+                        }
                         Divider()
                         Button("删除", role: .destructive) {
                             viewModel.log.removeSession(id: session.id)

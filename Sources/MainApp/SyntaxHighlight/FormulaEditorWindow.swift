@@ -66,6 +66,8 @@ public struct FormulaEditorWindow: View {
     @AppStorage("viewState.v1.formulaEditor.activeTabIdx") private var activeTabIdxStored: Int = 0
     /// v15.23 batch45 · 保存时自动格式化（trader 习惯 · 关闭则按原样写盘）
     @AppStorage("viewState.v1.formulaEditor.formatOnSave") private var formatOnSave: Bool = true
+    /// v15.23 batch123 · 保存时清行末空格（IDE 经典 · 默认开 · 配合 git 减少无意义 diff）
+    @AppStorage("viewState.v1.formulaEditor.trimTrailingWhitespace") private var trimTrailingWhitespaceOnSave: Bool = true
     /// v15.23 batch47 · 最近文件历史（最新在前 · cap 5 · JSON 持久化）
     @AppStorage("viewState.v1.formulaEditor.recentFiles") private var recentFilesJSON: String = ""
     /// v15.23 batch105 · minimap 缩略图开关（IDE 级长公式快速导航 · 默认开 · ⌘⇧M 切换）
@@ -715,11 +717,14 @@ public struct FormulaEditorWindow: View {
             }
             .help("保存当前公式为命名片段 / 加载已存片段（@AppStorage 持久化）")
             Spacer()
-            // v15.23 batch45 · 编辑器选项（保存自动格式化等）
+            // v15.23 batch45/123 · 编辑器选项（保存自动格式化 + 清行末空格）
             Menu {
                 Toggle("保存时自动格式化", isOn: $formatOnSave)
+                Toggle("保存时清行末空格", isOn: $trimTrailingWhitespaceOnSave)
                 Divider()
                 Button(formatOnSave ? "✓ 自动格式化已启用" : "▢ 自动格式化已关闭") { }
+                    .disabled(true)
+                Button(trimTrailingWhitespaceOnSave ? "✓ 清行末空格已启用" : "▢ 清行末空格已关闭") { }
                     .disabled(true)
             } label: {
                 Image(systemName: "gearshape")
@@ -878,9 +883,19 @@ public struct FormulaEditorWindow: View {
         }
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            // v15.23 batch45 · 保存前自动格式化（toggle 关时写原样）
-            let textToSave: String = formatOnSave ? MaiLangFormatter.format(sourceText) : sourceText
-            if formatOnSave, textToSave != sourceText {
+            // v15.23 batch45/123 · 保存前格式化 + 清行末空格（顺序：先 format · 后 trim）
+            var textToSave: String = formatOnSave ? MaiLangFormatter.format(sourceText) : sourceText
+            if trimTrailingWhitespaceOnSave {
+                textToSave = textToSave
+                    .components(separatedBy: "\n")
+                    .map { line in
+                        var s = Substring(line)
+                        while let last = s.last, last == " " || last == "\t" { s = s.dropLast() }
+                        return String(s)
+                    }
+                    .joined(separator: "\n")
+            }
+            if textToSave != sourceText {
                 sourceText = textToSave
             }
             try textToSave.write(to: url, atomically: true, encoding: .utf8)

@@ -56,9 +56,12 @@ struct TrainingWindow: View {
             observeTask = nil
         }
         .sheet(item: scoreSheetBinding) { wrapper in
-            TrainingScoreSheet(session: wrapper.session, score: wrapper.score) {
-                viewModel.dismissLastFinishedSheet()
-            }
+            TrainingScoreSheet(session: wrapper.session,
+                               score: wrapper.score,
+                               onDismiss: { viewModel.dismissLastFinishedSheet() },
+                               onRetrain: { pattern in
+                                   viewModel.pendingRetrainPattern = pattern
+                               })
         }
         .sheet(isPresented: $showHelpSheet) {
             helpSheet

@@ -34,6 +34,8 @@ final class TrainingViewModel: ObservableObject {
     /// v15.23 batch118 · 训练形态（preset 启动时记录 · history panel thumbnail 用）
     @Published var sessionScenarioPattern: TrainingScenarioPattern? = nil
     @Published var liveViolations: [DisciplineViolation] = []
+    /// v15.23 batch132 · 「再练同形态」请求（score sheet → controlBar 监听 · 触发后清回 nil）
+    @Published var pendingRetrainPattern: TrainingScenarioPattern? = nil
 
     /// 训练结束后弹 sheet 用 · endSession 写入 · 关闭 sheet 清空
     @Published var lastFinishedSession: TrainingSession? = nil

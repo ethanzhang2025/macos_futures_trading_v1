@@ -87,6 +87,17 @@ struct TrainingControlBar: View {
         .sheet(isPresented: $showStart) {
             startSheet
         }
+        // v15.23 batch132 · 监听 viewModel.pendingRetrainPattern · 找匹配 preset · 弹 startSheet
+        .onChange(of: viewModel.pendingRetrainPattern) { newPattern in
+            guard let pattern = newPattern else { return }
+            // 找该形态的第一个内置 preset · 命中则 applyPreset · 否则仅打开 sheet（trader 自定义）
+            if let preset = TrainingScenarios.defaultPresets.first(where: { $0.pattern == pattern }) {
+                applyPreset(preset)
+            }
+            showStart = true
+            // 立即清回 nil 防止重复触发
+            DispatchQueue.main.async { viewModel.pendingRetrainPattern = nil }
+        }
     }
 
     // MARK: - 状态指示

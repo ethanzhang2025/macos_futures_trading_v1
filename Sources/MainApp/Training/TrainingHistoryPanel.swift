@@ -70,9 +70,12 @@ struct TrainingHistoryPanel: View {
         }
         .sheet(item: selectedSessionBinding) { session in
             if let score = viewModel.log.score(for: session.id) {
-                TrainingScoreSheet(session: session, score: score) {
-                    selectedSessionID = nil
-                }
+                TrainingScoreSheet(session: session,
+                                   score: score,
+                                   onDismiss: { selectedSessionID = nil },
+                                   onRetrain: { pattern in
+                                       viewModel.pendingRetrainPattern = pattern
+                                   })
             }
         }
         .alert("清空全部历史？", isPresented: $showClearConfirm) {

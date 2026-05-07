@@ -18,6 +18,8 @@ struct TrainingScoreSheet: View {
     let session: TrainingSession
     let score: TrainingScore
     let onDismiss: () -> Void
+    /// v15.23 batch132 · 「再练同形态」回调（pattern 非 nil 时显示按钮）
+    var onRetrain: ((TrainingScenarioPattern) -> Void)? = nil
 
     @State private var showViolations: Bool = false
 
@@ -40,6 +42,16 @@ struct TrainingScoreSheet: View {
             Spacer(minLength: 8)
 
             HStack {
+                // v15.23 batch132 · 再练同形态按钮（pattern 非 nil 且 onRetrain 注入时显示）
+                if let pattern = session.scenarioPattern, let cb = onRetrain {
+                    Button {
+                        onDismiss()
+                        cb(pattern)
+                    } label: {
+                        Label("再练同形态", systemImage: "arrow.clockwise")
+                    }
+                    .help("立即开始一次同形态训练（\(pattern.emoji) \(pattern.displayName)）")
+                }
                 Spacer()
                 Button("关闭") { onDismiss() }
                     .keyboardShortcut(.defaultAction)

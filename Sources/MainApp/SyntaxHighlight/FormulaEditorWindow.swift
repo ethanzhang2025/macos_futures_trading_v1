@@ -77,6 +77,8 @@ public struct FormulaEditorWindow: View {
     /// v15.23 batch106 · 主编辑器当前可视行（1-based · minimap viewport 高亮 + 滚动同步）
     @State private var visibleStartLine: Int = 1
     @State private var visibleEndLine: Int = 1
+    /// v15.23 batch129 · split 视图右 pane 显示的 tab 索引（nil = 关闭 split · 默认关）
+    @State private var splitTabIdx: Int? = nil
     /// 多 tab 状态（持久化 · 初始化在 .onAppear）
     @State private var tabs: [FormulaTab] = []
     @State private var activeIdx: Int = 0
@@ -131,6 +133,39 @@ public struct FormulaEditorWindow: View {
                                     visibleEndLine = e
                                 })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // v15.23 batch129 · split 视图右 pane（只读 · 同屏对比另一 tab · ⌘\\ 切换）
+                if let splitIdx = splitTabIdx, splitIdx < tabs.count, splitIdx != activeIdx {
+                    Divider()
+                    let splitTab = tabs[splitIdx]
+                    VStack(spacing: 0) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.split.2x1")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Text(splitTab.name)
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("(只读对比)")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button { splitTabIdx = nil } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 9))
+                            }
+                            .buttonStyle(.borderless)
+                            .help("关闭 split 对比")
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Color.secondary.opacity(0.06))
+                        Divider()
+                        MaiLangCodeView(text: .constant(splitTab.content),
+                                        scheme: scheme,
+                                        fontSize: CGFloat(fontSizeStored),
+                                        isEditable: false)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
                 if showMinimap {
                     let selRange = minimapSelectionLineRange()
                     let warns = MaiLangLint.analyze(sourceText)
@@ -634,6 +669,29 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("o", modifiers: [.command, .shift])
             .help("公式大纲（⌘⇧O · 变量定义列表 · 点击跳转）")
+            // v15.23 batch129 · split 视图（⌘\ 切换 · 选 tab 同屏只读对比）
+            Menu {
+                if splitTabIdx != nil {
+                    Button("✕ 关闭 split") { splitTabIdx = nil }
+                        .keyboardShortcut("\\", modifiers: [.command])
+                    Divider()
+                }
+                ForEach(Array(tabs.enumerated()), id: \.element.id) { idx, tab in
+                    if idx != activeIdx {
+                        let isOn = (splitTabIdx == idx)
+                        Button("\(isOn ? "✓ " : "")\(tab.name)") {
+                            splitTabIdx = isOn ? nil : idx
+                        }
+                    }
+                }
+                if tabs.count <= 1 {
+                    Text("（仅 1 个 tab · 新建第二个再 split）")
+                }
+            } label: {
+                Label("分屏",
+                      systemImage: splitTabIdx != nil ? "square.split.2x1.fill" : "square.split.2x1")
+            }
+            .help("split 视图（⌘\\ 切换 · 选另一 tab 同屏只读对比 · trader 比对 MACD vs KDJ 实现）")
             // v15.23 batch105/109 · minimap 缩略图（⌘⇧M 切换 + Menu 选宽度 4 档）
             Menu {
                 Button(showMinimap ? "▣ 隐藏 minimap" : "▢ 显示 minimap") {
@@ -1213,6 +1271,7 @@ public struct FormulaEditorWindow: View {
             ("点击 tab", "切换 · 内容自动保存"),
             ("双击 tab", "重命名（Enter 保存 · Esc 取消）"),
             ("长按拖动", "重排序 tabs（v15.23 · 拖到目标位置释放）"),
+            ("⌘\\", "split 视图开关（v15.23 · 选另一 tab 同屏只读对比）"),
         ]),
         ("🔧 编译 / 格式化 / 学习", [
             ("⌘B", "编译验证（IndicatorCore Lexer + Parser · 错误显示行列）"),

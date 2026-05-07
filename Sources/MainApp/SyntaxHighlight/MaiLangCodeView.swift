@@ -22,6 +22,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
     let scheme: SyntaxColorScheme
     let fontSize: CGFloat
     let errorMarker: CodeErrorMarker?
+    /// v15.23 batch129 · 是否允许编辑（split 视图右 pane 设 false · 仅看不动 · 仍可选中复制）
+    let isEditable: Bool
     /// v15.22 batch11 · 光标位置回调（line/col 均 1-based · 用于 status bar 显示当前位置）
     let onCursorChange: ((Int, Int) -> Void)?
     /// v15.22 batch23 · 选区范围回调（NSRange · 用于多行 ⌘/ 批量注释等需要 selection 的操作）
@@ -40,6 +42,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
     public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark,
                 fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil,
+                isEditable: Bool = true,
                 onCursorChange: ((Int, Int) -> Void)? = nil,
                 onSelectionChange: ((NSRange) -> Void)? = nil,
                 onTokenAtCursor: ((String?) -> Void)? = nil,
@@ -51,6 +54,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
         self.scheme = scheme
         self.fontSize = fontSize
         self.errorMarker = errorMarker
+        self.isEditable = isEditable
         self.onCursorChange = onCursorChange
         self.onSelectionChange = onSelectionChange
         self.onTokenAtCursor = onTokenAtCursor
@@ -66,6 +70,9 @@ public struct MaiLangCodeView: NSViewRepresentable {
         tv.delegate = context.coordinator
         tv.isRichText = false
         tv.allowsUndo = true
+        // v15.23 batch129 · split 视图右 pane 设 false 仅看不动 · 仍可选中复制
+        tv.isEditable = isEditable
+        tv.isSelectable = true
         tv.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         tv.isAutomaticQuoteSubstitutionEnabled = false   // 防"智能"引号破坏字符串
         tv.isAutomaticDashSubstitutionEnabled = false
@@ -91,6 +98,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
     public func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let tv = scrollView.documentView as? NSTextView else { return }
+        // batch129 · 同步 isEditable 变化（toggle split 时切换）
+        if tv.isEditable != isEditable { tv.isEditable = isEditable }
         // 外部 text 变化（如 sheet 重新打开）→ 同步
         if tv.string != text {
             let cursor = tv.selectedRange()

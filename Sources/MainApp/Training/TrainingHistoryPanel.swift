@@ -22,6 +22,25 @@ struct TrainingHistoryPanel: View {
     @State private var filterPattern: TrainingScenarioPattern? = nil
     /// v15.23 batch130 · 时间段筛选（默认全部 · 与形态 filter 互补 · 同时 AND）
     @State private var filterPeriod: PeriodFilter = .all
+    /// v15.23 batch136 · 排序键（默认日期降序 · 与原行为一致）
+    @State private var sortKey: SortKey = .dateDesc
+
+    /// v15.23 batch136 · 排序枚举
+    enum SortKey: String, CaseIterable {
+        case dateDesc = "日期 ↓"
+        case scoreDesc = "总分 ↓"
+        case scoreAsc = "总分 ↑"
+        case pnlDesc = "盈亏 ↓"
+        case pnlAsc = "盈亏 ↑"
+
+        var icon: String {
+            switch self {
+            case .dateDesc: return "clock"
+            case .scoreDesc, .scoreAsc: return "star"
+            case .pnlDesc, .pnlAsc: return "dollarsign.circle"
+            }
+        }
+    }
 
     /// v15.23 batch130 · 时间段过滤枚举
     enum PeriodFilter: String, CaseIterable, Hashable {
@@ -125,6 +144,16 @@ struct TrainingHistoryPanel: View {
                     Label(filterPeriod.rawValue, systemImage: filterPeriod.icon)
                 }
                 .help("按时间段筛选历史训练（与形态筛选互补 · 同时 AND）")
+                // v15.23 batch136 · 排序 Menu
+                Menu {
+                    ForEach(SortKey.allCases, id: \.self) { k in
+                        let isOn = sortKey == k
+                        Button("\(isOn ? "✓ " : "")\(k.rawValue)") { sortKey = k }
+                    }
+                } label: {
+                    Label(sortKey.rawValue, systemImage: sortKey.icon)
+                }
+                .help("排序 · 5 选（日期降序默认 / 总分升降 / 盈亏升降）")
             }
             // v15.23 batch122 · 形态筛选 Menu（只在有 session 时显示）
             if !viewModel.log.sessions.isEmpty {
@@ -291,6 +320,21 @@ struct TrainingHistoryPanel: View {
         }
         if let cutoff = filterPeriod.cutoff {
             filtered = filtered.filter { $0.startedAt >= cutoff }
+        }
+        // v15.23 batch136 · 排序（recentSessions 已按日期降序 · 仅非默认时重排）
+        switch sortKey {
+        case .dateDesc:
+            break  // 已是默认顺序
+        case .scoreDesc:
+            filtered.sort { (viewModel.log.score(for: $0.id)?.totalScore ?? 0)
+                          > (viewModel.log.score(for: $1.id)?.totalScore ?? 0) }
+        case .scoreAsc:
+            filtered.sort { (viewModel.log.score(for: $0.id)?.totalScore ?? 0)
+                          < (viewModel.log.score(for: $1.id)?.totalScore ?? 0) }
+        case .pnlDesc:
+            filtered.sort { $0.pnl > $1.pnl }
+        case .pnlAsc:
+            filtered.sort { $0.pnl < $1.pnl }
         }
         let hasAnyFilter = filterPattern != nil || filterPeriod != .all
         return List {

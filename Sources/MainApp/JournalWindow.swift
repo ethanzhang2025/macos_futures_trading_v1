@@ -211,6 +211,7 @@ struct JournalWindow: View {
 
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -948,7 +949,7 @@ struct JournalWindow: View {
             .width(min: 60, ideal: 70)
         }
         .font(.system(.body, design: .monospaced))
-        // v15.23 batch175/178/184 · 成交右键操作
+        // v15.23 batch175/178/184/202 · 成交右键操作
         .contextMenu(forSelectionType: Trade.ID.self) { ids in
             if ids.count == 1, let id = ids.first, let trade = trades.first(where: { $0.id == id }) {
                 let count = journals.filter { $0.tradeIDs.contains(id) }.count
@@ -956,6 +957,10 @@ struct JournalWindow: View {
                     showRelatedJournals(for: trade)
                 }
                 .disabled(count == 0)
+                // v15.23 batch202 · 跨窗口跳主图（trader 复盘看图 · 与 Watchlist/Alert 模式一致）
+                Button("在主图查看「\(trade.instrumentID)」") {
+                    openInstrumentInChart(trade.instrumentID)
+                }
                 Divider()
                 // v15.23 batch184 · 一键 filter 此合约（trader 看完一笔想看同合约其他）
                 Button("仅看此合约「\(trade.instrumentID)」") {
@@ -978,6 +983,14 @@ struct JournalWindow: View {
         guard !selectedTradeIDs.isEmpty else { return }
         pendingNewJournalTradeIDs = selectedTradeIDs
         journalSheetState = .createJournal
+    }
+
+    /// v15.23 batch202 · 跨窗口跳主图（与 Watchlist/Alert openInstrumentInChart 同模式）
+    @MainActor
+    private func openInstrumentInChart(_ instrumentID: String) {
+        openWindow(id: "chart")
+        NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: instrumentID)
+        Toast.info("已切到主图", "\(instrumentID)")
     }
 
     /// v15.23 batch189 · 切到 trades tab + 选中关联成交（与 batch175 反向）
@@ -1297,6 +1310,7 @@ struct JournalWindow: View {
             ("⌘D / 右键 → 建关联日志 (batch178)", "选中 N 笔后 ⌘D · 弹新建 sheet 预填 tradeIDs"),
             ("「导出 filter」按钮 (batch180)", "导出当前 filter / 搜索后的 trades CSV（含 BOM）"),
             ("⌘L (batch182)", "跳转选中 trade 关联日志（单选 · 等价右键查看关联）"),
+            ("右键 → 在主图查看 (batch202)", "切 ChartScene + 加载该合约（与 Watchlist/Alert 模式一致）"),
         ]),
         ("📥 导入 / 导出 / 自动生成", [
             ("⌘⇧M", "导入交割单 CSV（文华 / 通用）"),

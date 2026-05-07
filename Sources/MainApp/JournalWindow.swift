@@ -39,6 +39,28 @@ private enum JournalViewMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// MARK: - 日志排序（v15.23 batch164 · 与 TrainingHistory sortKey 对齐）
+
+private enum JournalSortKey: String, CaseIterable, Identifiable {
+    case updatedDesc    = "更新 ↓"
+    case createdDesc    = "创建 ↓"
+    case titleAsc       = "标题 A→Z"
+    case emotionGroup   = "按情绪"
+    case deviationGroup = "按偏差"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .updatedDesc:    return "clock.arrow.circlepath"
+        case .createdDesc:    return "calendar"
+        case .titleAsc:       return "textformat.abc"
+        case .emotionGroup:   return "face.smiling"
+        case .deviationGroup: return "exclamationmark.triangle"
+        }
+    }
+}
+
 // MARK: - 月度聚合（commit 4/4）
 
 private struct MonthlyAggregate: Identifiable {
@@ -102,6 +124,10 @@ struct JournalWindow: View {
     // 搜索 + 视图模式（commit 4/4）
     @State private var searchText: String = ""
     @State private var journalViewMode: JournalViewMode = .list
+
+    // v15.23 batch164 · 排序（与 TrainingHistory sortKey 对齐 · @AppStorage 持久化）
+    @AppStorage("viewState.v1.journal.sortKey") private var sortKeyRaw: String = JournalSortKey.updatedDesc.rawValue
+    private var sortKey: JournalSortKey { JournalSortKey(rawValue: sortKeyRaw) ?? .updatedDesc }
 
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
@@ -329,6 +355,20 @@ struct JournalWindow: View {
 
             Spacer()
 
+            // v15.23 batch164 · 排序 Menu（5 档 · 仅列表模式有意义 · 月度模式按月份排序固定）
+            Menu {
+                ForEach(JournalSortKey.allCases) { k in
+                    let isOn = sortKey == k
+                    Button("\(isOn ? "✓ " : "")\(k.rawValue)") { sortKeyRaw = k.rawValue }
+                }
+            } label: {
+                Label(sortKey.rawValue, systemImage: sortKey.icon)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 110)
+            .help("排序方式（5 档 · 持久化）")
+            .disabled(journalViewMode != .list)
+
             Picker("视图", selection: $journalViewMode) {
                 ForEach(JournalViewMode.allCases) { m in
                     Text(m.rawValue).tag(m)
@@ -500,17 +540,48 @@ struct JournalWindow: View {
 
     /// 过滤：空格分隔多个 query · AND 匹配（所有 query 都需命中 title / reason / lesson / tags 任一字段）
     /// 大小写不敏感 · v1 简单 contains（v2 留倒排索引）
+    /// v15.23 batch164 · filter 后再 apply sortKey（5 档）
     private var filteredJournals: [TradeJournal] {
         let queries = searchText
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
-        guard !queries.isEmpty else { return journals }
-        return journals.filter { j in
+        let base: [TradeJournal] = queries.isEmpty ? journals : journals.filter { j in
             queries.allSatisfy { q in
                 j.title.localizedCaseInsensitiveContains(q)
                     || j.reason.localizedCaseInsensitiveContains(q)
                     || j.lesson.localizedCaseInsensitiveContains(q)
                     || j.tags.contains(where: { $0.localizedCaseInsensitiveContains(q) })
+            }
+        }
+        return Self.sortJournals(base, by: sortKey)
+    }
+
+    /// v15.23 batch164 · 排序（5 档 · group 类型用 enum allCases 顺序 · tiebreak updatedAt desc）
+    fileprivate static func sortJournals(_ items: [TradeJournal], by key: JournalSortKey) -> [TradeJournal] {
+        switch key {
+        case .updatedDesc:
+            return items.sorted { $0.updatedAt > $1.updatedAt }
+        case .createdDesc:
+            return items.sorted { $0.createdAt > $1.createdAt }
+        case .titleAsc:
+            return items.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .emotionGroup:
+            let order = Dictionary(uniqueKeysWithValues:
+                JournalEmotion.allCases.enumerated().map { ($1, $0) })
+            return items.sorted { (a, b) in
+                let ai = order[a.emotion] ?? 0
+                let bi = order[b.emotion] ?? 0
+                if ai != bi { return ai < bi }
+                return a.updatedAt > b.updatedAt
+            }
+        case .deviationGroup:
+            let order = Dictionary(uniqueKeysWithValues:
+                JournalDeviation.allCases.enumerated().map { ($1, $0) })
+            return items.sorted { (a, b) in
+                let ai = order[a.deviation] ?? 0
+                let bi = order[b.deviation] ?? 0
+                if ai != bi { return ai < bi }
+                return a.updatedAt > b.updatedAt
             }
         }
     }
@@ -556,7 +627,7 @@ struct JournalWindow: View {
 
     private var footer: some View {
         HStack {
-            Text("⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 搜索 + 月度聚合 · M5 接 SQLiteJournalStore")
+            Text("⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 搜索 + 5 档排序 + 月度聚合 · M5 接 SQLiteJournalStore")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()

@@ -587,10 +587,47 @@ struct JournalWindow: View {
             journalsToolbar
             Divider()
             switch journalViewMode {
-            case .list:    journalsTable
+            case .list:
+                if filteredJournals.isEmpty {
+                    journalsEmptyState
+                } else {
+                    journalsTable
+                }
             case .monthly: monthlyView
             }
         }
+    }
+
+    /// v15.23 batch185 · journals 列表 empty state（区分 0 篇 vs filter 空）
+    @ViewBuilder
+    private var journalsEmptyState: some View {
+        let hasFilter = !searchText.isEmpty || filterEmotion != nil || filterDeviation != nil
+            || filterMonth != nil || filterTradeID != nil
+        VStack(spacing: 12) {
+            Image(systemName: hasFilter ? "magnifyingglass.circle" : "book.closed")
+                .font(.system(size: 42))
+                .foregroundColor(.secondary.opacity(0.5))
+            if journals.isEmpty {
+                Text("还没有日志").font(.title3).foregroundColor(.secondary)
+                Text("⌘⇧J 新建第一篇 · ⌘⇧A 从成交自动生成草稿")
+                    .font(.caption).foregroundColor(.secondary)
+            } else if hasFilter {
+                Text("没有匹配的日志").font(.title3).foregroundColor(.secondary)
+                Text("当前 filter 下无结果 · 试试清除部分条件").font(.caption).foregroundColor(.secondary)
+                Button("清除全部 filter") {
+                    searchText = ""
+                    filterEmotion = nil
+                    filterDeviation = nil
+                    filterMonth = nil
+                    filterTradeID = nil
+                }
+                .controlSize(.small)
+                .padding(.top, 4)
+            } else {
+                Text("无日志可显示").font(.title3).foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var journalsToolbar: some View {

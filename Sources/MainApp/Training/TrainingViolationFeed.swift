@@ -13,6 +13,7 @@
 
 import SwiftUI
 import Foundation
+import AppKit
 import TradingCore
 
 struct TrainingViolationFeed: View {
@@ -20,6 +21,10 @@ struct TrainingViolationFeed: View {
     @ObservedObject var viewModel: TrainingViewModel
     /// v15.23 batch141 · severity 过滤（默认全部 · trader 只关心 error 时切换）
     @State private var filterSeverity: SeverityFilter = .all
+    /// v15.23 batch142 · error 违规声音提醒（默认开 · trader 看主图时听到提醒）
+    @AppStorage("viewState.v1.training.soundOnError") private var soundOnError: Bool = true
+    /// 上次 violation 数（用于检测新增 error）
+    @State private var lastViolationCount: Int = 0
 
     enum SeverityFilter: String, CaseIterable {
         case all = "全部"
@@ -37,6 +42,15 @@ struct TrainingViolationFeed: View {
                 filteredEmptyState
             } else {
                 list
+            }
+        }
+        // v15.23 batch142 · 新增 error 违规播提示音（detect 通过 count 增加 + last 是 error）
+        .onChange(of: viewModel.liveViolations.count) { newCount in
+            defer { lastViolationCount = newCount }
+            guard soundOnError, newCount > lastViolationCount else { return }
+            // liveViolations 用 insert(at: 0) 头插入 · 最新在 [0]
+            if let latest = viewModel.liveViolations.first, latest.severity == .error {
+                NSSound(named: "Funk")?.play()
             }
         }
     }
@@ -92,7 +106,19 @@ struct TrainingViolationFeed: View {
                 .frame(width: 200)
                 .labelsHidden()
                 .help("按严重度筛选实时违规")
+            }
 
+            // v15.23 batch142 · 声音提醒齿轮 Menu
+            Menu {
+                Toggle("error 违规播 \"Funk\"", isOn: $soundOnError)
+            } label: {
+                Image(systemName: soundOnError ? "speaker.wave.2" : "speaker.slash")
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 28)
+            .help("声音提醒（默认开 · trader 看主图时听到提醒）")
+
+            if !viewModel.liveViolations.isEmpty {
                 Button {
                     viewModel.liveViolations.removeAll()
                 } label: {

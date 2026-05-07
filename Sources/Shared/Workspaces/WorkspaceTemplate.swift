@@ -96,6 +96,10 @@ public struct WorkspaceTemplate: Sendable, Codable, Equatable, Identifiable, Has
     public var sortIndex: Int
     public var createdAt: Date
     public var updatedAt: Date
+    /// WP-60 · 修改次数（新建=1 · 每次 mutate 字段 +1）· LWW 副决胜
+    public var version: Int
+    /// WP-60 · 软删除时间戳（tombstone）
+    public var deletedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -105,7 +109,9 @@ public struct WorkspaceTemplate: Sendable, Codable, Equatable, Identifiable, Has
         shortcut: WorkspaceShortcut? = nil,
         sortIndex: Int = 0,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        version: Int = 1,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -115,6 +121,42 @@ public struct WorkspaceTemplate: Sendable, Codable, Equatable, Identifiable, Has
         self.sortIndex = sortIndex
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.version = version
+        self.deletedAt = deletedAt
+    }
+
+    // MARK: - Codable（兼容旧 JSON · 缺 version/deletedAt 时回退）
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, kind, windows, shortcut, sortIndex, createdAt, updatedAt, version, deletedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.kind = try c.decode(Kind.self, forKey: .kind)
+        self.windows = try c.decode([WindowLayout].self, forKey: .windows)
+        self.shortcut = try c.decodeIfPresent(WorkspaceShortcut.self, forKey: .shortcut)
+        self.sortIndex = try c.decode(Int.self, forKey: .sortIndex)
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+        self.updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        self.version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        self.deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(windows, forKey: .windows)
+        try c.encodeIfPresent(shortcut, forKey: .shortcut)
+        try c.encode(sortIndex, forKey: .sortIndex)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(version, forKey: .version)
+        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
     }
 }
 
@@ -166,8 +208,10 @@ public struct WorkspaceBook: Sendable, Codable, Equatable {
     @discardableResult
     public mutating func renameTemplate(id: UUID, to newName: String, now: Date = Date()) -> Bool {
         guard let index = templates.firstIndex(where: { $0.id == id }) else { return false }
+        guard templates[index].name != newName else { return true }
         templates[index].name = newName
         templates[index].updatedAt = now
+        templates[index].version += 1
         return true
     }
 
@@ -246,6 +290,8 @@ public struct WorkspaceBook: Sendable, Codable, Equatable {
         merged.sortIndex = templates[index].sortIndex
         merged.createdAt = templates[index].createdAt
         merged.updatedAt = now
+        merged.version = templates[index].version + 1
+        merged.deletedAt = templates[index].deletedAt
         templates[index] = merged
         return true
     }
@@ -258,10 +304,28 @@ public struct WorkspaceBook: Sendable, Codable, Equatable {
             for i in templates.indices where i != targetIdx && templates[i].shortcut == shortcut {
                 templates[i].shortcut = nil
                 templates[i].updatedAt = now
+                templates[i].version += 1
             }
         }
         templates[targetIdx].shortcut = shortcut
         templates[targetIdx].updatedAt = now
+        templates[targetIdx].version += 1
+        return true
+    }
+
+    // MARK: - WP-60 同步 · 软删除
+
+    /// 软删除模板（设 deletedAt + version+1 + 不切活跃）· 同步层用此而非物理 removeTemplate
+    @discardableResult
+    public mutating func softDeleteTemplate(id: UUID, now: Date = Date()) -> Bool {
+        guard let index = templates.firstIndex(where: { $0.id == id }) else { return false }
+        guard templates[index].deletedAt == nil else { return false }
+        templates[index].deletedAt = now
+        templates[index].updatedAt = now
+        templates[index].version += 1
+        if activeTemplateID == id {
+            activeTemplateID = templates.first { $0.deletedAt == nil }?.id
+        }
         return true
     }
 

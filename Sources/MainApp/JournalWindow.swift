@@ -282,6 +282,8 @@ struct JournalWindow: View {
             Divider().frame(height: 24)
             stat("总成交", "\(trades.count) 笔")
             stat("总日志", "\(journals.count) 篇")
+            // v15.23 batch172 · 今日 / 本周 chip（trader 一眼看节奏）
+            todayWeekChips
             Spacer()
             Button {
                 presentImportPanel()
@@ -324,6 +326,39 @@ struct JournalWindow: View {
             Text(label).font(.caption).foregroundColor(.secondary)
             Text(value).font(.system(size: 14, design: .monospaced))
         }
+    }
+
+    /// v15.23 batch172 · 今日 + 本周 chip（trader 看节奏 · trades 按 timestamp · journals 按 updatedAt）
+    @ViewBuilder
+    private var todayWeekChips: some View {
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        let weekStart = cal.date(byAdding: .day, value: -7, to: now) ?? now
+
+        let tradesToday = trades.filter { cal.isDateInToday($0.timestamp) }.count
+        let journalsToday = journals.filter { cal.isDateInToday($0.updatedAt) }.count
+        let tradesWeek = trades.filter { $0.timestamp >= weekStart }.count
+        let journalsWeek = journals.filter { $0.updatedAt >= weekStart }.count
+
+        HStack(spacing: 6) {
+            chipPill("☀ 今日", "\(tradesToday) 成 / \(journalsToday) 日", color: .orange,
+                     active: tradesToday > 0 || journalsToday > 0)
+            chipPill("📅 本周", "\(tradesWeek) 成 / \(journalsWeek) 日", color: .blue,
+                     active: tradesWeek > 0 || journalsWeek > 0)
+        }
+    }
+
+    private func chipPill(_ leading: String, _ trailing: String, color: Color, active: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(leading).font(.caption2).bold()
+            Text(trailing).font(.caption2).monospacedDigit()
+        }
+        .foregroundColor(active ? color : .secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background((active ? color : .gray).opacity(active ? 0.15 : 0.08))
+        .clipShape(Capsule())
+        .help("\(leading) · 成交 / 日志（成交按 timestamp · 日志按 updatedAt · 本周近 7 天）")
     }
 
     // MARK: - Tab 栏

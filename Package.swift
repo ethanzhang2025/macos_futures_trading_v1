@@ -306,7 +306,8 @@ let package = Package(
                 "Shared", "DataCore", "ChartCore", "IndicatorCore",
                 "JournalCore", "AlertCore", "WorkspaceCore", "SyncCore"
             ],
-            path: "Sources/iPadApp"
+            path: "Sources/iPadApp",
+            exclude: ["README.md"]
         )
     ]
 )

@@ -425,6 +425,83 @@
 - [ ] 文华 .wh 公式批量导入（⌘⇧I · NSOpenPanel · NSAlert 报告）实测 5+ 公式
 - [ ] swift test 验：943/221 全绿（含 quarterlyPnL +3 / HUDFieldsBook +10 / Interpreter +3）
 
+### v15.24 WP-60 CloudKit 同步预埋（batch001-010 · 10 commit）
+
+**当前 Linux 已完工**：1637/313 全绿 · 0 flaky · ~70 新测试 · SyncEngineDemo 4 场景
+
+**Linux 已无法验的部分**（必须 Mac 切机）：
+- [ ] **CloudKit container 创建**：Apple Developer Portal 新建 `iCloud.com.<yourorg>.FuturesTerminal`
+- [ ] **MainApp.entitlements**：iCloud + CloudKit capability + container ID
+- [ ] **Schema deploy**：CloudKit Dashboard Development env → Production
+- [ ] **CloudKitSyncBackend 容器联调**：`CKContainer(identifier:).privateCloudDatabase`
+- [ ] **两台 Mac 同步 watchlist**：A 加分组 → B 拉到 / A 改名 → B 同步 / A 软删 → B 见 tombstone
+- [ ] **冲突场景**：A B 同时改同一分组（双方 v>1 + 内容不同）→ ConflictLog 记录
+- [ ] **离线 + 重连**：A 飞行模式累积 5 改动 → 重连 → 全部 push · 不丢
+- [ ] **iPad 同步**（接 v15.25 iPadApp 后）
+
+**Linux 可验完整路径**（已通过 SyncEngineDemo 第 24 个真数据 demo）：
+- [x] LWW 决胜 / tombstone 双向 / 多设备并发 / 离线重连 / baseline 隔离
+
+**新业务模型字段（同步预埋 · 旧 JSON 全部兼容回退）**：
+- Watchlist：version + deletedAt + softDeleteGroup
+- WorkspaceTemplate：version + deletedAt + softDeleteTemplate（自动切活跃）
+- TradeJournal：version + deletedAt（敏感 · 阿里云 Stage B）
+- Alert：updatedAt + version + deletedAt（敏感 · 阿里云 Stage B · canTrigger 含 tombstone）
+- SyncableSettings：UI 偏好白名单 13 keys + 全局单条 + UserDefaults snapshot
+
+**配置参考**：`Sources/SyncCore/CloudKit/README.md`（Mac 切机完整步骤）
+
+**Mac 端验收**：现有 UI 不应有任何 visible 变化 · 同步逻辑全在 backend · 切机后 swift test 仍 1637+ 全绿
+
+### v15.25 WP-61 iPad 基础版（batch001-009 · 9 commit）
+
+**当前 Linux 已完工**：iPadApp 8 文件全编译过 · fallback @main 工作 · 所有 SwiftUI iOS 代码 `#if canImport(SwiftUI) && os(iOS)` 隔离
+
+**Linux 完全无法验**（必须 Mac 切机用 Xcode + iPad simulator）：
+
+#### A. 应用壳（batch001-002）
+- [ ] iPadApp 启动不闪退 · NavigationSplitView 横屏 balanced / 竖屏 sidebar 自动隐藏
+- [ ] safe area 正确（圆角 / 刘海 / Dynamic Island）
+
+#### B. 自选列表（batch003）
+- [ ] demoSeed 注入 3 分组 9 合约（黑色板块 / 贵金属 / 有色）
+- [ ] 点击合约 → detail 切换 / contextMenu + swipe 删除 / ✏️ 重命名 sheet medium detent
+
+#### C. K 线图表（batch004）
+- [ ] SwiftUI Canvas 渲染（红涨绿跌 + 影线 + 5×5 网格）
+- [ ] pinch zoom（visibleBarCount 20-200）+ drag pan（10pt = 1 根 + clamp）
+
+#### D. 多周期 + 指标（batch005）
+- [ ] 8 周期 chip：1m / 5m / 15m / 30m / 1H / 4H / 日 / 周（accentColor + semibold 选中态）
+- [ ] 指标 Menu MA/EMA/BOLL toggle（选中态 ✓ + 数量 chip）
+- [ ] 切周期图表数据重新生成（不同 volatility）
+
+#### E. CloudKit 同步入口（batch006）
+- [ ] sidebar gear icon → SettingsSheet
+- [ ] **若启用真 CloudKit**：替换 SyncCoordinator_iOS.makeDefault 内 backend · 配 entitlements · simulator 登录 iCloud
+- [ ] 与 Mac MainApp 共用 container · 数据天然互通（自选 / 工作区 / settings 三 recordType）
+
+#### F. Settings sheet（batch007）
+- [ ] sheet medium/large detent / 主题 segmented + @AppStorage / 4 SyncStatus 图标 + 文字 / 冲突日志前 10 条 + 清空
+- [ ] preferredColorScheme 主题切换立即应用
+
+#### G. 行情 detail（batch008）
+- [ ] 顶部条下方：最新价 24pt monospaced 红涨绿跌 + 涨跌% / OHLC 2×2 Grid（高=红 低=绿）/ 量 + 持仓量
+
+#### H. 视觉细节（trader 触感）
+- [ ] 触屏区 ≥ 44×32（HIG）
+- [ ] monospaced 数字（价格 / OHLC / 涨跌）
+- [ ] 红涨绿跌全局一致（中国习惯）
+- [ ] dark mode 切换不破布局
+- [ ] iPad 12.9" / 10.9" / mini 三种 size class 适配
+
+**配置参考**：`Sources/iPadApp/README.md`（完整切机指南 + 验收清单 H 大类 + 故障排查）
+
+**Stage A 范围内不做**（Stage B 接入）：
+- 下单 / 复盘 12 图 / 训练 / 预警 / 工作区模板（iPad 不展示）
+- Apple Pencil / 外接屏 / 多窗口 Stage Manager（B06）
+- Metal 真渲染 / 实时 Tick（polish · 当前 Canvas + demoBars 够 trader 看盘）
+
 ---
 
 ## 切机批验启动命令

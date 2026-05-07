@@ -932,12 +932,31 @@
     - 两台 Mac 同步联调（自选 / 模板 / settings · 冲突 / 离线 / 复活）
     - iPad 同步（WP-61 接入后）
 
-### ⬜ WP-61 · iPad 基础版
-- **时点**：M7
+### 🟡 WP-61 · iPad 基础版（v15.25 batch001-009 落地基础壳 · M7 联调启用）
+- **时点**：M7（✅ Linux 代码侧完工 v15.25 · ⏳ Mac 切机联调 + CloudKit 接入）
 - **负责**：你
 - **交付**：基础同步看盘、多周期切换、自选、图表（不做完整专业工作流）
 - **DoD**：Mac 数据同步到 iPad 后可正常看盘
 - **锚点**：D2 §2 M7-M9、D1 §2.5 差异化
+- **已交付**（v15.25 batch001-009 · 2026-05-07 · 9 commit · 8 新文件 · ~1500 行 SwiftUI · Linux 全编译过）：
+  - **batch001 iPadApp executable target 骨架**：@main + WindowGroup + iPadPlaceholderView · `#if canImport(SwiftUI) && os(iOS)` 隔离 · Linux/macOS fallback @main
+  - **batch002 IPadRootView**：NavigationSplitView 双栏（balanced）+ @State selection 绑定 + columnVisibility
+  - **batch003 WatchlistView_iOS**：@MainActor WatchlistViewModel + WatchlistBookStore 注入 + demoSeed 3 分组 9 合约 + Section 分组 + contextMenu + swipe 删除 + ✏️ 重命名 sheet
+  - **batch004 ChartView_iOS**：SwiftUI Canvas + Path 渲染 K 线（红涨绿跌中国习惯）+ MagnificationGesture pinch zoom + DragGesture pan + crosshair OHLC 浮窗 + SeededRNG demo 数据 200 根
+  - **batch005 PeriodPicker_iOS**：8 周期 chip 横向选择器 + 指标 Menu（MA/EMA/BOLL toggle · 选中数 chip）+ 自绘 segmented（HIG 触屏区 44×32）
+  - **batch006 SyncCoordinator_iOS**：@MainActor ObservableObject + 注入任意 SyncBackend + syncAll/syncWatchlist/syncWorkspace/syncSettings + InMemoryConflictLog 累计 + RecordTypeOutcome / SyncOutcomeBundle 输出模型 + makeDefault 工厂（Mac 切机替换 CloudKitSyncBackend）
+  - **batch007 SettingsSheet_iOS**：4 Section · 同步状态（4 SyncStatus 图标+色）/ 主题 segmented + @AppStorage / 冲突日志（前 10 条 · 清空）/ 关于 + AppTheme enum + preferredColorScheme 接入
+  - **batch008 QuoteDetailPanel_iOS**：3 列布局（最新价 24pt monospaced 红涨绿跌 / OHLC 2×2 Grid / 量 + 持仓量）+ 共用 ChartView_iOS.demoBars 数据一致
+  - **batch009 文档 + Mac 验收**：Sources/iPadApp/README.md 完整切机指南（Xcode + Simulator + CloudKit + entitlements + 验收清单 H 大类 + 故障排查表）+ Mac 未测清单 v15.25 章节
+  - **架构沉淀**：
+    - iOS-only target 模式：`#if canImport(SwiftUI) && os(iOS)` 全文隔离 · Linux/macOS fallback @main
+    - 跨端模型复用：Shared.WatchlistBook / KLine / KLinePeriod / SyncCore / SyncableSettings 全跨端 · iPad 0 复刻
+    - UI 不照搬 Mac（A12 §10）：NavigationSplitView 替代多窗口 / sheet 替代 ⌘ 快捷键 / gesture 替代 trackpad / chip 替代 segmented Picker
+    - CloudKit container 共享：iPad 与 Mac MainApp 用同 container · 数据天然互通
+  - **Mac 切机后续工作**（详见 §10 Mac 未测清单 v15.25 + Sources/iPadApp/README.md）：
+    - Xcode 配 iPadApp scheme + iPad simulator
+    - CloudKit container + iPadApp.entitlements 配置（可选 · 不配跑 Mock）
+    - 8 大类 ~50 项视觉验收（应用壳 / 自选 / 图表 / 多周期 / 同步 / Settings / 行情 detail / 视觉细节）
 
 ### ⬜ WP-62 · 麦语言基础版 30-50 函数
 - **时点**：M8

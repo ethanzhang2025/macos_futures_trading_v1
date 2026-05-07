@@ -286,6 +286,13 @@ let package = Package(
             name: "IncrementalIndicatorBenchmark",
             dependencies: ["Shared", "IndicatorCore"],
             path: "Tools/IncrementalIndicatorBenchmark"
+        ),
+        // SyncEngineDemo · WP-60 batch009 · 第 24 个真数据 demo
+        // 演示 LWW / 冲突 / 双设备 ping-pong / 删 vs 改竞争 / 离线重连 · Mock backend · Linux 100% 跑
+        .executableTarget(
+            name: "SyncEngineDemo",
+            dependencies: ["Shared", "SyncCore"],
+            path: "Tools/SyncEngineDemo"
         )
     ]
 )

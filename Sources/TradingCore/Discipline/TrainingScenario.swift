@@ -24,6 +24,8 @@ public struct TrainingScenario: Sendable, Codable, Equatable, Identifiable {
     public let initialBalance: Decimal
     public let recommendedDurationMinutes: Int
     public let difficulty: Difficulty
+    /// v15.23 batch115 · 价格形态枚举（用于 K 线 thumbnail 生成 · trader 选场景前一眼看懂走势特征）
+    public let pattern: TrainingScenarioPattern
 
     public init(id: UUID = UUID(),
                 name: String,
@@ -33,7 +35,8 @@ public struct TrainingScenario: Sendable, Codable, Equatable, Identifiable {
                 description: String,
                 initialBalance: Decimal,
                 recommendedDurationMinutes: Int,
-                difficulty: Difficulty = .medium) {
+                difficulty: Difficulty = .medium,
+                pattern: TrainingScenarioPattern = .oscillation) {
         self.id = id
         self.name = name
         self.instrumentID = instrumentID
@@ -43,6 +46,27 @@ public struct TrainingScenario: Sendable, Codable, Equatable, Identifiable {
         self.initialBalance = initialBalance
         self.recommendedDurationMinutes = recommendedDurationMinutes
         self.difficulty = difficulty
+        self.pattern = pattern
+    }
+
+    // batch115 · 自定义 Codable 兼容 v15.23 batch15-114 老 JSON（无 pattern 字段 → 默认 .oscillation）
+    private enum CodingKeys: String, CodingKey {
+        case id, name, instrumentID, startDate, endDate, description
+        case initialBalance, recommendedDurationMinutes, difficulty, pattern
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.instrumentID = try c.decode(String.self, forKey: .instrumentID)
+        self.startDate = try c.decode(Date.self, forKey: .startDate)
+        self.endDate = try c.decode(Date.self, forKey: .endDate)
+        self.description = try c.decode(String.self, forKey: .description)
+        self.initialBalance = try c.decode(Decimal.self, forKey: .initialBalance)
+        self.recommendedDurationMinutes = try c.decode(Int.self, forKey: .recommendedDurationMinutes)
+        self.difficulty = try c.decodeIfPresent(Difficulty.self, forKey: .difficulty) ?? .medium
+        self.pattern = try c.decodeIfPresent(TrainingScenarioPattern.self, forKey: .pattern) ?? .oscillation
     }
 
     public enum Difficulty: String, Sendable, Codable, Equatable, CaseIterable {
@@ -82,6 +106,20 @@ public struct TrainingScenario: Sendable, Codable, Equatable, Identifiable {
     }
 }
 
+/// v15.23 batch115 · 训练场景价格形态（用于 K 线 thumbnail 生成）
+/// trader 选场景时预先看懂走势特征 · 不同形态对应不同纪律训练焦点
+public enum TrainingScenarioPattern: String, Sendable, Codable, Equatable, CaseIterable {
+    case oscillation     // 震荡（无方向 sin 波 · 训练止损不追高）
+    case uptrend         // 单边上升趋势（训练持仓不被洗）
+    case downtrend       // 单边下降趋势
+    case vReversal       // V 反转（先跌后涨 · 训练 V 反不追、不报复加仓）
+    case breakout        // 突破（横盘后单边突破 · 训练突破回踩进场）
+    case fakeBreakout    // 假突破后真突破（训练用量能确认信号）
+    case gapAndHalt      // 跳空 + 熔断（极端行情 · 训练清仓决策）
+    case nightRally      // 夜盘急拉（训练快速反应 + 不追高）
+    case multiPhase      // 4 段综合（震荡→突破→趋势→反转 · 综合考核）
+}
+
 /// 静态推荐场景库（v15.23 batch15 · 8 个典型期货训练场景）
 public enum TrainingScenarios {
 
@@ -96,7 +134,8 @@ public enum TrainingScenarios {
             description: "无方向震荡 · 训练止损纪律 · 不追高不抄底",
             initialBalance: 100_000,
             recommendedDurationMinutes: 60,
-            difficulty: .easy
+            difficulty: .easy,
+            pattern: .oscillation
         ),
         TrainingScenario(
             name: "IF 趋势日（学持仓）",
@@ -106,7 +145,8 @@ public enum TrainingScenarios {
             description: "明显单边趋势 · 训练持仓不被洗出去 · 主升浪不平掉",
             initialBalance: 200_000,
             recommendedDurationMinutes: 90,
-            difficulty: .easy
+            difficulty: .easy,
+            pattern: .uptrend
         ),
 
         // 中级
@@ -118,7 +158,8 @@ public enum TrainingScenarios {
             description: "高位插针 + 急跌反弹 · 训练 V 反不追、不报复加仓",
             initialBalance: 300_000,
             recommendedDurationMinutes: 75,
-            difficulty: .medium
+            difficulty: .medium,
+            pattern: .vReversal
         ),
         TrainingScenario(
             name: "黄金避险拉升（学突破）",
@@ -128,7 +169,8 @@ public enum TrainingScenarios {
             description: "突破历史高点 · 训练突破回踩进场 · 不抢、不死多",
             initialBalance: 250_000,
             recommendedDurationMinutes: 60,
-            difficulty: .medium
+            difficulty: .medium,
+            pattern: .breakout
         ),
         TrainingScenario(
             name: "棉花横盘破位（学过滤假突破）",
@@ -138,7 +180,8 @@ public enum TrainingScenarios {
             description: "长时间横盘 + 假突破 + 真突破 · 训练用量能确认信号真假",
             initialBalance: 150_000,
             recommendedDurationMinutes: 90,
-            difficulty: .medium
+            difficulty: .medium,
+            pattern: .fakeBreakout
         ),
 
         // 高级
@@ -150,7 +193,8 @@ public enum TrainingScenarios {
             description: "跳空 + 熔断 · 训练极端行情下的清仓决策 · 资金保命第一",
             initialBalance: 500_000,
             recommendedDurationMinutes: 120,
-            difficulty: .hard
+            difficulty: .hard,
+            pattern: .gapAndHalt
         ),
         TrainingScenario(
             name: "螺纹钢夜盘急拉（学夜盘节奏）",
@@ -160,7 +204,8 @@ public enum TrainingScenarios {
             description: "夜盘消息驱动 · 训练快速反应 · 但避免追高 · 凌晨睡觉守纪律",
             initialBalance: 200_000,
             recommendedDurationMinutes: 60,
-            difficulty: .hard
+            difficulty: .hard,
+            pattern: .nightRally
         ),
         TrainingScenario(
             name: "全天 4 行情（综合考核）",
@@ -170,7 +215,8 @@ public enum TrainingScenarios {
             description: "震荡 → 突破 → 趋势 → 反转 4 段 · 综合训练所有纪律",
             initialBalance: 300_000,
             recommendedDurationMinutes: 240,
-            difficulty: .hard
+            difficulty: .hard,
+            pattern: .multiPhase
         ),
     ]
 

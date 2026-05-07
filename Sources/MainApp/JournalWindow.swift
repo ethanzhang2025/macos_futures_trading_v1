@@ -492,6 +492,21 @@ struct JournalWindow: View {
 
             Spacer()
 
+            // v15.23 batch179 · 当前 filter 金额合计（trader 看资金占用 / 印花费率）
+            let totalAmount = filteredTrades.reduce(Decimal.zero) { $0 + $1.price * Decimal($1.volume) }
+            let totalFee = filteredTrades.reduce(Decimal.zero) { $0 + $1.commission }
+            HStack(spacing: 8) {
+                Text("∑名义 \(formatDecimal(totalAmount, fractionDigits: 0))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+                Text("∑费 \(formatDecimal(totalFee, fractionDigits: 2))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+            .help("名义金额 = price × volume（不含 volumeMultiple）· 当前 filter 合计")
+
             Text("\(filteredTrades.count) / \(trades.count) 笔")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -723,6 +738,14 @@ struct JournalWindow: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 50, ideal: 60)
+
+            // v15.23 batch179 · 金额列（price × volume · 不含 volumeMultiple · 直观看名义额）
+            TableColumn("金额") { t in
+                Text(formatDecimal(t.price * Decimal(t.volume), fractionDigits: 1))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .width(min: 80, ideal: 100)
 
             TableColumn("手续费") { t in
                 Text(formatDecimal(t.commission, fractionDigits: 2))

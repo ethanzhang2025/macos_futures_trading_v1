@@ -1607,6 +1607,14 @@ private struct JournalEditorSheet: View {
         draft.tagsString = trimmed.isEmpty ? tag : "\(trimmed) \(tag)"
     }
 
+    /// v15.23 batch181 · 删除标签（chip ✕ · 重写 tagsString 为剩余去重 + 排序）
+    private func removeTag(_ tag: String) {
+        let parts = draft.tagsString.split(whereSeparator: \.isWhitespace).map(String.init)
+        var seen: Set<String> = []
+        let remaining = parts.filter { $0 != tag && seen.insert($0).inserted }
+        draft.tagsString = remaining.joined(separator: " ")
+    }
+
     /// 当前选中 tradeIDs 对应建议标签（按枚举顺序稳定 · O(N) 单遍）
     private var suggestedTags: [EmotionAutoTagger.Tag] {
         var seen = Set<EmotionAutoTagger.Tag>()
@@ -1683,6 +1691,35 @@ private struct JournalEditorSheet: View {
                 Section("标签（用空格分隔）") {
                     TextField("如：日内 趋势跟随 RB", text: $draft.tagsString)
                         .textFieldStyle(.roundedBorder)
+
+                    // v15.23 batch181 · 已选标签 chip 化（点 ✕ 一键删除 · 比文本编辑更易操作）
+                    let drafted = currentDraftTags.sorted()
+                    if !drafted.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(drafted, id: \.self) { tag in
+                                    HStack(spacing: 3) {
+                                        Text(tag).font(.caption)
+                                        Button {
+                                            removeTag(tag)
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.caption2)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .foregroundColor(.green)
+                                    .background(Color.green.opacity(0.15))
+                                    .clipShape(Capsule())
+                                    .help("点 ✕ 删除「\(tag)」")
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+
                     // v15.23 batch173 · 标签自动补全（基于历史 journals.tags · top10 频率降序）
                     if !availableHistoryTags.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {

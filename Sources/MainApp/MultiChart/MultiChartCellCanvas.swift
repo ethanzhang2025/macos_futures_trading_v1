@@ -46,6 +46,8 @@ struct MultiChartCellCanvas: View {
     let showVWAP: Bool
     /// v15.23 batch99 · Fibonacci 黄金回撤（区间 7 条水平线 · trader 经典回撤分析）
     let showFibonacci: Bool
+    /// v15.23 batch149 · Pivot Points（5 线 R2/R1/PP/S1/S2 · 短线支撑/压力 · 默认关）
+    let showPivotPoints: Bool
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
@@ -59,7 +61,8 @@ struct MultiChartCellCanvas: View {
          showIntegerLevels: Bool = false,
          showLimitLines: Bool = false,
          showVWAP: Bool = false,
-         showFibonacci: Bool = false) {
+         showFibonacci: Bool = false,
+         showPivotPoints: Bool = false) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
@@ -74,6 +77,7 @@ struct MultiChartCellCanvas: View {
         self.showLimitLines = showLimitLines
         self.showVWAP = showVWAP
         self.showFibonacci = showFibonacci
+        self.showPivotPoints = showPivotPoints
     }
 
     var body: some View {
@@ -133,6 +137,10 @@ struct MultiChartCellCanvas: View {
                 // v15.23 batch99 · Fibonacci 黄金回撤（区间高低点 7 条水平线 · trader 经典）
                 if showFibonacci {
                     drawFibonacci(in: ctx, rect: priceRect)
+                }
+                // v15.23 batch149 · Pivot Points（5 线 · 区间静态支撑/压力）
+                if showPivotPoints {
+                    drawPivotPoints(in: ctx, rect: priceRect)
                 }
                 if subHeight > 8 {
                     drawGrid(in: ctx, rect: subRect, lines: 2)
@@ -618,6 +626,55 @@ struct MultiChartCellCanvas: View {
                 .foregroundColor(color.opacity(2))
             ctx.draw(txt, at: CGPoint(x: rect.minX + 38, y: y - 5),
                      anchor: .center)
+        }
+    }
+
+    // MARK: - Pivot Points（v15.23 batch149 · 5 线 · 区间静态支撑/压力）
+
+    /// 简化版：用 bars[0]（区间首根）作"前一周期" H/L/C 计算 PP/R1/R2/S1/S2
+    /// PP = (H+L+C)/3 · R1=2*PP-L · S1=2*PP-H · R2=PP+(H-L) · S2=PP-(H-L)
+    /// trader 看 close 接近哪条线 → 短线进出场参考位
+    private func drawPivotPoints(in ctx: GraphicsContext, rect: CGRect) {
+        guard let first = bars.first else { return }
+        let h = (first.high as NSDecimalNumber).doubleValue
+        let l = (first.low as NSDecimalNumber).doubleValue
+        let c = (first.close as NSDecimalNumber).doubleValue
+        let pp = (h + l + c) / 3
+        let r1 = 2 * pp - l
+        let s1 = 2 * pp - h
+        let r2 = pp + (h - l)
+        let s2 = pp - (h - l)
+
+        let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
+        let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
+        guard let maxHigh = highs.max(), let minLow = lows.min(), maxHigh > minLow else { return }
+        let priceRange = maxHigh - minLow
+        let yFor: (Double) -> CGFloat = { p in
+            rect.maxY - CGFloat((p - minLow) / priceRange) * rect.height
+        }
+
+        let levels: [(Double, String, Color)] = [
+            (r2, "R2", .red.opacity(0.7)),
+            (r1, "R1", .red.opacity(0.5)),
+            (pp, "PP", .yellow.opacity(0.7)),
+            (s1, "S1", .green.opacity(0.5)),
+            (s2, "S2", .green.opacity(0.7)),
+        ]
+        for (price, label, color) in levels {
+            let y = yFor(price)
+            // 越界裁剪
+            guard y >= rect.minY - 2 && y <= rect.maxY + 2 else { continue }
+            var line = Path()
+            line.move(to: CGPoint(x: rect.minX, y: y))
+            line.addLine(to: CGPoint(x: rect.maxX, y: y))
+            ctx.stroke(line, with: .color(color),
+                       style: StrokeStyle(lineWidth: 0.6, dash: [4, 2]))
+            // 右上方标签 "R2 3520.5"
+            let txt = Text("\(label) \(String(format: "%.2f", price))")
+                .font(.system(size: 8, design: .monospaced))
+                .foregroundColor(color.opacity(2))
+            ctx.draw(txt, at: CGPoint(x: rect.maxX - 4, y: y - 5),
+                     anchor: .topTrailing)
         }
     }
 

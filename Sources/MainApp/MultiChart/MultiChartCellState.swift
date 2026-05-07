@@ -68,6 +68,9 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
     var showVWAP: Bool
     /// v15.23 batch99 · Fibonacci 黄金回撤（区间高低点 7 条水平线 · trader 经典回撤分析 · 默认关）
     var showFibonacci: Bool
+    /// v15.23 batch149 · Pivot Points 枢轴点（5 线 R2/R1/PP/S1/S2 · 短线支撑/压力 · 默认关）
+    /// 简化版：用 bars[0] 作"前一周期" H/L/C 计算 · 区间内静态参考线
+    var showPivotPoints: Bool
 
     init(id: UUID = UUID(),
          instrumentID: String = "RB0",
@@ -82,7 +85,8 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
          showIntegerLevels: Bool = false,
          showLimitLines: Bool = false,
          showVWAP: Bool = false,
-         showFibonacci: Bool = false) {
+         showFibonacci: Bool = false,
+         showPivotPoints: Bool = false) {
         self.id = id
         self.instrumentID = instrumentID
         self.period = period
@@ -97,11 +101,12 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.showLimitLines = showLimitLines
         self.showVWAP = showVWAP
         self.showFibonacci = showFibonacci
+        self.showPivotPoints = showPivotPoints
     }
 
     /// Codable · 老 cellsJSON 缺新字段时按合理默认值
     enum CodingKeys: String, CodingKey {
-        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels, showLimitLines, showVWAP, showFibonacci
+        case id, instrumentID, period, showVolume, showIndicators, showBoll, subChart, showSAR, horizontalLines, isTimeShareMode, showIntegerLevels, showLimitLines, showVWAP, showFibonacci, showPivotPoints
     }
 
     init(from decoder: Decoder) throws {
@@ -125,6 +130,7 @@ struct MultiChartCellState: Codable, Equatable, Identifiable, Hashable {
         self.showLimitLines = try c.decodeIfPresent(Bool.self, forKey: .showLimitLines) ?? false
         self.showVWAP = try c.decodeIfPresent(Bool.self, forKey: .showVWAP) ?? false
         self.showFibonacci = try c.decodeIfPresent(Bool.self, forKey: .showFibonacci) ?? false
+        self.showPivotPoints = try c.decodeIfPresent(Bool.self, forKey: .showPivotPoints) ?? false
     }
 }
 

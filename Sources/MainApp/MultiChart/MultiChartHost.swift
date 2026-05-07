@@ -999,7 +999,8 @@ struct MultiChartHost: View {
             ("CCI 副图（batch127）", "顺势指标 · ±100 超买超卖参考线 · ≥+100 红超买 · ≤-100 绿超卖 · 中性紫"),
             ("W%R 副图（batch137）", "威廉指标 · 范围 [-100, 0] · -20 超买（红） · -80 超卖（绿） · 中性青绿"),
             ("副图金叉/死叉点（batch82）", "KDJ K↑D 或 MACD DIF↑DEA = 红点（金叉买点）· 反向 = 绿点（死叉卖点）· 一眼定位"),
-            ("点击主图指标 Menu（batch88-99）", "MA + BOLL + SAR + 整数关口 + 涨跌停 + VWAP + Fibonacci 黄金回撤 · 七选多"),
+            ("点击主图指标 Menu（batch88-149）", "MA + BOLL + SAR + 整数关口 + 涨跌停 + VWAP + Fibonacci + Pivot Points · 八选多"),
+            ("Pivot Points（batch149）", "5 线 R2/R1/PP/S1/S2 · 区间静态枢轴（用 bars[0] H/L/C 计算）· 红色压力 · 黄色枢轴 · 绿色支撑"),
             ("右键 → 标水平线（batch91）", "在当前 close 价画橙色虚线 · 标支撑/压力位 · 持久化 · 清空也在右键"),
             ("BOLL 突破信号（batch92）", "开 BOLL 时 · close > 上轨 → 末根红边框（强多）· close < 下轨 → 末根绿边框（强空）· 一眼定位"),
             ("综合多空评级（batch103）", "cell toolbar emoji+中文：📈强多/↗偏多/→震荡/↘偏空/📉强空（综合 MA/KDJ/MACD 7 项 · 0-7 分）"),
@@ -1129,6 +1130,7 @@ struct MultiChartHost: View {
             onLimitLinesToggle: { updateCell(idx) { $0.showLimitLines.toggle() } },
             onVWAPToggle: { updateCell(idx) { $0.showVWAP.toggle() } },
             onFibonacciToggle: { updateCell(idx) { $0.showFibonacci.toggle() } },
+            onPivotPointsToggle: { updateCell(idx) { $0.showPivotPoints.toggle() } },
             onTimeShareToggle: { updateCell(idx) { $0.isTimeShareMode.toggle() } },
             onSubChartTap: { sub in updateCell(idx) {
                 $0.subChart = sub

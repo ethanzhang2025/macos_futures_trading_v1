@@ -42,6 +42,7 @@ struct MultiChartCellView: View {
     let onLimitLinesToggle: () -> Void
     let onVWAPToggle: () -> Void
     let onFibonacciToggle: () -> Void
+    let onPivotPointsToggle: () -> Void
     let onSubChartTap: (MultiChartSubChartType) -> Void
     let onTimeShareToggle: () -> Void
     let onPushToMain: () -> Void
@@ -112,7 +113,8 @@ struct MultiChartCellView: View {
                 showIntegerLevels: state.showIntegerLevels,
                 showLimitLines: state.showLimitLines,
                 showVWAP: state.showVWAP,
-                showFibonacci: state.showFibonacci
+                showFibonacci: state.showFibonacci,
+                showPivotPoints: state.showPivotPoints
             )
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -342,6 +344,12 @@ struct MultiChartCellView: View {
                     onFibonacciToggle()
                 } label: {
                     Label("Fibonacci 黄金回撤", systemImage: state.showFibonacci ? "checkmark.circle.fill" : "circle")
+                }
+                Button {
+                    onPivotPointsToggle()
+                } label: {
+                    Label("Pivot Points (R2/R1/PP/S1/S2)",
+                          systemImage: state.showPivotPoints ? "checkmark.circle.fill" : "circle")
                 }
             } label: {
                 Image(systemName: indicatorMenuIcon)

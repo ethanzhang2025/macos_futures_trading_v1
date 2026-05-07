@@ -490,6 +490,15 @@ struct JournalWindow: View {
             .help("成交排序方式（4 档 · 持久化）")
             .disabled(trades.isEmpty)
 
+            // v15.23 batch180 · 导出当前 filter 后的 trades CSV
+            Button {
+                exportFilteredTradesCSV()
+            } label: {
+                Label("导出 filter", systemImage: "arrow.up.doc")
+            }
+            .help("导出当前过滤 / 搜索后的 trades CSV（含 BOM Excel 友好）")
+            .disabled(filteredTrades.isEmpty)
+
             Spacer()
 
             // v15.23 batch179 · 当前 filter 金额合计（trader 看资金占用 / 印花费率）
@@ -1092,6 +1101,7 @@ struct JournalWindow: View {
             ("过滤计数", "右上角显示「N / 总数 笔」"),
             ("行右键 → 查看关联日志", "切到日志 tab + 紫色 chip · ✕ 清除"),
             ("⌘D / 右键 → 建关联日志 (batch178)", "选中 N 笔后 ⌘D · 弹新建 sheet 预填 tradeIDs"),
+            ("「导出 filter」按钮 (batch180)", "导出当前 filter / 搜索后的 trades CSV（含 BOM）"),
         ]),
         ("📥 导入 / 导出 / 自动生成", [
             ("⌘⇧M", "导入交割单 CSV（文华 / 通用）"),
@@ -1189,6 +1199,26 @@ struct JournalWindow: View {
     private enum ExportKind {
         case closedPosition
         case tradeFlow
+    }
+
+    /// v15.23 batch180 · 导出当前 filter 后的 trades CSV（复用 TradeCSVExporter · 不走 ExportKind 因为这是 quick action）
+    private func exportFilteredTradesCSV() {
+        guard !filteredTrades.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.prompt = "导出"
+        panel.title = "导出当前 filter 的 trades CSV"
+        let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        let suffix = filterTradeInstrument.map { "-\($0)" } ?? ""
+        panel.nameFieldStringValue = "trade流水\(suffix)-\(filteredTrades.count)笔-\(dateStr).csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data = TradeCSVExporter.exportData(filteredTrades)
+        do {
+            try data.write(to: url)
+            Toast.info("导出成功", "\(url.lastPathComponent) · \(filteredTrades.count) 笔")
+        } catch {
+            Toast.error("导出失败", error.localizedDescription)
+        }
     }
 
     private func presentExportPanel(kind: ExportKind) {

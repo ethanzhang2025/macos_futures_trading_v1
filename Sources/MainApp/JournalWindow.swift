@@ -129,6 +129,9 @@ struct JournalWindow: View {
     @AppStorage("viewState.v1.journal.sortKey") private var sortKeyRaw: String = JournalSortKey.updatedDesc.rawValue
     private var sortKey: JournalSortKey { JournalSortKey(rawValue: sortKeyRaw) ?? .updatedDesc }
 
+    // v15.23 batch165 · 情绪 filter（nil = 全部 · 与 TrainingHistory pattern filter 对齐）
+    @State private var filterEmotion: JournalEmotion? = nil
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -353,6 +356,22 @@ struct JournalWindow: View {
             }
             .frame(width: 280)
 
+            // v15.23 batch165 · 情绪 filter Menu（5 类 + 全部 · 应用到 list 和 monthly 双模式）
+            Menu {
+                Button("\(filterEmotion == nil ? "✓ " : "")全部") { filterEmotion = nil }
+                Divider()
+                ForEach(JournalEmotion.allCases, id: \.self) { e in
+                    let isOn = filterEmotion == e
+                    Button("\(isOn ? "✓ " : "")\(e.displayName)") { filterEmotion = e }
+                }
+            } label: {
+                Label(filterEmotion?.displayName ?? "全部情绪", systemImage: "face.smiling")
+                    .foregroundColor(filterEmotion?.color ?? .secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 110)
+            .help("情绪筛选（5 类 · 全部）")
+
             Spacer()
 
             // v15.23 batch164 · 排序 Menu（5 档 · 仅列表模式有意义 · 月度模式按月份排序固定）
@@ -541,17 +560,21 @@ struct JournalWindow: View {
     /// 过滤：空格分隔多个 query · AND 匹配（所有 query 都需命中 title / reason / lesson / tags 任一字段）
     /// 大小写不敏感 · v1 简单 contains（v2 留倒排索引）
     /// v15.23 batch164 · filter 后再 apply sortKey（5 档）
+    /// v15.23 batch165 · 加情绪 filter（filterEmotion · nil 不限）
     private var filteredJournals: [TradeJournal] {
         let queries = searchText
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
-        let base: [TradeJournal] = queries.isEmpty ? journals : journals.filter { j in
+        var base: [TradeJournal] = queries.isEmpty ? journals : journals.filter { j in
             queries.allSatisfy { q in
                 j.title.localizedCaseInsensitiveContains(q)
                     || j.reason.localizedCaseInsensitiveContains(q)
                     || j.lesson.localizedCaseInsensitiveContains(q)
                     || j.tags.contains(where: { $0.localizedCaseInsensitiveContains(q) })
             }
+        }
+        if let e = filterEmotion {
+            base = base.filter { $0.emotion == e }
         }
         return Self.sortJournals(base, by: sortKey)
     }

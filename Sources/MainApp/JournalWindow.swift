@@ -179,6 +179,11 @@ struct JournalWindow: View {
     // v15.23 batch177 · trades 表搜索（合约 / 方向 / 开平 / 来源 · 多 query AND）
     @State private var tradeSearchText: String = ""
 
+    // v15.23 batch183 · 搜索框 focus（⌘F 聚焦）
+    @FocusState private var focusedSearchField: SearchField?
+
+    private enum SearchField: Hashable { case journals, trades }
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -324,6 +329,11 @@ struct JournalWindow: View {
                     }
                 }
                 .keyboardShortcut("l", modifiers: [.command])
+                // v15.23 batch183 · ⌘F 智能聚焦搜索框（trades tab → tradeSearch · journals tab → search）
+                Button("") {
+                    focusedSearchField = selectedTab == .trades ? .trades : .journals
+                }
+                .keyboardShortcut("f", modifiers: [.command])
             }
             .opacity(0)
         )
@@ -474,8 +484,9 @@ struct JournalWindow: View {
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
-                TextField("搜索 合约 / 方向 / 开平 / 来源（空格 AND）", text: $tradeSearchText)
+                TextField("搜索 合约 / 方向 / 开平 / 来源（空格 AND · ⌘F 聚焦）", text: $tradeSearchText)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedSearchField, equals: .trades)
             }
             .frame(width: 280)
 
@@ -606,8 +617,9 @@ struct JournalWindow: View {
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
-                TextField("搜索 标题 / 原因 / 教训 / 标签（空格 AND）", text: $searchText)
+                TextField("搜索 标题 / 原因 / 教训 / 标签（空格 AND · ⌘F 聚焦）", text: $searchText)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedSearchField, equals: .journals)
             }
             .frame(width: 280)
 
@@ -1132,8 +1144,9 @@ struct JournalWindow: View {
             ("导出 CSV Menu", "闭合持仓 / Trade 流水 二选一 · 含 BOM Excel 友好"),
             ("导出月报 Menu (v15.23 batch169)", "4 段 markdown：概览 / 情绪 / 偏差 / 标签 top10 / 最近 30 · 应用当前 filter"),
         ]),
-        ("🔍 搜索 / 筛选 / 排序（v15.23 batch164-166）", [
+        ("🔍 搜索 / 筛选 / 排序（v15.23 batch164-166/183）", [
             ("搜索", "标题 / 原因 / 教训 / 标签 · 空格 AND · 大小写不敏感"),
+            ("⌘F", "智能聚焦：当前 tab 的搜索框（IDE 习惯 · batch183）"),
             ("情绪 filter", "5 类（自信 / 犹豫 / 恐惧 / 贪婪 / 平静）+ 全部"),
             ("偏差 filter", "8 类（按计划 / 破止损 / 抢反弹 / 追高 ...）+ 全部"),
             ("排序", "更新 ↓ / 创建 ↓ / 标题 A→Z / 按情绪 / 按偏差（持久化）"),

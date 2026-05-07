@@ -173,6 +173,9 @@ struct JournalWindow: View {
     // v15.23 batch175 · trades 表选中（用于行级 contextMenu）
     @State private var selectedTradeIDs: Set<Trade.ID> = []
 
+    // v15.23 batch177 · trades 表搜索（合约 / 方向 / 开平 / 来源 · 多 query AND）
+    @State private var tradeSearchText: String = ""
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -427,8 +430,18 @@ struct JournalWindow: View {
     }
 
     /// v15.23 batch171 · 合约 filter Menu · 自动从 trades 列举唯一 instrumentIDs
+    /// v15.23 batch177 · 加搜索框
     private var tradesToolbar: some View {
         HStack(spacing: 12) {
+            // v15.23 batch177 · 搜索框（合约/方向/开平/来源 · 空格 AND）
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("搜索 合约 / 方向 / 开平 / 来源（空格 AND）", text: $tradeSearchText)
+                    .textFieldStyle(.roundedBorder)
+            }
+            .frame(width: 280)
+
             let instruments = Array(Set(trades.map { $0.instrumentID })).sorted()
 
             Menu {
@@ -472,13 +485,19 @@ struct JournalWindow: View {
         .padding(.vertical, 8)
     }
 
-    /// v15.23 batch171/174 · 应用合约 filter + 排序
+    /// v15.23 batch171/174/177 · 应用合约 filter + 搜索 + 排序
     private var filteredTrades: [Trade] {
-        let base: [Trade]
+        var base: [Trade] = trades
         if let id = filterTradeInstrument {
-            base = trades.filter { $0.instrumentID == id }
-        } else {
-            base = trades
+            base = base.filter { $0.instrumentID == id }
+        }
+        // v15.23 batch177 · 搜索：合约 / 方向 / 开平 / 来源 · 空格分隔多 query · AND
+        let queries = tradeSearchText.split(whereSeparator: \.isWhitespace).map(String.init)
+        if !queries.isEmpty {
+            base = base.filter { t in
+                let haystack = "\(t.instrumentID) \(t.direction.displayName) \(t.offsetFlag.displayName) \(sourceLabel(t.source))"
+                return queries.allSatisfy { haystack.localizedCaseInsensitiveContains($0) }
+            }
         }
         switch tradeSortKey {
         case .timeDesc:   return base.sorted { $0.timestamp > $1.timestamp }

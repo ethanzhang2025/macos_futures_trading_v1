@@ -840,6 +840,12 @@ struct ChartScene: View {
             // v15.23 batch194 · ⌘⇧? 别名（与 5 大窗口 helpSheet 习惯一致 · 复用 showShortcutsHelp overlay）
             Button("") { showShortcutsHelp.toggle() }
                 .keyboardShortcut("?", modifiers: [.command, .shift])
+            // v15.23 batch206 · ⌘⌥R 打开复盘窗口（trader 看完 K 线想跳复盘看绩效）
+            Button("") { openWindow(id: "review") }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+            // v15.23 batch206 · ⌘⌥J 打开交易日志（trader 写当前合约心得）
+            Button("") { openWindow(id: "journal") }
+                .keyboardShortcut("j", modifiers: [.command, .option])
             // v15.20 batch82 · ⌘⇧W 切换 swing high/low 标注（趋势可视化 · 默认关）
             Button("") {
                 showSwingPoints.toggle()
@@ -2698,9 +2704,11 @@ struct ChartContentView: View {
                 ("⌘P", "导出主图截图 PNG"),
                 ("⌘⇧P", "复制主图截图到剪贴板"),
             ]),
-            ("帮助", [
+            ("帮助 / 跨窗口", [
                 ("⌘/", "切换本浮窗"),
                 ("⌘⇧?", "切换本浮窗（v15.23 batch194 · 与 5 大窗口 UX 统一）"),
+                ("⌘⌥R", "打开复盘工作台（v15.23 batch206）"),
+                ("⌘⌥J", "打开交易日志（v15.23 batch206）"),
             ]),
         ]
         VStack(alignment: .leading, spacing: 12) {

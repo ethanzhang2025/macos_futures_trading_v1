@@ -20,6 +20,39 @@ struct TrainingHistoryPanel: View {
     @State private var showClearConfirm: Bool = false
     /// v15.23 batch122 · 形态筛选（nil = 全部 · 选中后只显示该形态训练）
     @State private var filterPattern: TrainingScenarioPattern? = nil
+    /// v15.23 batch130 · 时间段筛选（默认全部 · 与形态 filter 互补 · 同时 AND）
+    @State private var filterPeriod: PeriodFilter = .all
+
+    /// v15.23 batch130 · 时间段过滤枚举
+    enum PeriodFilter: String, CaseIterable, Hashable {
+        case all = "全部"
+        case today = "今天"
+        case week = "本周"
+        case month = "本月"
+        case year = "本年"
+
+        /// 起始时间戳（all 返回 nil = 不过滤）
+        var cutoff: Date? {
+            let cal = Calendar(identifier: .gregorian)
+            switch self {
+            case .all:   return nil
+            case .today: return cal.startOfDay(for: Date())
+            case .week:  return cal.date(byAdding: .day, value: -7, to: Date())
+            case .month: return cal.date(byAdding: .month, value: -1, to: Date())
+            case .year:  return cal.date(byAdding: .year, value: -1, to: Date())
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .all:   return "infinity"
+            case .today: return "sun.max"
+            case .week:  return "calendar.badge.clock"
+            case .month: return "calendar"
+            case .year:  return "calendar.circle"
+            }
+        }
+    }
 
     private let recentLimit = 50
 
@@ -77,6 +110,18 @@ struct TrainingHistoryPanel: View {
                     Label("导出报告", systemImage: "square.and.arrow.up")
                 }
                 .help("生成 markdown 月报告（含统计 + 等级分布 + 形态分布 + 最近 30 次表格）")
+            }
+            // v15.23 batch130 · 时间段筛选 Menu（只在有 session 时显示）
+            if !viewModel.log.sessions.isEmpty {
+                Menu {
+                    ForEach(PeriodFilter.allCases, id: \.self) { p in
+                        let isOn = filterPeriod == p
+                        Button("\(isOn ? "✓ " : "")\(p.rawValue)") { filterPeriod = p }
+                    }
+                } label: {
+                    Label(filterPeriod.rawValue, systemImage: filterPeriod.icon)
+                }
+                .help("按时间段筛选历史训练（与形态筛选互补 · 同时 AND）")
             }
             // v15.23 batch122 · 形态筛选 Menu（只在有 session 时显示）
             if !viewModel.log.sessions.isEmpty {
@@ -229,21 +274,29 @@ struct TrainingHistoryPanel: View {
 
     private var sessionList: some View {
         let recent = viewModel.log.recentSessions(limit: recentLimit)
-        // batch122 · 形态过滤（nil = 全部 · 选中形态时只保留 scenarioPattern == filter）
-        let filtered: [TrainingSession] = filterPattern.map { p in
-            recent.filter { $0.scenarioPattern == p }
-        } ?? recent
+        // batch122/130 · 形态 + 时间段双重过滤（AND · 任一非 nil 都 filter）
+        var filtered: [TrainingSession] = recent
+        if let p = filterPattern {
+            filtered = filtered.filter { $0.scenarioPattern == p }
+        }
+        if let cutoff = filterPeriod.cutoff {
+            filtered = filtered.filter { $0.startedAt >= cutoff }
+        }
+        let hasAnyFilter = filterPattern != nil || filterPeriod != .all
         return List {
-            if filtered.isEmpty, filterPattern != nil {
+            if filtered.isEmpty, hasAnyFilter {
                 HStack {
                     Spacer()
                     VStack(spacing: 6) {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                             .font(.system(size: 24)).foregroundColor(.secondary)
-                        Text("没有该形态的训练记录")
+                        Text("没有匹配的训练记录")
                             .font(.callout).foregroundColor(.secondary)
-                        Button("清空筛选") { filterPattern = nil }
-                            .buttonStyle(.borderless)
+                        Button("清空筛选") {
+                            filterPattern = nil
+                            filterPeriod = .all
+                        }
+                        .buttonStyle(.borderless)
                     }
                     Spacer()
                 }

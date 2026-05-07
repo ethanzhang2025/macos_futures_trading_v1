@@ -132,6 +132,20 @@ struct MultiChartHost: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
+            // v15.23 batch161 · 锁定状态 summary（仅有锁定 cell 时显示）
+            let lockedCount = cells.prefix(activeCellCount).filter { $0.isLocked }.count
+            if lockedCount > 0 {
+                HStack(spacing: 3) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
+                    Text("\(lockedCount) 锁定")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+                .help("\(lockedCount) cell 已锁定 · 防误操作 swap/copy/reset")
+            }
+
             // v15.23 batch53 · focus 模式提示
             if let idx = focusedIdx {
                 HStack(spacing: 4) {

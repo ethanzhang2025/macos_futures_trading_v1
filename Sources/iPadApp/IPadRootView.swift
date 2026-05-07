@@ -72,6 +72,9 @@ private struct iPadDetailContent: View {
                 .padding()
                 .background(Color(uiColor: .secondarySystemBackground))
 
+                // 行情 detail 顶部条（最新价 + OHLC + 量）
+                QuoteDetailPanel_iOS(instrumentID: id, period: period)
+
                 ChartView_iOS(instrumentID: id, period: period)
             }
         } else {

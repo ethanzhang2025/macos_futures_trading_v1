@@ -218,6 +218,11 @@ struct AlertWindow: View {
             ("AlertBatchOperator", "批量启用 / 暂停 / setChannels / setCooldown（v15.21 batch127）"),
             ("contextMenu 多选", "右键批量操作"),
         ]),
+        ("📤 导出（v15.23 batch198）", [
+            ("Header 导出按钮", "alerts 配置 CSV（8 字段 · BOM · Excel 中文友好）"),
+            ("文件名", "alerts配置-N条-yyyy-MM-dd.csv"),
+            ("用途", "trader 备份 / 团队分享 / 报税审计"),
+        ]),
         ("📊 统计与反馈", [
             ("header stat", "总数 / 活跃 / 已触发 / 已暂停 + 24h / 本周触发活跃度"),
             ("toast 反馈", "添加 / 删除 / 暂停 等操作 toast 提示（v15.21 batch134）"),
@@ -304,9 +309,38 @@ struct AlertWindow: View {
             .menuStyle(.borderlessButton)
             .frame(maxWidth: 80)
             .help("添加预警 / 一键模板")
+
+            // v15.23 batch198 · 导出 alerts 配置 CSV（trader 备份 / 团队分享）
+            Button {
+                exportAlertsCSV()
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+            }
+            .buttonStyle(.borderless)
+            .help("导出预警配置 CSV（含 BOM Excel 友好 · 8 字段）")
+            .disabled(alerts.isEmpty)
         }
         .padding(.horizontal, 16)
         .frame(height: 48)
+    }
+
+    /// v15.23 batch198 · 导出当前 alerts 列表为 CSV
+    @MainActor
+    private func exportAlertsCSV() {
+        guard !alerts.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.title = "导出预警配置 CSV"
+        panel.prompt = "导出"
+        let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        panel.nameFieldStringValue = "alerts配置-\(alerts.count)条-\(dateStr).csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try AlertConfigCSVExporter.exportData(alerts).write(to: url)
+            Toast.info("导出成功", "\(alerts.count) 条预警 → \(url.lastPathComponent)")
+        } catch {
+            Toast.error("导出失败", error)
+        }
     }
 
     /// 一键模板入口 · NSAlert 让用户填合约 + 当前价 → 批量 emit alertAddedFromChart

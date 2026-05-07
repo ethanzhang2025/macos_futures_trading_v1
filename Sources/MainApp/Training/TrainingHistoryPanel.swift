@@ -263,6 +263,8 @@ struct TrainingHistoryPanel: View {
             ProgressView(value: progress, total: 1.0)
                 .frame(width: 100)
                 .tint(achieved ? .green : .accentColor)
+            // v15.23 batch154 · vs 上周对比（次数 / 平均分 deltas）
+            weeklyComparisonChip(thisWeekStart: weekStart, thisWeekCount: thisWeekCount)
             Spacer()
             Menu {
                 ForEach([3, 5, 7, 10, 15], id: \.self) { n in
@@ -276,6 +278,35 @@ struct TrainingHistoryPanel: View {
             .menuStyle(.borderlessButton)
             .frame(width: 22)
             .help("调整本周训练目标（3/5/7/10/15 次）")
+        }
+    }
+
+    /// v15.23 batch154 · 本周 vs 上周对比 chip（仅有上周数据时显示）
+    @ViewBuilder
+    private func weeklyComparisonChip(thisWeekStart: Date, thisWeekCount: Int) -> some View {
+        let cal = Calendar(identifier: .gregorian)
+        let lastWeekStart = cal.date(byAdding: .weekOfYear, value: -1, to: thisWeekStart) ?? thisWeekStart
+        let lastWeekSessions = viewModel.log.sessions.filter {
+            $0.startedAt >= lastWeekStart && $0.startedAt < thisWeekStart
+        }
+        if !lastWeekSessions.isEmpty {
+            let countDelta = thisWeekCount - lastWeekSessions.count
+            let lastWeekAvg = lastWeekSessions.compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+                .reduce(0, +) / max(1, lastWeekSessions.count)
+            let thisWeekScores = viewModel.log.sessions
+                .filter { $0.startedAt >= thisWeekStart }
+                .compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+            let thisWeekAvg = thisWeekScores.isEmpty ? 0 : thisWeekScores.reduce(0, +) / thisWeekScores.count
+            let scoreDelta = thisWeekAvg - lastWeekAvg
+            HStack(spacing: 2) {
+                Image(systemName: countDelta >= 0 ? "arrow.up.right" : "arrow.down.right")
+                    .font(.system(size: 9))
+                    .foregroundColor(countDelta >= 0 ? .red : .green)
+                Text("vs 上周 \(countDelta >= 0 ? "+" : "")\(countDelta)次 \(scoreDelta >= 0 ? "+" : "")\(scoreDelta)分")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .help("本周 \(thisWeekCount) 次（平均 \(thisWeekAvg) 分） vs 上周 \(lastWeekSessions.count) 次（平均 \(lastWeekAvg) 分）")
         }
     }
 

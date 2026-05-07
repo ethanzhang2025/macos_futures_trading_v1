@@ -35,29 +35,8 @@ struct FuturesTerminaliPadApp: App {
 
     var body: some Scene {
         WindowGroup {
-            iPadPlaceholderView()
+            IPadRootView()
         }
-    }
-}
-
-/// batch001 占位视图 · batch002 替换为 IPadRootView NavigationSplitView
-private struct iPadPlaceholderView: View {
-    var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.system(size: 80))
-                .foregroundStyle(.tint)
-
-            Text("期货终端 · iPad 基础版")
-                .font(.title)
-                .fontWeight(.semibold)
-
-            Text("v15.25 batch001 骨架\n后续 batch 填入自选 / 图表 / 多周期 / CloudKit 同步")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding()
     }
 }
 

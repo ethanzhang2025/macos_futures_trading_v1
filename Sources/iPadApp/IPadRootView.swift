@@ -18,38 +18,12 @@ struct IPadRootView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            // sidebar
-            iPadSidebarPlaceholder(selection: $selectedInstrumentID)
+            WatchlistView_iOS(selection: $selectedInstrumentID)
                 .navigationTitle("自选")
         } detail: {
-            // detail
             iPadDetailPlaceholder(instrumentID: selectedInstrumentID)
         }
         .navigationSplitViewStyle(.balanced)
-    }
-}
-
-// MARK: - sidebar 占位（batch003 替换为 WatchlistView_iOS）
-
-private struct iPadSidebarPlaceholder: View {
-    @Binding var selection: String?
-
-    /// 占位合约列表 · batch003 替换为真实 WatchlistBook 渲染
-    private let demoInstruments = ["rb0", "i0", "hc0", "au0", "ag0", "cu0"]
-
-    var body: some View {
-        List(demoInstruments, id: \.self, selection: $selection) { id in
-            HStack {
-                Text(id.uppercased())
-                    .font(.body)
-                Spacer()
-                Text("--.--")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 4)
-        }
-        .listStyle(.sidebar)
     }
 }
 

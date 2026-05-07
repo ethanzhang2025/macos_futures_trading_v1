@@ -70,7 +70,8 @@ let package = Package(
         .testTarget(name: "ChartCoreTests", dependencies: ["ChartCore", "IndicatorCore"], path: "Tests/ChartCoreTests"),
 
         // MARK: - JournalCore · 交易日志 + 复盘分析
-        .target(name: "JournalCore", dependencies: ["Shared", "DataCore"], path: "Sources/JournalCore"),
+        // SyncCore dep · WP-60 batch006 TradeJournal 同步 Adapter（敏感 · 阿里云通道留 Stage B）
+        .target(name: "JournalCore", dependencies: ["Shared", "DataCore", "SyncCore"], path: "Sources/JournalCore"),
         .testTarget(name: "JournalCoreTests", dependencies: ["JournalCore"], path: "Tests/JournalCoreTests"),
 
         // MARK: - AlertCore · 条件预警

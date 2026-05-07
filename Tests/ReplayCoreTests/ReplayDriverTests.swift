@@ -29,11 +29,17 @@ struct ReplayDriverTests {
 
         let driver = ReplayDriver(player: player, baseInterval: 0.05)  // 50ms / 8 ≈ 6ms 每步
         await driver.start()
-        try await Task.sleep(nanoseconds: 200_000_000)  // 200ms 应 ≥10 步
+        // v15.23 batch208 · 修 flaky：用 polling 等够 5 步（不再依赖固定 200ms）· deadline 1s 防死循环
+        let deadline = Date().addingTimeInterval(1.0)
+        var index = 0
+        while Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)  // 20ms 步进
+            index = await player.cursor.currentIndex
+            if index >= 5 { break }
+        }
         await driver.stop()
 
-        let cursor = await player.cursor
-        #expect(cursor.currentIndex >= 5)  // 至少推进 5 步（保守阈值，避免 CI flaky）
+        #expect(index >= 5, "应至少推进 5 步（实际 \(index) · 已等到 deadline）")
     }
 
     @Test("跑到末尾自动停 · isRunning = false + player 进 paused")

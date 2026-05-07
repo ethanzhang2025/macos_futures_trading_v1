@@ -23,6 +23,8 @@ struct TrainingScoreSheet: View {
     var onRetrain: ((TrainingScenarioPattern) -> Void)? = nil
 
     @State private var showViolations: Bool = false
+    /// v15.23 batch150 · 复制/截图反馈提示（3 秒自动清空）
+    @State private var actionFeedback: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -59,6 +61,7 @@ struct TrainingScoreSheet: View {
                     let pb = NSPasteboard.general
                     pb.clearContents()
                     pb.setString(md, forType: .string)
+                    flashFeedback("✓ 已复制 \(md.count) 字符 markdown")
                 } label: {
                     Label("复制分析", systemImage: "doc.on.doc")
                 }
@@ -66,10 +69,18 @@ struct TrainingScoreSheet: View {
                 // v15.23 batch146 · 截图为 PNG 分享（朋友圈晒分）
                 Button {
                     copyScreenshotToPasteboard()
+                    flashFeedback("✓ 已截图 PNG · 粘贴到微信/朋友圈")
                 } label: {
                     Label("截图分享", systemImage: "camera")
                 }
                 .help("把当前评分卡截图为 PNG · 复制到剪贴板 · 直接粘贴到微信/朋友圈")
+                // v15.23 batch150 · 反馈提示（3 秒消失）
+                if let feedback = actionFeedback {
+                    Text(feedback)
+                        .font(.system(size: 11))
+                        .foregroundColor(.green)
+                        .transition(.opacity)
+                }
                 Spacer()
                 Button("关闭") { onDismiss() }
                     .keyboardShortcut(.defaultAction)
@@ -288,6 +299,18 @@ struct TrainingScoreSheet: View {
         case .B: return .blue
         case .C: return .orange
         case .D: return .red
+        }
+    }
+
+    // MARK: - v15.23 batch150 · 反馈提示
+
+    private func flashFeedback(_ msg: String) {
+        actionFeedback = msg
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            await MainActor.run {
+                actionFeedback = nil
+            }
         }
     }
 

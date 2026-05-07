@@ -130,9 +130,43 @@ struct TrainingHistoryPanel: View {
             }
 
             distributionBar
+
+            // v15.23 batch125 · 形态分布 chip 行（点击 chip 等同选 filter · 视觉看练习偏向）
+            patternDistributionRow
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+    }
+
+    /// v15.23 batch125 · 形态分布 chip（9 形态 emoji + 计数 · 点击切 filter）
+    private var patternDistributionRow: some View {
+        let counts = Dictionary(grouping: viewModel.log.sessions.compactMap { $0.scenarioPattern })
+            .mapValues { $0.count }
+        return HStack(spacing: 4) {
+            ForEach(TrainingScenarioPattern.allCases, id: \.self) { pat in
+                let n = counts[pat] ?? 0
+                let isActive = (filterPattern == pat)
+                Button {
+                    filterPattern = isActive ? nil : pat
+                } label: {
+                    HStack(spacing: 2) {
+                        Text(pat.emoji)
+                            .font(.system(size: 11))
+                        Text("\(n)")
+                            .font(.system(size: 10, design: .monospaced))
+                    }
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(isActive
+                                ? Color.accentColor.opacity(0.25)
+                                : (n > 0 ? Color.secondary.opacity(0.10) : Color.clear))
+                    .cornerRadius(3)
+                    .opacity(n == 0 ? 0.4 : 1)
+                }
+                .buttonStyle(.plain)
+                .help("\(pat.displayName) · \(n) 次")
+            }
+        }
     }
 
     private func statLine(_ label: String, value: String, color: Color) -> some View {

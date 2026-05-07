@@ -526,7 +526,19 @@ struct TrainingHistoryPanel: View {
         }
     }
 
+    /// v15.23 batch162 · 友好时间格式（"刚刚" / "X 小时前" / "今天 HH:mm" / "昨天" / "N 天前" / "MM-dd HH:mm"）
     private func dateText(_ d: Date) -> String {
+        let now = Date()
+        let cal = Calendar(identifier: .gregorian)
+        let secs = now.timeIntervalSince(d)
+        if secs < 60 { return "刚刚" }
+        if secs < 3600 { return "\(Int(secs / 60)) 分钟前" }
+        let timeFmt = DateFormatter()
+        timeFmt.dateFormat = "HH:mm"
+        if cal.isDateInToday(d) { return "今天 \(timeFmt.string(from: d))" }
+        if cal.isDateInYesterday(d) { return "昨天 \(timeFmt.string(from: d))" }
+        let days = cal.dateComponents([.day], from: d, to: now).day ?? 0
+        if days < 7 { return "\(days) 天前 \(timeFmt.string(from: d))" }
         let f = DateFormatter()
         f.dateFormat = "MM-dd HH:mm"
         return f.string(from: d)

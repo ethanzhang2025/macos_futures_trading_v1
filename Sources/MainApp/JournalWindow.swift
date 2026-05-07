@@ -135,6 +135,9 @@ struct JournalWindow: View {
     // v15.23 batch166 · 偏差 filter（nil = 全部）
     @State private var filterDeviation: JournalDeviation? = nil
 
+    // v15.23 batch167 · 帮助面板（⌘⇧? · 4 大新窗口 UX 一致）
+    @State private var showHelpSheet: Bool = false
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -226,6 +229,18 @@ struct JournalWindow: View {
         } message: { journal in
             Text("日志将永久移除（关联的 \(journal.tradeIDs.count) 笔成交不受影响 · A09 单向引用）。")
         }
+        .sheet(isPresented: $showHelpSheet) { helpSheet }
+        .background(
+            Group {
+                Button("") { selectedTab = .trades }
+                    .keyboardShortcut("1", modifiers: [.command])
+                Button("") { selectedTab = .journals }
+                    .keyboardShortcut("2", modifiers: [.command])
+                Button("") { showHelpSheet = true }
+                    .keyboardShortcut("?", modifiers: [.command, .shift])
+            }
+            .opacity(0)
+        )
     }
 
     private var importSheetBinding: Binding<Bool> {
@@ -296,16 +311,19 @@ struct JournalWindow: View {
 
     // MARK: - Tab 栏
 
+    /// v15.23 batch167 · tab 数 badge + ⌘1/⌘2 视觉提示（与训练 ⌘1/⌘2/⌘3 对齐）
     private var tabBar: some View {
         Picker("", selection: $selectedTab) {
             ForEach(JournalTab.allCases) { t in
-                Text(t.rawValue).tag(t)
+                let count = t == .trades ? trades.count : journals.count
+                Text("\(t.rawValue) \(count)").tag(t)
             }
         }
         .pickerStyle(.segmented)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .labelsHidden()
+        .help("⌘1 成交记录 · ⌘2 交易日志 · ⌘⇧? 帮助")
     }
 
     @ViewBuilder
@@ -668,11 +686,75 @@ struct JournalWindow: View {
         return f
     }()
 
+    // MARK: - v15.23 batch167 · 帮助面板（4 大新窗口 UX 一致 · ⌘⇧? 唤出）
+
+    private static let helpGroups: [(String, [(String, String)])] = [
+        ("📑 Tab 切换", [
+            ("⌘1", "切到「成交记录」"),
+            ("⌘2", "切到「交易日志」"),
+            ("⌘⇧?", "唤出本面板"),
+        ]),
+        ("📥 导入 / 导出 / 自动生成", [
+            ("⌘⇧M", "导入交割单 CSV（文华 / 通用）"),
+            ("⌘⇧J", "新建日志"),
+            ("⌘⇧A", "从成交记录自动生成日志草稿"),
+            ("导出 Menu", "闭合持仓 / Trade 流水 二选一 · 含 BOM Excel 友好"),
+        ]),
+        ("🔍 搜索 / 筛选 / 排序（v15.23 batch164-166）", [
+            ("搜索", "标题 / 原因 / 教训 / 标签 · 空格 AND · 大小写不敏感"),
+            ("情绪 filter", "5 类（自信 / 犹豫 / 恐惧 / 贪婪 / 平静）+ 全部"),
+            ("偏差 filter", "8 类（按计划 / 破止损 / 抢反弹 / 追高 ...）+ 全部"),
+            ("排序", "更新 ↓ / 创建 ↓ / 标题 A→Z / 按情绪 / 按偏差（持久化）"),
+        ]),
+        ("📅 视图模式", [
+            ("列表", "Table 显示日志条目（默认）"),
+            ("月度", "按 createdAt 月份聚合 · 情绪/偏差/标签 top5"),
+        ]),
+        ("✏️ 列表操作", [
+            ("contextMenu", "编辑 / 删除（多选 supported）"),
+        ]),
+    ]
+
+    @ViewBuilder
+    private var helpSheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("⌨️ 交易日志全功能").font(.title2).bold()
+                Spacer()
+                Button("关闭") { showHelpSheet = false }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(Self.helpGroups, id: \.0) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(group.0).font(.headline)
+                            ForEach(group.1, id: \.0) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(item.0)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 200, alignment: .leading)
+                                    Text(item.1).font(.system(size: 12))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 580, idealWidth: 680, minHeight: 480, idealHeight: 600)
+    }
+
     // MARK: - Footer
 
     private var footer: some View {
         HStack {
-            Text("⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 搜索 + 5 档排序 + 月度聚合 · M5 接 SQLiteJournalStore")
+            Text("⌘1/⌘2 切 tab · ⌘⇧M 导入 · ⌘⇧J 新建 · ⌘⇧A 自动生成 · 搜索/情绪/偏差 filter + 5 档排序 + 月度聚合 · ⌘⇧? 帮助")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()

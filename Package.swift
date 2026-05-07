@@ -75,7 +75,8 @@ let package = Package(
         .testTarget(name: "JournalCoreTests", dependencies: ["JournalCore"], path: "Tests/JournalCoreTests"),
 
         // MARK: - AlertCore · 条件预警
-        .target(name: "AlertCore", dependencies: ["Shared", "DataCore", "IndicatorCore"], path: "Sources/AlertCore"),
+        // SyncCore dep · WP-60 batch007 Alert 同步 Adapter（敏感 · 阿里云通道留 Stage B）
+        .target(name: "AlertCore", dependencies: ["Shared", "DataCore", "IndicatorCore", "SyncCore"], path: "Sources/AlertCore"),
         .testTarget(name: "AlertCoreTests", dependencies: ["AlertCore"], path: "Tests/AlertCoreTests"),
 
         // MARK: - ReplayCore · K 线回放

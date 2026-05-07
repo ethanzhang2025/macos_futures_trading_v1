@@ -77,6 +77,10 @@ public enum NotificationChannelKind: String, Sendable, Codable, CaseIterable {
 }
 
 /// 单条预警
+///
+/// WP-60 同步预埋（v15.24 batch007 · 敏感数据 · 阿里云通道留 Stage B）：
+/// - updatedAt / version / deletedAt 字段预埋（schema 兼容）
+/// - 启用同步由 Stage B WP-84 合规方案落地后接入（D4 G1 方案 A · 不走 CloudKit）
 public struct Alert: Sendable, Codable, Equatable, Identifiable, Hashable {
     public var id: UUID
     public var name: String
@@ -90,6 +94,12 @@ public struct Alert: Sendable, Codable, Equatable, Identifiable, Hashable {
     public var createdAt: Date
     /// 最近一次触发时间（用于频控判断）
     public var lastTriggeredAt: Date?
+    /// WP-60 · 最后修改时间（不含 lastTriggeredAt 自更新 · 仅当用户实际改字段时刷新）
+    public var updatedAt: Date
+    /// WP-60 · 修改次数 · LWW 副决胜
+    public var version: Int
+    /// WP-60 · 软删除时间戳（同步友好 · 优先级高于 status.cancelled）
+    public var deletedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -100,7 +110,10 @@ public struct Alert: Sendable, Codable, Equatable, Identifiable, Hashable {
         channels: Set<NotificationChannelKind> = [.inApp, .systemNotice],
         cooldownSeconds: TimeInterval = 60,
         createdAt: Date = Date(),
-        lastTriggeredAt: Date? = nil
+        lastTriggeredAt: Date? = nil,
+        updatedAt: Date? = nil,
+        version: Int = 1,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -111,12 +124,64 @@ public struct Alert: Sendable, Codable, Equatable, Identifiable, Hashable {
         self.cooldownSeconds = cooldownSeconds
         self.createdAt = createdAt
         self.lastTriggeredAt = lastTriggeredAt
+        self.updatedAt = updatedAt ?? createdAt
+        self.version = version
+        self.deletedAt = deletedAt
+    }
+
+    // MARK: - Codable（兼容旧 JSON · 缺 updatedAt/version/deletedAt 时回退）
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, instrumentID, condition, status, channels
+        case cooldownSeconds, createdAt, lastTriggeredAt
+        case updatedAt, version, deletedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.instrumentID = try c.decode(String.self, forKey: .instrumentID)
+        self.condition = try c.decode(AlertCondition.self, forKey: .condition)
+        self.status = try c.decode(AlertStatus.self, forKey: .status)
+        self.channels = try c.decode(Set<NotificationChannelKind>.self, forKey: .channels)
+        self.cooldownSeconds = try c.decode(TimeInterval.self, forKey: .cooldownSeconds)
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+        self.lastTriggeredAt = try c.decodeIfPresent(Date.self, forKey: .lastTriggeredAt)
+        self.updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
+        self.version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        self.deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(instrumentID, forKey: .instrumentID)
+        try c.encode(condition, forKey: .condition)
+        try c.encode(status, forKey: .status)
+        try c.encode(channels, forKey: .channels)
+        try c.encode(cooldownSeconds, forKey: .cooldownSeconds)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(lastTriggeredAt, forKey: .lastTriggeredAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(version, forKey: .version)
+        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
     }
 
     /// 是否处于可触发状态（active 且不在 cooldown 内）
     public func canTrigger(at now: Date = Date()) -> Bool {
         guard status == .active else { return false }
+        guard deletedAt == nil else { return false }
         guard let last = lastTriggeredAt else { return true }
         return now.timeIntervalSince(last) >= cooldownSeconds
+    }
+
+    /// 软删除（同步友好 · 不物理删 · 由调用方持久化）
+    public mutating func markDeleted(now: Date = Date()) {
+        guard deletedAt == nil else { return }
+        deletedAt = now
+        updatedAt = now
+        version += 1
     }
 }

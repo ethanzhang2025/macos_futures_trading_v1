@@ -837,6 +837,9 @@ struct ChartScene: View {
             // v15.20 batch74 · ⌘/ 切换快捷键提示浮窗（trader 不记快捷键时随时查询）
             Button("") { showShortcutsHelp.toggle() }
                 .keyboardShortcut("/", modifiers: [.command])
+            // v15.23 batch194 · ⌘⇧? 别名（与 5 大窗口 helpSheet 习惯一致 · 复用 showShortcutsHelp overlay）
+            Button("") { showShortcutsHelp.toggle() }
+                .keyboardShortcut("?", modifiers: [.command, .shift])
             // v15.20 batch82 · ⌘⇧W 切换 swing high/low 标注（趋势可视化 · 默认关）
             Button("") {
                 showSwingPoints.toggle()
@@ -2697,6 +2700,7 @@ struct ChartContentView: View {
             ]),
             ("帮助", [
                 ("⌘/", "切换本浮窗"),
+                ("⌘⇧?", "切换本浮窗（v15.23 batch194 · 与 5 大窗口 UX 统一）"),
             ]),
         ]
         VStack(alignment: .leading, spacing: 12) {

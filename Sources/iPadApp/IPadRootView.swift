@@ -35,33 +35,21 @@ private struct iPadDetailPlaceholder: View {
     var body: some View {
         if let id = instrumentID {
             VStack(spacing: 0) {
-                // 顶部条占位（batch005 周期切换 / batch008 行情 detail）
+                // 顶部条（batch005 接周期切换 / batch008 行情 detail）
                 HStack {
                     Text(id.uppercased())
                         .font(.title3)
                         .fontWeight(.semibold)
+                        .monospaced()
                     Spacer()
-                    Text("周期占位")
+                    Text("1m · 周期切换占位")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding()
                 .background(Color(uiColor: .secondarySystemBackground))
 
-                // 图表占位
-                ZStack {
-                    Color(uiColor: .systemBackground)
-                    VStack(spacing: 12) {
-                        Image(systemName: "chart.xyaxis.line")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.tint)
-                        Text("图表占位 · \(id.uppercased())")
-                            .font(.headline)
-                        Text("batch004 填入 ChartCore Metal 渲染")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                ChartView_iOS(instrumentID: id)
             }
         } else {
             VStack(spacing: 16) {

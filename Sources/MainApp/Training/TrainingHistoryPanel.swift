@@ -194,6 +194,13 @@ struct TrainingHistoryPanel: View {
                 } else {
                     statLine("最佳", value: "—", color: .secondary)
                 }
+                // v15.23 batch135 · 连胜/连败 streak（≥ 2 才显示 · 心理学指标）
+                let st = viewModel.log.currentStreak
+                if st.count >= 2 {
+                    statLine(st.isWinning ? "🔥 连胜" : "💧 连败",
+                             value: "\(st.count) 次",
+                             color: st.isWinning ? .red : .blue)
+                }
             }
 
             distributionBar

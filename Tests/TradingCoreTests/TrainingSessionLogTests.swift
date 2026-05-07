@@ -143,6 +143,86 @@ struct TrainingSessionLogTests {
         #expect(log.recentSessions(limit: -1).isEmpty)
     }
 
+    // v15.23 batch135 · streak 连胜/连败统计
+    private func makeSessionAt(_ endedAt: Date, pnl: Decimal) -> TrainingSession {
+        TrainingSession(
+            startedAt: endedAt.addingTimeInterval(-3600),
+            endedAt: endedAt,
+            initialBalance: 100_000,
+            finalBalance: 100_000 + pnl,
+            violations: [])
+    }
+
+    @Test("currentStreak · 空 log → (0, false)（batch135）")
+    func streakEmpty() {
+        let log = TrainingSessionLog()
+        #expect(log.currentStreak.count == 0)
+        #expect(log.currentStreak.isWinning == false)
+    }
+
+    @Test("currentStreak · 最新 1 笔 +10% 赢 → (1, true)")
+    func streakSingleWin() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSessionAt(Date(), pnl: 10000))
+        let st = log.currentStreak
+        #expect(st.count == 1)
+        #expect(st.isWinning == true)
+    }
+
+    @Test("currentStreak · 连续 3 笔赢 → (3, true)")
+    func streakThreeWins() {
+        var log = TrainingSessionLog()
+        let now = Date()
+        log.addSession(makeSessionAt(now.addingTimeInterval(-7200), pnl: 10000))
+        log.addSession(makeSessionAt(now.addingTimeInterval(-3600), pnl: 10000))
+        log.addSession(makeSessionAt(now, pnl: 10000))
+        let st = log.currentStreak
+        #expect(st.count == 3)
+        #expect(st.isWinning == true)
+    }
+
+    @Test("currentStreak · 连续 2 笔输 → (2, false)")
+    func streakTwoLosses() {
+        var log = TrainingSessionLog()
+        let now = Date()
+        // pnl 0 + 无违规 → score = 20 + 50 = 70（边界 · B 级 · 算胜）
+        // pnl -3% → pnlScore=0 + disciplineScore=50 = 50（C 级 · 算败）
+        // 用 -5%（pnlScore 0）+ 1 error（disciplineScore 50-10=40）= 40 D 级
+        log.addSession(TrainingSession(
+            startedAt: now.addingTimeInterval(-3600),
+            endedAt: now.addingTimeInterval(-1800),
+            initialBalance: 100_000, finalBalance: 95_000,
+            violations: [DisciplineViolation(ruleID: UUID(), ruleKind: .stopLossPercent,
+                                             occurredAt: now, severity: .error, message: "e")]))
+        log.addSession(TrainingSession(
+            startedAt: now.addingTimeInterval(-1800),
+            endedAt: now,
+            initialBalance: 100_000, finalBalance: 95_000,
+            violations: [DisciplineViolation(ruleID: UUID(), ruleKind: .stopLossPercent,
+                                             occurredAt: now, severity: .error, message: "e")]))
+        let st = log.currentStreak
+        #expect(st.count == 2)
+        #expect(st.isWinning == false)
+    }
+
+    @Test("currentStreak · 最新赢 + 之前输 → 仅数最新连胜（1, true）")
+    func streakLatestOnly() {
+        var log = TrainingSessionLog()
+        let now = Date()
+        // 早期一笔输 · 后两笔赢 · streak 应仅 = 2 from latest（赢）
+        log.addSession(TrainingSession(
+            startedAt: now.addingTimeInterval(-7200),
+            endedAt: now.addingTimeInterval(-5400),
+            initialBalance: 100_000, finalBalance: 95_000,
+            violations: [DisciplineViolation(ruleID: UUID(), ruleKind: .stopLossPercent,
+                                             occurredAt: now, severity: .error, message: "e")]))
+        log.addSession(makeSessionAt(now.addingTimeInterval(-1800), pnl: 10000))
+        log.addSession(makeSessionAt(now, pnl: 10000))
+        let st = log.currentStreak
+        #expect(st.count == 2)
+        #expect(st.isWinning == true)
+    }
+
     @Test("Codable round-trip · 含 sessions + scores 缓存")
     func codableRoundTrip() throws {
         var log = TrainingSessionLog()

@@ -79,4 +79,22 @@ public struct TrainingSessionLog: Sendable, Equatable, Codable {
 
     /// 总训练次数
     public var sessionCount: Int { sessions.count }
+
+    /// v15.23 batch135 · 当前连胜/连败 streak
+    /// - count: 连续次数（≥ 1）· 0 表示无 session
+    /// - isWinning: true = 连胜 / false = 连败
+    /// - 胜负阈值：score ≥ 70（B 级以上算胜）· 可后续调整
+    public var currentStreak: (count: Int, isWinning: Bool) {
+        let recent = sessions.sorted { $0.endedAt > $1.endedAt }
+        guard !recent.isEmpty else { return (0, false) }
+        let firstScore = score(for: recent[0].id)?.totalScore ?? 0
+        let firstIsWin = firstScore >= 70
+        var count = 1
+        for i in 1..<recent.count {
+            let s = score(for: recent[i].id)?.totalScore ?? 0
+            let isWin = s >= 70
+            if isWin == firstIsWin { count += 1 } else { break }
+        }
+        return (count, firstIsWin)
+    }
 }

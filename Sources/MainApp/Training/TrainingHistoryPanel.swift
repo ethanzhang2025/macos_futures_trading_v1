@@ -9,6 +9,7 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import AppKit
 import Foundation
 import TradingCore
 
@@ -59,6 +60,24 @@ struct TrainingHistoryPanel: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
             Spacer()
+            // v15.23 batch126 · 月报导出（剪贴板 / .md 文件 · 只在有 session 时显示）
+            if !viewModel.log.sessions.isEmpty {
+                Menu {
+                    Button {
+                        copyReportToPasteboard()
+                    } label: {
+                        Label("复制到剪贴板", systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        saveReportToFile()
+                    } label: {
+                        Label("保存为 .md 文件", systemImage: "square.and.arrow.down")
+                    }
+                } label: {
+                    Label("导出报告", systemImage: "square.and.arrow.up")
+                }
+                .help("生成 markdown 月报告（含统计 + 等级分布 + 形态分布 + 最近 30 次表格）")
+            }
             // v15.23 batch122 · 形态筛选 Menu（只在有 session 时显示）
             if !viewModel.log.sessions.isEmpty {
                 Menu {
@@ -322,6 +341,27 @@ struct TrainingHistoryPanel: View {
         let f = DateFormatter()
         f.dateFormat = "MM-dd HH:mm"
         return f.string(from: d)
+    }
+
+    // MARK: - v15.23 batch126 · 月报导出
+
+    private func copyReportToPasteboard() {
+        let md = TrainingMarkdownReport.generate(viewModel.log)
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(md, forType: .string)
+    }
+
+    private func saveReportToFile() {
+        let panel = NSSavePanel()
+        panel.title = "保存训练月报"
+        panel.allowedContentTypes = [.plainText]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        panel.nameFieldStringValue = "训练月报_\(dateFmt.string(from: Date())).md"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let md = TrainingMarkdownReport.generate(viewModel.log)
+        try? md.write(to: url, atomically: true, encoding: .utf8)
     }
 }
 

@@ -168,4 +168,34 @@ struct TrainingMarkdownReportTests {
         let md = TrainingMarkdownReport.generateSingleSession(session, score: scorer, title: "求师傅点评")
         #expect(md.contains("# 求师傅点评"))
     }
+
+    // MARK: - v15.23 batch197 · 周报
+
+    @Test("batch197 · 周报标题为「训练周报」")
+    func weeklyTitle() {
+        let md = TrainingMarkdownReport.generateWeekly(TrainingSessionLog())
+        #expect(md.contains("# 训练周报"))
+    }
+
+    @Test("batch197 · 周报仅含最近 7 天 startedAt session")
+    func weeklyOnlyRecent7Days() {
+        var log = TrainingSessionLog()
+        let now = Date()
+        // 30 天前的旧 session（应被排除）
+        let oldDate = now.addingTimeInterval(-30 * 86_400)
+        log.addSession(TrainingSession(
+            startedAt: oldDate, endedAt: oldDate.addingTimeInterval(3600),
+            initialBalance: 100_000, finalBalance: 100_000,
+            scenarioName: "古早", scenarioPattern: .uptrend))
+        // 3 天前 session（应保留）
+        let recentDate = now.addingTimeInterval(-3 * 86_400)
+        log.addSession(TrainingSession(
+            startedAt: recentDate, endedAt: recentDate.addingTimeInterval(3600),
+            initialBalance: 100_000, finalBalance: 102_000,
+            scenarioName: "本周练", scenarioPattern: .uptrend))
+        let md = TrainingMarkdownReport.generateWeekly(log, generatedAt: now)
+        #expect(md.contains("本周练"))
+        #expect(!md.contains("古早"))
+        #expect(md.contains("总训练次数：**1**"))
+    }
 }

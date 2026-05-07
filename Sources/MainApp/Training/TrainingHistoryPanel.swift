@@ -118,22 +118,37 @@ struct TrainingHistoryPanel: View {
                 .foregroundColor(.secondary)
             Spacer()
             // v15.23 batch126 · 月报导出（剪贴板 / .md 文件 · 只在有 session 时显示）
+            // v15.23 batch197 · 加周报子菜单（与 ReviewWindow 周报对齐）
             if !viewModel.log.sessions.isEmpty {
                 Menu {
-                    Button {
-                        copyReportToPasteboard()
-                    } label: {
-                        Label("复制到剪贴板", systemImage: "doc.on.doc")
+                    Section("月报（应用 filter）") {
+                        Button {
+                            copyReportToPasteboard()
+                        } label: {
+                            Label("复制到剪贴板", systemImage: "doc.on.doc")
+                        }
+                        Button {
+                            saveReportToFile()
+                        } label: {
+                            Label("保存为 .md 文件", systemImage: "square.and.arrow.down")
+                        }
                     }
-                    Button {
-                        saveReportToFile()
-                    } label: {
-                        Label("保存为 .md 文件", systemImage: "square.and.arrow.down")
+                    Section("周报（最近 7 天 · v15.23 batch197）") {
+                        Button {
+                            copyWeeklyReportToPasteboard()
+                        } label: {
+                            Label("复制周报到剪贴板", systemImage: "doc.on.doc")
+                        }
+                        Button {
+                            saveWeeklyReportToFile()
+                        } label: {
+                            Label("保存周报为 .md 文件", systemImage: "square.and.arrow.down")
+                        }
                     }
                 } label: {
                     Label("导出报告", systemImage: "square.and.arrow.up")
                 }
-                .help("生成 markdown 月报告（含统计 + 等级分布 + 形态分布 + 最近 30 次表格）")
+                .help("生成 markdown 月报 / 周报（trader 月度 + 周度复盘双节奏）")
             }
             // v15.23 batch130 · 时间段筛选 Menu（只在有 session 时显示）
             if !viewModel.log.sessions.isEmpty {
@@ -579,6 +594,27 @@ struct TrainingHistoryPanel: View {
         panel.nameFieldStringValue = "训练月报_\(dateFmt.string(from: Date())).md"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let md = generateMarkdown()
+        try? md.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    // MARK: - v15.23 batch197 · 周报导出（最近 7 天 · 不应用 filter · 与 ReviewWindow 节奏对齐）
+
+    private func copyWeeklyReportToPasteboard() {
+        let md = TrainingMarkdownReport.generateWeekly(viewModel.log)
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(md, forType: .string)
+    }
+
+    private func saveWeeklyReportToFile() {
+        let panel = NSSavePanel()
+        panel.title = "保存训练周报"
+        panel.allowedContentTypes = [.plainText]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        panel.nameFieldStringValue = "训练周报_\(dateFmt.string(from: Date())).md"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let md = TrainingMarkdownReport.generateWeekly(viewModel.log)
         try? md.write(to: url, atomically: true, encoding: .utf8)
     }
 }

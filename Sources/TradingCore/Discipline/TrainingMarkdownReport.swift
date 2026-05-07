@@ -116,6 +116,19 @@ public enum TrainingMarkdownReport {
         return md
     }
 
+    /// v15.23 batch197 · 训练周报（最近 7 天 · 与 ReviewWindow 周报节奏对齐）
+    /// 复用 generate · 设置 cutoff = now - 7d · title = "训练周报"
+    public static func generateWeekly(_ log: TrainingSessionLog,
+                                       generatedAt: Date = Date()) -> String {
+        let cutoff = Calendar(identifier: .gregorian)
+            .date(byAdding: .day, value: -7, to: generatedAt) ?? generatedAt
+        return generate(log,
+                        filterCutoff: cutoff,
+                        title: "训练周报",
+                        generatedAt: generatedAt,
+                        recentLimit: 50)
+    }
+
     /// v15.23 batch133 · 单次 session 详细 markdown（训练完看分时复制 · 求点评/记笔记）
     /// 含：评分卡 / 形态 / 交易记录 N 笔 / 违规清单（kind+rule+message）
     public static func generateSingleSession(_ session: TrainingSession,

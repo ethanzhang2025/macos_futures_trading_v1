@@ -38,30 +38,4 @@ public struct SyncConflict: Sendable, Codable, Equatable, Hashable {
     }
 }
 
-/// 内存版冲突日志 · 默认实现（actor 线程安全）
-/// SQLite 持久化版本由 batch002 / 后续接入 StoreCore 时实现
-public actor InMemoryConflictLog {
-    private var entries: [SyncConflict] = []
-    private let cap: Int
-
-    public init(cap: Int = 1000) {
-        self.cap = cap
-    }
-
-    public func record(_ conflict: SyncConflict) {
-        entries.append(conflict)
-        if entries.count > cap {
-            entries.removeFirst(entries.count - cap)
-        }
-    }
-
-    public func recordAll(_ conflicts: [SyncConflict]) {
-        for c in conflicts { record(c) }
-    }
-
-    public func all() -> [SyncConflict] { entries }
-
-    public func count() -> Int { entries.count }
-
-    public func clear() { entries.removeAll() }
-}
+// 冲突日志的实现挪到 SyncConflictLog.swift

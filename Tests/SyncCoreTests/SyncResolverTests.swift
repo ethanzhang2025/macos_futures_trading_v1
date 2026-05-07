@@ -109,9 +109,9 @@ struct SyncResolverTests {
         #expect(outcome.conflict?.resolution == .local)  // local 时间晚胜
     }
 
-    @Test("一方 version=0（新建未改过）· 不算冲突")
+    @Test("一方 version=1（仅初始 · 未改过）· 不算冲突")
     func unilateralChangeNotConflict() {
-        let local = record(version: 0, modifiedOffset: 10, payload: "L")
+        let local = record(version: 1, modifiedOffset: 10, payload: "L")
         let remote = record(version: 3, modifiedOffset: 5, payload: "R")
         let outcome = SyncResolver.merge(local: local, remote: remote)
         #expect(outcome.conflict == nil)

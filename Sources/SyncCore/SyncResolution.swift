@@ -8,8 +8,10 @@
 //   4. 完全相等 · 取本地（确定性 · 不抖动）
 //
 // 冲突判定（写入 SyncConflictLog）：
-//   - 双方都非 tombstone + payload 不同 + 双方 version 都 > 0（都被改过）→ 记录冲突
-//   - 否则视为自然演进（不记录）
+//   - 双方都非 tombstone + payload 不同 + 双方 version 都 > 1（都被实质修改过 · 而非仅初始 v=1）→ 记录冲突
+//   - 否则视为自然演进（单边修改不报冲突）
+//   约定：新建 record version=1 · 每次 mutating 字段时 version += 1
+//   所以 version > 1 即"被实质改过至少一次"
 //
 // 这套规则覆盖：
 //   - A 改后 B 改：lastModified 决胜 · 后改方赢 · 记录冲突
@@ -76,10 +78,11 @@ public enum SyncResolver {
         return local
     }
 
-    /// 仅当双方都"被实质修改过"且内容不同 · 才算冲突
+    /// 仅当双方都"被实质修改过"（version > 1 · 即至少一次 mutate）且内容不同 · 才算冲突
+    /// 单边修改（一方 version=1 仍是初始）不报冲突 · 视为正常增量同步
     private static func isContentConflict(local: SyncRecord, remote: SyncRecord) -> Bool {
         guard local != remote else { return false }
-        guard local.version > 0, remote.version > 0 else { return false }
+        guard local.version > 1, remote.version > 1 else { return false }
         if local.isDeleted && remote.isDeleted { return false }
         return true
     }

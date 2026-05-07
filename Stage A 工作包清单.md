@@ -958,7 +958,7 @@
     - CloudKit container + iPadApp.entitlements 配置（可选 · 不配跑 Mock）
     - 8 大类 ~50 项视觉验收（应用壳 / 自选 / 图表 / 多周期 / 同步 / Settings / 行情 detail / 视觉细节）
 
-### ⬜ WP-62 · 麦语言基础版 30-50 函数
+### 🟡 WP-62 · 麦语言基础版 30-50 函数（v15.25 batch10 第 3 批落地 · ~99% 兼容）
 - **时点**：M8
 - **负责**：你
 - **依赖**：Legacy FormulaEngine（已 ~95% 完成 · v6.0+ 第 1+2 批扩展 10 函数）
@@ -995,6 +995,32 @@
   - **测试**：+10 测试 +1 suite · `Tests/IndicatorCoreTests/FormulaEngineTests/MaiYuYanExtensionBatch2Tests.swift` · Linux swift test 627/152 → **637/153 全绿** 1.009s
   - **代码质量**：code-simplifier 1 轮过审（BACKSET `Decimal(0)` 显式 + MEDIAN if/else 替代三元）
   - **后续批次（第 3 批 · 预留）**：剩 ~5% 边角函数（DRAWICON/STICKLINE/DRAWBAND 等画图函数留 ChartCore；WINNER/COST 需筹码分布数据；REVERSE 命名非标准跳过）
+- **已交付**（v15.25 batch10 · 2026-05-07 · 麦语言扩展第 3 批 · 61 → 66 函数 · 兼容度 ~95% → ~99%）：
+  - **新增 5 函数**（端到端通过 Lexer → Parser → Interpreter 跑公式验证）：
+    - `MaiYuYanBatch3.swift`（新文件 · 5 实现集中放）
+    - **TR**（无参 · `TR()` 调用 · 真实波幅 max(H-L, |H-prevC|, |L-prevC|) · 第一根退化 H-L）
+    - **ATR(N)**（平均真实波幅 = MA(TR, N) · trader 止损/波动率系统基础）
+    - **TROUGH(X)**（最近一次波谷值 · 与 LASTPEAK 对称 · 配套 TROUGHBARS）
+    - **HHVCROSS(X, N)**（上穿前 N 周期最高 · Donchian 突破信号源 · 与 AlertCondition.priceBreakoutHigh 对应）
+    - **REFV(X, N_series)**（浮动周期引用 · N 是 series 而非常量 · 动态周期算法）
+    - `BuiltinFunction.swift` 注册 5 函数到 `BuiltinFunctions.all`
+  - **设计取舍**：
+    - 5 实现集中一文件（同批次 · 互相独立 · 项目惯例 · 不抽 helper）
+    - TR / ATR 不共享 TR 内部计算（TR 也是公共函数 · 各自独立 stateless · 简洁优于 DRY）
+    - HHVCROSS prev < target 严格小判定（避免连续创新高时重复触发 · 与 AlertEvaluator 一致）
+    - REFV 偏移 series 长度强校验（!= source.count 抛错 · 防止误用）
+  - **测试**：+12 测试 +1 suite · `Tests/IndicatorCoreTests/FormulaEngineTests/MaiYuYanExtensionBatch3Tests.swift`
+    - TR 3 项（第一根 / 第二根 / 跳空稳定）
+    - ATR 2 项（基础 / N=1 退化为 TR）
+    - TROUGH 2 项（局部最小检测 / 后续刷新）
+    - HHVCROSS 2 项（基础 / 第一根 nil）
+    - REFV 3 项（N=1 等价 REF / 浮动周期 BARSLAST / 偏移 0 等价自身）
+  - **回归**：Linux swift test 1637/313 → **1649/314 全绿** 13.8s · 0 flaky · 0 回归
+  - **Stage A 麦语言收尾**：v6.0+ 第 1 批（51→56）+ 第 2 批（56→61）+ 第 3 批（61→66）= 总 +15 函数 · 兼容度 85% → ~99%
+  - **未做**（按 Stage A 清单原注释 · Stage B 接入）：
+    - DRAWICON/STICKLINE/DRAWBAND 画图函数（留 ChartCore）
+    - WINNER/COST 筹码分布（需筹码模型）
+    - REVERSE 命名非标准（跳过）
 - **MaiYuYanFormulaDemo · 第 18 个真数据 demo**（v6.0+ · 2026-04-26 · 第 1+2 批 10 函数真行情验证）：
   - 位置：`Tools/MaiYuYanFormulaDemo/main.swift` · `swift run MaiYuYanFormulaDemo`（~3-5s 含 Sina 拉取）
   - 4 段：拉 Sina RB0 60min K 线 / 跑 8 文华公式 / 10 新函数覆盖验证 / 总结

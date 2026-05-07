@@ -90,6 +90,12 @@ public enum BuiltinFunctions {
             RANGEFunction(),
             MEDIANFunction(),
             LASTPEAKFunction(),
+            // 麦语言扩展（第 3 批 · v15.25 兼容度 ~95% → ~99%）
+            TRFunction(),
+            ATRFunction(),
+            TROUGHFunction(),
+            HHVCROSSFunction(),
+            REFVFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

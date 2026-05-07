@@ -59,6 +59,8 @@ public struct FormulaEditorWindow: View {
     @State private var showHelpSheet: Bool = false
     /// v15.22 batch37 · 公式大纲面板（变量定义 + 行号 · 点击跳转）
     @State private var showOutlineSheet: Bool = false
+    /// v15.23 batch139 · outline sheet 搜索框 · filter 变量名（大小写不敏感）
+    @State private var outlineSearchQuery: String = ""
 
     // v15.23 batch43-44 · 多 tab 支持（多公式同窗口编辑 · 切换不丢内容）
     /// 持久化：tabs 数组 JSON（除 active tab 内容由 sourceText 镜像）
@@ -234,8 +236,14 @@ public struct FormulaEditorWindow: View {
         // v15.22 batch37 · 公式大纲面板（变量定义 + 行号 · 点击跳转）
         // v15.23 batch120 · 加 lint warnings Section · 一站式结构 + 健康度
         .sheet(isPresented: $showOutlineSheet) {
-            let outline = MaiLangOutline.parse(sourceText)
-            let lintWarns = MaiLangLint.analyze(sourceText)
+            let allOutline = MaiLangOutline.parse(sourceText)
+            let allLintWarns = MaiLangLint.analyze(sourceText)
+            // v15.23 batch139 · 搜索过滤（query 大小写不敏感 · 命中变量名/警告 message）
+            let q = outlineSearchQuery.trimmingCharacters(in: .whitespaces).lowercased()
+            let outline = q.isEmpty ? allOutline
+                          : allOutline.filter { $0.name.lowercased().contains(q) }
+            let lintWarns = q.isEmpty ? allLintWarns
+                          : allLintWarns.filter { $0.message.lowercased().contains(q) }
             let deps = MaiLangDependencies.analyze(sourceText)
             let depByName: [String: MaiLangVarDependency] = Dictionary(
                 uniqueKeysWithValues: deps.map { ($0.name.uppercased(), $0) })
@@ -253,6 +261,19 @@ public struct FormulaEditorWindow: View {
                     Button("关闭") { showOutlineSheet = false }.keyboardShortcut(.cancelAction)
                 }
                 .padding(12)
+                // batch139 · 搜索框
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                    TextField("过滤变量名 / 警告（如 \"DIF\" / \"未使用\"）", text: $outlineSearchQuery)
+                        .textFieldStyle(.plain)
+                    if !outlineSearchQuery.isEmpty {
+                        Button { outlineSearchQuery = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(.horizontal, 12).padding(.bottom, 8)
                 Divider()
                 if outline.isEmpty && lintWarns.isEmpty {
                     Spacer()

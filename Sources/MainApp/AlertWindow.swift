@@ -232,8 +232,8 @@ struct AlertWindow: View {
             ("AlertBatchOperator", "批量启用 / 暂停 / setChannels / setCooldown（v15.21 batch127）"),
             ("contextMenu 多选", "右键批量操作"),
         ]),
-        ("📤 导出（v15.23 batch198）", [
-            ("Header 导出按钮", "alerts 配置 CSV（8 字段 · BOM · Excel 中文友好）"),
+        ("📤 导出（v15.23 batch198/207）", [
+            ("Header 导出按钮 / ⌘E", "alerts 配置 CSV（8 字段 · BOM · Excel 中文友好）"),
             ("文件名", "alerts配置-N条-yyyy-MM-dd.csv"),
             ("用途", "trader 备份 / 团队分享 / 报税审计"),
         ]),
@@ -325,13 +325,15 @@ struct AlertWindow: View {
             .help("添加预警 / 一键模板")
 
             // v15.23 batch198 · 导出 alerts 配置 CSV（trader 备份 / 团队分享）
+            // v15.23 batch207 · 加 ⌘E 快捷键
             Button {
                 exportAlertsCSV()
             } label: {
                 Image(systemName: "square.and.arrow.up")
             }
             .buttonStyle(.borderless)
-            .help("导出预警配置 CSV（含 BOM Excel 友好 · 8 字段）")
+            .keyboardShortcut("e", modifiers: [.command])
+            .help("导出预警配置 CSV（含 BOM Excel 友好 · 8 字段 · ⌘E）")
             .disabled(alerts.isEmpty)
         }
         .padding(.horizontal, 16)

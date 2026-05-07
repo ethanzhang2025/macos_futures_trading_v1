@@ -54,6 +54,9 @@ struct WorkspaceWindow: View {
     @State private var pendingImportedBook: WorkspaceBook?
     @State private var importErrorMessage: String?
 
+    /// v15.23 batch190 · 帮助面板（⌘⇧? · 5 大新窗口 UX 一致）
+    @State private var showHelpSheet: Bool = false
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 book mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -157,6 +160,75 @@ struct WorkspaceWindow: View {
         } message: { msg in
             Text(msg)
         }
+        // v15.23 batch190 · 帮助面板（⌘⇧? · 5 大新窗口 UX 一致）
+        .sheet(isPresented: $showHelpSheet) { helpSheet }
+        .background(
+            Button("") { showHelpSheet = true }
+                .keyboardShortcut("?", modifiers: [.command, .shift])
+                .opacity(0)
+        )
+    }
+
+    // MARK: - v15.23 batch190 · 帮助面板（5 大新窗口 UX 一致）
+
+    private static let helpGroups: [(String, [(String, String)])] = [
+        ("📑 模板管理", [
+            ("左栏 + 按钮", "添加模板（弹 sheet 选名 + Kind）"),
+            ("contextMenu", "重命名 / 删除 / 应用网格预设 / 编辑快捷键"),
+            ("拖拽排序", "同 Kind 内长按拖动重排序（持久化）"),
+            ("快捷键设置", "为模板绑全局快捷键（字符 + ⌘⇧⌥⌃ 4 modifier）"),
+        ]),
+        ("📐 模板内窗口编辑", [
+            ("右栏 + 按钮", "添加窗口（位置 / 大小 / 类型 · 浮动布局）"),
+            ("应用网格预设", "6 张卡片：1×1 / 2×1 / 1×2 / 2×2 / 3×2 / 2×3"),
+            ("编辑窗口", "双击 / contextMenu 修改单窗口布局"),
+        ]),
+        ("📤 导入 / 导出 (v1.7)", [
+            ("导出 JSON", "整本 WorkspaceBook → .json（NSSavePanel · trader 备份/分享）"),
+            ("导入 JSON", "→ 替换当前 templates（确认 dialog · 防误覆盖）"),
+        ]),
+        ("⌨️ 快捷键", [
+            ("⌘⇧?", "唤出本帮助面板（v15.23 batch190）"),
+            ("自定义模板快捷键", "ShortcutEditorSheet 设置 · 全局唤起对应模板"),
+        ]),
+        ("🎯 v15.19 batch38 场景预设", [
+            ("trader 一键新建常用布局", "盯盘 / 复盘 / 训练 / 自由 4 套预设"),
+        ]),
+    ]
+
+    @ViewBuilder
+    private var helpSheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("⌨️ 工作区模板全功能").font(.title2).bold()
+                Spacer()
+                Button("关闭") { showHelpSheet = false }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(Self.helpGroups, id: \.0) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(group.0).font(.headline)
+                            ForEach(group.1, id: \.0) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(item.0)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 180, alignment: .leading)
+                                    Text(item.1).font(.system(size: 12))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 580, idealWidth: 680, minHeight: 480, idealHeight: 580)
     }
 
     private var deleteConfirmBinding: Binding<Bool> {

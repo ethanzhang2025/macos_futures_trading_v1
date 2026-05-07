@@ -285,6 +285,16 @@ public struct FormulaEditorWindow: View {
                     }
                     Text(")").font(.caption).foregroundColor(.secondary)
                     Spacer()
+                    // v15.23 batch153 · 复制大纲到剪贴板（markdown bullet 格式）
+                    Button {
+                        copyOutlineMarkdown(outline: outline,
+                                            warns: lintWarns,
+                                            deps: depByName)
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("复制大纲为 markdown · 粘贴到笔记/分享公式结构")
                     // v15.23 batch140 · 排序 + 仅输出 toggle
                     Menu {
                         Section("排序") {
@@ -1403,6 +1413,44 @@ public struct FormulaEditorWindow: View {
             ("智能大写", "完整保留字 + 空格/逗号/括号 → 自动转大写"),
         ]),
     ]
+
+    /// v15.23 batch153 · 复制大纲为 markdown（变量列表 + 警告 + 依赖）
+    private func copyOutlineMarkdown(outline: [MaiLangOutlineEntry],
+                                     warns: [MaiLangLintWarning],
+                                     deps: [String: MaiLangVarDependency]) {
+        var md = "# 公式大纲\n\n"
+        if outline.isEmpty && warns.isEmpty {
+            md += "_暂无变量定义_\n"
+        } else {
+            if !outline.isEmpty {
+                md += "## 变量（\(outline.count)）\n\n"
+                for entry in outline {
+                    let typeLabel = entry.isOutput ? "输出" : "中间"
+                    md += "- L\(entry.line) · `\(entry.name)` (\(typeLabel))"
+                    if let d = deps[entry.name.uppercased()] {
+                        if !d.uses.isEmpty {
+                            md += " → uses: \(d.uses.joined(separator: ", "))"
+                        }
+                        if !d.usedBy.isEmpty {
+                            md += " ← usedBy: \(d.usedBy.joined(separator: ", "))"
+                        }
+                    }
+                    md += "\n"
+                }
+                md += "\n"
+            }
+            if !warns.isEmpty {
+                md += "## ⚠ Lint 警告（\(warns.count)）\n\n"
+                for w in warns {
+                    md += "- L\(w.line) · \(w.message)\n"
+                }
+            }
+        }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(md, forType: .string)
+        statusMessage = "已复制大纲（\(md.count) 字符 markdown）"
+    }
 
     /// v15.23 batch108 · 当前选区起止行号（1-based · selection.length == 0 返回 nil）· minimap 选区高亮用
     private func minimapSelectionLineRange() -> (Int, Int)? {

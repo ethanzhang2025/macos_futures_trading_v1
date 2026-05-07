@@ -293,6 +293,20 @@ let package = Package(
             name: "SyncEngineDemo",
             dependencies: ["Shared", "SyncCore"],
             path: "Tools/SyncEngineDemo"
+        ),
+
+        // MARK: - iPadApp · WP-61 iPad 基础版（v15.25 batch001 起步）
+        // SwiftUI App 协议 · NavigationSplitView 双栏（自选 sidebar / 图表 detail）
+        // 全文 #if canImport(SwiftUI) && os(iOS) 隔离 · Linux/macOS fallback @main
+        // 范围（A12 In）：基础壳 / 自选 / 图表 / 多周期 / CloudKit 同步对接（共用 SyncCore）
+        // 范围（Out）：下单 / 复盘 / 训练 / 预警 / Pencil（Stage B B06）
+        .executableTarget(
+            name: "iPadApp",
+            dependencies: [
+                "Shared", "DataCore", "ChartCore", "IndicatorCore",
+                "JournalCore", "AlertCore", "WorkspaceCore", "SyncCore"
+            ],
+            path: "Sources/iPadApp"
         )
     ]
 )

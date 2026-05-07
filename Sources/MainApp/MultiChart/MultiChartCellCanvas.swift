@@ -151,6 +151,8 @@ struct MultiChartCellCanvas: View {
                         drawOI(in: ctx, rect: subRect)
                     case .atr:
                         drawATR(in: ctx, rect: subRect)
+                    case .cci:
+                        drawCCI(in: ctx, rect: subRect)
                     }
                     // batch101 · 副图左上角显示指标名称 + 参数（trader 一眼识别）
                     drawSubChartLabel(in: ctx, rect: subRect)
@@ -568,6 +570,7 @@ struct MultiChartCellCanvas: View {
         case .rsi: label = "RSI(14)"
         case .oi: label = "OI 持仓量"
         case .atr: label = "ATR(14)"
+        case .cci: label = "CCI(14)"
         }
         let txt = Text(label)
             .font(.system(size: 9, design: .monospaced))
@@ -1095,6 +1098,64 @@ struct MultiChartCellCanvas: View {
         }
         // RSI 折线 · 青色
         drawKDJLine(in: ctx, rect: rect, values: rsi, color: .cyan.opacity(0.85))
+    }
+
+    // MARK: - CCI（v15.23 batch127 · 标准 14 周期 · ±100 超买超卖 · 期货顺势指标）
+
+    /// CCI(14) = (TP - MA(TP, 14)) / (0.015 × MD)
+    /// TP = (H+L+C)/3 · MD = mean(|TP - MA|, 窗口内)
+    /// 典型范围 [-200, +200] · ±100 参考线 · 紫色与其他副图区分
+    private func drawCCI(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        let N = 14
+        guard n >= N else { return }
+        var cci: [Double] = Array(repeating: .nan, count: n)
+        for idx in (N - 1)..<n {
+            let tps = bars[(idx - N + 1)...idx].map { bar -> Double in
+                let h = (bar.high as NSDecimalNumber).doubleValue
+                let l = (bar.low as NSDecimalNumber).doubleValue
+                let c = (bar.close as NSDecimalNumber).doubleValue
+                return (h + l + c) / 3
+            }
+            let ma = tps.reduce(0, +) / Double(N)
+            let md = tps.map { abs($0 - ma) }.reduce(0, +) / Double(N)
+            cci[idx] = md > 1e-9 ? (tps.last! - ma) / (0.015 * md) : 0
+        }
+        // 坐标系：±200 默认范围 · 极端行情自动扩展至实际 max
+        let validVals = cci.compactMap { $0.isNaN ? nil : abs($0) }
+        let absMax = max(200, validVals.max() ?? 200)
+        let midY = rect.midY
+        let halfH = rect.height / 2
+        let yFor = { (v: Double) -> CGFloat in
+            midY - CGFloat(v / absMax) * halfH
+        }
+        // ±100 参考虚线（经典超买/超卖位）
+        for ref in [100.0, -100.0] {
+            let y = yFor(ref)
+            var path = Path()
+            path.move(to: CGPoint(x: rect.minX, y: y))
+            path.addLine(to: CGPoint(x: rect.maxX, y: y))
+            ctx.stroke(path, with: .color(.secondary.opacity(0.3)),
+                       style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+        }
+        // 0 轴参考线
+        var zeroPath = Path()
+        zeroPath.move(to: CGPoint(x: rect.minX, y: midY))
+        zeroPath.addLine(to: CGPoint(x: rect.maxX, y: midY))
+        ctx.stroke(zeroPath, with: .color(.secondary.opacity(0.5)), lineWidth: 0.4)
+        // CCI 折线 · 紫色（与 KDJ/MACD/RSI/OI/ATR 区分）
+        var path = Path()
+        var started = false
+        for i in 0..<n where !cci[i].isNaN {
+            let x = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let y = yFor(cci[i])
+            if !started {
+                path.move(to: CGPoint(x: x, y: y)); started = true
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        ctx.stroke(path, with: .color(.purple.opacity(0.9)), lineWidth: 0.9)
     }
 
     // MARK: - 金叉/死叉信号点（v15.23 batch82 · KDJ + MACD 共用 · trader 副图核心信号）

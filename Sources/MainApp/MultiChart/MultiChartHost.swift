@@ -478,6 +478,22 @@ struct MultiChartHost: View {
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
+                case .cci:
+                    if let cci = Self.cciAt(bars: bars, idx: idx) {
+                        // ±100 超买/超卖配色（红超买 / 绿超卖 / 紫中性）
+                        let color: Color = cci >= 100 ? .red.opacity(0.85)
+                                          : cci <= -100 ? .green.opacity(0.85)
+                                          : .purple.opacity(0.85)
+                        Text(String(format: "CCI %.1f", cci))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(color)
+                        let signal = cci >= 100 ? "超买" : cci <= -100 ? "超卖" : ""
+                        if !signal.isEmpty {
+                            Text(signal)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(color)
+                        }
+                    }
                 case .volume, .none:
                     EmptyView()
                 }
@@ -584,6 +600,24 @@ struct MultiChartHost: View {
             atr = (atr * Double(N - 1) + trs[i]) / Double(N)
         }
         return atr
+    }
+
+    /// v15.23 batch127 · CCI 14 标准 · bars[idx] 处的 CCI 值（±100 超买/超卖 · ±200 极值）
+    /// 公式：CCI = (TP - MA(TP, N)) / (0.015 × MD)
+    /// TP = (H+L+C)/3 · MD = mean(|TP[i] - MA|, i in window)
+    static func cciAt(bars: [KLine], idx: Int) -> Double? {
+        let N = 14
+        guard idx >= N - 1, idx < bars.count else { return nil }
+        let tps = bars[(idx - N + 1)...idx].map { bar -> Double in
+            let h = (bar.high as NSDecimalNumber).doubleValue
+            let l = (bar.low as NSDecimalNumber).doubleValue
+            let c = (bar.close as NSDecimalNumber).doubleValue
+            return (h + l + c) / 3
+        }
+        let ma = tps.reduce(0, +) / Double(N)
+        let md = tps.map { abs($0 - ma) }.reduce(0, +) / Double(N)
+        guard md > 1e-9 else { return 0 }
+        return (tps.last! - ma) / (0.015 * md)
     }
 
     /// v15.23 batch84 · RSI 14 标准 · bars[idx] 处的 RSI 值

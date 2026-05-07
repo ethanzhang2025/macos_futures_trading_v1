@@ -141,6 +141,9 @@ struct JournalWindow: View {
     // v15.23 batch170 · 月度卡片点击跳 list + 月份 filter（"yyyy-MM" 格式 · nil 不限）
     @State private var filterMonth: String? = nil
 
+    // v15.23 batch171 · trades 表合约 filter（nil = 全部 · 自动列举现有 instrumentIDs）
+    @State private var filterTradeInstrument: String? = nil
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -343,9 +346,58 @@ struct JournalWindow: View {
     @ViewBuilder
     private var content: some View {
         switch selectedTab {
-        case .trades:   tradesTable
+        case .trades:   tradesContent
         case .journals: journalsContent
         }
+    }
+
+    // MARK: - 成交记录 Tab 容器（v15.23 batch171 · toolbar + Table）
+
+    @ViewBuilder
+    private var tradesContent: some View {
+        VStack(spacing: 0) {
+            tradesToolbar
+            Divider()
+            tradesTable
+        }
+    }
+
+    /// v15.23 batch171 · 合约 filter Menu · 自动从 trades 列举唯一 instrumentIDs
+    private var tradesToolbar: some View {
+        HStack(spacing: 12) {
+            let instruments = Array(Set(trades.map { $0.instrumentID })).sorted()
+
+            Menu {
+                Button("\(filterTradeInstrument == nil ? "✓ " : "")全部合约") { filterTradeInstrument = nil }
+                if !instruments.isEmpty { Divider() }
+                ForEach(instruments, id: \.self) { id in
+                    let isOn = filterTradeInstrument == id
+                    let n = trades.filter { $0.instrumentID == id }.count
+                    Button("\(isOn ? "✓ " : "")\(id) · \(n)") { filterTradeInstrument = id }
+                }
+            } label: {
+                Label(filterTradeInstrument ?? "全部合约（\(instruments.count) 种）", systemImage: "doc.text.magnifyingglass")
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 180)
+            .help("合约筛选（自动从导入的成交列举）")
+            .disabled(trades.isEmpty)
+
+            Spacer()
+
+            Text("\(filteredTrades.count) / \(trades.count) 笔")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    /// v15.23 batch171 · 应用合约 filter（与 trades 表绑定）
+    private var filteredTrades: [Trade] {
+        guard let id = filterTradeInstrument else { return trades }
+        return trades.filter { $0.instrumentID == id }
     }
 
     // MARK: - 交易日志 Tab 容器（toolbar + Table）
@@ -497,7 +549,7 @@ struct JournalWindow: View {
     // MARK: - 成交记录 Tab
 
     private var tradesTable: some View {
-        Table(trades) {
+        Table(filteredTrades) {
             TableColumn("合约") { t in
                 Text(t.instrumentID).fontWeight(.medium)
             }
@@ -813,6 +865,10 @@ struct JournalWindow: View {
             ("⌘1", "切到「成交记录」"),
             ("⌘2", "切到「交易日志」"),
             ("⌘⇧?", "唤出本面板"),
+        ]),
+        ("📊 成交记录（v15.23 batch171）", [
+            ("合约 filter Menu", "全部 / 各合约（自动列举 + 各合约笔数）"),
+            ("过滤计数", "右上角显示「N / 总数 笔」"),
         ]),
         ("📥 导入 / 导出 / 自动生成", [
             ("⌘⇧M", "导入交割单 CSV（文华 / 通用）"),

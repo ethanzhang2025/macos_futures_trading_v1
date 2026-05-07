@@ -980,6 +980,16 @@ struct JournalWindow: View {
         journalSheetState = .createJournal
     }
 
+    /// v15.23 batch189 · 切到 trades tab + 选中关联成交（与 batch175 反向）
+    private func showRelatedTrades(for journal: TradeJournal) {
+        // 清 trades 端 filter / search · 让用户能看到全部关联（即使原 filter 隐藏）
+        filterTradeInstrument = nil
+        tradeSearchText = ""
+        selectedTradeIDs = Set(journal.tradeIDs)
+        selectedTab = .trades
+        Toast.info("已切到关联成交", "\(journal.title) · \(journal.tradeIDs.count) 笔已选中")
+    }
+
     /// v15.23 batch175 · 切到 journals tab + 设 trade filter（高亮关联日志）
     private func showRelatedJournals(for trade: Trade) {
         filterTradeID = trade.id
@@ -1047,12 +1057,18 @@ struct JournalWindow: View {
             if ids.count == 1,
                let id = ids.first,
                let journal = journals.first(where: { $0.id == id }) {
-                Button("编辑") {
+                Button("编辑（⌘E）") {
                     journalSheetState = .editJournal(journal)
                 }
                 // v15.23 batch168 · 复制单篇 markdown 到剪贴板（trader 一键发微信群 / 笔记）
-                Button("复制单篇分析（Markdown）") {
+                Button("复制单篇分析（⌘⇧C）") {
                     copySingleJournalMarkdown(journal)
+                }
+                // v15.23 batch189 · 跳到关联 trades（与 batch175 反向）
+                if !journal.tradeIDs.isEmpty {
+                    Button("跳到关联成交（\(journal.tradeIDs.count) 笔）") {
+                        showRelatedTrades(for: journal)
+                    }
                 }
                 Divider()
                 Button("删除", role: .destructive) {

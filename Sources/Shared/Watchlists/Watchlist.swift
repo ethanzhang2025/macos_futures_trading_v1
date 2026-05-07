@@ -1,7 +1,8 @@
 // WP-43 · 自选管理 v1 数据模型层
 // 多分组（无上限）+ 每组合约（无上限）+ 拖拽排序 + 同组去重
 // 纯 value type 设计；不 import SwiftUI/AppKit/CloudKit，保持 Sources/Shared 跨端可移植
-// 屏幕级 DnD 交互留给后续 UI WP；CloudKit 同步留给 A12（M7-M9）
+// 屏幕级 DnD 交互留给后续 UI WP
+// WP-60 同步预埋（v15.24 batch003）：version / deletedAt 字段；旧 JSON decode 兼容（decodeIfPresent）
 
 import Foundation
 
@@ -15,6 +16,10 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
     public var instrumentIDs: [String]
     public var createdAt: Date
     public var updatedAt: Date
+    /// WP-60 · 修改次数（新建=1 · 每次 mutate 字段 +1）· LWW 副决胜 · 旧 JSON 缺省 1
+    public var version: Int
+    /// WP-60 · 软删除时间戳（tombstone）· 非 nil 即已删
+    public var deletedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -22,7 +27,9 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         sortIndex: Int = 0,
         instrumentIDs: [String] = [],
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        version: Int = 1,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -30,11 +37,43 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         self.instrumentIDs = instrumentIDs
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.version = version
+        self.deletedAt = deletedAt
     }
 
     /// 空分组工厂
     public static func empty(name: String, sortIndex: Int = 0) -> Watchlist {
         Watchlist(name: name, sortIndex: sortIndex)
+    }
+
+    // MARK: - Codable（兼容旧 JSON · 缺 version/deletedAt 时回退）
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, sortIndex, instrumentIDs, createdAt, updatedAt, version, deletedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.sortIndex = try c.decode(Int.self, forKey: .sortIndex)
+        self.instrumentIDs = try c.decode([String].self, forKey: .instrumentIDs)
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+        self.updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        self.version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        self.deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(sortIndex, forKey: .sortIndex)
+        try c.encode(instrumentIDs, forKey: .instrumentIDs)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(version, forKey: .version)
+        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
     }
 }
 
@@ -72,8 +111,10 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
     @discardableResult
     public mutating func renameGroup(id: UUID, to newName: String, now: Date = Date()) -> Bool {
         guard let index = groups.firstIndex(where: { $0.id == id }) else { return false }
+        guard groups[index].name != newName else { return true }
         groups[index].name = newName
         groups[index].updatedAt = now
+        groups[index].version += 1
         return true
     }
 
@@ -106,6 +147,7 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
         guard !groups[index].instrumentIDs.contains(instrumentID) else { return false }
         groups[index].instrumentIDs.append(instrumentID)
         groups[index].updatedAt = now
+        groups[index].version += 1
         return true
     }
 
@@ -117,6 +159,7 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
         guard let pos = groups[index].instrumentIDs.firstIndex(of: instrumentID) else { return false }
         groups[index].instrumentIDs.remove(at: pos)
         groups[index].updatedAt = now
+        groups[index].version += 1
         return true
     }
 
@@ -128,6 +171,7 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
               Self.moveElement(in: &groups[groupIndex].instrumentIDs, from: from, to: to)
         else { return false }
         groups[groupIndex].updatedAt = now
+        groups[groupIndex].version += 1
         return true
     }
 
@@ -148,13 +192,29 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
 
         groups[sourceIdx].instrumentIDs.remove(at: posInSource)
         groups[sourceIdx].updatedAt = now
+        groups[sourceIdx].version += 1
 
         if sourceIdx != targetIdx, !groups[targetIdx].instrumentIDs.contains(instrumentID) {
             let count = groups[targetIdx].instrumentIDs.count
             let insertAt = targetIndex.map { max(0, min($0, count)) } ?? count
             groups[targetIdx].instrumentIDs.insert(instrumentID, at: insertAt)
             groups[targetIdx].updatedAt = now
+            groups[targetIdx].version += 1
         }
+        return true
+    }
+
+    // MARK: - WP-60 同步 · 软删除
+
+    /// 软删除分组（设 deletedAt + version+1）· 同步层用此而非物理 removeGroup
+    /// - Returns: 是否成功
+    @discardableResult
+    public mutating func softDeleteGroup(id: UUID, now: Date = Date()) -> Bool {
+        guard let index = groups.firstIndex(where: { $0.id == id }) else { return false }
+        guard groups[index].deletedAt == nil else { return false }
+        groups[index].deletedAt = now
+        groups[index].updatedAt = now
+        groups[index].version += 1
         return true
     }
 

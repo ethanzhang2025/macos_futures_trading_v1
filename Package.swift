@@ -45,7 +45,8 @@ let package = Package(
         ),
 
         // MARK: - Shared · 跨端共用的模型 / 协议 / 工具
-        .target(name: "Shared", dependencies: ["CSQLite"], path: "Sources/Shared"),
+        // 含 Watchlist / WorkspaceTemplate · 同步 Adapter 通过 SyncCore 协议接入（WP-60）
+        .target(name: "Shared", dependencies: ["CSQLite", "SyncCore"], path: "Sources/Shared"),
         .testTarget(name: "SharedTests", dependencies: ["Shared"], path: "Tests/SharedTests"),
 
         // MARK: - DataCore · Tick / K 线 / 合约 / 数据源协议
@@ -102,7 +103,7 @@ let package = Package(
         // D2/D4 G1 分级存储方案 A：CloudKit 存非敏感（自选/工作区/UI 偏好）· 阿里云自建存敏感（日志/预警·Stage B）
         // 本模块 = 厂商无关抽象层：SyncableRecord 协议 · SyncBackend 协议 · SyncEngine LWW · MockSyncBackend
         // CloudKitSyncBackend 在 #if canImport(CloudKit) 隔离（Linux 跳过 · Mac 切机时联调）
-        .target(name: "SyncCore", dependencies: ["Shared"], path: "Sources/SyncCore"),
+        .target(name: "SyncCore", dependencies: [], path: "Sources/SyncCore"),
         .testTarget(name: "SyncCoreTests", dependencies: ["SyncCore"], path: "Tests/SyncCoreTests"),
 
         // MARK: - MainApp · macOS App 主框架（demo → 真 App · M5 集成入口）

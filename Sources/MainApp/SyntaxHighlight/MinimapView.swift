@@ -19,16 +19,20 @@ public struct MinimapView: View {
     let visibleStartLine: Int?
     /// 1-based 可视区结束行（含）· nil = 不显示 viewport
     let visibleEndLine: Int?
+    /// v15.23 batch107 · 当前光标所在行（1-based · nil = 不画指示线）· IDE 经典：minimap 上显示光标位置
+    let cursorLine: Int?
     /// 用户点击/拖到第 N 行（1-based）回调 · 主编辑器据此跳转
     let onClickLine: (Int) -> Void
 
     public init(text: String, scheme: SyntaxColorScheme,
                 visibleStartLine: Int? = nil, visibleEndLine: Int? = nil,
+                cursorLine: Int? = nil,
                 onClickLine: @escaping (Int) -> Void) {
         self.text = text
         self.scheme = scheme
         self.visibleStartLine = visibleStartLine
         self.visibleEndLine = visibleEndLine
+        self.cursorLine = cursorLine
         self.onClickLine = onClickLine
     }
 
@@ -130,7 +134,7 @@ public struct MinimapView: View {
             }
         }
 
-        // batch106 viewport 高亮预留（visibleStartLine 为 nil 时跳过）
+        // batch106 viewport 高亮（visibleStartLine 为 nil 时跳过）
         if let s = visibleStartLine, let e = visibleEndLine, s >= 1, e >= s, s <= totalLines {
             let endLine = min(e, totalLines)
             let topY = CGFloat(s - 1) * lineH
@@ -141,6 +145,13 @@ public struct MinimapView: View {
                 : Color.black.opacity(0.08)
             ctx.fill(Path(rect), with: .color(fillColor))
             ctx.stroke(Path(rect), with: .color(Color.accentColor.opacity(0.6)), lineWidth: 1)
+        }
+
+        // batch107 当前光标行指示线（IDE 经典 · 画在 viewport 之上 · 醒目但不抢戏）
+        if let cl = cursorLine, cl >= 1, cl <= totalLines {
+            let y = CGFloat(cl - 1) * lineH
+            let rect = CGRect(x: 0, y: y, width: size.width, height: max(lineH, 1.5))
+            ctx.fill(Path(rect), with: .color(Color.accentColor.opacity(0.55)))
         }
     }
 

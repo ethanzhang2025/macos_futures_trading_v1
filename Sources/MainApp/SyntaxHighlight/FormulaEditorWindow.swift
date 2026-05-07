@@ -49,6 +49,8 @@ public struct FormulaEditorWindow: View {
     @State private var showGotoLineSheet: Bool = false
     @State private var gotoLineInput: String = ""
     @State private var pendingGotoLine: Int? = nil
+    /// v15.23 batch107 · minimap 拖动专用 scroll-only 跳转（不动光标 · 与 pendingGotoLine 区分）
+    @State private var pendingScrollToLine: Int? = nil
     /// v15.22 batch39 · 待插入到光标位置的文本
     @State private var pendingInsertText: String? = nil
     /// v15.22 batch34 · 快捷键帮助面板
@@ -115,6 +117,7 @@ public struct FormulaEditorWindow: View {
                                 },
                                 pendingGotoLine: $pendingGotoLine,
                                 pendingInsertText: $pendingInsertText,
+                                pendingScrollToLine: $pendingScrollToLine,
                                 onVisibleLinesChange: { s, e in
                                     visibleStartLine = s
                                     visibleEndLine = e
@@ -124,7 +127,8 @@ public struct FormulaEditorWindow: View {
                     MinimapView(text: sourceText, scheme: scheme,
                                 visibleStartLine: visibleStartLine,
                                 visibleEndLine: visibleEndLine,
-                                onClickLine: { line in pendingGotoLine = line })
+                                cursorLine: cursorLine,
+                                onClickLine: { line in pendingScrollToLine = line })
                         .frame(width: 100)
                 }
             }

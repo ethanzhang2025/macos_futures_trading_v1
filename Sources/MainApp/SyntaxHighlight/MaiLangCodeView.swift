@@ -29,9 +29,12 @@ public struct MaiLangCodeView: NSViewRepresentable {
     /// v15.22 batch27 · 当前光标处 token 文本回调（nil = 无 token · 用于 status bar 函数签名实时显示）
     let onTokenAtCursor: ((String?) -> Void)?
     /// v15.22 batch29 · 跳转到指定行（1-based · 设非 nil 触发 updateNSView 跳转后自动清回 nil）
+    /// 含 setSelectedRange + makeFirstResponder · 用于「跳转到行」sheet / outline 跳转
     @Binding var pendingGotoLine: Int?
     /// v15.22 batch39 · 插入文本到当前光标位置（设非 nil 触发 updateNSView 插入后自动清回 nil）
     @Binding var pendingInsertText: String?
+    /// v15.23 batch107 · 仅滚动到指定行（不动光标 / 不抢 firstResponder · minimap 拖动用）
+    @Binding var pendingScrollToLine: Int?
     /// v15.23 batch106 · 可视行回调（first/last 1-based · 监听 NSScrollView 滚动 + 文本变化）· minimap viewport 高亮用
     let onVisibleLinesChange: ((Int, Int) -> Void)?
 
@@ -42,6 +45,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 onTokenAtCursor: ((String?) -> Void)? = nil,
                 pendingGotoLine: Binding<Int?> = .constant(nil),
                 pendingInsertText: Binding<String?> = .constant(nil),
+                pendingScrollToLine: Binding<Int?> = .constant(nil),
                 onVisibleLinesChange: ((Int, Int) -> Void)? = nil) {
         self._text = text
         self.scheme = scheme
@@ -52,6 +56,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
         self.onTokenAtCursor = onTokenAtCursor
         self._pendingGotoLine = pendingGotoLine
         self._pendingInsertText = pendingInsertText
+        self._pendingScrollToLine = pendingScrollToLine
         self.onVisibleLinesChange = onVisibleLinesChange
     }
 
@@ -106,25 +111,21 @@ public struct MaiLangCodeView: NSViewRepresentable {
             tv.window?.makeFirstResponder(tv)
             DispatchQueue.main.async { self.pendingInsertText = nil }
         }
-        // v15.22 batch29 · 处理跳转请求（行号 1-based）
+        // v15.22 batch29 · 处理跳转请求（行号 1-based · 含光标移动 + 抢 firstResponder）
         if let target = pendingGotoLine, target > 0 {
-            let nsStr = tv.string as NSString
-            var currentLine = 1
-            var lineStart = 0
-            var i = 0
-            while i < nsStr.length && currentLine < target {
-                if nsStr.character(at: i) == 0x0A {
-                    currentLine += 1
-                    lineStart = i + 1
-                }
-                i += 1
-            }
-            if currentLine == target {
+            if let lineStart = Self.utf16Offset(forLine: target, in: tv.string) {
                 tv.setSelectedRange(NSRange(location: lineStart, length: 0))
                 tv.scrollRangeToVisible(NSRange(location: lineStart, length: 0))
                 tv.window?.makeFirstResponder(tv)
             }
             DispatchQueue.main.async { self.pendingGotoLine = nil }
+        }
+        // v15.23 batch107 · 仅滚动（不动光标 · minimap 拖动专用 · trader 边编辑边浏览全文）
+        if let target = pendingScrollToLine, target > 0 {
+            if let lineStart = Self.utf16Offset(forLine: target, in: tv.string) {
+                tv.scrollRangeToVisible(NSRange(location: lineStart, length: 0))
+            }
+            DispatchQueue.main.async { self.pendingScrollToLine = nil }
         }
     }
 
@@ -516,6 +517,23 @@ public struct MaiLangCodeView: NSViewRepresentable {
         let endLoc = max(charRange.location, NSMaxRange(charRange) - 1)
         let lastLine = lineNumber(forUTF16Loc: endLoc, in: ns)
         return (firstLine, lastLine)
+    }
+
+    /// 1-based 行号 → utf16 行起始 location · 越界返回 nil
+    static func utf16Offset(forLine line: Int, in source: String) -> Int? {
+        guard line > 0 else { return nil }
+        let ns = source as NSString
+        var currentLine = 1
+        var lineStart = 0
+        var i = 0
+        while i < ns.length && currentLine < line {
+            if ns.character(at: i) == 0x0A {
+                currentLine += 1
+                lineStart = i + 1
+            }
+            i += 1
+        }
+        return currentLine == line ? lineStart : nil
     }
 
     /// utf16 location → 1-based 行号 · 越界 clamp

@@ -32,8 +32,10 @@ public struct MinimapView: View {
     let highlightedToken: String?
     /// v15.23 batch111 · lint 警告行（1-based · 橙色横条 · 与 errorLine 红色区分）· trader 一眼看 dead code
     let warningLines: [Int]
-    /// 用户点击/拖到第 N 行（1-based）回调 · 主编辑器据此跳转
+    /// 用户点击/拖到第 N 行（1-based）回调 · 主编辑器据此 scroll-only 跳转（不动光标）
     let onClickLine: (Int) -> Void
+    /// v15.23 batch113 · 双击第 N 行回调（goto + 移光标 + 抢 firstResponder · IDE 双击=进入编辑）· nil = 不响应
+    let onDoubleClickLine: ((Int) -> Void)?
 
     public init(text: String, scheme: SyntaxColorScheme,
                 visibleStartLine: Int? = nil, visibleEndLine: Int? = nil,
@@ -42,7 +44,8 @@ public struct MinimapView: View {
                 errorLine: Int? = nil,
                 highlightedToken: String? = nil,
                 warningLines: [Int] = [],
-                onClickLine: @escaping (Int) -> Void) {
+                onClickLine: @escaping (Int) -> Void,
+                onDoubleClickLine: ((Int) -> Void)? = nil) {
         self.text = text
         self.scheme = scheme
         self.visibleStartLine = visibleStartLine
@@ -54,7 +57,12 @@ public struct MinimapView: View {
         self.highlightedToken = highlightedToken
         self.warningLines = warningLines
         self.onClickLine = onClickLine
+        self.onDoubleClickLine = onDoubleClickLine
     }
+
+    // batch113 双击检测内部 state（300ms 窗口 · 5pt 距离）
+    @State private var lastClickAt: Date = .distantPast
+    @State private var lastClickLocation: CGPoint = .zero
 
     public var body: some View {
         GeometryReader { geo in
@@ -75,6 +83,24 @@ public struct MinimapView: View {
                         let lineH = computedLineHeight(canvasH: geo.size.height, totalLines: total)
                         let raw = Int(value.location.y / lineH) + 1
                         onClickLine(min(max(1, raw), total))
+                    }
+                    .onEnded { value in
+                        // batch113 · 双击检测（< 300ms · 距离 < 5pt）→ 触发 onDoubleClickLine
+                        guard let cb = onDoubleClickLine else { return }
+                        let now = Date()
+                        let dt = now.timeIntervalSince(lastClickAt)
+                        let dx = abs(value.location.x - lastClickLocation.x)
+                        let dy = abs(value.location.y - lastClickLocation.y)
+                        if dt < 0.3, dx < 5, dy < 5 {
+                            let total = max(1, lineCount)
+                            let lineH = computedLineHeight(canvasH: geo.size.height, totalLines: total)
+                            let raw = Int(value.location.y / lineH) + 1
+                            cb(min(max(1, raw), total))
+                            lastClickAt = .distantPast   // reset 防三击
+                        } else {
+                            lastClickAt = now
+                            lastClickLocation = value.location
+                        }
                     }
             )
         }

@@ -140,7 +140,8 @@ public struct FormulaEditorWindow: View {
                                 errorLine: errorMarker?.line,
                                 highlightedToken: currentTokenText,
                                 warningLines: warns.map { $0.line },
-                                onClickLine: { line in pendingScrollToLine = line })
+                                onClickLine: { line in pendingScrollToLine = line },
+                                onDoubleClickLine: { line in pendingGotoLine = line })
                         .frame(width: CGFloat(minimapWidth))
                 }
             }
@@ -1159,8 +1160,9 @@ public struct FormulaEditorWindow: View {
         ("🎯 行级定位", [
             ("⌘L", "跳转到指定行（输入行号）"),
             ("点击行号", "选中整行（左侧 gutter）"),
-            ("⌘⇧M", "切换 minimap 缩略图（v15.23 · 拖动直接跳转）"),
-            ("status bar", "实时显示光标位置 行:列"),
+            ("⌘⇧M", "切换 minimap 缩略图（v15.23 · 拖动 scroll-only · 双击 goto + 移光标 · 4 档宽度）"),
+            ("minimap 标记", "🟧未用变量/重复定义 · 🟥编译错误 · 🟨当前 token 全文同名引用"),
+            ("status bar", "实时显示光标位置 行:列 · ⚠ 警告数（点击跳第一个）"),
         ]),
         ("🔍 查找", [
             ("⌘F", "查找（NSTextView 内置 find bar · 增量）"),

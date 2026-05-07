@@ -27,6 +27,9 @@ public struct MinimapView: View {
     let selectionEndLine: Int?
     /// v15.23 batch108 · 编译错误行（1-based · nil = 无错误）· 红条横线 trader 一眼定位 bug
     let errorLine: Int?
+    /// v15.23 batch110 · 当前光标处 token 文本（用于 minimap 全文同名引用高亮 · IDE 级 symbol references）
+    /// nil 或空串 → 不高亮 · 长度 < 2 也不高亮（避免单字符噪音）
+    let highlightedToken: String?
     /// 用户点击/拖到第 N 行（1-based）回调 · 主编辑器据此跳转
     let onClickLine: (Int) -> Void
 
@@ -35,6 +38,7 @@ public struct MinimapView: View {
                 cursorLine: Int? = nil,
                 selectionStartLine: Int? = nil, selectionEndLine: Int? = nil,
                 errorLine: Int? = nil,
+                highlightedToken: String? = nil,
                 onClickLine: @escaping (Int) -> Void) {
         self.text = text
         self.scheme = scheme
@@ -44,6 +48,7 @@ public struct MinimapView: View {
         self.selectionStartLine = selectionStartLine
         self.selectionEndLine = selectionEndLine
         self.errorLine = errorLine
+        self.highlightedToken = highlightedToken
         self.onClickLine = onClickLine
     }
 
@@ -114,6 +119,13 @@ public struct MinimapView: View {
         // 全文 tokenize 一次（与 status bar token 计数同源 · 不重复词法分析）
         let tokens = MaiLangSyntaxHighlighter.tokenize(text)
 
+        // batch110 · 同名引用高亮（光标处 token 全文匹配 · 限定长度 ≥ 2 · 仅 identifier/builtinFunc）
+        let refTarget: String? = {
+            guard let raw = highlightedToken?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  raw.count >= 2 else { return nil }
+            return raw.uppercased()
+        }()
+
         // token 按起始行分桶（token 一般不跨行；跨行的 string/comment 取其起始行近似画）
         var tokensByLine: [Int: [SyntaxToken]] = [:]
         for t in tokens {
@@ -138,6 +150,16 @@ public struct MinimapView: View {
                 guard endCol > startCol else { continue }
                 let x = CGFloat(startCol) * charW
                 let w = CGFloat(endCol - startCol) * charW
+
+                // batch110 · 引用高亮 underlay（黄色背景 · 在 token 颜色下层 · 凸显但不掩盖）
+                if let target = refTarget,
+                   (t.kind == .identifier || t.kind == .builtinFunc),
+                   t.text.uppercased() == target {
+                    let bg = CGRect(x: max(0, x - 0.5), y: y,
+                                    width: w + 1, height: max(lineH, 1.5))
+                    ctx.fill(Path(bg), with: .color(Color.yellow.opacity(0.55)))
+                }
+
                 let rgb = scheme.color(for: t.kind)
                 let rect = CGRect(x: x, y: y, width: w, height: max(lineH - 0.3, 0.7))
                 ctx.fill(Path(rect),

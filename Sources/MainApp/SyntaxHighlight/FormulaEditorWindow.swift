@@ -41,6 +41,8 @@ public struct FormulaEditorWindow: View {
     @State private var selectionRange: NSRange = NSRange(location: 0, length: 0)
     /// v15.22 batch27 · 当前光标 token 的函数签名（nil = 当前位置不是已知函数）
     @State private var currentTokenSig: String? = nil
+    /// v15.23 batch110 · 当前光标 token 原文（不限于已知函数 · 含变量名 · minimap 同名引用高亮用）
+    @State private var currentTokenText: String? = nil
     /// v15.22 batch28 · 函数列表面板（⌘⇧L 切换 · 73 函数 9 分类）
     @State private var showFunctionsPanel: Bool = false
     /// v15.22 batch35 · 函数库搜索过滤
@@ -110,6 +112,7 @@ public struct FormulaEditorWindow: View {
                                 },
                                 onSelectionChange: { range in selectionRange = range },
                                 onTokenAtCursor: { name in
+                                    currentTokenText = name
                                     if let n = name?.uppercased(),
                                        let s = MaiLangFunctionSignatures.all[n] {
                                         currentTokenSig = s.formatted
@@ -134,6 +137,7 @@ public struct FormulaEditorWindow: View {
                                 selectionStartLine: selRange?.0,
                                 selectionEndLine: selRange?.1,
                                 errorLine: errorMarker?.line,
+                                highlightedToken: currentTokenText,
                                 onClickLine: { line in pendingScrollToLine = line })
                         .frame(width: CGFloat(minimapWidth))
                 }

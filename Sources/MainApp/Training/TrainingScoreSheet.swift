@@ -108,6 +108,13 @@ struct TrainingScoreSheet: View {
     // MARK: - Header
 
     private var header: some View {
+        baseHeader
+            .padding(12)
+            .background(gradeGradient(score.grade))
+            .cornerRadius(8)
+    }
+
+    private var baseHeader: some View {
         HStack(alignment: .top, spacing: 14) {
             Text(score.grade.emoji)
                 .font(.system(size: 56))
@@ -320,6 +327,19 @@ struct TrainingScoreSheet: View {
         case .C: return .orange
         case .D: return .red
         }
+    }
+
+    /// v15.23 batch159 · grade 对应背景渐变（视觉强化 · 弱透明 · 不抢正文）
+    private func gradeGradient(_ grade: TrainingScore.Grade) -> LinearGradient {
+        let base = gradeColor(grade)
+        return LinearGradient(
+            gradient: Gradient(colors: [
+                base.opacity(0.18),
+                base.opacity(0.04),
+            ]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     // MARK: - v15.23 batch150 · 反馈提示

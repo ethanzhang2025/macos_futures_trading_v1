@@ -422,6 +422,18 @@ struct JournalWindow: View {
 
             Spacer()
 
+            // v15.23 batch169 · 月报导出 Menu（复制到剪贴板 / 保存为 .md · filter 应用到导出）
+            Menu {
+                Button("复制到剪贴板") { exportMonthlyReport(toFile: false) }
+                Button("保存为 .md 文件…") { exportMonthlyReport(toFile: true) }
+            } label: {
+                Label("导出月报", systemImage: "doc.text")
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 100)
+            .help("月报 4 段 markdown · 当前 filter 自动应用")
+            .disabled(journals.isEmpty)
+
             // v15.23 batch164 · 排序 Menu（5 档 · 仅列表模式有意义 · 月度模式按月份排序固定）
             Menu {
                 ForEach(JournalSortKey.allCases) { k in
@@ -591,6 +603,52 @@ struct JournalWindow: View {
         Toast.info("已复制单篇分析", "\(journal.title) · \(md.count) 字")
     }
 
+    /// v15.23 batch169 · 月报 markdown 导出（剪贴板 / 文件二选一 · 应用当前 emotion + deviation filter）
+    private func exportMonthlyReport(toFile: Bool) {
+        let label = filterLabel
+        let md = JournalMarkdownReport.generate(
+            journals,
+            filterEmotion: filterEmotion,
+            filterDeviation: filterDeviation,
+            filterLabel: label
+        )
+        if toFile {
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.plainText]
+            panel.nameFieldStringValue = "交易日志月报-\(Self.fileStampFormatter.string(from: Date())).md"
+            panel.title = "保存月报"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            do {
+                try md.write(to: url, atomically: true, encoding: .utf8)
+                Toast.info("月报已保存", url.lastPathComponent)
+            } catch {
+                Toast.error("保存失败", error.localizedDescription)
+            }
+        } else {
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(md, forType: .string)
+            let suffix = label.map { "（\($0)）" } ?? ""
+            Toast.info("月报已复制\(suffix)", "\(md.count) 字 · \(filteredJournals.count) 篇")
+        }
+    }
+
+    /// v15.23 batch169 · filterLabel：基于 emotion / deviation filter 拼接（nil 时为 nil · 不加标题后缀）
+    private var filterLabel: String? {
+        var parts: [String] = []
+        if let e = filterEmotion { parts.append(e.displayName) }
+        if let d = filterDeviation { parts.append(d.displayName) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private static let fileStampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd-HHmm"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
     // MARK: - 月度视图（commit 4/4）
 
     @ViewBuilder
@@ -722,7 +780,8 @@ struct JournalWindow: View {
             ("⌘⇧M", "导入交割单 CSV（文华 / 通用）"),
             ("⌘⇧J", "新建日志"),
             ("⌘⇧A", "从成交记录自动生成日志草稿"),
-            ("导出 Menu", "闭合持仓 / Trade 流水 二选一 · 含 BOM Excel 友好"),
+            ("导出 CSV Menu", "闭合持仓 / Trade 流水 二选一 · 含 BOM Excel 友好"),
+            ("导出月报 Menu (v15.23 batch169)", "4 段 markdown：概览 / 情绪 / 偏差 / 标签 top10 / 最近 30 · 应用当前 filter"),
         ]),
         ("🔍 搜索 / 筛选 / 排序（v15.23 batch164-166）", [
             ("搜索", "标题 / 原因 / 教训 / 标签 · 空格 AND · 大小写不敏感"),

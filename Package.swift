@@ -105,7 +105,12 @@ let package = Package(
         // D2/D4 G1 分级存储方案 A：CloudKit 存非敏感（自选/工作区/UI 偏好）· 阿里云自建存敏感（日志/预警·Stage B）
         // 本模块 = 厂商无关抽象层：SyncableRecord 协议 · SyncBackend 协议 · SyncEngine LWW · MockSyncBackend
         // CloudKitSyncBackend 在 #if canImport(CloudKit) 隔离（Linux 跳过 · Mac 切机时联调）
-        .target(name: "SyncCore", dependencies: [], path: "Sources/SyncCore"),
+        .target(
+            name: "SyncCore",
+            dependencies: [],
+            path: "Sources/SyncCore",
+            exclude: ["CloudKit/README.md"]
+        ),
         .testTarget(name: "SyncCoreTests", dependencies: ["SyncCore"], path: "Tests/SyncCoreTests"),
 
         // MARK: - MainApp · macOS App 主框架（demo → 真 App · M5 集成入口）

@@ -67,6 +67,35 @@ struct MaiLangLintTests {
         #expect(warns[0].line == 2)
     }
 
+    @Test("同名变量重复定义 → 警告（首次定义行号回报）")
+    func duplicateDefinition() {
+        let src = """
+        DIF:=EMA(CLOSE,12)-EMA(CLOSE,26);
+        DIF:=EMA(CLOSE,5)-EMA(CLOSE,10);
+        OUT:DIF*2;
+        """
+        let warns = MaiLangLint.analyze(src)
+        // 第 2 行重复定义 DIF · 应有 1 条 duplicateDefinition warning
+        let dupes = warns.filter { $0.kind == .duplicateDefinition }
+        #expect(dupes.count == 1)
+        #expect(dupes[0].line == 2)
+        #expect(dupes[0].message.contains("DIF"))
+        #expect(dupes[0].message.contains("第 1 行"))
+    }
+
+    @Test("重复定义 + 大小写不敏感（dif vs DIF）")
+    func duplicateCaseInsensitive() {
+        let src = """
+        DIF:=EMA(CLOSE,12);
+        dif:=EMA(CLOSE,26);
+        OUT:DIF*2;
+        """
+        let warns = MaiLangLint.analyze(src)
+        let dupes = warns.filter { $0.kind == .duplicateDefinition }
+        #expect(dupes.count == 1)
+        #expect(dupes[0].line == 2)
+    }
+
     @Test("注释中提到的变量名不算引用")
     func commentMentionDoesNotCount() {
         let src = """

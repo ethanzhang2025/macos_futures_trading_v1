@@ -18,7 +18,8 @@ public struct MaiLangLintWarning: Sendable, Equatable {
     public let message: String
 
     public enum Kind: String, Sendable, Equatable {
-        case unusedVariable    // 中间变量定义但全文无其他引用
+        case unusedVariable        // 中间变量定义但全文无其他引用
+        case duplicateDefinition   // 同名变量被定义两次及以上（可能是 typo · 后续覆盖前定义）
     }
 
     public init(line: Int, kind: Kind, message: String) {
@@ -46,6 +47,8 @@ public enum MaiLangLint {
         }
 
         var warnings: [MaiLangLintWarning] = []
+
+        // 规则 1：未使用的中间变量
         for entry in outline where !entry.isOutput {
             let key = entry.name.uppercased()
             let usage = (refCount[key] ?? 0) - (defCount[key] ?? 0)
@@ -56,6 +59,21 @@ public enum MaiLangLint {
                     message: "未使用的中间变量 \(entry.name)"))
             }
         }
+
+        // 规则 2：重复定义（同名变量定义 ≥ 2 次 · 后续覆盖首次 · 可能 typo）
+        var firstSeenLine: [String: Int] = [:]
+        for entry in outline {
+            let key = entry.name.uppercased()
+            if let firstLine = firstSeenLine[key] {
+                warnings.append(MaiLangLintWarning(
+                    line: entry.line,
+                    kind: .duplicateDefinition,
+                    message: "重复定义：\(entry.name)（首次定义在第 \(firstLine) 行）"))
+            } else {
+                firstSeenLine[key] = entry.line
+            }
+        }
+
         return warnings.sorted { $0.line < $1.line }
     }
 }

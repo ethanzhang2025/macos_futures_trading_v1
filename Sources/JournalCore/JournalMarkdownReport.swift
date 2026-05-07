@@ -79,6 +79,7 @@ public enum JournalMarkdownReport {
         filterEmotion: JournalEmotion? = nil,
         filterDeviation: JournalDeviation? = nil,
         filterCutoff: Date? = nil,
+        filterMonth: String? = nil,
         filterLabel: String? = nil,
         title: String = "交易日志月报",
         generatedAt: Date = Date(),
@@ -88,6 +89,8 @@ public enum JournalMarkdownReport {
         if let e = filterEmotion { filtered = filtered.filter { $0.emotion == e } }
         if let d = filterDeviation { filtered = filtered.filter { $0.deviation == d } }
         if let cutoff = filterCutoff { filtered = filtered.filter { $0.createdAt >= cutoff } }
+        // v15.23 batch170 · "yyyy-MM" 月份 filter（基于 createdAt · 时区 Asia/Shanghai）
+        if let m = filterMonth { filtered = filtered.filter { monthString($0.createdAt) == m } }
 
         var md = ""
         let titleSuffix = filterLabel.map { "（\($0)）" } ?? ""
@@ -189,6 +192,15 @@ public enum JournalMarkdownReport {
     static func formatDateTime(_ date: Date) -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f.string(from: date)
+    }
+
+    /// v15.23 batch170 · 月份字符串 "yyyy-MM"（Asia/Shanghai · 与 JournalWindow.monthFormatter 一致）
+    static func monthString(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM"
         f.timeZone = TimeZone(identifier: "Asia/Shanghai")
         f.locale = Locale(identifier: "en_US_POSIX")
         return f.string(from: date)

@@ -138,6 +138,9 @@ struct JournalWindow: View {
     // v15.23 batch167 · 帮助面板（⌘⇧? · 4 大新窗口 UX 一致）
     @State private var showHelpSheet: Bool = false
 
+    // v15.23 batch170 · 月度卡片点击跳 list + 月份 filter（"yyyy-MM" 格式 · nil 不限）
+    @State private var filterMonth: String? = nil
+
     /// M5 持久化：load 完成前 isLoaded=false · 期间 mutation 不触发 save（避免 onChange 把 Mock 写覆盖真数据）
     @State private var isLoaded: Bool = false
 
@@ -462,6 +465,30 @@ struct JournalWindow: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
+
+            // v15.23 batch170 · 月份 filter chip（点击 X 清除）
+            if let m = filterMonth {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar.badge.checkmark")
+                        .font(.caption2)
+                    Text(m)
+                        .font(.caption2)
+                        .monospacedDigit()
+                    Button {
+                        filterMonth = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .foregroundColor(.accentColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.accentColor.opacity(0.15))
+                .clipShape(Capsule())
+                .help("月份过滤 · 点 ✕ 清除")
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -603,13 +630,14 @@ struct JournalWindow: View {
         Toast.info("已复制单篇分析", "\(journal.title) · \(md.count) 字")
     }
 
-    /// v15.23 batch169 · 月报 markdown 导出（剪贴板 / 文件二选一 · 应用当前 emotion + deviation filter）
+    /// v15.23 batch169 · 月报 markdown 导出（剪贴板 / 文件二选一 · 应用 emotion + deviation + month filter）
     private func exportMonthlyReport(toFile: Bool) {
         let label = filterLabel
         let md = JournalMarkdownReport.generate(
             journals,
             filterEmotion: filterEmotion,
             filterDeviation: filterDeviation,
+            filterMonth: filterMonth,
             filterLabel: label
         )
         if toFile {
@@ -633,9 +661,10 @@ struct JournalWindow: View {
         }
     }
 
-    /// v15.23 batch169 · filterLabel：基于 emotion / deviation filter 拼接（nil 时为 nil · 不加标题后缀）
+    /// v15.23 batch169/170 · filterLabel：基于 emotion / deviation / month filter 拼接（nil 时不加标题后缀）
     private var filterLabel: String? {
         var parts: [String] = []
+        if let m = filterMonth { parts.append(m) }
         if let e = filterEmotion { parts.append(e.displayName) }
         if let d = filterDeviation { parts.append(d.displayName) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -668,7 +697,12 @@ struct JournalWindow: View {
             ScrollView {
                 VStack(spacing: 12) {
                     ForEach(aggregates) { agg in
-                        MonthlyCard(aggregate: agg)
+                        MonthlyCard(aggregate: agg) {
+                            // v15.23 batch170 · 点击月卡 → 切 list + 设 filterMonth
+                            filterMonth = agg.month
+                            journalViewMode = .list
+                            Toast.info("已切到列表", "\(agg.month) · \(agg.count) 篇")
+                        }
                     }
                 }
                 .padding(16)
@@ -697,6 +731,10 @@ struct JournalWindow: View {
         }
         if let d = filterDeviation {
             base = base.filter { $0.deviation == d }
+        }
+        // v15.23 batch170 · 月份 filter（"yyyy-MM"）· 基于 createdAt
+        if let m = filterMonth {
+            base = base.filter { Self.monthFormatter.string(from: $0.createdAt) == m }
         }
         return Self.sortJournals(base, by: sortKey)
     }
@@ -792,6 +830,7 @@ struct JournalWindow: View {
         ("📅 视图模式", [
             ("列表", "Table 显示日志条目（默认）"),
             ("月度", "按 createdAt 月份聚合 · 情绪/偏差/标签 top5"),
+            ("月卡点击 (v15.23 batch170)", "点击月份卡片 → 跳列表 + 设月份过滤（chip 显示 · ✕ 清除）"),
         ]),
         ("✏️ 列表操作", [
             ("contextMenu", "编辑 / 复制单篇分析 / 删除"),
@@ -1523,6 +1562,8 @@ private struct GeneratorPreviewSheet: View {
 private struct MonthlyCard: View {
 
     let aggregate: MonthlyAggregate
+    /// v15.23 batch170 · 点击卡片跳 list + 设 month filter（nil 时无交互）
+    var onTap: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1534,6 +1575,12 @@ private struct MonthlyCard: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
+                if onTap != nil {
+                    Image(systemName: "arrow.right.circle")
+                        .foregroundColor(.accentColor)
+                        .font(.caption)
+                        .help("点击跳转到列表 · 仅显示本月日志")
+                }
             }
 
             HStack(alignment: .top, spacing: 24) {
@@ -1569,6 +1616,8 @@ private struct MonthlyCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.gray.opacity(0.06))
         .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
     }
 
     /// 单列分布（情绪 / 偏差共用）· 仅渲染 count > 0 的 case

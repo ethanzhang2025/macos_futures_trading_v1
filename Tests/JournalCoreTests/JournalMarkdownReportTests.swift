@@ -227,4 +227,19 @@ struct JournalMarkdownReportTests {
         let md = JournalMarkdownReport.generate([])
         #expect(md.contains("_暂无日志_"))
     }
+
+    @Test("月报 · filterMonth 应用 yyyy-MM")
+    func monthFilterMonth() {
+        // 构造两篇不同月份的 journal · Asia/Shanghai 时区
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let dApr = cal.date(from: DateComponents(year: 2026, month: 4, day: 15))!
+        let dMay = cal.date(from: DateComponents(year: 2026, month: 5, day: 1))!
+        let j1 = makeJournal(title: "Apr", createdAt: dApr)
+        let j2 = makeJournal(title: "May", createdAt: dMay)
+        let md = JournalMarkdownReport.generate([j1, j2], filterMonth: "2026-04")
+        #expect(md.contains("篇数：**1**"))
+        #expect(md.contains("| Apr |"))
+        #expect(!md.contains("| May |"))
+    }
 }

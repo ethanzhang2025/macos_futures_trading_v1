@@ -18,6 +18,14 @@ import TradingCore
 struct TrainingViolationFeed: View {
 
     @ObservedObject var viewModel: TrainingViewModel
+    /// v15.23 batch141 · severity 过滤（默认全部 · trader 只关心 error 时切换）
+    @State private var filterSeverity: SeverityFilter = .all
+
+    enum SeverityFilter: String, CaseIterable {
+        case all = "全部"
+        case errorOnly = "仅错误"
+        case warningOnly = "仅警告"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -25,10 +33,34 @@ struct TrainingViolationFeed: View {
             Divider()
             if viewModel.liveViolations.isEmpty {
                 emptyState
+            } else if filtered.isEmpty {
+                filteredEmptyState
             } else {
                 list
             }
         }
+    }
+
+    /// v15.23 batch141 · 应用 severity filter 后的违规列表
+    private var filtered: [DisciplineViolation] {
+        switch filterSeverity {
+        case .all: return viewModel.liveViolations
+        case .errorOnly: return viewModel.liveViolations.filter { $0.severity == .error }
+        case .warningOnly: return viewModel.liveViolations.filter { $0.severity == .warning }
+        }
+    }
+
+    private var filteredEmptyState: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 24)).foregroundColor(.secondary)
+            Text("没有「\(filterSeverity.rawValue)」类违规")
+                .font(.callout).foregroundColor(.secondary)
+            Button("显示全部") { filterSeverity = .all }
+                .buttonStyle(.borderless)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
     }
 
     // MARK: - Header
@@ -49,7 +81,18 @@ struct TrainingViolationFeed: View {
 
             Spacer()
 
+            // v15.23 batch141 · severity 过滤 Picker（segmented · 紧凑）
             if !viewModel.liveViolations.isEmpty {
+                Picker("", selection: $filterSeverity) {
+                    ForEach(SeverityFilter.allCases, id: \.self) { f in
+                        Text(f.rawValue).tag(f)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+                .labelsHidden()
+                .help("按严重度筛选实时违规")
+
                 Button {
                     viewModel.liveViolations.removeAll()
                 } label: {
@@ -92,7 +135,7 @@ struct TrainingViolationFeed: View {
 
     private var list: some View {
         List {
-            ForEach(viewModel.liveViolations) { v in
+            ForEach(filtered) { v in
                 row(v)
             }
         }

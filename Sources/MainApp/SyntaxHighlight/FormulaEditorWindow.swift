@@ -236,6 +236,9 @@ public struct FormulaEditorWindow: View {
         .sheet(isPresented: $showOutlineSheet) {
             let outline = MaiLangOutline.parse(sourceText)
             let lintWarns = MaiLangLint.analyze(sourceText)
+            let deps = MaiLangDependencies.analyze(sourceText)
+            let depByName: [String: MaiLangVarDependency] = Dictionary(
+                uniqueKeysWithValues: deps.map { ($0.name.uppercased(), $0) })
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text("📋 公式大纲").font(.title2).bold()
@@ -263,23 +266,44 @@ public struct FormulaEditorWindow: View {
                         if !outline.isEmpty {
                             Section(header: Text("变量定义").font(.headline)) {
                                 ForEach(outline, id: \.line) { entry in
-                                    HStack {
-                                        Text("\(entry.line)").font(.caption.monospacedDigit())
-                                            .foregroundColor(.secondary)
-                                            .frame(width: 32, alignment: .trailing)
-                                        Text(entry.name)
-                                            .font(.system(.body, design: .monospaced))
-                                            .foregroundColor(.accentColor)
-                                        Text(entry.isOutput ? "(输出)" : "(中间)")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                        Spacer()
-                                        Button("跳转") {
-                                            pendingGotoLine = entry.line
-                                            showOutlineSheet = false
-                                            statusMessage = "跳转到 \(entry.name) · 第 \(entry.line) 行"
+                                    let dep = depByName[entry.name.uppercased()]
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack {
+                                            Text("\(entry.line)").font(.caption.monospacedDigit())
+                                                .foregroundColor(.secondary)
+                                                .frame(width: 32, alignment: .trailing)
+                                            Text(entry.name)
+                                                .font(.system(.body, design: .monospaced))
+                                                .foregroundColor(.accentColor)
+                                            Text(entry.isOutput ? "(输出)" : "(中间)")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            Button("跳转") {
+                                                pendingGotoLine = entry.line
+                                                showOutlineSheet = false
+                                                statusMessage = "跳转到 \(entry.name) · 第 \(entry.line) 行"
+                                            }
+                                            .buttonStyle(.borderless)
                                         }
-                                        .buttonStyle(.borderless)
+                                        // batch134 · 依赖关系（紧凑显示在变量行下方）
+                                        if let d = dep, !d.uses.isEmpty || !d.usedBy.isEmpty {
+                                            HStack(spacing: 8) {
+                                                Color.clear.frame(width: 32)
+                                                if !d.uses.isEmpty {
+                                                    Text("→ \(d.uses.joined(separator: ", "))")
+                                                        .font(.caption2)
+                                                        .foregroundColor(.cyan)
+                                                        .help("依赖：\(d.uses.joined(separator: ", "))")
+                                                }
+                                                if !d.usedBy.isEmpty {
+                                                    Text("← \(d.usedBy.joined(separator: ", "))")
+                                                        .font(.caption2)
+                                                        .foregroundColor(.orange)
+                                                        .help("被引用：\(d.usedBy.joined(separator: ", "))")
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

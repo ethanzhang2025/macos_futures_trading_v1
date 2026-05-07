@@ -213,9 +213,9 @@ struct JournalWindow: View {
         .sheet(item: $journalSheetState) { state in
             switch state {
             case .createJournal:
-                JournalEditorSheet(editing: nil, trades: trades) { saveJournal($0) }
+                JournalEditorSheet(editing: nil, trades: trades, existingTagsByFrequency: tagsByFrequency) { saveJournal($0) }
             case .editJournal(let journal):
-                JournalEditorSheet(editing: journal, trades: trades) { updateJournal($0) }
+                JournalEditorSheet(editing: journal, trades: trades, existingTagsByFrequency: tagsByFrequency) { updateJournal($0) }
             case .generatorPreview(let drafts):
                 GeneratorPreviewSheet(drafts: drafts) { batchAddJournals($0) }
             }
@@ -746,6 +746,15 @@ struct JournalWindow: View {
             let suffix = label.map { "（\($0)）" } ?? ""
             Toast.info("月报已复制\(suffix)", "\(md.count) 字 · \(filteredJournals.count) 篇")
         }
+    }
+
+    /// v15.23 batch173 · 历史标签按频率降序（编辑 sheet 自动补全建议来源）
+    private var tagsByFrequency: [String] {
+        var counts: [String: Int] = [:]
+        for j in journals {
+            for t in j.tags { counts[t, default: 0] += 1 }
+        }
+        return counts.sorted { ($0.value, $1.key) > ($1.value, $0.key) }.map(\.key)
     }
 
     /// v15.23 batch169/170 · filterLabel：基于 emotion / deviation / month filter 拼接（nil 时不加标题后缀）
@@ -1332,17 +1341,23 @@ private struct JournalEditorSheet: View {
     let onSave: (TradeJournal) -> Void
     /// 关联成交 → EmotionAutoTagger 建议标签（PositionMatcher 配对一次 · sheet 生命期内复用）
     private let tagsByTradeID: [UUID: [EmotionAutoTagger.Tag]]
+    /// v15.23 batch173 · 历史标签（按频率降序 · 用于自动补全建议）
+    private let suggestedHistoryTags: [String]
 
     @Environment(\.dismiss) private var dismiss
     @State private var draft: JournalDraft
     @State private var tradesExpanded: Bool
 
-    init(editing: TradeJournal?, trades: [Trade], onSave: @escaping (TradeJournal) -> Void) {
+    init(editing: TradeJournal?,
+         trades: [Trade],
+         existingTagsByFrequency: [String] = [],
+         onSave: @escaping (TradeJournal) -> Void) {
         self.editing = editing
         self.trades = trades
         self.onSave = onSave
         self._draft = State(initialValue: JournalDraft(from: editing))
         self._tradesExpanded = State(initialValue: editing?.tradeIDs.isEmpty == false)
+        self.suggestedHistoryTags = existingTagsByFrequency
         // 预算一次 · 后续 body 重渲只查 dict
         let (closed, _) = PositionMatcher.match(trades: trades)
         var map: [UUID: [EmotionAutoTagger.Tag]] = [:]
@@ -1351,6 +1366,23 @@ private struct JournalEditorSheet: View {
             map[pos.closeTradeID] = tags
         }
         self.tagsByTradeID = map
+    }
+
+    /// v15.23 batch173 · 已输入的标签（避免在 suggestion 重复显示）
+    private var currentDraftTags: Set<String> {
+        Set(draft.tagsString.split(whereSeparator: \.isWhitespace).map(String.init))
+    }
+
+    /// v15.23 batch173 · 显示 top 10 中尚未输入的历史标签
+    private var availableHistoryTags: [String] {
+        let drafted = currentDraftTags
+        return suggestedHistoryTags.filter { !drafted.contains($0) }.prefix(10).map { $0 }
+    }
+
+    /// v15.23 batch173 · 点击建议把它追加到 tagsString（自动补空格分隔）
+    private func appendTag(_ tag: String) {
+        let trimmed = draft.tagsString.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft.tagsString = trimmed.isEmpty ? tag : "\(trimmed) \(tag)"
     }
 
     /// 当前选中 tradeIDs 对应建议标签（按枚举顺序稳定 · O(N) 单遍）
@@ -1429,6 +1461,34 @@ private struct JournalEditorSheet: View {
                 Section("标签（用空格分隔）") {
                     TextField("如：日内 趋势跟随 RB", text: $draft.tagsString)
                         .textFieldStyle(.roundedBorder)
+                    // v15.23 batch173 · 标签自动补全（基于历史 journals.tags · top10 频率降序）
+                    if !availableHistoryTags.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("常用标签（点击追加）")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(availableHistoryTags, id: \.self) { tag in
+                                        Button {
+                                            appendTag(tag)
+                                        } label: {
+                                            Text(tag)
+                                                .font(.caption)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 3)
+                                                .background(Color.accentColor.opacity(0.15))
+                                                .foregroundColor(.accentColor)
+                                                .clipShape(Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help("追加 \(tag) 到当前标签")
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+                        }
+                    }
                 }
 
                 Section("关联成交（已选 \(draft.tradeIDs.count) 笔 / 共 \(trades.count) 可选）") {

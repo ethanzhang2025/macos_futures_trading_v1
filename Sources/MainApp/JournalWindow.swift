@@ -1719,6 +1719,18 @@ private struct JournalEditorSheet: View {
         draft.tagsString = trimmed.isEmpty ? tag : "\(trimmed) \(tag)"
     }
 
+    /// v15.23 batch187 · 字数提示（< 30 灰 · 30-1000 绿 · > 1000 橙）
+    @ViewBuilder
+    private func charCountHint(_ text: String) -> some View {
+        let n = text.count
+        let color: Color = n < 30 ? .secondary : (n > 1000 ? .orange : .green)
+        let suffix = n < 30 ? "（建议 ≥ 30）" : (n > 1000 ? "（已超 1000）" : "")
+        Text("\(n) 字\(suffix)")
+            .font(.caption2)
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
     /// v15.23 batch181 · 删除标签（chip ✕ · 重写 tagsString 为剩余去重 + 排序）
     private func removeTag(_ tag: String) {
         let parts = draft.tagsString.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -1754,6 +1766,8 @@ private struct JournalEditorSheet: View {
                     TextEditor(text: $draft.reason)
                         .frame(minHeight: 60)
                         .font(.body)
+                    // v15.23 batch187 · 字数提示（trader 看自己写够没）
+                    charCountHint(draft.reason)
                 }
 
                 Section("情绪 + 偏差") {
@@ -1798,6 +1812,8 @@ private struct JournalEditorSheet: View {
                     TextEditor(text: $draft.lesson)
                         .frame(minHeight: 60)
                         .font(.body)
+                    // v15.23 batch187 · 字数提示
+                    charCountHint(draft.lesson)
                 }
 
                 Section("标签（用空格分隔）") {

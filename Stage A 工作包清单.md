@@ -896,8 +896,8 @@
 
 ## E7 · 产品 · 多端与麦语言
 
-### ⬜ WP-60 · CloudKit 数据结构预埋 + UI 同步
-- **时点**：M1-M6 预埋，M7 UI 启用
+### 🟡 WP-60 · CloudKit 数据结构预埋 + UI 同步（v15.24 batch001-009 落地预埋层 · M7 启用同步）
+- **时点**：M1-M6 预埋（✅ 已交付 v15.24），M7 UI 启用
 - **负责**：你
 - **依赖**：WP-84 合规方案落地
 - **交付**：M1-M6 所有功能数据结构预留 CloudKit 字段；M7 上线自选 / 模板 / 日志三项同步（日志需按 WP-84 方案确认能否走 CloudKit）
@@ -907,6 +907,30 @@
   - ❌ 不做无冲突策略的同步（最简 Last-Write-Wins + 冲突日志）
   - ❌ 不把 CloudKit Schema 和本地 SQLite Schema 强耦合（需抽象转换层）
 - **锚点**：D2 §2、D2 §6 M7 milestone、ChatGPT A12/B08
+- **已交付**（v15.24 batch001-009 · 2026-05-07 · 9 commit · ~70 新测试 · 1637/313 Linux 全绿）：
+  - **batch001 SyncCore 模块骨架**（依赖仅 Foundation · 厂商无关抽象层）
+    - SyncRecord DTO（recordType/id/lastModified/version/deletedAt/payload）
+    - SyncableRecord + SyncRecordDecodable 协议
+    - SyncBackend 协议（fetch since / push / delete）
+    - SyncResolver LWW 算法（lastModified 主决胜 + version 副决胜 + tombstone 优先）
+    - SyncEngine actor（pull-merge-push 主循环 + 增量 baseline per-recordType）
+    - MockSyncBackend actor（内存版 · 测试 + demo 用 · failureMode 错误注入）
+  - **batch002 SyncConflictLog**：协议 + InMemoryConflictLog（cap 1000 · filter/since/entries/paginate）+ 多设备并发场景测试 9 项
+  - **batch003 Watchlist 预埋**：version + deletedAt + Codable 兼容旧 JSON + softDeleteGroup + WatchlistSyncAdapter（"watchlist"）+ 19 测试
+  - **batch004 WorkspaceTemplate 预埋**：同上模式 + softDeleteTemplate（自动切活跃）+ Adapter（"workspace_template"）+ 13 测试
+  - **batch005 SyncableSettings**：单条聚合（singletonID）+ 13 keys 白名单 + UserDefaults snapshot 迁移 + Adapter（"settings"）+ 10 测试
+  - **batch006 TradeJournal 预埋**（敏感 · 阿里云 Stage B）：字段 + Adapter（"journal"）+ 8 测试
+  - **batch007 Alert 预埋**（敏感 · 阿里云 Stage B）：updatedAt + version + deletedAt + canTrigger 含 tombstone + Adapter（"alert"）+ 7 测试
+  - **batch008 CloudKitSyncBackend 骨架**（macOS-only · #if canImport(CloudKit)）：actor 实现 fetch/push/delete + CKError → SyncBackendError 映射 + Mac 切机 readme 完整指南
+  - **batch009 SyncEngineDemo 第 24 个真数据 demo**：Tools CLI 4 大场景（push/pull · ping-pong · 删 vs 改 · 离线重连）· Mock backend · Linux 直接 swift run
+  - **核心架构沉淀**：
+    - Schema 版本演进：每 model 加 version + deletedAt · Codable decodeIfPresent 兼容旧 JSON · 全部 mutating 操作 version+1
+    - LWW 简化判定：双方 version > 1 + payload 不同 + 非双 tombstone → 冲突（避免单边修改 false positive 太多）
+    - 抽象层 / Adapter / Backend 三层隔离：业务模型不依赖 backend · 切换 backend 仅改 SyncEngine 注入
+  - **Mac 切机后续工作**（详见 §10 Mac 未测清单 v15.24 章节）：
+    - CloudKit container 创建 + Entitlements + Schema deploy（首次启动）
+    - 两台 Mac 同步联调（自选 / 模板 / settings · 冲突 / 离线 / 复活）
+    - iPad 同步（WP-61 接入后）
 
 ### ⬜ WP-61 · iPad 基础版
 - **时点**：M7

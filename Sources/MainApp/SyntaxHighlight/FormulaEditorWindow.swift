@@ -124,10 +124,14 @@ public struct FormulaEditorWindow: View {
                                 })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 if showMinimap {
+                    let selRange = minimapSelectionLineRange()
                     MinimapView(text: sourceText, scheme: scheme,
                                 visibleStartLine: visibleStartLine,
                                 visibleEndLine: visibleEndLine,
                                 cursorLine: cursorLine,
+                                selectionStartLine: selRange?.0,
+                                selectionEndLine: selRange?.1,
+                                errorLine: errorMarker?.line,
                                 onClickLine: { line in pendingScrollToLine = line })
                         .frame(width: 100)
                 }
@@ -1133,6 +1137,16 @@ public struct FormulaEditorWindow: View {
             ("智能大写", "完整保留字 + 空格/逗号/括号 → 自动转大写"),
         ]),
     ]
+
+    /// v15.23 batch108 · 当前选区起止行号（1-based · selection.length == 0 返回 nil）· minimap 选区高亮用
+    private func minimapSelectionLineRange() -> (Int, Int)? {
+        guard selectionRange.length > 0 else { return nil }
+        let ns = sourceText as NSString
+        let startLine = MaiLangCodeView.lineNumber(forUTF16Loc: selectionRange.location, in: ns)
+        let endLoc = max(selectionRange.location, NSMaxRange(selectionRange) - 1)
+        let endLine = MaiLangCodeView.lineNumber(forUTF16Loc: endLoc, in: ns)
+        return (startLine, endLine)
+    }
 
     private func textStats(_ s: String) -> (chars: Int, lines: Int) {
         let chars = s.count

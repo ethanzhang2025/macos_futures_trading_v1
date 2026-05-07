@@ -21,18 +21,29 @@ public struct MinimapView: View {
     let visibleEndLine: Int?
     /// v15.23 batch107 · 当前光标所在行（1-based · nil = 不画指示线）· IDE 经典：minimap 上显示光标位置
     let cursorLine: Int?
+    /// v15.23 batch108 · 多行选区起始行（1-based · nil 或 = endLine 时不画）· trader 多行批量操作时一眼看选区范围
+    let selectionStartLine: Int?
+    /// v15.23 batch108 · 多行选区结束行（含 · 1-based）
+    let selectionEndLine: Int?
+    /// v15.23 batch108 · 编译错误行（1-based · nil = 无错误）· 红条横线 trader 一眼定位 bug
+    let errorLine: Int?
     /// 用户点击/拖到第 N 行（1-based）回调 · 主编辑器据此跳转
     let onClickLine: (Int) -> Void
 
     public init(text: String, scheme: SyntaxColorScheme,
                 visibleStartLine: Int? = nil, visibleEndLine: Int? = nil,
                 cursorLine: Int? = nil,
+                selectionStartLine: Int? = nil, selectionEndLine: Int? = nil,
+                errorLine: Int? = nil,
                 onClickLine: @escaping (Int) -> Void) {
         self.text = text
         self.scheme = scheme
         self.visibleStartLine = visibleStartLine
         self.visibleEndLine = visibleEndLine
         self.cursorLine = cursorLine
+        self.selectionStartLine = selectionStartLine
+        self.selectionEndLine = selectionEndLine
+        self.errorLine = errorLine
         self.onClickLine = onClickLine
     }
 
@@ -147,11 +158,33 @@ public struct MinimapView: View {
             ctx.stroke(Path(rect), with: .color(Color.accentColor.opacity(0.6)), lineWidth: 1)
         }
 
+        // batch108 多行选区高亮（在 viewport 之后 / cursor / error 之前 · 与 NSTextView 蓝色选中色一致）
+        if let s = selectionStartLine, let e = selectionEndLine,
+           s >= 1, e >= s, e <= totalLines, e > s {
+            let topY = CGFloat(s - 1) * lineH
+            let h = CGFloat(e - s + 1) * lineH
+            let rect = CGRect(x: 0, y: topY, width: size.width, height: h)
+            let fill: Color = scheme == .dark
+                ? Color.blue.opacity(0.22)
+                : Color.blue.opacity(0.18)
+            ctx.fill(Path(rect), with: .color(fill))
+        }
+
         // batch107 当前光标行指示线（IDE 经典 · 画在 viewport 之上 · 醒目但不抢戏）
         if let cl = cursorLine, cl >= 1, cl <= totalLines {
             let y = CGFloat(cl - 1) * lineH
             let rect = CGRect(x: 0, y: y, width: size.width, height: max(lineH, 1.5))
             ctx.fill(Path(rect), with: .color(Color.accentColor.opacity(0.55)))
+        }
+
+        // batch108 编译错误行红色横条（最高优先级覆盖 · trader 编译失败一眼定位）
+        if let el = errorLine, el >= 1, el <= totalLines {
+            let y = CGFloat(el - 1) * lineH
+            let rect = CGRect(x: 0, y: y, width: size.width, height: max(lineH, 2.0))
+            ctx.fill(Path(rect), with: .color(Color.red.opacity(0.65)))
+            // 左侧再加 2pt 浓红 indicator · 增强辨识
+            let leftBar = CGRect(x: 0, y: y, width: 2.5, height: max(lineH, 2.0))
+            ctx.fill(Path(leftBar), with: .color(Color.red))
         }
     }
 

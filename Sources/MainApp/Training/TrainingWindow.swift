@@ -19,6 +19,7 @@
 
 import SwiftUI
 import Foundation
+import AppKit
 import Shared
 import TradingCore
 
@@ -81,8 +82,34 @@ struct TrainingWindow: View {
                 Button("") { tab = .history }
                     .keyboardShortcut("3", modifiers: [.command])
                     .opacity(0)
+                // v15.23 batch200 · ⌘E 月报 / ⌘⌥E 周报快捷键（仅 history tab · 复制到剪贴板）
+                Button("") {
+                    if tab == .history {
+                        copyTrainingReport(weekly: false)
+                    }
+                }
+                .keyboardShortcut("e", modifiers: [.command])
+                .opacity(0)
+                Button("") {
+                    if tab == .history {
+                        copyTrainingReport(weekly: true)
+                    }
+                }
+                .keyboardShortcut("e", modifiers: [.command, .option])
+                .opacity(0)
             }
         )
+    }
+
+    /// v15.23 batch200 · 训练月报 / 周报复制到剪贴板（⌘E / ⌘⌥E · 与 ReviewWindow 模式一致）
+    private func copyTrainingReport(weekly: Bool) {
+        let md = weekly
+            ? TrainingMarkdownReport.generateWeekly(viewModel.log)
+            : TrainingMarkdownReport.generate(viewModel.log)
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(md, forType: .string)
+        Toast.info(weekly ? "已复制训练周报" : "已复制训练月报", "\(md.count) 字 · 直接粘贴")
     }
 
     // MARK: - v15.23 batch63 · 帮助面板
@@ -113,6 +140,8 @@ struct TrainingWindow: View {
             ("最近 50 列表", "点击行 → 弹评分 sheet 回看"),
             ("右键 → 删除", "移除单次记录"),
             ("清空全部", "永久删除所有历史（带确认）"),
+            ("⌘E (batch200)", "复制训练月报 markdown 到剪贴板（仅 history tab）"),
+            ("⌘⌥E (batch200)", "复制训练周报（最近 7 天 · 与 ReviewWindow 周报对齐）"),
         ]),
         ("🎯 评分系统", [
             ("总分 0-100", "盈亏 50 + 纪律 50"),

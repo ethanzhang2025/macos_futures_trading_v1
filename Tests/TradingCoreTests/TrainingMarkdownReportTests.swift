@@ -140,4 +140,32 @@ struct TrainingMarkdownReportTests {
             TrainingSessionLog(), filterLabel: "本月 · 震荡")
         #expect(md.contains("（本月 · 震荡）"))
     }
+
+    @Test("generateSingleSession · 含评分 + 形态 + 评语（batch133）")
+    func singleSessionBasic() {
+        let session = makeSession(scenarioName: "急涨练习", pattern: .uptrend, pnl: 5000)
+        let scorer = TrainingScorer.score(session)
+        let md = TrainingMarkdownReport.generateSingleSession(session, score: scorer)
+        #expect(md.contains("# 训练分析"))
+        #expect(md.contains("急涨练习"))
+        #expect(md.contains("\(scorer.totalScore)"))
+        #expect(md.contains("📈 上升趋势"))
+        #expect(md.contains("评语"))
+    }
+
+    @Test("generateSingleSession · 无违规显示「严守纪律 ✅」")
+    func singleSessionNoViolations() {
+        let session = makeSession(scenarioName: "完美", pattern: .oscillation)
+        let scorer = TrainingScorer.score(session)
+        let md = TrainingMarkdownReport.generateSingleSession(session, score: scorer)
+        #expect(md.contains("严守纪律"))
+    }
+
+    @Test("generateSingleSession · 自定义 title")
+    func singleSessionCustomTitle() {
+        let session = makeSession()
+        let scorer = TrainingScorer.score(session)
+        let md = TrainingMarkdownReport.generateSingleSession(session, score: scorer, title: "求师傅点评")
+        #expect(md.contains("# 求师傅点评"))
+    }
 }

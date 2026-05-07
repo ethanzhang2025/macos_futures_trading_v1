@@ -10,6 +10,7 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import AppKit
 import Foundation
 import TradingCore
 
@@ -52,6 +53,16 @@ struct TrainingScoreSheet: View {
                     }
                     .help("立即开始一次同形态训练（\(pattern.emoji) \(pattern.displayName)）")
                 }
+                // v15.23 batch133 · 复制本次分析为 markdown（trader 求点评 / 笔记）
+                Button {
+                    let md = TrainingMarkdownReport.generateSingleSession(session, score: score)
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString(md, forType: .string)
+                } label: {
+                    Label("复制分析", systemImage: "doc.on.doc")
+                }
+                .help("复制本次训练详细 markdown · 粘贴到笔记 / 师傅 / AI 求点评")
                 Spacer()
                 Button("关闭") { onDismiss() }
                     .keyboardShortcut(.defaultAction)

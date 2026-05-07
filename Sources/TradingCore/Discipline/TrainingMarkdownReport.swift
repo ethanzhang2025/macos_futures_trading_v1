@@ -116,6 +116,53 @@ public enum TrainingMarkdownReport {
         return md
     }
 
+    /// v15.23 batch133 · 单次 session 详细 markdown（训练完看分时复制 · 求点评/记笔记）
+    /// 含：评分卡 / 形态 / 交易记录 N 笔 / 违规清单（kind+rule+message）
+    public static func generateSingleSession(_ session: TrainingSession,
+                                             score: TrainingScore,
+                                             title: String? = nil) -> String {
+        var md = ""
+        let displayTitle = title ?? "训练分析 · \(session.scenarioName.isEmpty ? "未命名" : session.scenarioName)"
+        md += "# \(displayTitle)\n\n"
+        md += "> \(formatDateTime(session.endedAt)) · 时长 \(session.durationMinutes) 分钟\n\n"
+
+        // 评分卡
+        md += "## 评分\n\n"
+        md += "- 总分：**\(score.totalScore)** / 100（\(score.grade.emoji) \(score.grade.displayName) 级）\n"
+        md += "- 盈亏子分：\(score.pnlScore) / 50\n"
+        md += "- 纪律子分：\(score.disciplineScore) / 50\n"
+        if let pattern = session.scenarioPattern {
+            md += "- 形态：\(pattern.emoji) \(pattern.displayName)\n"
+        }
+        let pnlPct = String(format: "%+.2f", (session.pnlPercent as NSDecimalNumber).doubleValue)
+        let pnlAbs = String(format: "%+.2f", (session.pnl as NSDecimalNumber).doubleValue)
+        md += "- 盈亏：\(pnlAbs) 元（\(pnlPct)%）\n\n"
+        md += "**评语**：\(score.summary)\n\n"
+
+        // 交易记录
+        md += "## 交易记录\n\n"
+        if session.trades.isEmpty {
+            md += "_无成交_\n\n"
+        } else {
+            md += "共 \(session.trades.count) 笔\n\n"
+        }
+
+        // 违规清单
+        md += "## 纪律违规\n\n"
+        if session.violations.isEmpty {
+            md += "_无违规 · 严守纪律 ✅_\n"
+        } else {
+            md += "| 时间 | 严重 | 类别 | 触发原因 |\n"
+            md += "|------|------|------|----------|\n"
+            for v in session.violations {
+                let sev = v.severity == .error ? "🔴 违规" : "🟡 警告"
+                md += "| \(formatDateTime(v.occurredAt)) | \(sev) | \(v.ruleKind.rawValue) | \(v.message) |\n"
+            }
+        }
+
+        return md
+    }
+
     private static func formatDateTime(_ d: Date) -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm"

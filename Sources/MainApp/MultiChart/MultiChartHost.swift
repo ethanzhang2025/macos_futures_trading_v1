@@ -494,6 +494,22 @@ struct MultiChartHost: View {
                                 .foregroundColor(color)
                         }
                     }
+                case .wr:
+                    if let wr = Self.wrAt(bars: bars, idx: idx) {
+                        // -20 超买（红）/ -80 超卖（绿）/ 中性（青）
+                        let color: Color = wr >= -20 ? .red.opacity(0.85)
+                                          : wr <= -80 ? .green.opacity(0.85)
+                                          : .teal.opacity(0.85)
+                        Text(String(format: "W%%R %.1f", wr))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(color)
+                        let signal = wr >= -20 ? "超买" : wr <= -80 ? "超卖" : ""
+                        if !signal.isEmpty {
+                            Text(signal)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(color)
+                        }
+                    }
                 case .volume, .none:
                     EmptyView()
                 }
@@ -600,6 +616,19 @@ struct MultiChartHost: View {
             atr = (atr * Double(N - 1) + trs[i]) / Double(N)
         }
         return atr
+    }
+
+    /// v15.23 batch137 · Williams %R 14 标准 · bars[idx] 处 W%R（[-100, 0] · -20 超买 / -80 超卖）
+    /// 公式：WR = -100 × (Hn - C) / (Hn - Ln)
+    static func wrAt(bars: [KLine], idx: Int) -> Double? {
+        let N = 14
+        guard idx >= N - 1, idx < bars.count else { return nil }
+        let window = bars[(idx - N + 1)...idx]
+        let hn = window.map { ($0.high as NSDecimalNumber).doubleValue }.max() ?? 0
+        let ln = window.map { ($0.low as NSDecimalNumber).doubleValue }.min() ?? 0
+        let c = (bars[idx].close as NSDecimalNumber).doubleValue
+        guard hn - ln > 1e-9 else { return -50 }
+        return -100 * (hn - c) / (hn - ln)
     }
 
     /// v15.23 batch127 · CCI 14 标准 · bars[idx] 处的 CCI 值（±100 超买/超卖 · ±200 极值）
@@ -965,9 +994,10 @@ struct MultiChartHost: View {
             ("右键 cell", "聚焦/交换/复制配置/重置 4 类操作"),
             ("点击 #↗ 按钮", "推送到主 ChartScene 深入分析"),
             ("点击 cell 合约名/周期", "Menu 切换"),
-            ("点击副图图标（batch79-127）", "切换副图：量 / KDJ / MACD / RSI / OI / ATR / CCI（顺势 ±100 超买超卖）/ 无（主图全屏）"),
+            ("点击副图图标（batch79-137）", "切换副图：量 / KDJ / MACD / RSI / OI / ATR / CCI / W%R / 无（主图全屏）"),
             ("OI 持仓量副图（batch87）", "中国期货独有 · 增仓上涨=多头强势 · 增仓下跌=空头强势 · 减仓=多空回吐"),
             ("CCI 副图（batch127）", "顺势指标 · ±100 超买超卖参考线 · ≥+100 红超买 · ≤-100 绿超卖 · 中性紫"),
+            ("W%R 副图（batch137）", "威廉指标 · 范围 [-100, 0] · -20 超买（红） · -80 超卖（绿） · 中性青绿"),
             ("副图金叉/死叉点（batch82）", "KDJ K↑D 或 MACD DIF↑DEA = 红点（金叉买点）· 反向 = 绿点（死叉卖点）· 一眼定位"),
             ("点击主图指标 Menu（batch88-99）", "MA + BOLL + SAR + 整数关口 + 涨跌停 + VWAP + Fibonacci 黄金回撤 · 七选多"),
             ("右键 → 标水平线（batch91）", "在当前 close 价画橙色虚线 · 标支撑/压力位 · 持久化 · 清空也在右键"),

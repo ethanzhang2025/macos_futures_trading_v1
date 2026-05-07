@@ -22,6 +22,7 @@ enum MultiChartSubChartType: String, Codable, Equatable, Hashable, CaseIterable 
     case oi = "oi"          // 持仓量 OI（中国期货独有 · 主力意图 + 趋势确认）
     case atr = "atr"        // ATR 14 平均真实波幅（Wilder · trader 设止损 + 仓位管理）
     case cci = "cci"        // v15.23 batch127 · CCI 14 顺势指标（±100 超买/超卖 · 期货标配）
+    case wr = "wr"          // v15.23 batch137 · Williams %R 14（-20 超买 -80 超卖 · 短线 trader 反转信号）
 
     var displayName: String {
         switch self {
@@ -33,6 +34,7 @@ enum MultiChartSubChartType: String, Codable, Equatable, Hashable, CaseIterable 
         case .oi: return "持仓量"
         case .atr: return "ATR"
         case .cci: return "CCI"
+        case .wr: return "W%R"
         }
     }
 }

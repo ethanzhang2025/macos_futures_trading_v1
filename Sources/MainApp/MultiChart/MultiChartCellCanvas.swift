@@ -153,6 +153,8 @@ struct MultiChartCellCanvas: View {
                         drawATR(in: ctx, rect: subRect)
                     case .cci:
                         drawCCI(in: ctx, rect: subRect)
+                    case .wr:
+                        drawWR(in: ctx, rect: subRect)
                     }
                     // batch101 · 副图左上角显示指标名称 + 参数（trader 一眼识别）
                     drawSubChartLabel(in: ctx, rect: subRect)
@@ -571,6 +573,7 @@ struct MultiChartCellCanvas: View {
         case .oi: label = "OI 持仓量"
         case .atr: label = "ATR(14)"
         case .cci: label = "CCI(14)"
+        case .wr:  label = "W%R(14)"
         }
         let txt = Text(label)
             .font(.system(size: 9, design: .monospaced))
@@ -1156,6 +1159,50 @@ struct MultiChartCellCanvas: View {
             }
         }
         ctx.stroke(path, with: .color(.purple.opacity(0.9)), lineWidth: 0.9)
+    }
+
+    // MARK: - W%R（v15.23 batch137 · 14 周期 · -20 超买 / -80 超卖 · 短线反转信号）
+
+    /// W%R = -100 × (Hn - C) / (Hn - Ln) · 范围 [-100, 0]
+    private func drawWR(in ctx: GraphicsContext, rect: CGRect) {
+        let n = bars.count
+        let N = 14
+        guard n >= N else { return }
+        var wr: [Double] = Array(repeating: .nan, count: n)
+        for idx in (N - 1)..<n {
+            let window = bars[(idx - N + 1)...idx]
+            let hn = window.map { ($0.high as NSDecimalNumber).doubleValue }.max() ?? 0
+            let ln = window.map { ($0.low as NSDecimalNumber).doubleValue }.min() ?? 0
+            let c = (bars[idx].close as NSDecimalNumber).doubleValue
+            wr[idx] = (hn - ln) > 1e-9 ? -100 * (hn - c) / (hn - ln) : -50
+        }
+        // 坐标系固定 [-100, 0]（W%R 数学界定 · 不需要自适应）
+        let yFor = { (v: Double) -> CGFloat in
+            // -100 → bottom · 0 → top · 反向（v 越大 y 越小）
+            rect.minY + CGFloat((-v) / 100) * rect.height
+        }
+        // -20 / -80 参考虚线
+        for ref in [-20.0, -80.0] {
+            let y = yFor(ref)
+            var path = Path()
+            path.move(to: CGPoint(x: rect.minX, y: y))
+            path.addLine(to: CGPoint(x: rect.maxX, y: y))
+            ctx.stroke(path, with: .color(.secondary.opacity(0.3)),
+                       style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+        }
+        // W%R 折线 · 青绿色 teal（与 RSI cyan / CCI purple 区分）
+        var path = Path()
+        var started = false
+        for i in 0..<n where !wr[i].isNaN {
+            let x = rect.minX + (CGFloat(i) + 0.5) * rect.width / CGFloat(n)
+            let y = yFor(wr[i])
+            if !started {
+                path.move(to: CGPoint(x: x, y: y)); started = true
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        ctx.stroke(path, with: .color(.teal.opacity(0.9)), lineWidth: 0.9)
     }
 
     // MARK: - 金叉/死叉信号点（v15.23 batch82 · KDJ + MACD 共用 · trader 副图核心信号）

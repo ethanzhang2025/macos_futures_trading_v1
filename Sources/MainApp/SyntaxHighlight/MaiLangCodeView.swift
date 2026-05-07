@@ -32,6 +32,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
     @Binding var pendingGotoLine: Int?
     /// v15.22 batch39 · 插入文本到当前光标位置（设非 nil 触发 updateNSView 插入后自动清回 nil）
     @Binding var pendingInsertText: String?
+    /// v15.23 batch106 · 可视行回调（first/last 1-based · 监听 NSScrollView 滚动 + 文本变化）· minimap viewport 高亮用
+    let onVisibleLinesChange: ((Int, Int) -> Void)?
 
     public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark,
                 fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil,
@@ -39,7 +41,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 onSelectionChange: ((NSRange) -> Void)? = nil,
                 onTokenAtCursor: ((String?) -> Void)? = nil,
                 pendingGotoLine: Binding<Int?> = .constant(nil),
-                pendingInsertText: Binding<String?> = .constant(nil)) {
+                pendingInsertText: Binding<String?> = .constant(nil),
+                onVisibleLinesChange: ((Int, Int) -> Void)? = nil) {
         self._text = text
         self.scheme = scheme
         self.fontSize = fontSize
@@ -49,6 +52,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
         self.onTokenAtCursor = onTokenAtCursor
         self._pendingGotoLine = pendingGotoLine
         self._pendingInsertText = pendingInsertText
+        self.onVisibleLinesChange = onVisibleLinesChange
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -75,6 +79,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
         // 初始文本
         tv.string = text
         applyHighlight(to: tv)
+        // v15.23 batch106 · 监听滚动 → 报当前可视行（minimap viewport 高亮用）
+        context.coordinator.attachVisibleLinesObserver(scrollView: scrollView, textView: tv)
         return scrollView
     }
 
@@ -126,7 +132,36 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
     public final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: MaiLangCodeView
+        weak var textView: NSTextView?
+        var visibleObserver: NSObjectProtocol?
+
         init(_ parent: MaiLangCodeView) { self.parent = parent }
+
+        deinit {
+            if let obs = visibleObserver {
+                NotificationCenter.default.removeObserver(obs)
+            }
+        }
+
+        /// v15.23 batch106 · 订阅 NSScrollView contentView bounds 变化 → 报可视行（minimap viewport 同步）
+        func attachVisibleLinesObserver(scrollView: NSScrollView, textView: NSTextView) {
+            self.textView = textView
+            guard parent.onVisibleLinesChange != nil else { return }
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            visibleObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: scrollView.contentView, queue: .main
+            ) { [weak self] _ in
+                self?.reportVisibleLines()
+            }
+            // 首帧（layout 完成后）报一次
+            DispatchQueue.main.async { [weak self] in self?.reportVisibleLines() }
+        }
+
+        func reportVisibleLines() {
+            guard let tv = textView, let cb = parent.onVisibleLinesChange else { return }
+            if let (s, e) = MaiLangCodeView.visibleLines(in: tv) { cb(s, e) }
+        }
 
         public func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
@@ -134,6 +169,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.text = tv.string
                 self.parent.applyHighlight(to: tv)
+                // batch106 · 文本变 → 行数变 → 可视行集合可能变（顶部 line 不变 · 底部可能 shift）
+                self.reportVisibleLines()
             }
         }
 
@@ -459,6 +496,38 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 str.draw(at: NSPoint(x: x, y: y), withAttributes: attrs)
             }
         }
+    }
+
+    // MARK: - v15.23 batch106 · 可视行计算（layoutManager + visibleRect）
+
+    /// 计算 NSTextView 当前可视区起止行号（1-based · 含 partial visible）· 失败返回 nil
+    static func visibleLines(in tv: NSTextView) -> (Int, Int)? {
+        guard let lm = tv.layoutManager, let tc = tv.textContainer else { return nil }
+        let rect = tv.visibleRect
+        if rect.isEmpty { return nil }
+        let glyphRange = lm.glyphRange(forBoundingRect: rect, in: tc)
+        if glyphRange.length == 0 {
+            // 空文档 / 文本未 layout 完
+            return (1, 1)
+        }
+        let charRange = lm.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        let ns = tv.string as NSString
+        let firstLine = lineNumber(forUTF16Loc: charRange.location, in: ns)
+        let endLoc = max(charRange.location, NSMaxRange(charRange) - 1)
+        let lastLine = lineNumber(forUTF16Loc: endLoc, in: ns)
+        return (firstLine, lastLine)
+    }
+
+    /// utf16 location → 1-based 行号 · 越界 clamp
+    static func lineNumber(forUTF16Loc loc: Int, in ns: NSString) -> Int {
+        let length = min(max(0, loc), ns.length)
+        var line = 1
+        var i = 0
+        while i < length {
+            if ns.character(at: i) == 0x0A { line += 1 }
+            i += 1
+        }
+        return line
     }
 
     /// v15.22 batch6 · 行/列（1-based）→ NSRange UTF-16 偏移 · 越界返回 nil

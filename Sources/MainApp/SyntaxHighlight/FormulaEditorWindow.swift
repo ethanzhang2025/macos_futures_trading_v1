@@ -66,6 +66,9 @@ public struct FormulaEditorWindow: View {
     @AppStorage("viewState.v1.formulaEditor.recentFiles") private var recentFilesJSON: String = ""
     /// v15.23 batch105 · minimap 缩略图开关（IDE 级长公式快速导航 · 默认开 · ⌘⇧M 切换）
     @AppStorage("viewState.v1.formulaEditor.showMinimap") private var showMinimap: Bool = true
+    /// v15.23 batch106 · 主编辑器当前可视行（1-based · minimap viewport 高亮 + 滚动同步）
+    @State private var visibleStartLine: Int = 1
+    @State private var visibleEndLine: Int = 1
     /// 多 tab 状态（持久化 · 初始化在 .onAppear）
     @State private var tabs: [FormulaTab] = []
     @State private var activeIdx: Int = 0
@@ -111,10 +114,16 @@ public struct FormulaEditorWindow: View {
                                     }
                                 },
                                 pendingGotoLine: $pendingGotoLine,
-                                pendingInsertText: $pendingInsertText)
+                                pendingInsertText: $pendingInsertText,
+                                onVisibleLinesChange: { s, e in
+                                    visibleStartLine = s
+                                    visibleEndLine = e
+                                })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 if showMinimap {
                     MinimapView(text: sourceText, scheme: scheme,
+                                visibleStartLine: visibleStartLine,
+                                visibleEndLine: visibleEndLine,
                                 onClickLine: { line in pendingGotoLine = line })
                         .frame(width: 100)
                 }

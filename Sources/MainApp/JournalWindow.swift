@@ -814,16 +814,23 @@ struct JournalWindow: View {
             .width(min: 60, ideal: 70)
         }
         .font(.system(.body, design: .monospaced))
-        // v15.23 batch175/178 · 成交右键操作
+        // v15.23 batch175/178/184 · 成交右键操作
         .contextMenu(forSelectionType: Trade.ID.self) { ids in
             if ids.count == 1, let id = ids.first, let trade = trades.first(where: { $0.id == id }) {
                 let count = journals.filter { $0.tradeIDs.contains(id) }.count
-                Button("查看关联日志（\(count) 篇）") {
+                Button("查看关联日志（\(count) 篇 · ⌘L）") {
                     showRelatedJournals(for: trade)
                 }
                 .disabled(count == 0)
+                Divider()
+                // v15.23 batch184 · 一键 filter 此合约（trader 看完一笔想看同合约其他）
+                Button("仅看此合约「\(trade.instrumentID)」") {
+                    filterTradeInstrument = trade.instrumentID
+                }
+                .disabled(filterTradeInstrument == trade.instrumentID)
             }
             if !ids.isEmpty {
+                Divider()
                 Button("建关联日志（\(ids.count) 笔 · ⌘D）") {
                     pendingNewJournalTradeIDs = ids
                     journalSheetState = .createJournal

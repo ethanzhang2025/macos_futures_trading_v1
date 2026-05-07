@@ -28,6 +28,9 @@ struct ReviewWindow: View {
     /// v15.23 batch64 · 帮助面板（⌘⇧? · 4 大新窗口 UX 一致）
     @State private var showHelpSheet: Bool = false
 
+    /// v15.23 batch203 · 合约 filter（与 dateFilter 互补 · 自动从 allPositions 列举）
+    @State private var filterInstrument: String? = nil
+
     private struct ZoomedCard: Identifiable {
         var id: String { title }
         let title: String
@@ -66,6 +69,15 @@ struct ReviewWindow: View {
                            "闭合 \(s.closedPositions.count) 笔 · 总 PnL ¥\(signedDecimal(s.monthlyPnL.totalPnL))")
             }
         }
+        // v15.23 batch203 · 合约 filter 切换 → 重算 summary + toast
+        .onChange(of: filterInstrument) { _ in
+            recomputeSummary()
+            if let s = summary {
+                let label = filterInstrument ?? "全部合约"
+                Toast.info("合约 filter：\(label)",
+                           "闭合 \(s.closedPositions.count) 笔 · 总 PnL ¥\(signedDecimal(s.monthlyPnL.totalPnL))")
+            }
+        }
         .sheet(item: $zoomedCard) { card in
             zoomedCardView(card)
         }
@@ -84,6 +96,7 @@ struct ReviewWindow: View {
     private static let helpGroups: [(String, [(String, String)])] = [
         ("📅 区间筛选", [
             ("toolbar 区间 Menu", "全部 / 7 天 / 30 天 / 当月 / 月份 / 季度"),
+            ("toolbar 合约 Menu (batch203)", "全部 / 各合约（自动从 positions 列举 + 笔数）· 与区间 filter 互补"),
             ("Toast 反馈", "切换后顶部提示新区间数据量"),
         ]),
         ("📊 12 张图（v15.23 闭环）", [
@@ -218,9 +231,13 @@ struct ReviewWindow: View {
     }
 
     /// 按 dateFilter 过滤 + 重算 summary（同步 · MainActor · 0 IO）
+    /// v15.23 batch203 · 加 instrument filter（dateFilter 之后再 filter）
     @MainActor
     private func recomputeSummary() {
-        let filtered = ReviewDateFilterEngine.filter(allPositions, by: dateFilter)
+        var filtered = ReviewDateFilterEngine.filter(allPositions, by: dateFilter)
+        if let inst = filterInstrument {
+            filtered = filtered.filter { $0.instrumentID == inst }
+        }
         summary = ReviewSummary(
             tradeCount: totalTradeCount,
             closedPositions: filtered,
@@ -350,6 +367,21 @@ struct ReviewWindow: View {
                 }
                 .frame(width: 110)
                 .help("筛选复盘区间 · 全部 / 7 天 / 30 天 / 当月 / 月份 / 季度")
+
+                // v15.23 batch203 · 合约 filter Menu（自动列举 allPositions 中的所有 instrumentID）
+                let instruments = Array(Set(allPositions.map { $0.instrumentID })).sorted()
+                Menu(filterInstrument ?? "全部合约") {
+                    Button("\(filterInstrument == nil ? "✓ " : "")全部合约") { filterInstrument = nil }
+                    if !instruments.isEmpty { Divider() }
+                    ForEach(instruments, id: \.self) { id in
+                        let isOn = filterInstrument == id
+                        let n = allPositions.filter { $0.instrumentID == id }.count
+                        Button("\(isOn ? "✓ " : "")\(id) · \(n)") { filterInstrument = id }
+                    }
+                }
+                .frame(width: 130)
+                .help("按合约筛选复盘 · 与区间 filter 互补 · 自动从 closed positions 列举")
+
                 stat("成交", "\(s.tradeCount) 笔")
                 stat("闭合", "\(s.closedPositions.count) 笔")
                 stat("总 PnL", "¥\(signedDecimal(s.monthlyPnL.totalPnL))")

@@ -106,6 +106,11 @@ struct ReviewWindow: View {
             ("Esc / 关闭", "退出全屏"),
             ("PNG 导出", "全屏放大后一键保存图片"),
         ]),
+        ("📝 报告导出（v15.23 batch196）", [
+            ("⌘E", "导出本月 markdown 月报"),
+            ("⌘⌥E", "导出最近 7 天周报（与月报互补 · trader 周复盘节奏）"),
+            ("⌘⇧E", "导出全部 12 张 chartCard PNG 到目录"),
+        ]),
     ]
 
     @ViewBuilder
@@ -381,6 +386,10 @@ struct ReviewWindow: View {
                 Button("导出月报…") { exportMonthlyReport(s) }
                     .help("生成本月 Markdown 复盘报告 · 含全套指标 + 心理标签 + 品种/时段分布（⌘E）")
                     .keyboardShortcut("e", modifiers: [.command])
+                // v15.23 batch196 · 周报（最近 7 天 · 与月报互补）
+                Button("导出周报…") { exportWeeklyReport(s) }
+                    .help("生成最近 7 天 Markdown 周报告（⌘⌥E · trader 周复盘节奏）")
+                    .keyboardShortcut("e", modifiers: [.command, .option])
                 Button("导出全部图…") { exportAllChartCards(s) }
                     .help("一键导出全部 12 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v15.23 加日历热力 + 时长散点）")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
@@ -456,6 +465,26 @@ struct ReviewWindow: View {
             Toast.info("导出成功", "已导出 \(success) 张图到 \(folder.lastPathComponent)。")
         } else {
             Toast.errorBody("部分导出失败", "成功 \(success) / 失败 \(failedCount) 张 · 检查目录可写权限。")
+        }
+    }
+
+    /// v15.23 batch196 · 周度 Markdown 复盘报告导出（最近 7 天 · trader 周复盘节奏）
+    @MainActor
+    private func exportWeeklyReport(_ s: ReviewSummary) {
+        let panel = NSSavePanel()
+        panel.title = "导出周复盘报告"
+        panel.allowedContentTypes = [.plainText]
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyyMMdd"
+        let stamp = fmt.string(from: Date())
+        panel.nameFieldStringValue = "复盘周报_截至\(stamp).md"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let md = MonthlyReportGenerator.generateWeekly(positions: s.closedPositions)
+        do {
+            try md.data(using: .utf8)?.write(to: url, options: .atomic)
+            Toast.info("导出成功", "已生成最近 7 天周报到 \(url.lastPathComponent)。")
+        } catch {
+            Toast.error("导出失败", error)
         }
     }
 

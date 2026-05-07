@@ -121,6 +121,48 @@ struct MonthlyReportGeneratorTests {
         #expect(md.contains("凌晨 00:00-02:30"))
     }
 
+    // MARK: - v15.23 batch196 · weekly + 通用 range
+
+    @Test("v15.23 batch196 · 周报标题为「近 7 天复盘周报」")
+    func weeklyTitle() {
+        let md = MonthlyReportGenerator.generateWeekly(positions: [], now: mayMidday, timeZone: cn)
+        #expect(md.contains("# 近 7 天复盘周报"))
+    }
+
+    @Test("v15.23 batch196 · 周报切片：仅最近 7 天 closeTime 计入")
+    func weeklyOnlyRecent7Days() {
+        let now = mayMidday
+        let inWeek = now.addingTimeInterval(-3 * 86_400)        // 3 天前
+        let outOfWeek = now.addingTimeInterval(-30 * 86_400)    // 30 天前
+        let positions = [
+            position(100, instrument: "rb2501", at: inWeek),
+            position(-200, instrument: "i2501", at: outOfWeek),
+        ]
+        let md = MonthlyReportGenerator.generateWeekly(positions: positions, now: now, timeZone: cn)
+        // 只有 1 笔 (100) 在窗口内
+        #expect(md.contains("| 闭合笔数 | 1 |"))
+        #expect(md.contains("| 总 PnL | +100 |"))
+    }
+
+    @Test("v15.23 batch196 · generateInRange 自定义区间 + 标题")
+    func customRange() {
+        let now = mayMidday
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = cn
+        let start = cal.date(from: DateComponents(year: 2026, month: 5, day: 1))!
+        let end = cal.date(from: DateComponents(year: 2026, month: 5, day: 8))!
+        let positions = [
+            position(50, at: cal.date(from: DateComponents(year: 2026, month: 5, day: 3))!),
+            position(80, at: cal.date(from: DateComponents(year: 2026, month: 5, day: 9))!),  // 在 end 之外
+        ]
+        let md = MonthlyReportGenerator.generateInRange(
+            positions: positions, start: start, end: end,
+            title: "5 月第 1 周报告", now: now, timeZone: cn
+        )
+        #expect(md.contains("# 5 月第 1 周报告"))
+        #expect(md.contains("| 闭合笔数 | 1 |"))
+        #expect(md.contains("| 总 PnL | +50 |"))
+    }
+
     @Test("生成时间脚注存在")
     func footer() {
         let md = MonthlyReportGenerator.generate(

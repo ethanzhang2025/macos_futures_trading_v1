@@ -36,7 +36,54 @@ public enum MonthlyReportGenerator {
         let monthStart = cal.date(from: comps) ?? now
         let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) ?? now
 
-        let monthly = positions.filter { $0.closeTime >= monthStart && $0.closeTime < monthEnd }
+        let title = "\(year) 年 \(month) 月复盘报告"
+        return generateInRange(
+            positions: positions, start: monthStart, end: monthEnd,
+            title: title, now: now, timeZone: timeZone
+        )
+    }
+
+    /// v15.23 batch196 · 通用区间报告（周报 / 任意自定义区间复用）
+    /// - Parameters:
+    ///   - start: 区间起（包含）
+    ///   - end: 区间止（不包含）
+    ///   - title: 报告标题（如 "近 7 天周报" / "2026-04 月报"）
+    public static func generateInRange(
+        positions: [ClosedPosition],
+        start: Date,
+        end: Date,
+        title: String,
+        now: Date = Date(),
+        timeZone: TimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+    ) -> String {
+        let monthly = positions.filter { $0.closeTime >= start && $0.closeTime < end }
+        return renderBody(
+            slice: monthly, title: title, now: now, timeZone: timeZone
+        )
+    }
+
+    /// v15.23 batch196 · 周报快捷入口（最近 7 天 · 与 trader 周复盘节奏一致）
+    public static func generateWeekly(
+        positions: [ClosedPosition],
+        now: Date = Date(),
+        timeZone: TimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+    ) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let start = cal.date(byAdding: .day, value: -7, to: now) ?? now
+        return generateInRange(
+            positions: positions, start: start, end: now,
+            title: "近 7 天复盘周报", now: now, timeZone: timeZone
+        )
+    }
+
+    /// 内部渲染（共用 month / week / range 三个入口）
+    private static func renderBody(
+        slice monthly: [ClosedPosition],
+        title: String,
+        now: Date,
+        timeZone: TimeZone
+    ) -> String {
 
         let streak = ReviewAnalytics.streakMetrics(from: monthly)
         let risk = ReviewAnalytics.riskAdjustedMetrics(from: monthly)
@@ -51,7 +98,7 @@ public enum MonthlyReportGenerator {
         nowFmt.timeZone = timeZone
 
         var md = ""
-        md += "# \(year) 年 \(month) 月复盘报告\n\n"
+        md += "# \(title)\n\n"
         md += "_生成时间：\(nowFmt.string(from: now))（\(timeZone.identifier)）_\n\n"
 
         md += "## 概览\n\n"

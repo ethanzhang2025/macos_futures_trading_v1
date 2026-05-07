@@ -67,6 +67,8 @@ struct EngineDisciplineIntegrationTests {
                 }
             }
         }
+        // v15.23 batch208 · 等 observeTask 进入 for await（避免 stress 下 event 丢失）
+        await waitForObserveReady()
 
         let now = Date(timeIntervalSince1970: 1746360000)
         for i in 0..<6 {
@@ -92,6 +94,8 @@ struct EngineDisciplineIntegrationTests {
                 if case .disciplineViolation(let v) = event { await collector.add(v) }
             }
         }
+        // v15.23 batch208 · 等 observeTask 进入 for await（continuation 注册完成）再发 event
+        await waitForObserveReady()
 
         let now = Date(timeIntervalSince1970: 1746360000)
         for i in 0..<4 {
@@ -101,7 +105,6 @@ struct EngineDisciplineIntegrationTests {
         for i in 4..<7 {
             await engine.onTick(makeTick(3500), now: now.addingTimeInterval(Double(i)))
         }
-        // v15.23 batch208 · 修 flaky · 用 polling 等够 1 个 violation（替代固定 50ms sleep · 解决 CI 慢节点 timing）
         _ = await waitForCount(collector, target: 1)
         // 再额外 buffer · 确保第二个 violation 不会出现（dedup 验证负面用例）
         try? await Task.sleep(nanoseconds: 50_000_000)
@@ -121,6 +124,7 @@ struct EngineDisciplineIntegrationTests {
                 if case .disciplineViolation(let v) = event { await collector.add(v) }
             }
         }
+        await waitForObserveReady()  // v15.23 batch208 · 同上
         let now = Date(timeIntervalSince1970: 1746360000)
         for i in 0..<10 {
             _ = await engine.submitOrder(openOrder(), now: now.addingTimeInterval(Double(i)))
@@ -144,13 +148,14 @@ struct EngineDisciplineIntegrationTests {
                 if case .disciplineViolation(let v) = event { await collector.add(v) }
             }
         }
+        // v15.23 batch208 · 等 observeTask 进入 for await（continuation 注册完成）再发 event
+        await waitForObserveReady()
 
         let now = Date(timeIntervalSince1970: 1746360000)
         for i in 0..<2 {
             _ = await engine.submitOrder(openOrder(), now: now.addingTimeInterval(Double(i)))
             await engine.onTick(makeTick(3500), now: now.addingTimeInterval(Double(i)))
         }
-        // v15.23 batch208 · 修 flaky · polling 等到 count == 1（替代 30ms sleep · CI 慢节点不 flaky）
         let count1 = await waitForCount(collector, target: 1)
         #expect(count1 == 1, "首次违规未推送 · 实际 \(count1)")
 
@@ -176,7 +181,7 @@ private actor ViolationCollector {
 @discardableResult
 private func waitForCount(_ collector: ViolationCollector,
                           target: Int,
-                          timeout: Double = 0.5) async -> Int {
+                          timeout: Double = 1.5) async -> Int {
     let deadline = Date().addingTimeInterval(timeout)
     var current = await collector.count()
     while current < target && Date() < deadline {
@@ -184,4 +189,13 @@ private func waitForCount(_ collector: ViolationCollector,
         current = await collector.count()
     }
     return current
+}
+
+/// v15.23 batch208 · 让 observeTask 进入 `for await` 状态后再开始发 event
+/// 根因：AsyncStream builder closure 是 deferred · 只有调用方 first iterator 才执行
+/// 注册 continuation。在并行测试 stress 下 · 主线程可能在 observeTask 进入 await 前
+/// 就已经发送 onTick · 导致 event 丢失。yield + 短 sleep 给 task 起步窗口。
+private func waitForObserveReady() async {
+    await Task.yield()
+    try? await Task.sleep(nanoseconds: 30_000_000)  // 30ms 起步窗口
 }

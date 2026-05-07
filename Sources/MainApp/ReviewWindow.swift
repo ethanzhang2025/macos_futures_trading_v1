@@ -31,6 +31,9 @@ struct ReviewWindow: View {
     /// v15.23 batch203 · 合约 filter（与 dateFilter 互补 · 自动从 allPositions 列举）
     @State private var filterInstrument: String? = nil
 
+    /// v15.23 batch205 · 跨窗口跳主图
+    @Environment(\.openWindow) private var openWindow
+
     private struct ZoomedCard: Identifiable {
         var id: String { title }
         let title: String
@@ -97,6 +100,7 @@ struct ReviewWindow: View {
         ("📅 区间筛选", [
             ("toolbar 区间 Menu", "全部 / 7 天 / 30 天 / 当月 / 月份 / 季度"),
             ("toolbar 合约 Menu (batch203)", "全部 / 各合约（自动从 positions 列举 + 笔数）· 与区间 filter 互补"),
+            ("跳主图 button (batch205)", "选中合约后 → 在主图查看（chart.line 图标 · 仅 filter 时显示）"),
             ("Toast 反馈", "切换后顶部提示新区间数据量"),
         ]),
         ("📊 12 张图（v15.23 闭环）", [
@@ -381,6 +385,19 @@ struct ReviewWindow: View {
                 }
                 .frame(width: 130)
                 .help("按合约筛选复盘 · 与区间 filter 互补 · 自动从 closed positions 列举")
+
+                // v15.23 batch205 · 当前合约 filter 时 · 加跳主图 button（trader 看绩效后想去图上验证）
+                if let inst = filterInstrument {
+                    Button {
+                        openWindow(id: "chart")
+                        NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: inst)
+                        Toast.info("已切到主图", "\(inst)")
+                    } label: {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("在主图查看「\(inst)」（v15.23 batch205）")
+                }
 
                 stat("成交", "\(s.tradeCount) 笔")
                 stat("闭合", "\(s.closedPositions.count) 笔")

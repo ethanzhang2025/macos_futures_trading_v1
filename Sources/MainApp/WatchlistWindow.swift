@@ -222,6 +222,11 @@ struct WatchlistWindow: View {
             ("导入 .txt / .csv", "文华格式 / 自由表格 · 双击末尾空白也可加合约（v15.21 batch88）"),
             ("跨窗口加合约", "ChartScene → 自选 通过 .watchlistAddInstrument 通知（v15.21 batch131）"),
         ]),
+        ("📤 导出（v15.23 batch199）", [
+            ("Header 导出 Menu", "当前分组 .txt / 全部分组合并 .txt（# 注释行分隔）"),
+            ("当前分组 → 剪贴板", "复制为多行文本 · trader 一键粘到 IM / 邮件"),
+            ("文件名", "自选-分组名-N个-日期.txt（文华格式兼容）"),
+        ]),
         ("📊 报价 / 排序", [
             ("⌘R", "立即刷新报价（不等 5s 周期）"),
             ("排序", "manual / 涨幅 ↓ / 涨幅 ↑ / 价格 / 持仓 / 成交（持久化）"),
@@ -328,6 +333,30 @@ struct WatchlistWindow: View {
                 }
                 .buttonStyle(.borderless)
                 .help("导入自选合约（.txt 文华格式 · .csv 自由表格）")
+
+                // v15.23 batch199 · 导出分组合约列表（当前 / 全部 二选一）
+                Menu {
+                    if let groupID = selectedGroupID,
+                       let group = book.group(id: groupID) {
+                        Button("当前分组「\(group.name)」(\(group.instrumentIDs.count) 个)") {
+                            exportGroupToFile(groupID: groupID)
+                        }
+                    }
+                    Button("全部 \(book.groups.count) 个分组（合并）") {
+                        exportAllGroupsToFile()
+                    }
+                    Divider()
+                    Button("当前分组复制到剪贴板") {
+                        copyCurrentGroupToPasteboard()
+                    }
+                    .disabled(selectedGroupID == nil)
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .menuStyle(.borderlessButton)
+                .frame(maxWidth: 28)
+                .help("导出合约列表（.txt 文华兼容 · trader 备份/分享）")
+                .disabled(book.groups.isEmpty)
                 Button {
                     showQuickPasteSheet = true
                 } label: {
@@ -1113,6 +1142,63 @@ struct WatchlistWindow: View {
     }
 
     /// v15.21 batch91 · 双格式导入：.txt 文华自选（含 "{" 标头）走严格 · 否则（.csv / 自由 .txt）走 QuickPasteSheet 预填
+    /// v15.23 batch199 · 单分组导出 .txt（每行一个合约 · 文华格式兼容）
+    @MainActor
+    private func exportGroupToFile(groupID: UUID) {
+        guard let group = book.group(id: groupID) else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.title = "导出分组「\(group.name)」"
+        let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        panel.nameFieldStringValue = "自选-\(group.name)-\(group.instrumentIDs.count)个-\(dateStr).txt"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let content = group.instrumentIDs.joined(separator: "\n") + "\n"
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            Toast.info("导出成功", "\(group.instrumentIDs.count) 个合约 → \(url.lastPathComponent)")
+        } catch {
+            Toast.error("导出失败", error)
+        }
+    }
+
+    /// v15.23 batch199 · 全部分组导出（每分组前面加 # 注释行 · 不影响导入解析）
+    @MainActor
+    private func exportAllGroupsToFile() {
+        guard !book.groups.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.title = "导出全部分组"
+        let totalCount = book.groups.reduce(0) { $0 + $1.instrumentIDs.count }
+        let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        panel.nameFieldStringValue = "自选-全部\(book.groups.count)分组-\(totalCount)个-\(dateStr).txt"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        var lines: [String] = []
+        for group in book.groups {
+            lines.append("# \(group.name) (\(group.instrumentIDs.count))")
+            lines.append(contentsOf: group.instrumentIDs)
+            lines.append("")  // 空行分隔
+        }
+        let content = lines.joined(separator: "\n")
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            Toast.info("导出成功", "\(book.groups.count) 分组 / \(totalCount) 合约 → \(url.lastPathComponent)")
+        } catch {
+            Toast.error("导出失败", error)
+        }
+    }
+
+    /// v15.23 batch199 · 当前分组复制到剪贴板（NSPasteboard · trader 快速粘到 IM）
+    @MainActor
+    private func copyCurrentGroupToPasteboard() {
+        guard let groupID = selectedGroupID,
+              let group = book.group(id: groupID) else { return }
+        let content = group.instrumentIDs.joined(separator: "\n")
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(content, forType: .string)
+        Toast.info("已复制", "「\(group.name)」\(group.instrumentIDs.count) 个合约")
+    }
+
     private func importWatchlistFromFile() {
         let panel = NSOpenPanel()
         panel.title = "导入自选合约（.txt 文华格式 · .csv 自由表格）"

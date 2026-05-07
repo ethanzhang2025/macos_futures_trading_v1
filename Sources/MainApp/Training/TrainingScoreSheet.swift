@@ -25,6 +25,8 @@ struct TrainingScoreSheet: View {
     @State private var showViolations: Bool = false
     /// v15.23 batch150 · 复制/截图反馈提示（3 秒自动清空）
     @State private var actionFeedback: String? = nil
+    /// v15.23 batch152 · grade emoji 放大动画起始 scale（0.5 → 1.0 弹簧）
+    @State private var emojiScale: CGFloat = 0.5
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -97,6 +99,12 @@ struct TrainingScoreSheet: View {
         HStack(alignment: .top, spacing: 14) {
             Text(score.grade.emoji)
                 .font(.system(size: 56))
+                .scaleEffect(emojiScale)
+                .onAppear {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.55)) {
+                        emojiScale = 1.0
+                    }
+                }
             VStack(alignment: .leading, spacing: 4) {
                 Text("训练评分")
                     .font(.caption)

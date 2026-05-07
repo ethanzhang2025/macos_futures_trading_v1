@@ -37,6 +37,21 @@ struct TrainingControlBar: View {
         HStack(spacing: 12) {
             statusIndicator
 
+            // v15.23 batch143 · streak chip（≥ 2 才显示 · 与 history panel 同步）
+            let streak = viewModel.log.currentStreak
+            if streak.count >= 2 {
+                HStack(spacing: 3) {
+                    Text(streak.isWinning ? "🔥" : "💧")
+                        .font(.system(size: 12))
+                    Text("\(streak.isWinning ? "连胜" : "连败")\(streak.count)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(streak.isWinning ? .red : .blue)
+                }
+                .help(streak.isWinning
+                      ? "连胜 \(streak.count) 次 · 别飘 · 守纪律"
+                      : "连败 \(streak.count) 次 · 状态可能不对 · 考虑休息")
+            }
+
             if viewModel.isSessionActive {
                 Text("⏱ \(elapsedText)")
                     .font(.system(size: 14, design: .monospaced))

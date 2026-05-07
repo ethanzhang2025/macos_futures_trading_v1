@@ -17,6 +17,8 @@ struct TrainingHistoryPanel: View {
     @ObservedObject var viewModel: TrainingViewModel
     @State private var selectedSessionID: TrainingSession.ID? = nil
     @State private var showClearConfirm: Bool = false
+    /// v15.23 batch122 · 形态筛选（nil = 全部 · 选中后只显示该形态训练）
+    @State private var filterPattern: TrainingScenarioPattern? = nil
 
     private let recentLimit = 50
 
@@ -57,7 +59,29 @@ struct TrainingHistoryPanel: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
             Spacer()
+            // v15.23 batch122 · 形态筛选 Menu（只在有 session 时显示）
             if !viewModel.log.sessions.isEmpty {
+                Menu {
+                    Button(filterPattern == nil ? "✓ 全部形态" : "全部形态") {
+                        filterPattern = nil
+                    }
+                    Divider()
+                    ForEach(TrainingScenarioPattern.allCases, id: \.self) { pat in
+                        let isOn = (filterPattern == pat)
+                        Button("\(pat.emoji) \(pat.displayName) \(isOn ? "✓" : "")") {
+                            filterPattern = isOn ? nil : pat
+                        }
+                    }
+                } label: {
+                    if let p = filterPattern {
+                        Label("\(p.emoji) \(p.displayName)",
+                              systemImage: "line.3.horizontal.decrease.circle.fill")
+                    } else {
+                        Label("筛选形态",
+                              systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                }
+                .help("按形态筛选历史训练（看自己在哪类行情成绩好/弱）")
                 Button(role: .destructive) {
                     showClearConfirm = true
                 } label: {
@@ -152,8 +176,27 @@ struct TrainingHistoryPanel: View {
 
     private var sessionList: some View {
         let recent = viewModel.log.recentSessions(limit: recentLimit)
+        // batch122 · 形态过滤（nil = 全部 · 选中形态时只保留 scenarioPattern == filter）
+        let filtered: [TrainingSession] = filterPattern.map { p in
+            recent.filter { $0.scenarioPattern == p }
+        } ?? recent
         return List {
-            ForEach(recent) { session in
+            if filtered.isEmpty, filterPattern != nil {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 6) {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .font(.system(size: 24)).foregroundColor(.secondary)
+                        Text("没有该形态的训练记录")
+                            .font(.callout).foregroundColor(.secondary)
+                        Button("清空筛选") { filterPattern = nil }
+                            .buttonStyle(.borderless)
+                    }
+                    Spacer()
+                }
+                .padding()
+            }
+            ForEach(filtered) { session in
                 sessionRow(session)
                     .contentShape(Rectangle())
                     .onTapGesture {

@@ -14,6 +14,8 @@ import SwiftUI
 struct IPadRootView: View {
 
     @State private var selectedInstrumentID: String? = nil
+    @State private var selectedPeriod: KLinePeriod = .minute1
+    @State private var enabledIndicators: Set<String> = []
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
@@ -21,35 +23,40 @@ struct IPadRootView: View {
             WatchlistView_iOS(selection: $selectedInstrumentID)
                 .navigationTitle("自选")
         } detail: {
-            iPadDetailPlaceholder(instrumentID: selectedInstrumentID)
+            iPadDetailContent(
+                instrumentID: selectedInstrumentID,
+                period: $selectedPeriod,
+                enabledIndicators: $enabledIndicators
+            )
         }
         .navigationSplitViewStyle(.balanced)
     }
 }
 
-// MARK: - detail 占位（batch004 替换为 ChartView_iOS）
-
-private struct iPadDetailPlaceholder: View {
+private struct iPadDetailContent: View {
     let instrumentID: String?
+    @Binding var period: KLinePeriod
+    @Binding var enabledIndicators: Set<String>
 
     var body: some View {
         if let id = instrumentID {
             VStack(spacing: 0) {
-                // 顶部条（batch005 接周期切换 / batch008 行情 detail）
-                HStack {
+                // 顶部条：合约 ID + 周期切换 + 指标 toggle
+                HStack(spacing: 12) {
                     Text(id.uppercased())
                         .font(.title3)
                         .fontWeight(.semibold)
                         .monospaced()
-                    Spacer()
-                    Text("1m · 周期切换占位")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Divider().frame(height: 24)
+                    PeriodPicker_iOS(
+                        selectedPeriod: $period,
+                        enabledIndicators: $enabledIndicators
+                    )
                 }
                 .padding()
                 .background(Color(uiColor: .secondarySystemBackground))
 
-                ChartView_iOS(instrumentID: id)
+                ChartView_iOS(instrumentID: id, period: period)
             }
         } else {
             VStack(spacing: 16) {
@@ -65,5 +72,6 @@ private struct iPadDetailPlaceholder: View {
         }
     }
 }
+
 
 #endif

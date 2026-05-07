@@ -23,6 +23,7 @@ import Shared
 struct ChartView_iOS: View {
 
     let instrumentID: String
+    let period: KLinePeriod
 
     /// demo K 线数据 · batch008 替换为真实 SinaSource / DataSource 接入
     @State private var bars: [KLine] = []
@@ -49,9 +50,9 @@ struct ChartView_iOS: View {
                 }
             }
         }
-        .task(id: instrumentID) {
-            // batch008 替换为真实数据接入
-            self.bars = ChartView_iOS.demoBars(for: instrumentID, count: 200)
+        .task(id: "\(instrumentID)-\(period.rawValue)") {
+            // batch008 替换为真实数据接入（按 period 拉对应粒度）
+            self.bars = ChartView_iOS.demoBars(for: instrumentID, period: period, count: 200)
             self.visibleBarCount = 60
             self.offsetBars = 0
         }
@@ -205,23 +206,26 @@ struct ChartView_iOS: View {
     // MARK: - Demo data
 
     /// 合成 demo K 线 · batch008 替换为真实数据
-    static func demoBars(for instrumentID: String, count: Int) -> [KLine] {
+    static func demoBars(for instrumentID: String, period: KLinePeriod, count: Int) -> [KLine] {
         var bars: [KLine] = []
         bars.reserveCapacity(count)
         var price: Double = 3500
-        let baseDate = Date(timeIntervalSinceNow: -Double(count) * 60)
-        var rng = SeededRNG(seed: UInt64(truncatingIfNeeded: instrumentID.hashValue))
+        let secondsPerBar = max(period.seconds, 1)
+        let baseDate = Date(timeIntervalSinceNow: -Double(count) * Double(secondsPerBar))
+        var rng = SeededRNG(seed: UInt64(truncatingIfNeeded: instrumentID.hashValue ^ period.rawValue.hashValue))
+        // 大周期波动幅度更大
+        let volatility = max(1.0, Double(secondsPerBar) / 60.0).squareRoot() * 3
         for i in 0..<count {
-            let drift = rng.nextDouble(-3, 3)
+            let drift = rng.nextDouble(-volatility, volatility)
             let open = price
             let close = price + drift
-            let high = max(open, close) + rng.nextDouble(0, 2)
-            let low = min(open, close) - rng.nextDouble(0, 2)
+            let high = max(open, close) + rng.nextDouble(0, volatility * 0.7)
+            let low = min(open, close) - rng.nextDouble(0, volatility * 0.7)
             let vol = Int(rng.nextDouble(100, 500))
-            let ts = baseDate.addingTimeInterval(Double(i) * 60)
+            let ts = baseDate.addingTimeInterval(Double(i) * Double(secondsPerBar))
             bars.append(KLine(
                 instrumentID: instrumentID,
-                period: .minute1,
+                period: period,
                 openTime: ts,
                 open: Decimal(open),
                 high: Decimal(high),

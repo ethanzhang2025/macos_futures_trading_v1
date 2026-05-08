@@ -302,6 +302,14 @@ public enum BuiltinFunctions {
             RECOVERYFunction(),
             TRENDSTRENGTHFunction(),
             MACROSSFunction(),
+            // 麦语言扩展（第 30 批 · v15.25 · 距离统计 + 健壮算法）
+            HHVDISTFunction(),
+            LLVDISTFunction(),
+            FREQRATIOFunction(),
+            MEDIANSLOPEFunction(),
+            TRIMMEANFunction(),
+            MAXSTREAKFunction(),
+            TIMEINRANGEFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

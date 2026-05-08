@@ -22,8 +22,15 @@ public struct KLineAxisView: View {
 
     /// 标签数量（视觉密度 · 5 是文华/国信主流）
     public static let labelCount = 5
-    /// 时间格式（mock 数据从 1970 起 · 真行情会用 "MM-dd HH:mm" 同款）
+    /// 同日内：仅 HH:mm（v15.33 session-aware · 跨日时智能切到 fullFormatter）
     private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.locale = Locale(identifier: "zh_CN")
+        return f
+    }()
+    /// 跨交易日：MM-dd HH:mm（自动覆盖 · 不需要外部传 flag）
+    private static let timeFormatterWithDate: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "MM-dd HH:mm"
         f.locale = Locale(identifier: "zh_CN")
@@ -37,6 +44,8 @@ public struct KLineAxisView: View {
     /// v15.x 主题切换支持 · 默认深色保兼容
     public let axisBackground: Color
     public let axisTextColor: Color
+    /// v15.33 session-aware · 可选传入 · 提供时启用跨 session 智能避让标签
+    public let sessionGaps: [SessionGap]
 
     public init(
         bars: [KLine],
@@ -44,7 +53,8 @@ public struct KLineAxisView: View {
         priceRange: ClosedRange<Decimal>,
         orientation: Orientation,
         axisBackground: Color = Color.black.opacity(0.35),
-        axisTextColor: Color = Color.white.opacity(0.78)
+        axisTextColor: Color = Color.white.opacity(0.78),
+        sessionGaps: [SessionGap] = []
     ) {
         self.bars = bars
         self.viewport = viewport
@@ -52,6 +62,7 @@ public struct KLineAxisView: View {
         self.orientation = orientation
         self.axisBackground = axisBackground
         self.axisTextColor = axisTextColor
+        self.sessionGaps = sessionGaps
     }
 
     public var body: some View {
@@ -93,14 +104,25 @@ public struct KLineAxisView: View {
         )
     }
 
+    /// 可视范围是否跨交易日（决定时间标签格式 · 跨日则带 MM-dd · 同日仅 HH:mm）
+    private var visibleSpansMultipleDays: Bool {
+        sessionGaps.contains { gap in
+            gap.kind == .day &&
+            gap.barIndex >= viewport.startIndex &&
+            gap.barIndex < viewport.startIndex + viewport.visibleCount
+        }
+    }
+
     private func label(at i: Int) -> String {
         switch orientation {
         case .time:
             let visible = max(1, viewport.visibleCount)
             let step = visible / max(1, Self.labelCount - 1)
-            let idx = min(bars.count - 1, max(0, viewport.startIndex + step * i))
+            let raw = viewport.startIndex + step * i
+            let idx = preferLabelIndex(near: raw)
             guard idx >= 0, idx < bars.count else { return "" }
-            return Self.timeFormatter.string(from: bars[idx].openTime)
+            let formatter = visibleSpansMultipleDays ? Self.timeFormatterWithDate : Self.timeFormatter
+            return formatter.string(from: bars[idx].openTime)
         case .price:
             // 顶 = upperBound · 底 = lowerBound · 5 等分（i=0 最上 · i=4 最下）
             let lo = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
@@ -109,6 +131,23 @@ public struct KLineAxisView: View {
             let value = lo + (hi - lo) * t
             return String(format: "%.1f", value)
         }
+    }
+
+    /// 标签智能避让：若 raw 索引正好落在 session/day gap 边界（前后 1 根内）·
+    /// 把标签平移到 gap 之外的最近 bar · 避免显示跨段 bar 的时间引起视觉割裂
+    private func preferLabelIndex(near raw: Int) -> Int {
+        let lo = 0
+        let hi = bars.count - 1
+        let clamped = min(hi, max(lo, raw))
+        guard !sessionGaps.isEmpty else { return clamped }
+        // gap.barIndex = 跨段起点 · 标签位于 [barIndex - 1, barIndex] 处需平移
+        for gap in sessionGaps {
+            if abs(clamped - gap.barIndex) <= 1 {
+                // 优先往 gap 后侧 · 落在新 session 起点（更直观 · 显示新段开盘时间）
+                return min(hi, gap.barIndex)
+            }
+        }
+        return clamped
     }
 
     private func position(at i: Int, in size: CGSize) -> CGPoint {

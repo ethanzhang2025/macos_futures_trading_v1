@@ -2252,7 +2252,8 @@ struct ChartContentView: View {
                 priceRange: currentPriceRange,
                 orientation: .time,
                 axisBackground: chartTheme.background,
-                axisTextColor: chartTheme.textSecondary
+                axisTextColor: chartTheme.textSecondary,
+                sessionGaps: sessionGaps
             )
             .frame(height: 28)
         }
@@ -2408,6 +2409,11 @@ struct ChartContentView: View {
         .accessibilityHidden(true)
     }
 
+    /// v15.33 WP-40 P1 · session/day 缺口（基于 bars 时间戳差自动检测 · daily 周期返空）
+    var sessionGaps: [SessionGap] {
+        SessionAxisHelper.detectGaps(bars: bars, period: bars.first?.period ?? .minute1)
+    }
+
     /// 主图区（K 线 + 网格 + 十字光标 + indicators + HUD · gesture 挂这里）
     var chartMainArea: some View {
         ZStack(alignment: .topLeading) {
@@ -2419,6 +2425,10 @@ struct ChartContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // 视觉迭代第 1 项：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐
             KLineGridView()
+            // v15.33 WP-40 P1 · session/day 分界竖线（夜盘日盘衔接 / 跨交易日 / 周末）
+            KLineSessionDividerView(
+                bars: bars, viewport: viewport, gaps: sessionGaps
+            )
             // 视觉迭代第 2 项：十字光标 + OHLC 浮窗 + 轴边价格/时间浮标（hover 跟随）
             KLineCrosshairView(
                 bars: bars,

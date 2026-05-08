@@ -118,6 +118,14 @@ public enum BuiltinFunctions {
             HMAFunction(),
             DEMAFunction(),
             OSCFunction(),
+            // 麦语言扩展（第 7 批 · v15.25 兼容度 ~99.9% → ~99.95% · 量价/反转/多空综合）
+            VWAPFunction(),
+            EMVFunction(),
+            MASSFunction(),
+            CHOFunction(),
+            VHFFunction(),
+            BBIFunction(),
+            PVTFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

@@ -254,6 +254,14 @@ public enum BuiltinFunctions {
             NEWHIGHFunction(),
             NEWLOWFunction(),
             PULLBACKFunction(),
+            // 麦语言扩展（第 24 批 · v15.25 · 灵活 Pivot + 连续判定）
+            PIVOTHIGHFunction(),
+            PIVOTLOWFunction(),
+            STREAKFunction(),
+            VOLATILITYRATIOFunction(),
+            TRENDDIRFunction(),
+            CONSECUPFunction(),
+            CONSECDOWNFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

@@ -206,6 +206,14 @@ public enum BuiltinFunctions {
             DONCHIANUFunction(),
             DONCHIANLFunction(),
             DONCHIANMFunction(),
+            // 麦语言扩展（第 18 批 · v15.25 · Keltner / Starc 通道 + 比率 + 周期能量）
+            KELCHMFunction(),
+            KELCHUFunction(),
+            KELCHLFunction(),
+            STARCUFunction(),
+            STARCLFunction(),
+            MARFunction(),
+            CYCLEFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

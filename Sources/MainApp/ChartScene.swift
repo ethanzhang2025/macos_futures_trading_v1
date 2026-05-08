@@ -958,13 +958,13 @@ struct ChartScene: View {
     private func exportDrawings() {
         guard !drawings.isEmpty else {
             let alert = NSAlert()
-            alert.messageText = "无画线可导出"
+            alert.messageText = L("无画线可导出")
             alert.informativeText = "当前合约 \(currentInstrumentID) \(selectedPeriod.displayName) 没有画线。"
             alert.runModal()
             return
         }
         let panel = NSSavePanel()
-        panel.title = "导出画线"
+        panel.title = L("导出画线")
         panel.allowedContentTypes = [.json]
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -977,7 +977,7 @@ struct ChartScene: View {
             try data.write(to: url)
         } catch {
             let alert = NSAlert()
-            alert.messageText = "导出失败"
+            alert.messageText = L("导出失败")
             alert.informativeText = error.localizedDescription
             alert.alertStyle = .critical
             alert.runModal()
@@ -987,7 +987,7 @@ struct ChartScene: View {
     /// 导入 JSON 画线 · 弹 alert 询问覆盖/追加/取消
     private func importDrawings() {
         let panel = NSOpenPanel()
-        panel.title = "导入画线"
+        panel.title = L("导入画线")
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -996,11 +996,11 @@ struct ChartScene: View {
             let data = try Data(contentsOf: url)
             let imported = try JSONDecoder().decode([Drawing].self, from: data)
             let alert = NSAlert()
-            alert.messageText = "导入画线"
+            alert.messageText = L("导入画线")
             alert.informativeText = "解析到 \(imported.count) 个画线。当前已有 \(drawings.count) 个。\n\n选择操作："
-            alert.addButton(withTitle: "覆盖")
-            alert.addButton(withTitle: "追加")
-            alert.addButton(withTitle: "取消")
+            alert.addButton(withTitle: L("覆盖"))
+            alert.addButton(withTitle: L("追加"))
+            alert.addButton(withTitle: L("取消"))
             let response = alert.runModal()
             if response == .alertFirstButtonReturn {
                 drawings = imported
@@ -1010,7 +1010,7 @@ struct ChartScene: View {
             // 取消 → 不动
         } catch {
             let alert = NSAlert()
-            alert.messageText = "导入失败"
+            alert.messageText = L("导入失败")
             alert.informativeText = "JSON 解析失败：\(error.localizedDescription)"
             alert.alertStyle = .critical
             alert.runModal()
@@ -1141,7 +1141,7 @@ struct ChartScene: View {
     /// v13.16 保存选中画线为模板 · NSAlert 输入名称 + v15.19 batch39 选 category
     private func saveCurrentAsTemplate(_ drawing: Drawing) {
         let alert = NSAlert()
-        alert.messageText = "保存为模板"
+        alert.messageText = L("保存为模板")
         alert.informativeText = "输入模板名称 + 选分类（已存 \(drawingTemplates.count) 个）："
         let typeName = drawingTypeLabel(drawing.type)
         let dateFmt = DateFormatter()
@@ -1163,8 +1163,8 @@ struct ChartScene: View {
         container.addArrangedSubview(nameField)
         container.addArrangedSubview(categoryPopup)
         alert.accessoryView = container
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L("保存"))
+        alert.addButton(withTitle: L("取消"))
         if alert.runModal() == .alertFirstButtonReturn {
             let name = nameField.stringValue.isEmpty ? typeName : nameField.stringValue
             let categoryIdx = max(0, min(categoryPopup.indexOfSelectedItem, DrawingTemplateCategory.allCases.count - 1))
@@ -1209,13 +1209,13 @@ struct ChartScene: View {
     @MainActor
     private func renameTemplate(_ template: DrawingTemplate) {
         let alert = NSAlert()
-        alert.messageText = "重命名模板"
+        alert.messageText = L("重命名模板")
         alert.informativeText = "原名：\(template.name)"
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         textField.stringValue = template.name
         alert.accessoryView = textField
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L("保存"))
+        alert.addButton(withTitle: L("取消"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let newName = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !newName.isEmpty else { return }
@@ -1228,11 +1228,11 @@ struct ChartScene: View {
     @MainActor
     private func confirmDeleteTemplate(_ template: DrawingTemplate) {
         let alert = NSAlert()
-        alert.messageText = "删除模板"
+        alert.messageText = L("删除模板")
         alert.informativeText = "确认删除模板「\(template.name)」？此操作不可撤销。"
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "删除")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L("删除"))
+        alert.addButton(withTitle: L("取消"))
         if alert.runModal() == .alertFirstButtonReturn {
             drawingTemplates.removeAll { $0.id == template.id }
         }
@@ -1241,11 +1241,11 @@ struct ChartScene: View {
     /// v13.16 删全部模板（confirmation alert）
     private func confirmDeleteAllTemplates() {
         let alert = NSAlert()
-        alert.messageText = "删除全部模板"
+        alert.messageText = L("删除全部模板")
         alert.informativeText = "确认删除全部 \(drawingTemplates.count) 个画线模板？此操作不可撤销。"
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "删除")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L("删除"))
+        alert.addButton(withTitle: L("取消"))
         if alert.runModal() == .alertFirstButtonReturn {
             drawingTemplates.removeAll()
         }
@@ -1255,7 +1255,7 @@ struct ChartScene: View {
     @MainActor
     private func exportDrawingTemplates() {
         let panel = NSSavePanel()
-        panel.title = "导出画线模板"
+        panel.title = L("导出画线模板")
         panel.allowedContentTypes = [.json]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyyMMdd_HHmm"
@@ -1275,7 +1275,7 @@ struct ChartScene: View {
     @MainActor
     private func importDrawingTemplates() {
         let panel = NSOpenPanel()
-        panel.title = "导入画线模板"
+        panel.title = L("导入画线模板")
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -1288,11 +1288,11 @@ struct ChartScene: View {
         }
         // 让用户选合并模式 · 默认合并（保留已有 · 添加新）· 高级用户可选替换
         let modeAlert = NSAlert()
-        modeAlert.messageText = "导入模板"
-        modeAlert.informativeText = "选择合并模式：\n· 合并：保留已有模板 · 添加新模板（同 id 跳过）\n· 替换：清空已有 · 全用导入版"
-        modeAlert.addButton(withTitle: "合并")
-        modeAlert.addButton(withTitle: "替换")
-        modeAlert.addButton(withTitle: "取消")
+        modeAlert.messageText = L("导入模板")
+        modeAlert.informativeText = L("选择合并模式：\n· 合并：保留已有模板 · 添加新模板（同 id 跳过）\n· 替换：清空已有 · 全用导入版")
+        modeAlert.addButton(withTitle: L("合并"))
+        modeAlert.addButton(withTitle: L("替换"))
+        modeAlert.addButton(withTitle: L("取消"))
         let response = modeAlert.runModal()
         let mode: DrawingTemplateExporter.ImportMode
         switch response {
@@ -3330,7 +3330,7 @@ struct ChartContentView: View {
             return
         }
         let panel = NSSavePanel()
-        panel.title = "导出主图截图"
+        panel.title = L("导出主图截图")
         panel.allowedContentTypes = [.png]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyy-MM-dd-HHmm"
@@ -3545,13 +3545,13 @@ struct ChartContentView: View {
     private func editTextDrawing(_ drawing: Drawing) {
         guard drawing.type == .text else { return }
         let alert = NSAlert()
-        alert.messageText = "编辑文字"
-        alert.informativeText = "修改标注内容："
+        alert.messageText = L("编辑文字")
+        alert.informativeText = L("修改标注内容：")
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         textField.stringValue = drawing.text ?? ""
         alert.accessoryView = textField
-        alert.addButton(withTitle: "确定")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L("确定"))
+        alert.addButton(withTitle: L("取消"))
         if alert.runModal() == .alertFirstButtonReturn {
             let newText = textField.stringValue.isEmpty ? "标注" : textField.stringValue
             if let idx = drawings.firstIndex(where: { $0.id == drawing.id }) {
@@ -3566,13 +3566,13 @@ struct ChartContentView: View {
         let price = drawing.startPoint.price
         let priceStr = formatPrice(price)
         let nsAlert = NSAlert()
-        nsAlert.messageText = "为水平线创建预警"
+        nsAlert.messageText = L("为水平线创建预警")
         nsAlert.informativeText = "价格触及 \(priceStr) 时预警 · \(instrumentLabel)"
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         textField.stringValue = "\(instrumentLabel) 触及 \(priceStr)"
         nsAlert.accessoryView = textField
-        nsAlert.addButton(withTitle: "创建")
-        nsAlert.addButton(withTitle: "取消")
+        nsAlert.addButton(withTitle: L("创建"))
+        nsAlert.addButton(withTitle: L("取消"))
         if nsAlert.runModal() == .alertFirstButtonReturn {
             let name = textField.stringValue.isEmpty ? "水平线预警" : textField.stringValue
             postAlertCreated(Alert(
@@ -3604,14 +3604,14 @@ struct ChartContentView: View {
         container.frame = NSRect(x: 0, y: 0, width: 280, height: 64)
         let nameField = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
         nameField.stringValue = "\(instrumentLabel) \(priceStr)"
-        nameField.placeholderString = "预警名字"
+        nameField.placeholderString = L("预警名字")
         let kindPopup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 280, height: 26), pullsDown: false)
         kindPopup.addItems(withTitles: options.map(\.title))
         container.addArrangedSubview(nameField)
         container.addArrangedSubview(kindPopup)
         nsAlert.accessoryView = container
-        nsAlert.addButton(withTitle: "创建")
-        nsAlert.addButton(withTitle: "取消")
+        nsAlert.addButton(withTitle: L("创建"))
+        nsAlert.addButton(withTitle: L("取消"))
         guard nsAlert.runModal() == .alertFirstButtonReturn else { return }
         let idx = max(0, min(kindPopup.indexOfSelectedItem, options.count - 1))
         let name = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3627,9 +3627,9 @@ struct ChartContentView: View {
     private func postAlertCreated(_ alert: Alert) {
         NotificationCenter.default.post(name: .alertAddedFromChart, object: alert)
         let success = NSAlert()
-        success.messageText = "预警已创建"
-        success.informativeText = "可在「预警」窗口（⌘1）编辑 / 暂停 / 删除。"
-        success.addButton(withTitle: "好")
+        success.messageText = L("预警已创建")
+        success.informativeText = L("可在「预警」窗口（⌘1）编辑 / 暂停 / 删除。")
+        success.addButton(withTitle: L("好"))
         success.runModal()
     }
 
@@ -3637,13 +3637,13 @@ struct ChartContentView: View {
     private func editFontSize(_ drawing: Drawing) {
         guard drawing.type == .text else { return }
         let alert = NSAlert()
-        alert.messageText = "修改字号"
-        alert.informativeText = "输入字号 pt（8~32）："
+        alert.messageText = L("修改字号")
+        alert.informativeText = L("输入字号 pt（8~32）：")
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 80, height: 24))
         textField.stringValue = String(Int(drawing.fontSize ?? 12))
         alert.accessoryView = textField
-        alert.addButton(withTitle: "确定")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L("确定"))
+        alert.addButton(withTitle: L("取消"))
         if alert.runModal() == .alertFirstButtonReturn {
             let raw = Double(textField.stringValue) ?? 12
             let clamped = max(8, min(32, raw))
@@ -4127,13 +4127,13 @@ struct ChartContentView: View {
     /// v13.8 应用工具栏当前色 / 线宽
     private func promptTextInput(at point: DrawingPoint) {
         let alert = NSAlert()
-        alert.messageText = "文字标注"
-        alert.informativeText = "输入要在主图标注的文字："
+        alert.messageText = L("文字标注")
+        alert.informativeText = L("输入要在主图标注的文字：")
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         textField.stringValue = "标注"
         alert.accessoryView = textField
-        alert.addButton(withTitle: "确定")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L("确定"))
+        alert.addButton(withTitle: L("取消"))
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
             let raw = textField.stringValue

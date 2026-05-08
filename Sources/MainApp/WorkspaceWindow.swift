@@ -809,8 +809,8 @@ struct WorkspaceWindow: View {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = "工作区模板-\(Self.filenameDate(Date())).json"
-        panel.title = "导出工作区模板"
-        panel.prompt = "导出"
+        panel.title = L("导出工作区模板")
+        panel.prompt = L("导出")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let data = try Self.exportEncoder.encode(book)
@@ -825,8 +825,8 @@ struct WorkspaceWindow: View {
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.title = "选择工作区模板 JSON 文件"
-        panel.prompt = "导入"
+        panel.title = L("选择工作区模板 JSON 文件")
+        panel.prompt = L("导入")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let data = try Data(contentsOf: url)

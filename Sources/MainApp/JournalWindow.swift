@@ -1114,7 +1114,7 @@ struct JournalWindow: View {
             let panel = NSSavePanel()
             panel.allowedContentTypes = [.plainText]
             panel.nameFieldStringValue = "交易日志月报-\(Self.fileStampFormatter.string(from: Date())).md"
-            panel.title = "保存月报"
+            panel.title = L("保存月报")
             guard panel.runModal() == .OK, let url = panel.url else { return }
             do {
                 try md.write(to: url, atomically: true, encoding: .utf8)
@@ -1398,8 +1398,8 @@ struct JournalWindow: View {
         panel.allowedContentTypes = [.commaSeparatedText]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.title = "选择交割单 CSV 文件"
-        panel.prompt = "导入"
+        panel.title = L("选择交割单 CSV 文件")
+        panel.prompt = L("导入")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         importURL = url
         importFormat = .wenhua
@@ -1417,8 +1417,8 @@ struct JournalWindow: View {
         guard !filteredTrades.isEmpty else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
-        panel.prompt = "导出"
-        panel.title = "导出当前 filter 的 trades CSV"
+        panel.prompt = L("导出")
+        panel.title = L("导出当前 filter 的 trades CSV")
         let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
         let suffix = filterTradeInstrument.map { "-\($0)" } ?? ""
         panel.nameFieldStringValue = "trade流水\(suffix)-\(filteredTrades.count)笔-\(dateStr).csv"
@@ -1435,7 +1435,7 @@ struct JournalWindow: View {
     private func presentExportPanel(kind: ExportKind) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
-        panel.prompt = "导出"
+        panel.prompt = L("导出")
         let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
 
         let data: Data
@@ -1444,16 +1444,16 @@ struct JournalWindow: View {
             let (closed, _) = PositionMatcher.match(trades: trades)
             guard !closed.isEmpty else {
                 let alert = NSAlert()
-                alert.messageText = "无可导出闭合持仓"
-                alert.informativeText = "当前 trades 全部为开仓 / 未配对 · 至少需有一对开+平才能生成"
+                alert.messageText = L("无可导出闭合持仓")
+                alert.informativeText = L("当前 trades 全部为开仓 / 未配对 · 至少需有一对开+平才能生成")
                 alert.runModal()
                 return
             }
-            panel.title = "导出闭合持仓 CSV"
+            panel.title = L("导出闭合持仓 CSV")
             panel.nameFieldStringValue = "闭合持仓-\(dateStr).csv"
             data = ClosedPositionCSVExporter.exportData(closed)
         case .tradeFlow:
-            panel.title = "导出 Trade 流水 CSV"
+            panel.title = L("导出 Trade 流水 CSV")
             panel.nameFieldStringValue = "trade流水-\(dateStr).csv"
             data = TradeCSVExporter.exportData(trades)
         }
@@ -1462,7 +1462,7 @@ struct JournalWindow: View {
             try data.write(to: url)
         } catch {
             let alert = NSAlert()
-            alert.messageText = "导出失败"
+            alert.messageText = L("导出失败")
             alert.informativeText = error.localizedDescription
             alert.alertStyle = .critical
             alert.runModal()

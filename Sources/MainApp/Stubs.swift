@@ -118,7 +118,7 @@ private struct GeneralSettingsTab: View {
     private func exportPreferences() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
-        panel.title = "导出偏好为 JSON"
+        panel.title = L("导出偏好为 JSON")
         let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
         panel.nameFieldStringValue = "futures-terminal-prefs-\(dateStr).json"
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -130,18 +130,18 @@ private struct GeneralSettingsTab: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
-        panel.title = "选择偏好 JSON"
+        panel.title = L("选择偏好 JSON")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let data = try Data(contentsOf: url)
             let written = try PreferenceExporter.import(from: data)
             let alert = NSAlert()
-            alert.messageText = "导入完成"
+            alert.messageText = L("导入完成")
             alert.informativeText = "已写入 \(written) 项偏好 · 重启 App 后生效"
             alert.runModal()
         } catch {
             let alert = NSAlert()
-            alert.messageText = "导入失败"
+            alert.messageText = L("导入失败")
             alert.informativeText = error.localizedDescription
             alert.alertStyle = .critical
             alert.runModal()

@@ -970,7 +970,7 @@ struct MultiChartHost: View {
             return
         }
         let panel = NSSavePanel()
-        panel.title = "导出多图表布局"
+        panel.title = L("导出多图表布局")
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = "multichart_layout_\(currentDateText()).json"
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -979,7 +979,7 @@ struct MultiChartHost: View {
 
     private func importLayout() {
         let panel = NSOpenPanel()
-        panel.title = "导入多图表布局"
+        panel.title = L("导入多图表布局")
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -1018,7 +1018,7 @@ struct MultiChartHost: View {
             return
         }
         let panel = NSSavePanel()
-        panel.title = "导出多图表截图"
+        panel.title = L("导出多图表截图")
         panel.allowedContentTypes = [.png]
         panel.nameFieldStringValue = "multichart_\(currentDateText()).png"
         guard panel.runModal() == .OK, let url = panel.url else { return }

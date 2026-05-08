@@ -18,7 +18,7 @@ enum Toast {
         let a = NSAlert()
         a.messageText = title
         a.informativeText = body
-        a.addButton(withTitle: "好")
+        a.addButton(withTitle: L("好"))
         a.runModal()
     }
 
@@ -28,7 +28,7 @@ enum Toast {
         a.messageText = title
         a.informativeText = err.localizedDescription
         a.alertStyle = .warning
-        a.addButton(withTitle: "好")
+        a.addButton(withTitle: L("好"))
         a.runModal()
     }
 
@@ -38,7 +38,7 @@ enum Toast {
         a.messageText = title
         a.informativeText = body
         a.alertStyle = .warning
-        a.addButton(withTitle: "好")
+        a.addButton(withTitle: L("好"))
         a.runModal()
     }
 }

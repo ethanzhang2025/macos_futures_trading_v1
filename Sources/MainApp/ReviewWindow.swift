@@ -463,11 +463,11 @@ struct ReviewWindow: View {
     @MainActor
     private func exportAllChartCards(_ s: ReviewSummary) {
         let panel = NSOpenPanel()
-        panel.title = "选择导出目录"
+        panel.title = L("选择导出目录")
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "导出到这里"
+        panel.prompt = L("导出到这里")
         guard panel.runModal() == .OK, let folder = panel.url else { return }
 
         let dateFmt = DateFormatter()
@@ -521,7 +521,7 @@ struct ReviewWindow: View {
     @MainActor
     private func exportWeeklyReport(_ s: ReviewSummary) {
         let panel = NSSavePanel()
-        panel.title = "导出周复盘报告"
+        panel.title = L("导出周复盘报告")
         panel.allowedContentTypes = [.plainText]
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyyMMdd"
@@ -546,7 +546,7 @@ struct ReviewWindow: View {
         let year = comps.year ?? 2026
         let month = comps.month ?? 1
         let panel = NSSavePanel()
-        panel.title = "导出月度复盘报告"
+        panel.title = L("导出月度复盘报告")
         panel.allowedContentTypes = [.plainText]
         panel.nameFieldStringValue = String(format: "复盘报告_%04d-%02d.md", year, month)
         guard panel.runModal() == .OK, let url = panel.url else { return }

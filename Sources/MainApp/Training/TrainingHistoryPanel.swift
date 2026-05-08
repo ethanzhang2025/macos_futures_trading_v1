@@ -587,7 +587,7 @@ struct TrainingHistoryPanel: View {
 
     private func saveReportToFile() {
         let panel = NSSavePanel()
-        panel.title = "保存训练月报"
+        panel.title = L("保存训练月报")
         panel.allowedContentTypes = [.plainText]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyyMMdd_HHmm"
@@ -608,7 +608,7 @@ struct TrainingHistoryPanel: View {
 
     private func saveWeeklyReportToFile() {
         let panel = NSSavePanel()
-        panel.title = "保存训练周报"
+        panel.title = L("保存训练周报")
         panel.allowedContentTypes = [.plainText]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyyMMdd_HHmm"

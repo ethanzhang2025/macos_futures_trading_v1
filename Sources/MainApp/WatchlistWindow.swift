@@ -1167,7 +1167,7 @@ struct WatchlistWindow: View {
         guard !book.groups.isEmpty else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.plainText]
-        panel.title = "导出全部分组"
+        panel.title = L("导出全部分组")
         let totalCount = book.groups.reduce(0) { $0 + $1.instrumentIDs.count }
         let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
         panel.nameFieldStringValue = "自选-全部\(book.groups.count)分组-\(totalCount)个-\(dateStr).txt"
@@ -1201,7 +1201,7 @@ struct WatchlistWindow: View {
 
     private func importWatchlistFromFile() {
         let panel = NSOpenPanel()
-        panel.title = "导入自选合约（.txt 文华格式 · .csv 自由表格）"
+        panel.title = L("导入自选合约（.txt 文华格式 · .csv 自由表格）")
         panel.allowedContentTypes = [.plainText, .commaSeparatedText]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false

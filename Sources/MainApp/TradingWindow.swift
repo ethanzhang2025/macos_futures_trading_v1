@@ -578,11 +578,11 @@ struct TradingWindow: View {
     /// 弹 NSAlert 确认 · 用户点"重置"才执行：清快照 + engine.reset + 立即 refresh
     private func resetAccountWithConfirmation() {
         let alert = NSAlert()
-        alert.messageText = "重置模拟账户？"
-        alert.informativeText = "将清空所有委托 / 成交 / 持仓 / 资金曲线 · 资金恢复 1,000,000 · 此操作不可撤销。"
+        alert.messageText = L("重置模拟账户？")
+        alert.informativeText = L("将清空所有委托 / 成交 / 持仓 / 资金曲线 · 资金恢复 1,000,000 · 此操作不可撤销。")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "重置")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L("重置"))
+        alert.addButton(withTitle: L("取消"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
         Task {
@@ -599,7 +599,7 @@ struct TradingWindow: View {
 
     private func exportCSV() {
         let panel = NSSavePanel()
-        panel.title = "导出当日交割单"
+        panel.title = L("导出当日交割单")
         panel.allowedContentTypes = [.commaSeparatedText]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyy-MM-dd-HHmmss"

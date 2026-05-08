@@ -1025,7 +1025,7 @@ public struct FormulaEditorWindow: View {
 
     private func openFile() {
         let panel = NSOpenPanel()
-        panel.title = "打开 .wh / 文本公式"
+        panel.title = L("打开 .wh / 文本公式")
         panel.allowedContentTypes = [.plainText]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -1050,7 +1050,7 @@ public struct FormulaEditorWindow: View {
 
     private func saveFile() {
         let panel = NSSavePanel()
-        panel.title = "保存麦语言公式"
+        panel.title = L("保存麦语言公式")
         panel.allowedContentTypes = [.plainText]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyyMMdd_HHmm"

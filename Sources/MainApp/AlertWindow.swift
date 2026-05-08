@@ -346,8 +346,8 @@ struct AlertWindow: View {
         guard !alerts.isEmpty else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
-        panel.title = "导出预警配置 CSV"
-        panel.prompt = "导出"
+        panel.title = L("导出预警配置 CSV")
+        panel.prompt = L("导出")
         let dateStr = ISO8601DateFormatter().string(from: Date()).prefix(10)
         panel.nameFieldStringValue = "alerts配置-\(alerts.count)条-\(dateStr).csv"
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -366,23 +366,23 @@ struct AlertWindow: View {
         let nsAlert = NSAlert()
         let title = preset?.displayName ?? "一次创建全部 6 类"
         nsAlert.messageText = "📋 \(title)"
-        nsAlert.informativeText = "输入合约 + 当前价 · 自动用合理默认创建预警 · 创建后可在列表编辑"
+        nsAlert.informativeText = L("输入合约 + 当前价 · 自动用合理默认创建预警 · 创建后可在列表编辑")
         let container = NSStackView()
         container.orientation = .vertical
         container.alignment = .leading
         container.spacing = 8
         container.frame = NSRect(x: 0, y: 0, width: 260, height: 70)
         let instField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        instField.placeholderString = "合约（如 RB0 / IF0）"
+        instField.placeholderString = L("合约（如 RB0 / IF0）")
         instField.stringValue = "RB0"
         let priceField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        priceField.placeholderString = "当前价（涨跌停 ±5% 基准）"
+        priceField.placeholderString = L("当前价（涨跌停 ±5% 基准）")
         priceField.stringValue = "3500"
         container.addArrangedSubview(instField)
         container.addArrangedSubview(priceField)
         nsAlert.accessoryView = container
-        nsAlert.addButton(withTitle: "创建")
-        nsAlert.addButton(withTitle: "取消")
+        nsAlert.addButton(withTitle: L("创建"))
+        nsAlert.addButton(withTitle: L("取消"))
         guard nsAlert.runModal() == .alertFirstButtonReturn else { return }
         let inst = instField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !inst.isEmpty, let priceDouble = Double(priceField.stringValue) else { return }
@@ -1164,7 +1164,7 @@ struct AlertWindow: View {
     @MainActor
     private func exportHistoryCSV() {
         let panel = NSSavePanel()
-        panel.title = "导出预警触发历史"
+        panel.title = L("导出预警触发历史")
         panel.allowedContentTypes = [.commaSeparatedText]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyyMMdd_HHmm"

@@ -526,14 +526,14 @@ private struct ImportFormulaButton: View {
 
     private static func runImport() {
         let panel = NSOpenPanel()
-        panel.title = "导入文华公式"
+        panel.title = L("导入文华公式")
         panel.allowedContentTypes = [.plainText]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         let alert = NSAlert()
-        alert.messageText = "导入文华公式"
+        alert.messageText = L("导入文华公式")
 
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
@@ -553,7 +553,7 @@ private struct ImportFormulaButton: View {
             alert.informativeText = "导入失败：\(error.localizedDescription)"
             alert.alertStyle = .critical
         }
-        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: L("确定"))
         alert.runModal()
     }
 }

@@ -142,6 +142,14 @@ public enum BuiltinFunctions {
             WADFunction(),
             HDFunction(),
             LDFunction(),
+            // 麦语言扩展（第 10 批 · v15.25 兼容度 ~99.98% → ~99.99% · 枢轴/能量/AD/Aroon 拆分）
+            PIVOTFunction(),
+            R1Function(),
+            S1Function(),
+            CRFunction(),
+            WVADFunction(),
+            AROONLFunction(),
+            AROONSFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

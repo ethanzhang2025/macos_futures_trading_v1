@@ -15,6 +15,7 @@
 import SwiftUI
 import Foundation
 import Shared
+import ChartCore
 
 struct MultiChartCellCanvas: View {
 
@@ -91,6 +92,8 @@ struct MultiChartCellCanvas: View {
                 let subRect = CGRect(x: 0, y: priceHeight + 4, width: size.width, height: subHeight)
 
                 drawGrid(in: ctx, rect: priceRect)
+                // v15.34 WP-40 P1 延伸 · session/day 缺口竖线（夜盘日盘衔接 / 跨日 / 周末）
+                drawSessionDividers(in: ctx, rect: priceRect)
                 if isTimeShareMode {
                     // batch93 · 分时折线模式（close 红线 + 累计均价黄线 + 红色底纹）
                     drawTimeShareLine(in: ctx, rect: priceRect)
@@ -246,6 +249,31 @@ struct MultiChartCellCanvas: View {
             }
         }
         .background(Color(NSColor.textBackgroundColor))
+    }
+
+    // MARK: - Session/Day Dividers (v15.34 WP-40 P1 延伸)
+
+    /// 复用 ChartCore.SessionAxisHelper · 单 cell 简化版（不分 viewport · 全 bars 范围）
+    /// 6 cell 同屏时：每 cell 独立显示自己的 session/day 缺口（多周期共振时尤其有用）
+    private func drawSessionDividers(in ctx: GraphicsContext, rect: CGRect) {
+        guard let period = bars.first?.period else { return }
+        let gaps = SessionAxisHelper.detectGaps(bars: bars, period: period)
+        guard !gaps.isEmpty, !bars.isEmpty else { return }
+        let stepX = rect.width / CGFloat(bars.count)
+        for gap in gaps {
+            let x = rect.minX + CGFloat(gap.barIndex) * stepX
+            var line = Path()
+            line.move(to: CGPoint(x: x, y: rect.minY))
+            line.addLine(to: CGPoint(x: x, y: rect.maxY))
+            switch gap.kind {
+            case .session:
+                ctx.stroke(line, with: .color(.white.opacity(0.10)),
+                           style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
+            case .day:
+                ctx.stroke(line, with: .color(.orange.opacity(0.40)),
+                           style: StrokeStyle(lineWidth: 1.0, dash: [5, 4]))
+            }
+        }
     }
 
     // MARK: - Grid

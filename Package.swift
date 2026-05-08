@@ -66,7 +66,7 @@ let package = Package(
             name: "ChartCore",
             dependencies: ["Shared", "DataCore", "IndicatorCore"],
             path: "Sources/ChartCore",
-            exclude: ["Metal/KLineShaders.metal"]
+            exclude: ["Metal/KLineShaders.metal", "README.md"]
         ),
         .testTarget(name: "ChartCoreTests", dependencies: ["ChartCore", "IndicatorCore"], path: "Tests/ChartCoreTests"),
 

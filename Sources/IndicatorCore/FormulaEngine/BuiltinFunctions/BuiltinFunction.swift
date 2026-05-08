@@ -190,6 +190,14 @@ public enum BuiltinFunctions {
             TYPINGFunction(),
             MAANGLEFunction(),
             RSIDIVFunction(),
+            // 麦语言扩展（第 16 批 · v15.25 · 量价进阶 + 中国市场 BR/AR + 配对统计 BETA）
+            CMFFunction(),
+            ADLFunction(),
+            BRFunction(),
+            ARFunction(),
+            KVOFunction(),
+            RVIFunction(),
+            BETAFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

@@ -126,6 +126,14 @@ public enum BuiltinFunctions {
             VHFFunction(),
             BBIFunction(),
             PVTFunction(),
+            // 麦语言扩展（第 8 批 · v15.25 兼容度 ~99.95% → ~99.97% · 进阶+价格组合）
+            CMOFunction(),
+            AROONOSCFunction(),
+            VWMAFunction(),
+            NVIFunction(),
+            AVGPRICEFunction(),
+            MEDPRICEFunction(),
+            WCFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

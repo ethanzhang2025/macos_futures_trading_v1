@@ -308,6 +308,7 @@ struct FuturesTerminalApp: App {
                 OpenTrainingButton()  // v15.23 batch14 · WP-54 模拟训练 ⌘⇧T
                 OpenMultiChartButton() // v15.23 batch50 · WP-44 多图表 ⌘⌥M
                 OpenSpreadButton()     // v15.27 · WP-套利分析 ⌘⌥S
+                OpenOptionButton()     // v15.32 · WP-期权工作台 ⌘⌥O
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -410,6 +411,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1080, height: 680)
+
+        // v15.32 · WP-期权工作台（⌘⌥O · T 型链 + 实时 Greeks + 5 经典策略 + PnL 曲线）
+        WindowGroup("期权工作台", id: "option") {
+            OptionWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1180, height: 760)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -530,6 +538,15 @@ private struct OpenSpreadButton: View {
     var body: some View {
         Button("套利分析（⌘⌥S）") { openWindow(id: "spread") }
             .keyboardShortcut("s", modifiers: [.command, .option])
+    }
+}
+
+/// v15.32 · WP-期权工作台入口（⌘⌥O · T 型链 + 实时 Greeks + 5 策略 PnL）
+private struct OpenOptionButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("期权工作台（⌘⌥O）") { openWindow(id: "option") }
+            .keyboardShortcut("o", modifiers: [.command, .option])
     }
 }
 

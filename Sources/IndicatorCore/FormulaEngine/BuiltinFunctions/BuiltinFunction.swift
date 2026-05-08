@@ -174,6 +174,14 @@ public enum BuiltinFunctions {
             DKXFunction(),
             HVFunction(),
             ATRPCTFunction(),
+            // 麦语言扩展（第 14 批 · v15.25 · MACD/BOLL/KDJ trader 三件套拆独立函数）
+            MACDDIFFunction(),
+            MACDDEAFunction(),
+            MACDBARFunction(),
+            BOLLMFunction(),
+            BOLLUFunction(),
+            BOLLLFunction(),
+            KDJKFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

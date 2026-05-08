@@ -350,6 +350,14 @@ public enum BuiltinFunctions {
             SQUAREDFunction(),
             CUBEDFunction(),
             INVERTFunction(),
+            // 麦语言扩展（第 36 批 · v15.25 · 累积统计 EXPANDING + 有效值）
+            EXPANDINGMEANFunction(),
+            EXPANDINGMAXFunction(),
+            EXPANDINGMINFunction(),
+            EXPANDINGSTDFunction(),
+            EXPANDINGSUMFunction(),
+            FIRSTVALIDFunction(),
+            LASTVALIDFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

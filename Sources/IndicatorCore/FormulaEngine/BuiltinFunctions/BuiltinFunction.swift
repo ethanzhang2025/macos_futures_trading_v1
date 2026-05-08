@@ -150,6 +150,14 @@ public enum BuiltinFunctions {
             WVADFunction(),
             AROONLFunction(),
             AROONSFunction(),
+            // 麦语言扩展（第 11 批 · v15.25 兼容度 ~99.99% → ~99.995% · 价格组合/自适应均线/包络）
+            TYPFunction(),
+            OCFunction(),
+            ENVUPFunction(),
+            ENVDNFunction(),
+            KAMAFunction(),
+            ZLEMAFunction(),
+            NEARESTFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

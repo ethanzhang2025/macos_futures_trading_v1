@@ -326,6 +326,14 @@ public enum BuiltinFunctions {
             TRIMAFunction(),
             EXPSMOOTHINGFunction(),
             WEIGHTEDMEANFunction(),
+            // 麦语言扩展（第 33 批 · v15.25 · 综合信号 · 背离 + 评分）
+            DIVERGENCEFunction(),
+            TRENDSCOREFunction(),
+            MOMENTUMSCOREFunction(),
+            VOLATILITYRANKFunction(),
+            PRICELEVELFunction(),
+            CROSSCOUNTFunction(),
+            SIGNALSTRENGTHFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

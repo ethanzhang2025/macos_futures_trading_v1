@@ -158,6 +158,14 @@ public enum BuiltinFunctions {
             KAMAFunction(),
             ZLEMAFunction(),
             NEARESTFunction(),
+            // 麦语言扩展（第 12 批 · v15.25 兼容度 ~99.995% → ~99.997% · 趋势止损/Bill Williams/分形）
+            SUPERTRENDFunction(),
+            CHANDELIERLFunction(),
+            CHANDELIERSFunction(),
+            AOFunction(),
+            ACFunction(),
+            FRACTALHFunction(),
+            FRACTALLFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

@@ -334,6 +334,14 @@ public enum BuiltinFunctions {
             PRICELEVELFunction(),
             CROSSCOUNTFunction(),
             SIGNALSTRENGTHFunction(),
+            // 麦语言扩展（第 34 批 · v15.25 · Heiken-Ashi K 线 + SAR 方向 + 价格行为）
+            HAOPENFunction(),
+            HAHIGHFunction(),
+            HALOWFunction(),
+            HACLOSEFunction(),
+            HADIRFunction(),
+            SARDIRFunction(),
+            PRICEACTIONFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

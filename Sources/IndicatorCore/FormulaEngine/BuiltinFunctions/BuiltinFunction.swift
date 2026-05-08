@@ -406,6 +406,14 @@ public enum BuiltinFunctions {
             BACKWARDATIONFunction(),
             CONTRACTSPREADFunction(),
             FRONTMONTHFunction(),
+            // 麦语言扩展（第 43 批 · v15.25 · 现代量化指标 · LazyBear / Connors / Coppock / KST）
+            WAVETRENDFunction(),
+            SQUEEZEMOMFunction(),
+            CONNORSRSIFunction(),
+            SCHAFFTCFunction(),
+            ELDERRAYFunction(),
+            COPPOCKFunction(),
+            KSTFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

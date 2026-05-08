@@ -812,64 +812,6 @@ struct ChartScene: View {
                 .keyboardShortcut("5", modifiers: [.command])
             Button("") { selectedPeriod = .daily }
                 .keyboardShortcut("6", modifiers: [.command])
-            // v15.19 batch30 + v15.20 batch63 · ⌘⇧M 测距三态：
-            // ① 无锚点 → 设起点 anchor（进入 follow 模式 · HUD 跟随 hover 实时）
-            // ② 有 anchor 无 final → 固定 final = hover（HUD 锁定 · 双锚点视觉）
-            // ③ 有 anchor 有 final → 全清退出测距
-            Button("") {
-                if measureAnchor == nil {
-                    measureAnchor = hoverDataPoint
-                    measureFinal = nil
-                    presentToggleNotice("测距：起点已设")
-                } else if measureFinal == nil {
-                    measureFinal = hoverDataPoint
-                    presentToggleNotice("测距：终点已锁定 · ⌘⇧X 复制详情")
-                } else {
-                    measureAnchor = nil
-                    measureFinal = nil
-                    presentToggleNotice("测距：已退出")
-                }
-            }
-            .keyboardShortcut("m", modifiers: [.command, .shift])
-            // v15.20 batch70 · ⌘⇧X 复制测距详情到剪贴板（trader IM 分享测距结果）
-            Button("", action: copyMeasurementToPasteboard)
-                .keyboardShortcut("x", modifiers: [.command, .shift])
-            // v15.20 batch74 · ⌘/ 切换快捷键提示浮窗（trader 不记快捷键时随时查询）
-            Button("") { showShortcutsHelp.toggle() }
-                .keyboardShortcut("/", modifiers: [.command])
-            // v15.23 batch194 · ⌘⇧? 别名（与 5 大窗口 helpSheet 习惯一致 · 复用 showShortcutsHelp overlay）
-            Button("") { showShortcutsHelp.toggle() }
-                .keyboardShortcut("?", modifiers: [.command, .shift])
-            // v15.23 batch206 · ⌘⌥R 打开复盘窗口（trader 看完 K 线想跳复盘看绩效）
-            Button("") { openWindow(id: "review") }
-                .keyboardShortcut("r", modifiers: [.command, .option])
-            // v15.23 batch206 · ⌘⌥J 打开交易日志（trader 写当前合约心得）
-            Button("") { openWindow(id: "journal") }
-                .keyboardShortcut("j", modifiers: [.command, .option])
-            // v15.20 batch82 · ⌘⇧W 切换 swing high/low 标注（趋势可视化 · 默认关）
-            Button("") {
-                showSwingPoints.toggle()
-                presentToggleNotice("Swing 标注：\(showSwingPoints ? "显示" : "隐藏")")
-            }
-                .keyboardShortcut("w", modifiers: [.command, .shift])
-            // v15.19 batch36 · ⌘End / ⌘→ 跳到最新 K 线（保持 visibleCount · 仅滚到最右）
-            Button("", action: jumpToLatestBar)
-                .keyboardShortcut(.end, modifiers: [.command])
-            Button("", action: jumpToLatestBar)
-                .keyboardShortcut(.rightArrow, modifiers: [.command])
-            // v15.19 batch51 · ⌘. 切换副图显隐（专注主图分析时清屏 · 与 ⌘⇧H HUD toggle 风格一致）
-            // v15.20 batch84 加 toast 反馈
-            Button("") {
-                showSubCharts.toggle()
-                presentToggleNotice("副图：\(showSubCharts ? "显示" : "隐藏")")
-            }
-                .keyboardShortcut(".", modifiers: [.command])
-            // v15.19 batch52 · ⌘\ 切换画线 overlay 显隐（专注裸 K 线 · 不删画线 · 仅暂时隐藏）
-            Button("") {
-                showDrawings.toggle()
-                presentToggleNotice("画线：\(showDrawings ? "显示" : "隐藏")")
-            }
-                .keyboardShortcut("\\", modifiers: [.command])
             // v15.19 batch28 · ⌥1-9 全 9 个常用周期一键切（trader 高频工作流 · 与 ⌘1-6 互补）
             Button("") { selectedPeriod = .minute1 }
                 .keyboardShortcut("1", modifiers: [.option])
@@ -1232,6 +1174,21 @@ struct ChartScene: View {
             clean.isLocked = nil
             let template = DrawingTemplate(name: name, drawing: clean, category: category)
             drawingTemplates.append(template)
+        }
+    }
+
+    /// v15.18 · WP-133a drawing_create 用户主动新建画线集中入口（ChartScene 端）
+    private func addUserDrawing(_ drawing: Drawing) {
+        drawings.append(drawing)
+        if let service = analytics {
+            let typeRaw = drawing.type.rawValue
+            Task {
+                _ = try? await service.record(
+                    .drawingCreate,
+                    userID: FuturesTerminalApp.anonymousUserID,
+                    properties: ["drawing_type": typeRaw]
+                )
+            }
         }
     }
 
@@ -2046,6 +2003,9 @@ struct ChartContentView: View {
     /// 初始速度分摊帧数
     static let inertiaSpreadFrames: Float = 20
 
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.analytics) private var analytics
+
     let renderer: MetalKLineRenderer
     let bars: [KLine]
     let indicators: [IndicatorSeries]
@@ -2298,6 +2258,7 @@ struct ChartContentView: View {
         }
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
         .background(viewportShortcuts)
+        .background(chartContentShortcuts)
         .onChange(of: viewport) { newValue in
             // v13.22 viewport 节流持久化（panGesture 60Hz · 1s 节流避免高频写盘）
             let now = Date()
@@ -2337,6 +2298,59 @@ struct ChartContentView: View {
 
     /// v15.x · 副图高度 UserDefaults key（移自 ChartScene · 持久化在本 struct 内）
     fileprivate static let subChartHeightKey = "subChartHeight.v1"
+
+    /// 测距 / overlay toggle / 跨窗口快捷键（v15.25 · 从 ChartScene.periodShortcuts 拆出）
+    /// ⌘⇧M 测距三态 · ⌘⇧X 复制 · ⌘/ ⌘⇧? 帮助 · ⌘⌥R/J 跨窗口 · ⌘⇧W swing · ⌘./⌘\ 副图/画线 · ⌘End/→ 跳最新
+    private var chartContentShortcuts: some View {
+        Group {
+            Button("") {
+                if measureAnchor == nil {
+                    measureAnchor = hoverDataPoint
+                    measureFinal = nil
+                    presentToggleNotice("测距：起点已设")
+                } else if measureFinal == nil {
+                    measureFinal = hoverDataPoint
+                    presentToggleNotice("测距：终点已锁定 · ⌘⇧X 复制详情")
+                } else {
+                    measureAnchor = nil
+                    measureFinal = nil
+                    presentToggleNotice("测距：已退出")
+                }
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            Button("", action: copyMeasurementToPasteboard)
+                .keyboardShortcut("x", modifiers: [.command, .shift])
+            Button("") { showShortcutsHelp.toggle() }
+                .keyboardShortcut("/", modifiers: [.command])
+            Button("") { showShortcutsHelp.toggle() }
+                .keyboardShortcut("?", modifiers: [.command, .shift])
+            Button("") { openWindow(id: "review") }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+            Button("") { openWindow(id: "journal") }
+                .keyboardShortcut("j", modifiers: [.command, .option])
+            Button("") {
+                showSwingPoints.toggle()
+                presentToggleNotice("Swing 标注：\(showSwingPoints ? "显示" : "隐藏")")
+            }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
+            Button("", action: jumpToLatestBar)
+                .keyboardShortcut(.end, modifiers: [.command])
+            Button("", action: jumpToLatestBar)
+                .keyboardShortcut(.rightArrow, modifiers: [.command])
+            Button("") {
+                showSubCharts.toggle()
+                presentToggleNotice("副图：\(showSubCharts ? "显示" : "隐藏")")
+            }
+                .keyboardShortcut(".", modifiers: [.command])
+            Button("") {
+                showDrawings.toggle()
+                presentToggleNotice("画线：\(showDrawings ? "显示" : "隐藏")")
+            }
+                .keyboardShortcut("\\", modifiers: [.command])
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+    }
 
     /// v13.23 viewport 键盘快捷键（仅 keyWindow 响应 · 多窗口隔离）
     /// ⌘= 放大 / ⌘- 缩小 / ⌘0 重置（默认 120 根） / ← 后退 5 / → 前进 5（带 ⇧ 键 25 根加速）
@@ -2643,7 +2657,7 @@ struct ChartContentView: View {
         let barDiff = end.barIndex - anchor.barIndex
         let arrow = priceDiff >= 0 ? "↑" : "↓"
         let lines: [String] = [
-            "📏 \(currentInstrumentID) \(selectedPeriod.rawValue) 测距",
+            "📏 \(instrumentLabel) \(periodLabel) 测距",
             "起：\(formatPrice(anchor.price))",
             "终：\(formatPrice(end.price))",
             "\(arrow) \(formatPriceDiff(priceDiff)) (\(String(format: "%+.2f%%", pct)))",
@@ -3241,14 +3255,12 @@ struct ChartContentView: View {
                 }
                 Divider()
             }
-            // v15.21 batch129 · 跨窗口联动 · 看本合约预警（与 batch128 watchlist 一致）
-            Button("查看本合约预警（\(currentInstrumentID)）") {
-                NotificationCenter.default.post(name: .alertWindowFilterToInstrument, object: currentInstrumentID)
+            Button("查看本合约预警（\(instrumentLabel)）") {
+                NotificationCenter.default.post(name: .alertWindowFilterToInstrument, object: instrumentLabel)
                 openWindow(id: "alert")
             }
-            // v15.21 batch131 · 跨窗口联动 · 加本合约到自选（trader 在 ChartScene 浏览外部数据时一键收藏）
-            Button("加入自选（\(currentInstrumentID)）") {
-                NotificationCenter.default.post(name: .watchlistAddInstrument, object: currentInstrumentID)
+            Button("加入自选（\(instrumentLabel)）") {
+                NotificationCenter.default.post(name: .watchlistAddInstrument, object: instrumentLabel)
                 openWindow(id: "watchlist")
             }
             Divider()

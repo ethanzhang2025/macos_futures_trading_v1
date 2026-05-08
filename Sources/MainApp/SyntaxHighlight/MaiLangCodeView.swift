@@ -140,6 +140,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
     public func makeCoordinator() -> Coordinator { Coordinator(self) }
 
+    @MainActor
     public final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: MaiLangCodeView
         weak var textView: NSTextView?

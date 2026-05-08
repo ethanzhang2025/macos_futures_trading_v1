@@ -12,6 +12,7 @@ import PackageDescription
 
 let package = Package(
     name: "FuturesTerminal",
+    defaultLocalization: "zh-Hans",
     platforms: [
         .macOS(.v13),
         .iOS(.v16)
@@ -120,7 +121,8 @@ let package = Package(
         .executableTarget(
             name: "MainApp",
             dependencies: ["Shared", "DataCore", "ChartCore", "IndicatorCore", "ReplayCore", "JournalCore", "AlertCore", "StoreCore", "TradingCore"],
-            path: "Sources/MainApp"
+            path: "Sources/MainApp",
+            resources: [.process("Resources")]
         ),
 
         // MARK: - Tools · 命令行验证工具（非生产代码，CI 可跳过）

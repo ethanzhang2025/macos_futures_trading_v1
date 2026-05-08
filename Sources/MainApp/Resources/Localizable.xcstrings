@@ -1,0 +1,120 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "version" : "1.0",
+  "strings" : {
+    "K 线图表" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "K-Line" } }
+      }
+    },
+    "自选合约" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Watchlist" } }
+      }
+    },
+    "复盘" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Replay" } }
+      }
+    },
+    "预警" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Alerts" } }
+      }
+    },
+    "预警面板" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Alerts" } }
+      }
+    },
+    "交易日志" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Trade Journal" } }
+      }
+    },
+    "工作区模板" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Workspace Templates" } }
+      }
+    },
+    "模拟交易" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Paper Trading" } }
+      }
+    },
+    "模拟训练" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Training" } }
+      }
+    },
+    "模拟训练（⌘⇧T）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Training (⌘⇧T)" } }
+      }
+    },
+    "多图表" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Multi-Chart" } }
+      }
+    },
+    "多图表（⌘⌥M）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Multi-Chart (⌘⌥M)" } }
+      }
+    },
+    "公式编辑器" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Formula Editor" } }
+      }
+    },
+    "公式编辑器（⌘⌥F）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Formula Editor (⌘⌥F)" } }
+      }
+    },
+    "视图" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "View" } }
+      }
+    },
+    "工具" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tools" } }
+      }
+    },
+    "新建图表" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New Chart" } }
+      }
+    },
+    "复盘工作台" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Replay Workspace" } }
+      }
+    },
+    "导入文华公式（.wh）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Import WH Formula (.wh)" } }
+      }
+    }
+  }
+}

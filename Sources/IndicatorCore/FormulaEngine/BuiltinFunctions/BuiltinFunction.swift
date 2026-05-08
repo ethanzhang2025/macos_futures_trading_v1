@@ -294,6 +294,14 @@ public enum BuiltinFunctions {
             AVGBODYFunction(),
             AVGRANGEFunction(),
             BODYRATIOFunction(),
+            // 麦语言扩展（第 29 批 · v15.25 · 健壮统计 + 风险指标 + 综合信号）
+            MADFunction(),
+            SORTINOFunction(),
+            CALMARFunction(),
+            RUNUPFunction(),
+            RECOVERYFunction(),
+            TRENDSTRENGTHFunction(),
+            MACROSSFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

@@ -19,3 +19,9 @@
 "新建图表" = "New Chart";
 "复盘工作台" = "Replay Workspace";
 "导入文华公式（.wh）" = "Import WH Formula (.wh)";
+
+/* View menu · hint text + theme toggle button */
+"周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）" = "Period: ⌘1=1m / ⌘2=5m / ⌘3=15m / ⌘4=30m / ⌘5=60m / ⌘6=Daily (when K-Line window focused)";
+"切换主题（%@）" = "Toggle Theme (%@)";
+"→ 浅色" = "→ Light";
+"→ 深色" = "→ Dark";

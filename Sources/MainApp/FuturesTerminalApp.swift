@@ -442,7 +442,10 @@ private struct OpenReviewButton: View {
 private struct ToggleThemeButton: View {
     @State private var current: ChartTheme = ChartThemeStore.load() ?? .dark
     var body: some View {
-        Button("切换主题（\(current == .dark ? "→ 浅色" : "→ 深色")）") {
+        let arrow: String = current == .dark
+            ? String(localized: "→ 浅色")
+            : String(localized: "→ 深色")
+        Button("切换主题（\(arrow)）") {
             let next: ChartTheme = (current == .dark) ? .light : .dark
             ChartThemeStore.save(next)
             current = next

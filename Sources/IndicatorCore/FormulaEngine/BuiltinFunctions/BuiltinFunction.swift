@@ -358,6 +358,14 @@ public enum BuiltinFunctions {
             EXPANDINGSUMFunction(),
             FIRSTVALIDFunction(),
             LASTVALIDFunction(),
+            // 麦语言扩展（第 37 批 · v15.25 · 高级均值 + 价格指数化）
+            HARMONICMEANFunction(),
+            GEOMEANFunction(),
+            POWMEANFunction(),
+            RMSFunction(),
+            RANGEMIDFunction(),
+            PRICESCOREFunction(),
+            INDEXEDFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

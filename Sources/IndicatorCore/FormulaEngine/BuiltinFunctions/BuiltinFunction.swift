@@ -214,6 +214,14 @@ public enum BuiltinFunctions {
             STARCLFunction(),
             MARFunction(),
             CYCLEFunction(),
+            // 麦语言扩展（第 19 批 · v15.25 · Bill Williams + 统计归一化）
+            MARKETFIFunction(),
+            CHOPPINESSFunction(),
+            EFIFunction(),
+            PERCENTRANKFunction(),
+            ZSCOREFunction(),
+            NORMFunction(),
+            EMDFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

@@ -366,6 +366,14 @@ public enum BuiltinFunctions {
             RANGEMIDFunction(),
             PRICESCOREFunction(),
             INDEXEDFunction(),
+            // 麦语言扩展（第 38 批 · v15.25 · 计数统计）
+            NCROSSUPFunction(),
+            NCROSSDNFunction(),
+            POSCOUNTFunction(),
+            NEGCOUNTFunction(),
+            ZEROCOUNTFunction(),
+            CHANGECOUNTFunction(),
+            SAMECOUNTFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

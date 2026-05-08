@@ -262,6 +262,14 @@ public enum BuiltinFunctions {
             TRENDDIRFunction(),
             CONSECUPFunction(),
             CONSECDOWNFunction(),
+            // 麦语言扩展（第 25 批 · v15.25 · 数学完备 + 最大回撤风险管理）
+            SINFunction(),
+            COSFunction(),
+            ATANFunction(),
+            PIFunction(),
+            MAXDDFunction(),
+            MAXDDPCTFunction(),
+            DRAWDOWNFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

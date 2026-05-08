@@ -20,6 +20,45 @@
 "复盘工作台" = "Replay Workspace";
 "导入文华公式（.wh）" = "Import WH Formula (.wh)";
 
+/* WatchlistWindow · 自选合约窗口（v15.25 WP-i18n P3 · commit 1） */
+"⌨️ 自选窗口全功能" = "⌨️ Watchlist · Full Help";
+"全部 6 类一次创建" = "Create All 6 Categories";
+"全部 · 跨分组扫盘" = "All · Cross-Group Scan";
+"关闭" = "Close";
+"分组名" = "Group Name";
+"删除分组" = "Delete Group";
+"双击合约打开主图 · 含主连续 + 活跃月份合约" = "Double-click contract to open chart · main + active months";
+"取消" = "Cancel";
+"合约代码（如 RB0 / IF2509）" = "Contract Code (e.g. RB0 / IF2509)";
+"复制全部合约代码（换行）" = "Copy All Contracts (newline)";
+"复制全部合约代码（逗号）" = "Copy All Contracts (comma)";
+"复制行所有信息" = "Copy Row";
+"好" = "OK";
+"当前分组复制到剪贴板" = "Copy Current Group to Clipboard";
+"快速粘贴合约" = "Quick Paste Contracts";
+"打开主图" = "Open Chart";
+"批量预警" = "Bulk Alerts";
+"搜索合约（⌘F）" = "Search Contract (⌘F)";
+"支持任意分隔符：换行 / 空格 / 逗号（中英）/ 分号 / 顿号 / Tab · 行尾 # 注释剥离 · 数字自动过滤" = "Supports any delimiter: newline / space / comma / semicolon / Tab · # trailing comments stripped · numbers filtered";
+"新分组名（留空 → 粘贴导入）" = "New Group Name (empty → paste import)";
+"新建分组（不勾则追加到现有分组）" = "Create New Group (unchecked → append to existing)";
+"查看本合约预警" = "View Alerts for This Contract";
+"涨幅前 10 → 涨停预警" = "Top 10 Gainers → Limit-Up Alerts";
+"涨幅前 5 → 涨停预警" = "Top 5 Gainers → Limit-Up Alerts";
+"添加" = "Add";
+"添加合约" = "Add Contract";
+"目标分组" = "Target Group";
+"确认导入" = "Confirm Import";
+"自选分组" = "Watchlist Groups";
+"解析：" = "Parsed:";
+"跌幅前 10 → 跌停预警" = "Top 10 Losers → Limit-Down Alerts";
+"跌幅前 5 → 跌停预警" = "Top 5 Losers → Limit-Down Alerts";
+"退出聚合视图" = "Exit Aggregated View";
+"重命名（双击也行）" = "Rename (or double-click)";
+"（空 · 输入或粘贴合约代码）" = "(empty · type or paste contract code)";
+"📋 创建预警模板" = "📋 Create Alert Template";
+"主力合约支持：RB0 / IF0 / AU0 / CU0\n（其他可输入 · commit 4 主图联动时不支持的合约会回退到主力）" = "Main contracts: RB0 / IF0 / AU0 / CU0\n(others accepted · unsupported contracts fall back to main when chart-linked)";
+
 /* View menu · hint text + theme toggle button */
 "周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）" = "Period: ⌘1=1m / ⌘2=5m / ⌘3=15m / ⌘4=30m / ⌘5=60m / ⌘6=Daily (when K-Line window focused)";
 "切换主题（%@）" = "Toggle Theme (%@)";

@@ -246,6 +246,14 @@ public enum BuiltinFunctions {
             ISPIERCINGFunction(),
             ISGAPDOWNFunction(),
             ISSHAVENTOPFunction(),
+            // 麦语言扩展（第 23 批 · v15.25 · 趋势信号 · 金死叉/支撑阻力/新高新低/回调）
+            GOLDENCROSSFunction(),
+            DEADCROSSFunction(),
+            SUPPORTFunction(),
+            RESISTANCEFunction(),
+            NEWHIGHFunction(),
+            NEWLOWFunction(),
+            PULLBACKFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

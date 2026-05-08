@@ -238,6 +238,14 @@ public enum BuiltinFunctions {
             ISBEARENGFunction(),
             ISGAPUPFunction(),
             ISLONGBODYFunction(),
+            // 麦语言扩展（第 22 批 · v15.25 · K 线形态扩展 · 多根组合 + 经典反转）
+            ISMORNINGSTARFunction(),
+            ISEVENINGSTARFunction(),
+            ISHARAMIFunction(),
+            ISDARKCLOUDFunction(),
+            ISPIERCINGFunction(),
+            ISGAPDOWNFunction(),
+            ISSHAVENTOPFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

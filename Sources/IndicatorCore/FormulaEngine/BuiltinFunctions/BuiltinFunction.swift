@@ -166,6 +166,14 @@ public enum BuiltinFunctions {
             ACFunction(),
             FRACTALHFunction(),
             FRACTALLFunction(),
+            // 麦语言扩展（第 13 批 · v15.25 兼容度 ~99.997% → ~99.999% · 含补漏 RSI + 量能 + 波动率）
+            RSIFunction(),
+            STOCHFunction(),
+            VOLRFunction(),
+            VOSCFunction(),
+            DKXFunction(),
+            HVFunction(),
+            ATRPCTFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

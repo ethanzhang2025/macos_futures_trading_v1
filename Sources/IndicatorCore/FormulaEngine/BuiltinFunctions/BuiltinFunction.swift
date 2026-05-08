@@ -110,6 +110,14 @@ public enum BuiltinFunctions {
             OBVFunction(),
             MFIFunction(),
             TEMAFunction(),
+            // 麦语言扩展（第 6 批 · v15.25 兼容度 ~99.8% → ~99.9% · 情绪/乖离/量能/均线变种）
+            PSYFunction(),
+            BIASFunction(),
+            VRFunction(),
+            DPOFunction(),
+            HMAFunction(),
+            DEMAFunction(),
+            OSCFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

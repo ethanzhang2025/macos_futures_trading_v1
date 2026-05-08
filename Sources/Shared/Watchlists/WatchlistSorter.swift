@@ -14,7 +14,10 @@ public enum WatchlistSortField: String, CaseIterable, Sendable, Codable {
     case instrumentID    // 合约代码字典序
     case lastPrice       // 最新价
     case changePct       // 涨跌幅 %
+    case change          // v15.38 V2 · 涨跌（绝对值 · 不归一化 · 高价合约同涨幅 = 大变动）
     case openInterest    // 持仓量
+    case volume          // v15.38 V2 · 成交量（活跃度 · trader 找活跃合约）
+    case amplitude       // v15.38 V2 · 振幅 = (high - low) / preClose · 日内波动率
 
     public var displayName: String {
         switch self {
@@ -22,7 +25,10 @@ public enum WatchlistSortField: String, CaseIterable, Sendable, Codable {
         case .instrumentID:  return "合约"
         case .lastPrice:     return "最新价"
         case .changePct:     return "涨跌幅"
+        case .change:        return "涨跌"
         case .openInterest:  return "持仓量"
+        case .volume:        return "成交量"
+        case .amplitude:     return "振幅"
         }
     }
 }
@@ -33,7 +39,7 @@ public enum WatchlistSorter {
     /// - ids: 输入合约代码（保序原数组 · sort 不 mutate）
     /// - field: 排序字段
     /// - ascending: 升序（true）或降序（false）· field=.manual 忽略
-    /// - keyForID: 数值字段 closure（lastPrice/changePct/openInterest 用 · 不可比较返回 nil 排末尾）
+    /// - keyForID: 数值字段 closure（lastPrice/changePct/openInterest/volume/change/amplitude 用 · 不可比较返回 nil 排末尾）
     public static func sort(
         ids: [String],
         field: WatchlistSortField,
@@ -45,7 +51,7 @@ public enum WatchlistSorter {
             return ids   // 不排
         case .instrumentID:
             return ids.sorted { ascending ? $0 < $1 : $0 > $1 }
-        case .lastPrice, .changePct, .openInterest:
+        case .lastPrice, .changePct, .change, .openInterest, .volume, .amplitude:
             return ids.sorted { lhs, rhs in
                 let lk = keyForID(lhs)
                 let rk = keyForID(rhs)

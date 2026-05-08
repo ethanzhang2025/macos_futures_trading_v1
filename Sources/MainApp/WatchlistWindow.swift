@@ -92,6 +92,18 @@ struct WatchlistWindow: View {
     /// v15.20 batch76 · @AppStorage 持久化（重启保留 · trader 习惯使用聚合扫盘）
     @AppStorage("viewState.v1.watchlist.showAllAggregated") private var showAllAggregated: Bool = false
 
+    /// v15.38 V2 · 高级过滤 preset（涨幅/跌幅/涨停/跌停/极端/活跃 · 默认全部）
+    @AppStorage("viewState.v1.watchlist.filterPresetRaw") private var filterPresetRaw: String = WatchlistFilterPreset.all.rawValue
+    private var filterPreset: WatchlistFilterPreset {
+        WatchlistFilterPreset(rawValue: filterPresetRaw) ?? .all
+    }
+    private func setFilterPreset(_ preset: WatchlistFilterPreset) {
+        filterPresetRaw = preset.rawValue
+    }
+
+    /// v15.38 V2 · 分组视图搜索文本（聚合视图原已有 aggregatedSearchText · 此为分组视图新增）
+    @State private var groupSearchText: String = ""
+
     /// 解析 sortField · raw 不合法 fallback .manual（写入用 setSortField）
     private var sortField: WatchlistSortField {
         WatchlistSortField(rawValue: sortFieldRaw) ?? .manual
@@ -553,8 +565,14 @@ struct WatchlistWindow: View {
     /// v15.21 batch101 · 加搜索框（按合约 ID 模糊筛选 · ⌘F 聚焦）· 大量合约时快速定位
     private var aggregatedInstrumentList: some View {
         let allIDs = aggregatedInstrumentIDs
-        let q = aggregatedSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let filteredIDs = q.isEmpty ? allIDs : allIDs.filter { $0.lowercased().contains(q) }
+        // v15.38 V2 · filter preset（涨跌停/极端/活跃）+ 关键词联合过滤
+        let filteredIDs = WatchlistFilter.filter(
+            ids: allIDs,
+            preset: filterPreset,
+            keyword: aggregatedSearchText,
+            changePctForID: currentChangePct,
+            volumeForID: currentVolume
+        )
         let sortedIDs = WatchlistSorter.sort(
             ids: filteredIDs,
             field: sortField,
@@ -587,6 +605,8 @@ struct WatchlistWindow: View {
                 Button("") { isAggregatedSearchFocused = true }
                     .keyboardShortcut("f", modifiers: .command)
                     .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+                // v15.38 V2 · 高级过滤 menu（涨幅/跌幅/涨停/跌停/极端/活跃 6 preset）
+                filterPresetMenu
                 Spacer()
                 // v15.20 batch68 · 涨幅/跌幅前 N 一键批量预警（聚合扫盘 + AlertPreset 联动）
                 Menu {
@@ -605,6 +625,9 @@ struct WatchlistWindow: View {
             }
             .padding(16)
 
+            Divider()
+            // v15.38 V2 · 视图统计 HUD（涨跌家数 + 平均涨幅 + 涨停跌停 + 极值合约）
+            statsHUD(for: sortedIDs)
             Divider()
             instrumentColumnsHeader
             Divider()
@@ -692,14 +715,31 @@ struct WatchlistWindow: View {
     }
 
     private func instrumentList(for group: Watchlist) -> some View {
-        VStack(spacing: 0) {
+        let displayedIDs = sortedInstrumentIDs(for: group)
+        return VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text(group.name)
                     .font(.title3)
                     .fontWeight(.semibold)
-                Text("· \(group.instrumentIDs.count) 合约")
+                Text("· \(displayedIDs.count)/\(group.instrumentIDs.count) 合约")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                // v15.38 V2 · 分组视图搜索框（⌘F 同 aggregated 路径）
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass").foregroundColor(.secondary).font(.caption)
+                    TextField("搜索", text: $groupSearchText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 130)
+                    if !groupSearchText.isEmpty {
+                        Button { groupSearchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary).font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("清空搜索")
+                    }
+                }
+                // v15.38 V2 · 高级过滤 menu
+                filterPresetMenu
                 Spacer()
                 Button {
                     sheetState = .addInstrument(groupID: group.id, groupName: group.name)
@@ -711,6 +751,9 @@ struct WatchlistWindow: View {
             }
             .padding(16)
 
+            Divider()
+            // v15.38 V2 · 视图统计 HUD
+            statsHUD(for: displayedIDs)
             Divider()
             instrumentColumnsHeader
             Divider()
@@ -757,13 +800,51 @@ struct WatchlistWindow: View {
             sortableHeaderCell(L("涨跌幅"), field: .changePct, width: 80, alignment: .trailing)
             Spacer().frame(width: 16)
             sortableHeaderCell(L("持仓量"), field: .openInterest, width: 80, alignment: .trailing)
+            // v15.38 V2 · 隐藏排序触发器（不占视觉空间 · 只供菜单/快捷键调用）
+            sortableHeaderCell(L("成交量"), field: .volume, width: 0, alignment: .trailing)
+                .hidden()
+            sortableHeaderCell(L("涨跌"), field: .change, width: 0, alignment: .trailing)
+                .hidden()
+            sortableHeaderCell(L("振幅"), field: .amplitude, width: 0, alignment: .trailing)
+                .hidden()
             Spacer()
+            // v15.38 V2 · 排序菜单（一键切到隐藏字段）
+            sortFieldMenu
         }
         .font(.system(size: 11, design: .monospaced))
         .foregroundColor(.secondary)
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
         .background(Color.secondary.opacity(0.06))
+    }
+
+    /// v15.38 V2 · 排序字段下拉菜单（除了 columns header 已可点击的 4 字段，加 3 个新字段入口）
+    private var sortFieldMenu: some View {
+        Menu {
+            ForEach(WatchlistSortField.allCases, id: \.self) { field in
+                Button {
+                    if sortField == field {
+                        sortAscending.toggle()
+                    } else {
+                        setSortField(field)
+                        sortAscending = false
+                    }
+                } label: {
+                    HStack {
+                        Text(field.displayName)
+                        if sortField == field {
+                            Image(systemName: sortAscending ? "arrow.up" : "arrow.down")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(sortField.displayName, systemImage: "arrow.up.arrow.down")
+                .font(.system(size: 11))
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: 90)
+        .help("按字段排序：包含成交量 / 涨跌 / 振幅 等扩展字段")
     }
 
     /// v15.20 batch59 · 可点击表头单元格（同字段切升降序 · 异字段切到该字段降序起）
@@ -785,28 +866,158 @@ struct WatchlistWindow: View {
             .help("点击按\(title)排序 · 再点切升降序 · 拖拽行自动切回手动")
     }
 
-    /// v15.20 batch59 · 按 sortField + sortAscending 排序合约 ID（quotes 不可达 fallback nil 排末尾）
+    /// v15.20 batch59 · 按 sortField + sortAscending 排序合约 ID（v15.38 V2 加 filter preset + 分组搜索）
     private func sortedInstrumentIDs(for group: Watchlist) -> [String] {
-        WatchlistSorter.sort(
+        // 先 filter（preset + 关键词）· 再 sort
+        let filtered = WatchlistFilter.filter(
             ids: group.instrumentIDs,
+            preset: filterPreset,
+            keyword: groupSearchText,
+            changePctForID: currentChangePct,
+            volumeForID: currentVolume
+        )
+        return WatchlistSorter.sort(
+            ids: filtered,
             field: sortField,
             ascending: sortAscending,
             keyForID: keyForInstrument
         )
     }
 
-    /// v15.20 batch59 · 数值字段 closure（同 sort field 提取规则）
+    /// v15.20 batch59 · 数值字段 closure（v15.38 V2 扩展 volume/change/amplitude）
     private func keyForInstrument(_ id: String) -> Double? {
         switch sortField {
         case .lastPrice:
             return quotes[id].map { NSDecimalNumber(decimal: $0.lastPrice).doubleValue }
         case .changePct:
             return parseChangePct(changePctText(for: id))
+        case .change:
+            return quotes[id].map { NSDecimalNumber(decimal: $0.change).doubleValue }
         case .openInterest:
             return quotes[id].map { Double($0.openInterest) }
+        case .volume:
+            return quotes[id].map { Double($0.volume) }
+        case .amplitude:
+            // 振幅 = (high - low) / preSettlement
+            guard let q = quotes[id] else { return nil }
+            let hi = NSDecimalNumber(decimal: q.high).doubleValue
+            let lo = NSDecimalNumber(decimal: q.low).doubleValue
+            let pre = NSDecimalNumber(decimal: q.preSettlement).doubleValue
+            guard pre > 1e-9 else { return nil }
+            return (hi - lo) / pre * 100   // 百分比
         case .manual, .instrumentID:
             return nil   // sorter 不调 keyForID
         }
+    }
+
+    /// v15.38 V2 · 当前 quote 涨跌幅（filter / stats 用 · keyForInstrument 受 sortField 影响 · 此 helper 始终返回 changePct）
+    private func currentChangePct(_ id: String) -> Double? {
+        parseChangePct(changePctText(for: id))
+    }
+
+    /// v15.38 V2 · 当前 quote 成交量（filter active 用）
+    private func currentVolume(_ id: String) -> Double? {
+        quotes[id].map { Double($0.volume) }
+    }
+
+    // MARK: - v15.38 V2 · Filter Menu + Stats HUD
+
+    /// 过滤 preset Menu（toolbar 用 · 6 个内置 preset · 选中 ✓ 标识）
+    private var filterPresetMenu: some View {
+        Menu {
+            ForEach(WatchlistFilterPreset.allCases, id: \.self) { preset in
+                Button {
+                    setFilterPreset(preset)
+                } label: {
+                    HStack {
+                        Text(preset.displayName)
+                        if filterPreset == preset {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(filterPreset == .all ? "过滤" : filterPreset.displayName,
+                  systemImage: filterPreset == .all
+                    ? "line.3.horizontal.decrease.circle"
+                    : "line.3.horizontal.decrease.circle.fill")
+                .foregroundColor(filterPreset == .all ? .primary : .accentColor)
+        }
+        .help("按涨跌幅 / 涨跌停 / 活跃度过滤合约")
+    }
+
+    /// 视图统计 HUD（涨跌家数 + 平均涨幅 + 涨停跌停数 + 极值合约 ID）
+    /// 显示在视图顶部 · 一眼定位市场情绪
+    @ViewBuilder
+    private func statsHUD(for ids: [String]) -> some View {
+        let stats = WatchlistStatsCalculator.compute(ids: ids, changePctForID: currentChangePct)
+        if stats.total == 0 {
+            EmptyView()
+        } else {
+            HStack(spacing: 14) {
+                statBadge(systemImage: "arrow.up.circle.fill",
+                         text: "\(stats.gainers) 涨", color: .red)
+                statBadge(systemImage: "arrow.down.circle.fill",
+                         text: "\(stats.losers) 跌", color: .green)
+                if stats.unchanged > 0 {
+                    statBadge(systemImage: "circle", text: "\(stats.unchanged) 平", color: .secondary)
+                }
+                if stats.limitUpCount > 0 {
+                    statBadge(systemImage: "bolt.fill",
+                             text: "\(stats.limitUpCount) 涨停", color: .red)
+                }
+                if stats.limitDownCount > 0 {
+                    statBadge(systemImage: "bolt.fill",
+                             text: "\(stats.limitDownCount) 跌停", color: .green)
+                }
+                Divider().frame(height: 14)
+                Text("均 \(String(format: "%+.2f%%", stats.avgChangePct))")
+                    .font(.caption.monospaced())
+                    .foregroundColor(stats.avgChangePct >= 0 ? .red : .green)
+                if let topG = stats.topGainerID {
+                    Text("领涨 \(topG) \(String(format: "%+.1f%%", stats.topGainerPct))")
+                        .font(.caption.monospaced())
+                        .foregroundColor(.red.opacity(0.85))
+                }
+                if let topL = stats.topLoserID {
+                    Text("领跌 \(topL) \(String(format: "%+.1f%%", stats.topLoserPct))")
+                        .font(.caption.monospaced())
+                        .foregroundColor(.green.opacity(0.85))
+                }
+                Spacer()
+                // 偏向条（直观可视）
+                bullBiasIndicator(stats.bullBias)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+            .background(Color.secondary.opacity(0.05))
+        }
+    }
+
+    private func statBadge(systemImage: String, text: String, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: systemImage).font(.caption2).foregroundColor(color)
+            Text(text).font(.caption.monospaced()).foregroundColor(color)
+        }
+    }
+
+    /// 多空偏向条（-1..+1 · 红多 / 绿空 · trader 一眼看市场倾向）
+    private func bullBiasIndicator(_ bias: Double) -> some View {
+        let normalized = (bias + 1) / 2   // 映射到 [0, 1]
+        return HStack(spacing: 2) {
+            Text("情绪").font(.caption2).foregroundColor(.secondary)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.green.opacity(0.25)).frame(width: 80, height: 8)
+                Capsule().fill(bias >= 0 ? Color.red.opacity(0.85) : Color.green.opacity(0.85))
+                    .frame(width: max(2, CGFloat(normalized) * 80), height: 8)
+            }
+            Text(String(format: "%+.0f%%", bias * 100))
+                .font(.caption.monospaced())
+                .foregroundColor(bias >= 0 ? .red : .green)
+                .frame(width: 36, alignment: .trailing)
+        }
+        .help("多空偏向（涨家数 - 跌家数）/ 总数 · 红=偏多 · 绿=偏空")
     }
 
     private func instrumentRow(id: String, index: Int, groupID: UUID) -> some View {

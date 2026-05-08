@@ -230,6 +230,14 @@ public enum BuiltinFunctions {
             CUMSUMFunction(),
             CUMPRODFunction(),
             MAXIDXFunction(),
+            // 麦语言扩展（第 21 批 · v15.25 · K 线形态识别）
+            ISDOJIFunction(),
+            ISHAMMERFunction(),
+            ISINVHAMMERFunction(),
+            ISBULLENGFunction(),
+            ISBEARENGFunction(),
+            ISGAPUPFunction(),
+            ISLONGBODYFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

@@ -196,6 +196,118 @@ public enum OptionStrategyBuilder {
         )
     }
 
+    // MARK: - 铁鹰
+
+    /// Bull Put Spread (K1, K2) + Bear Call Spread (K3, K4) · K1<K2<K3<K4
+    /// 4 leg：Long Put(K1) + Short Put(K2) + Short Call(K3) + Long Call(K4)
+    /// 用法：你认为标的会在 [K2, K3] 区间窄幅震荡 · 收净权利金 · 上下两侧风险有限
+    public static func ironCondor(
+        context: Context,
+        putLowStrike: Double, putHighStrike: Double,
+        callLowStrike: Double, callHighStrike: Double,
+        expiration: Date,
+        quantity: Int = 1
+    ) -> OptionStrategy? {
+        guard putLowStrike < putHighStrike,
+              putHighStrike < callLowStrike,
+              callLowStrike < callHighStrike,
+              let slice = context.chain.slice(for: expiration),
+              let longPut   = findContract(slice: slice, type: .put,  strike: putLowStrike),
+              let shortPut  = findContract(slice: slice, type: .put,  strike: putHighStrike),
+              let shortCall = findContract(slice: slice, type: .call, strike: callLowStrike),
+              let longCall  = findContract(slice: slice, type: .call, strike: callHighStrike)
+        else { return nil }
+
+        let lpP = theoreticalPrice(contract: longPut,   context: context)
+        let spP = theoreticalPrice(contract: shortPut,  context: context)
+        let scP = theoreticalPrice(contract: shortCall, context: context)
+        let lcP = theoreticalPrice(contract: longCall,  context: context)
+
+        return OptionStrategy(
+            id: "iron-condor-\(context.chain.underlyingID)-\(Int(putLowStrike))-\(Int(putHighStrike))-\(Int(callLowStrike))-\(Int(callHighStrike))",
+            name: "铁鹰 \(Int(putLowStrike))/\(Int(putHighStrike))/\(Int(callLowStrike))/\(Int(callHighStrike))",
+            strategyType: .ironCondor,
+            legs: [
+                OptionStrategyLeg(contract: longPut,   direction: .long,  quantity: quantity, entryPremium: lpP),
+                OptionStrategyLeg(contract: shortPut,  direction: .short, quantity: quantity, entryPremium: spP),
+                OptionStrategyLeg(contract: shortCall, direction: .short, quantity: quantity, entryPremium: scP),
+                OptionStrategyLeg(contract: longCall,  direction: .long,  quantity: quantity, entryPremium: lcP),
+            ],
+            underlyingID: context.chain.underlyingID,
+            underlyingName: context.chain.underlyingName
+        )
+    }
+
+    // MARK: - 备兑开仓
+
+    /// Long Underlying + Short Call(callStrike) · 你长期持有标的 · 卖 Call 收权利金增厚收益
+    /// 用法：温和看涨 / 中性 · 上方利润有限（被行权）· 下方有标的下跌风险（不是无限 · 但权利金缓冲）
+    /// - Parameters:
+    ///   - underlyingEntryPrice: 标的持仓均价（默认 = 当前现价 · 即按现价新建仓）
+    public static func coveredCall(
+        context: Context,
+        callStrike: Double,
+        expiration: Date,
+        underlyingEntryPrice: Double? = nil,
+        quantity: Int = 1
+    ) -> OptionStrategy? {
+        guard let slice = context.chain.slice(for: expiration),
+              let shortCall = findContract(slice: slice, type: .call, strike: callStrike)
+        else { return nil }
+
+        let scP = theoreticalPrice(contract: shortCall, context: context)
+        let entry = underlyingEntryPrice ?? context.spotPrice
+        // 单股语义对齐 leg.payoffAtExpiration（leg 也是按"每股"算 · 不乘 contractMultiplier）
+        // 1 张备兑 = -1 期权 + +1 单位标的 · 实际美元 PnL 整体再乘 contractMultiplier
+        let positionSize = quantity
+
+        return OptionStrategy(
+            id: "covered-call-\(context.chain.underlyingID)-\(Int(callStrike))",
+            name: "备兑开仓 \(Int(callStrike))",
+            strategyType: .coveredCall,
+            legs: [
+                OptionStrategyLeg(contract: shortCall, direction: .short, quantity: quantity, entryPremium: scP),
+            ],
+            underlyingID: context.chain.underlyingID,
+            underlyingName: context.chain.underlyingName,
+            underlyingPositionSize: positionSize,
+            underlyingEntryPrice: entry
+        )
+    }
+
+    // MARK: - 保护性看跌
+
+    /// Long Underlying + Long Put(putStrike) · 持有标的 · 买 Put 当保险锁定下跌风险
+    /// 用法：长期看好但担忧短期回撤 · 下方亏损被锁在 (entryPrice - putStrike + putPremium)
+    public static func protectivePut(
+        context: Context,
+        putStrike: Double,
+        expiration: Date,
+        underlyingEntryPrice: Double? = nil,
+        quantity: Int = 1
+    ) -> OptionStrategy? {
+        guard let slice = context.chain.slice(for: expiration),
+              let longPut = findContract(slice: slice, type: .put, strike: putStrike)
+        else { return nil }
+
+        let lpP = theoreticalPrice(contract: longPut, context: context)
+        let entry = underlyingEntryPrice ?? context.spotPrice
+        let positionSize = quantity     // 单股语义 · 同 coveredCall
+
+        return OptionStrategy(
+            id: "protective-put-\(context.chain.underlyingID)-\(Int(putStrike))",
+            name: "保护性看跌 \(Int(putStrike))",
+            strategyType: .protectivePut,
+            legs: [
+                OptionStrategyLeg(contract: longPut, direction: .long, quantity: quantity, entryPremium: lpP),
+            ],
+            underlyingID: context.chain.underlyingID,
+            underlyingName: context.chain.underlyingName,
+            underlyingPositionSize: positionSize,
+            underlyingEntryPrice: entry
+        )
+    }
+
     // MARK: - private helpers
 
     /// 查找指定 (type, strike) 的合约 · strike 容差 0.01

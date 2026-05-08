@@ -29,6 +29,8 @@ struct OptionWindow: View {
     @State private var strategyLowStrike: Double = 3800
     @State private var strategyHighStrike: Double = 3950
     @State private var strategyMidStrike: Double = 3850
+    /// 第 4 个 strike · 仅铁鹰用（callHighStrike · K4）
+    @State private var strategyExtraStrike: Double = 4000
 
     private var meta: OptionPresets.UnderlyingMeta? {
         OptionPresets.byUnderlyingID[selectedUnderlyingID]
@@ -77,6 +79,26 @@ struct OptionWindow: View {
                 context: ctx, lowStrike: strategyLowStrike, midStrike: strategyMidStrike,
                 highStrike: strategyHighStrike, expiration: exp
             )
+        case .ironCondor:
+            // 4 strike 映射：low=putLow(K1) · mid=putHigh(K2) · high=callLow(K3) · extra=callHigh(K4)
+            return OptionStrategyBuilder.ironCondor(
+                context: ctx,
+                putLowStrike:   strategyLowStrike,
+                putHighStrike:  strategyMidStrike,
+                callLowStrike:  strategyHighStrike,
+                callHighStrike: strategyExtraStrike,
+                expiration: exp
+            )
+        case .coveredCall:
+            // 单 strike：mid 用作 callStrike（OTM Call）· 标的入场默认现价
+            return OptionStrategyBuilder.coveredCall(
+                context: ctx, callStrike: strategyMidStrike, expiration: exp
+            )
+        case .protectivePut:
+            // 单 strike：mid 用作 putStrike（OTM Put）· 标的入场默认现价
+            return OptionStrategyBuilder.protectivePut(
+                context: ctx, putStrike: strategyMidStrike, expiration: exp
+            )
         default: return nil
         }
     }
@@ -95,6 +117,7 @@ struct OptionWindow: View {
         }
         .frame(minWidth: 1100, minHeight: 720)
         .onChange(of: selectedUnderlyingID) { _, _ in resetForNewUnderlying() }
+        .onChange(of: selectedStrategyType) { _, newType in remapStrikesForStrategy(newType) }
     }
 
     // MARK: - Toolbar
@@ -263,13 +286,40 @@ struct OptionWindow: View {
                 Text("长跨式").tag(StrategyType.longStraddle)
                 Text("长宽跨式").tag(StrategyType.longStrangle)
                 Text("蝶式").tag(StrategyType.longButterfly)
+                Text("铁鹰").tag(StrategyType.ironCondor)
+                Text("备兑").tag(StrategyType.coveredCall)
+                Text("护跌").tag(StrategyType.protectivePut)
             }
             .pickerStyle(.segmented)
 
-            HStack(spacing: 8) {
-                strikeField("低", $strategyLowStrike)
-                strikeField("中", $strategyMidStrike)
-                strikeField("高", $strategyHighStrike)
+            switch selectedStrategyType {
+            case .ironCondor:
+                // 铁鹰 4 strike：K1<K2<K3<K4
+                HStack(spacing: 8) {
+                    strikeField("PutK1", $strategyLowStrike)
+                    strikeField("PutK2", $strategyMidStrike)
+                    strikeField("CallK3", $strategyHighStrike)
+                    strikeField("CallK4", $strategyExtraStrike)
+                }
+            case .coveredCall, .protectivePut:
+                // 单 strike + 标的入场提示
+                HStack(spacing: 8) {
+                    strikeField(selectedStrategyType == .coveredCall ? "Call K" : "Put K",
+                                $strategyMidStrike)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("标的入场").font(.caption2).foregroundColor(.secondary)
+                        Text(String(format: "%.2f", spotPrice))
+                            .font(.callout.monospaced())
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            default:
+                HStack(spacing: 8) {
+                    strikeField("低", $strategyLowStrike)
+                    strikeField("中", $strategyMidStrike)
+                    strikeField("高", $strategyHighStrike)
+                }
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -404,9 +454,38 @@ struct OptionWindow: View {
         if let m = meta {
             spotPrice = NSDecimalNumber(decimal: m.spotPrice).doubleValue
             let step = NSDecimalNumber(decimal: m.strikeStep).doubleValue
-            strategyLowStrike = round((spotPrice - 2 * step) / step) * step
-            strategyMidStrike = round(spotPrice / step) * step
+            // 通用 3 strike：low=ATM-2step / mid=ATM / high=ATM+2step（蝶式等距 / 牛熊价差合理）
+            strategyLowStrike  = round((spotPrice - 2 * step) / step) * step
+            strategyMidStrike  = round(spotPrice / step) * step
             strategyHighStrike = round((spotPrice + 2 * step) / step) * step
+            // 铁鹰用：切到铁鹰时按 K1<K2<K3<K4 重映射 · 见 onChange(of: selectedStrategyType)
+            strategyExtraStrike = round((spotPrice + 4 * step) / step) * step
+        }
+    }
+
+    /// 切策略时 · 把 strike 按各策略经典布局重新铺开
+    /// - 铁鹰：K1<K2<K3<K4 围绕 ATM 对称
+    /// - 备兑：mid = ATM + step（OTM Call · 卖虚一档）
+    /// - 护跌：mid = ATM - step（OTM Put · 买虚一档）
+    /// - 其他：low/mid/high 围绕 ATM 对称（蝶式等距 / 牛熊价差合理）
+    private func remapStrikesForStrategy(_ type: StrategyType) {
+        guard let m = meta else { return }
+        let step = NSDecimalNumber(decimal: m.strikeStep).doubleValue
+        let atm = round(spotPrice / step) * step
+        switch type {
+        case .ironCondor:
+            strategyLowStrike   = atm - 2 * step    // PutK1
+            strategyMidStrike   = atm - step        // PutK2
+            strategyHighStrike  = atm + step        // CallK3
+            strategyExtraStrike = atm + 2 * step    // CallK4
+        case .coveredCall:
+            strategyMidStrike = atm + step          // 卖虚一档 Call
+        case .protectivePut:
+            strategyMidStrike = atm - step          // 买虚一档 Put
+        default:
+            strategyLowStrike  = atm - 2 * step
+            strategyMidStrike  = atm
+            strategyHighStrike = atm + 2 * step
         }
     }
 }

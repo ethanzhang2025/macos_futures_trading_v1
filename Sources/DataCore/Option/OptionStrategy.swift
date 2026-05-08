@@ -64,27 +64,38 @@ public struct OptionStrategy: Sendable, Equatable {
     public let legs: [OptionStrategyLeg]
     public let underlyingID: String
     public let underlyingName: String
+    /// 标的现货持仓（备兑/保护性看跌等需要 · 单位 = 标的最小份数 · 0 = 纯期权策略）
+    /// 通常 = quantity × contractMultiplier（1 张 50ETF 期权 = 10000 份 50ETF）
+    public let underlyingPositionSize: Int
+    /// 标的入场均价（与持仓挂钩 · positionSize=0 时此字段被忽略）
+    public let underlyingEntryPrice: Double
 
     public init(id: String, name: String, strategyType: StrategyType,
-                legs: [OptionStrategyLeg], underlyingID: String, underlyingName: String) {
+                legs: [OptionStrategyLeg], underlyingID: String, underlyingName: String,
+                underlyingPositionSize: Int = 0,
+                underlyingEntryPrice: Double = 0) {
         self.id = id
         self.name = name
         self.strategyType = strategyType
         self.legs = legs
         self.underlyingID = underlyingID
         self.underlyingName = underlyingName
+        self.underlyingPositionSize = underlyingPositionSize
+        self.underlyingEntryPrice = underlyingEntryPrice
     }
 
-    /// 净权利金（多腿 - 空腿 · 正 = 净付出 · 负 = 净收入）
+    /// 净权利金（多腿 - 空腿 · 正 = 净付出 · 负 = 净收入 · 不含标的现货成本）
     public var netPremium: Double {
         legs.reduce(0) { acc, leg in
             acc + leg.direction.sign * leg.entryPremium * Double(leg.quantity)
         }
     }
 
-    /// 到期 PnL · 在指定标的价 S 下的总损益
+    /// 到期 PnL · 在指定标的价 S 下的总损益（期权 leg PnL + 标的现货 MTM PnL）
     public func payoffAtExpiration(spotPrice: Double) -> Double {
-        legs.reduce(0) { $0 + $1.payoffAtExpiration(spotPrice: spotPrice) }
+        let optionPnL = legs.reduce(0) { $0 + $1.payoffAtExpiration(spotPrice: spotPrice) }
+        let underlyingPnL = Double(underlyingPositionSize) * (spotPrice - underlyingEntryPrice)
+        return optionPnL + underlyingPnL
     }
 
     /// 涉及到的所有 strike（去重 · 升序）
@@ -102,6 +113,8 @@ public enum StrategyType: String, Sendable, Codable, CaseIterable {
     case longStrangle    = "LONG_STRANGLE"      // 长宽跨式（不同 strike）
     case longButterfly   = "LONG_BUTTERFLY"     // 蝶式（3 strike）
     case ironCondor      = "IRON_CONDOR"        // 铁鹰（4 strike · 4 leg）
+    case coveredCall     = "COVERED_CALL"       // 备兑开仓（持有标的 + 卖 Call）
+    case protectivePut   = "PROTECTIVE_PUT"     // 保护性看跌（持有标的 + 买 Put · 类似买保险）
     case custom          = "CUSTOM"             // 自定义
 
     public var displayName: String {
@@ -112,6 +125,8 @@ public enum StrategyType: String, Sendable, Codable, CaseIterable {
         case .longStrangle:   return "长宽跨式"
         case .longButterfly:  return "蝶式"
         case .ironCondor:     return "铁鹰"
+        case .coveredCall:    return "备兑开仓"
+        case .protectivePut:  return "保护性看跌"
         case .custom:         return "自定义"
         }
     }

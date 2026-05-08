@@ -206,6 +206,217 @@ struct OptionStrategyTests {
         #expect(!analysis.isMaxLossUnlimited)
     }
 
+    // MARK: - 铁鹰
+
+    @Test("铁鹰 · 4 leg 构造正确（PutK1 long / PutK2 short / CallK3 short / CallK4 long）")
+    func ironCondorLegStructure() {
+        let ctx = makeContext()
+        let s = OptionStrategyBuilder.ironCondor(
+            context: ctx,
+            putLowStrike: 90, putHighStrike: 95,
+            callLowStrike: 105, callHighStrike: 110,
+            expiration: firstExpiration(ctx)
+        )!
+        #expect(s.legs.count == 4)
+        // leg[0] = Long Put@90
+        #expect(s.legs[0].direction == .long)
+        #expect(s.legs[0].contract.type == .put)
+        #expect(s.legs[0].contract.strikePrice == 90)
+        // leg[1] = Short Put@95
+        #expect(s.legs[1].direction == .short)
+        #expect(s.legs[1].contract.type == .put)
+        #expect(s.legs[1].contract.strikePrice == 95)
+        // leg[2] = Short Call@105
+        #expect(s.legs[2].direction == .short)
+        #expect(s.legs[2].contract.type == .call)
+        #expect(s.legs[2].contract.strikePrice == 105)
+        // leg[3] = Long Call@110
+        #expect(s.legs[3].direction == .long)
+        #expect(s.legs[3].contract.type == .call)
+        #expect(s.legs[3].contract.strikePrice == 110)
+    }
+
+    @Test("铁鹰 · 净权利金为负（净收入 · 卖方策略）")
+    func ironCondorNetCredit() {
+        let ctx = makeContext()
+        let s = OptionStrategyBuilder.ironCondor(
+            context: ctx,
+            putLowStrike: 90, putHighStrike: 95,
+            callLowStrike: 105, callHighStrike: 110,
+            expiration: firstExpiration(ctx)
+        )!
+        // 卖近虚值（K2 Put · K3 Call）+ 买远虚值（K1 Put · K4 Call）→ 收净权利金 → netPremium < 0
+        #expect(s.netPremium < 0)
+    }
+
+    @Test("铁鹰 · S 在 [PutK2, CallK3] 中段 · 接近最大利润（净收入）")
+    func ironCondorMaxProfitInMiddle() {
+        let ctx = makeContext()
+        let s = OptionStrategyBuilder.ironCondor(
+            context: ctx,
+            putLowStrike: 90, putHighStrike: 95,
+            callLowStrike: 105, callHighStrike: 110,
+            expiration: firstExpiration(ctx)
+        )!
+        // S=100 落在 [95, 105] 区间 · 4 腿全 OTM → PnL = -netPremium = +netCredit
+        let pnlMid = s.payoffAtExpiration(spotPrice: 100)
+        #expect(abs(pnlMid + s.netPremium) < 0.01)
+    }
+
+    @Test("铁鹰 · 远端利润亏损都有限（4 腿对冲）")
+    func ironCondorLimitedBoth() {
+        let ctx = makeContext()
+        let s = OptionStrategyBuilder.ironCondor(
+            context: ctx,
+            putLowStrike: 90, putHighStrike: 95,
+            callLowStrike: 105, callHighStrike: 110,
+            expiration: firstExpiration(ctx)
+        )!
+        let analysis = OptionPayoffAnalyzer.analyze(strategy: s)
+        #expect(!analysis.isMaxProfitUnlimited)
+        #expect(!analysis.isMaxLossUnlimited)
+    }
+
+    @Test("铁鹰 · 损益平衡 2 个零点（K2 上方 + K3 下方各 1）")
+    func ironCondorBreakevens() {
+        let ctx = makeContext()
+        let s = OptionStrategyBuilder.ironCondor(
+            context: ctx,
+            putLowStrike: 90, putHighStrike: 95,
+            callLowStrike: 105, callHighStrike: 110,
+            expiration: firstExpiration(ctx)
+        )!
+        let analysis = OptionPayoffAnalyzer.analyze(strategy: s)
+        #expect(analysis.breakevens.count == 2)
+        // 下侧 breakeven 应在 (90, 95) 区间内（PutK2 - netCredit）
+        // 上侧 breakeven 应在 (105, 110) 区间内（CallK3 + netCredit）
+        if analysis.breakevens.count == 2 {
+            let lo = analysis.breakevens[0]
+            let hi = analysis.breakevens[1]
+            #expect(lo > 90 && lo < 95)
+            #expect(hi > 105 && hi < 110)
+        }
+    }
+
+    // MARK: - 备兑开仓
+
+    @Test("备兑开仓 · 单 leg = Short Call · positionSize=quantity")
+    func coveredCallStructure() {
+        let ctx = makeContext(spotPrice: 100)
+        let s = OptionStrategyBuilder.coveredCall(
+            context: ctx, callStrike: 105, expiration: firstExpiration(ctx), quantity: 1
+        )!
+        #expect(s.legs.count == 1)
+        #expect(s.legs[0].direction == .short)
+        #expect(s.legs[0].contract.type == .call)
+        #expect(s.legs[0].contract.strikePrice == 105)
+        #expect(s.underlyingPositionSize == 1)
+        #expect(s.underlyingEntryPrice == 100)
+    }
+
+    @Test("备兑开仓 · S=entryPrice · PnL = +callPremium（卖方收权利金 · 标的不动）")
+    func coveredCallAtEntryPrice() {
+        let ctx = makeContext(spotPrice: 100)
+        let s = OptionStrategyBuilder.coveredCall(
+            context: ctx, callStrike: 105, expiration: firstExpiration(ctx)
+        )!
+        // S=100=entryPrice · 标的 PnL=0 · short call OTM → +premium
+        let pnl = s.payoffAtExpiration(spotPrice: 100)
+        let callPremium = s.legs[0].entryPremium
+        #expect(abs(pnl - callPremium) < 0.01)
+    }
+
+    @Test("备兑开仓 · S 远超 callStrike · 利润有限被锁顶（K - S0 + premium）")
+    func coveredCallCappedUpside() {
+        let ctx = makeContext(spotPrice: 100)
+        let s = OptionStrategyBuilder.coveredCall(
+            context: ctx, callStrike: 105, expiration: firstExpiration(ctx)
+        )!
+        // S=200 远超 105 · 被行权
+        // 标的 PnL = 200 - 100 = 100
+        // short call PnL = -(200-105) + premium = -95 + premium
+        // total = 100 - 95 + premium = 5 + premium = (K - entry) + premium
+        let pnl = s.payoffAtExpiration(spotPrice: 200)
+        let theoretical = (105 - 100) + s.legs[0].entryPremium
+        #expect(abs(pnl - theoretical) < 0.01)
+    }
+
+    @Test("备兑开仓 · 利润有限 · 亏损虽大但有限（标的不会跌成负数）")
+    func coveredCallLimitedProfit() {
+        let ctx = makeContext(spotPrice: 100)
+        let s = OptionStrategyBuilder.coveredCall(
+            context: ctx, callStrike: 105, expiration: firstExpiration(ctx)
+        )!
+        let analysis = OptionPayoffAnalyzer.analyze(strategy: s)
+        #expect(!analysis.isMaxProfitUnlimited)
+    }
+
+    // MARK: - 保护性看跌
+
+    @Test("保护性看跌 · S 远低 putStrike · 亏损被锁底（K - S0 - premium）")
+    func protectivePutDownsideFloor() {
+        let ctx = makeContext(spotPrice: 100)
+        let s = OptionStrategyBuilder.protectivePut(
+            context: ctx, putStrike: 95, expiration: firstExpiration(ctx)
+        )!
+        // S=50 远低
+        // 标的 PnL = 50 - 100 = -50
+        // long put PnL = (95-50) - premium = 45 - premium
+        // total = -50 + 45 - premium = -5 - premium = -(S0-K) - premium
+        let pnl = s.payoffAtExpiration(spotPrice: 50)
+        let theoretical = -(100.0 - 95) - s.legs[0].entryPremium
+        #expect(abs(pnl - theoretical) < 0.01)
+    }
+
+    @Test("保护性看跌 · 上方利润无限（标的可一直涨 · 仅扣 put premium）")
+    func protectivePutUnlimitedUpside() {
+        let ctx = makeContext(spotPrice: 100)
+        let s = OptionStrategyBuilder.protectivePut(
+            context: ctx, putStrike: 95, expiration: firstExpiration(ctx)
+        )!
+        let analysis = OptionPayoffAnalyzer.analyze(strategy: s)
+        #expect(analysis.isMaxProfitUnlimited)
+        #expect(!analysis.isMaxLossUnlimited)
+    }
+
+    @Test("备兑/保护性 · positionSize=0 时 · 退化成纯期权策略")
+    func coveredCallZeroPosition() {
+        let ctx = makeContext(spotPrice: 100)
+        // 手动构造无标的的 short call · 验 OptionStrategy 默认 positionSize=0
+        let bareShortCall = OptionStrategy(
+            id: "bare-short-call",
+            name: "裸卖 Call",
+            strategyType: .custom,
+            legs: [OptionStrategyLeg(
+                contract: makeOption(type: .call, strike: 105),
+                direction: .short, quantity: 1, entryPremium: 3
+            )],
+            underlyingID: "TEST", underlyingName: "测试"
+        )
+        // S=200 · 裸卖 call 亏损巨大 · 不会被标的对冲
+        let pnl = bareShortCall.payoffAtExpiration(spotPrice: 200)
+        #expect(pnl < -50)  // 实际 = -(200-105) + 3 = -92
+    }
+
+    @Test("铁鹰 · strike 顺序违例返 nil（要求 K1<K2<K3<K4）")
+    func ironCondorRejectsBadOrder() {
+        let ctx = makeContext()
+        // K2 >= K3 违例
+        #expect(OptionStrategyBuilder.ironCondor(
+            context: ctx,
+            putLowStrike: 90, putHighStrike: 105,
+            callLowStrike: 100, callHighStrike: 110,
+            expiration: firstExpiration(ctx)
+        ) == nil)
+        // K1 >= K2 违例
+        #expect(OptionStrategyBuilder.ironCondor(
+            context: ctx,
+            putLowStrike: 95, putHighStrike: 90,
+            callLowStrike: 105, callHighStrike: 110,
+            expiration: firstExpiration(ctx)
+        ) == nil)
+    }
+
     // MARK: - PnL 分析器
 
     @Test("PnL 曲线长度 = sampleCount")

@@ -374,6 +374,14 @@ public enum BuiltinFunctions {
             ZEROCOUNTFunction(),
             CHANGECOUNTFunction(),
             SAMECOUNTFunction(),
+            // 麦语言扩展（第 39 批 · v15.25 · 基础差值 + 中价均线）
+            HLDIFFFunction(),
+            HCDIFFFunction(),
+            CLDIFFFunction(),
+            OCDIFFFunction(),
+            TPRMAFunction(),
+            HLAVGMAFunction(),
+            OCAVGMAFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

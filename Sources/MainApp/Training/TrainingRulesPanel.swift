@@ -205,8 +205,7 @@ private struct RuleEditSheet: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                .onChange(of: kind) { _, newKind in
-                    // 切换 kind 时若 trader 没改过 threshold，刷新到该 kind 默认值
+                .onChange(of: kind) { newKind in
                     if rule == nil || rule?.kind != newKind {
                         thresholdText = Self.formatDecimal(Self.defaultThreshold(for: newKind))
                     }

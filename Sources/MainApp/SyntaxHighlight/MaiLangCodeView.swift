@@ -326,14 +326,13 @@ public struct MaiLangCodeView: NSViewRepresentable {
         public func textView(_ textView: NSTextView,
                              completions words: [String],
                              forPartialWordRange charRange: NSRange,
-                             indexOfSelectedItem index: UnsafeMutablePointer<Int>?) -> [String]? {
+                             indexOfSelectedItem index: UnsafeMutablePointer<Int>) -> [String] {
             let prefix = (textView.string as NSString).substring(with: charRange).uppercased()
-            guard !prefix.isEmpty else { return nil }
+            guard !prefix.isEmpty else { return [] }
             let candidates = MaiLangSyntaxHighlighter.allCompletionCandidates
                 .filter { $0.hasPrefix(prefix) }
-            // 默认选中第一个（trader 直接 Tab 即可补全）
-            if !candidates.isEmpty, index != nil {
-                index!.pointee = 0
+            if !candidates.isEmpty {
+                index.pointee = 0
             }
             return candidates
         }

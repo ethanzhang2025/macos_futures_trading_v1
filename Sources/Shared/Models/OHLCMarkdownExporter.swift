@@ -24,7 +24,7 @@ public enum OHLCMarkdownExporter {
     }
 
     /// (close-open)/open × 100 · 2 位小数 · 含符号 · open=0 显示 "—"
-    static func formatChangePercent(open: Decimal, close: Decimal) -> String {
+    public static func formatChangePercent(open: Decimal, close: Decimal) -> String {
         guard open != 0 else { return "—" }
         let openD = NSDecimalNumber(decimal: open).doubleValue
         let closeD = NSDecimalNumber(decimal: close).doubleValue

@@ -1120,7 +1120,7 @@ struct JournalWindow: View {
                 try md.write(to: url, atomically: true, encoding: .utf8)
                 Toast.info("月报已保存", url.lastPathComponent)
             } catch {
-                Toast.error("保存失败", error.localizedDescription)
+                Toast.error("保存失败", error)
             }
         } else {
             let pb = NSPasteboard.general
@@ -1428,7 +1428,7 @@ struct JournalWindow: View {
             try data.write(to: url)
             Toast.info("导出成功", "\(url.lastPathComponent) · \(filteredTrades.count) 笔")
         } catch {
-            Toast.error("导出失败", error.localizedDescription)
+            Toast.error("导出失败", error)
         }
     }
 

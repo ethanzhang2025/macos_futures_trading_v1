@@ -327,7 +327,7 @@ struct TrainingHistoryPanel: View {
 
     /// v15.23 batch125 · 形态分布 chip（9 形态 emoji + 计数 · 点击切 filter）
     private var patternDistributionRow: some View {
-        let counts = Dictionary(grouping: viewModel.log.sessions.compactMap { $0.scenarioPattern })
+        let counts = Dictionary(grouping: viewModel.log.sessions.compactMap { $0.scenarioPattern }, by: { $0 })
             .mapValues { $0.count }
         return HStack(spacing: 4) {
             ForEach(TrainingScenarioPattern.allCases, id: \.self) { pat in

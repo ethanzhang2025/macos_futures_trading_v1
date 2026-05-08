@@ -31,6 +31,8 @@ struct OptionWindow: View {
     @State private var strategyMidStrike: Double = 3850
     /// 第 4 个 strike · 仅铁鹰用（callHighStrike · K4）
     @State private var strategyExtraStrike: Double = 4000
+    /// v15.36 · 期权 Phase 6.4 · 回测 sheet 显隐
+    @State private var backtestSheetPresented: Bool = false
 
     private var meta: OptionPresets.UnderlyingMeta? {
         OptionPresets.byUnderlyingID[selectedUnderlyingID]
@@ -118,6 +120,22 @@ struct OptionWindow: View {
         .frame(minWidth: 1100, minHeight: 720)
         .onChange(of: selectedUnderlyingID) { _, _ in resetForNewUnderlying() }
         .onChange(of: selectedStrategyType) { _, newType in remapStrikesForStrategy(newType) }
+        // v15.36 · Phase 6.4 · 回测 sheet
+        .sheet(isPresented: $backtestSheetPresented) {
+            if let s = currentStrategy {
+                OptionBacktestSheet(strategy: s, isPresented: $backtestSheetPresented)
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 32)).foregroundColor(.orange)
+                    Text("无有效策略 · 请先在工作台选 strike 构造策略")
+                        .font(.callout)
+                    Button("关闭") { backtestSheetPresented = false }
+                        .keyboardShortcut(.cancelAction)
+                }
+                .padding(40).frame(width: 360)
+            }
+        }
     }
 
     // MARK: - Toolbar
@@ -338,7 +356,18 @@ struct OptionWindow: View {
         let analysis = s.map { OptionPayoffAnalyzer.analyze(strategy: $0) }
         return VStack(alignment: .leading, spacing: 6) {
             if let s = s {
-                Text(s.name).font(.callout.bold())
+                HStack {
+                    Text(s.name).font(.callout.bold())
+                    Spacer()
+                    Button {
+                        backtestSheetPresented = true
+                    } label: {
+                        Label("回测", systemImage: "chart.line.uptrend.xyaxis")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("跑历史回测 · PnL 曲线 + maxDD + Sharpe + 胜率")
+                }
                 HStack(spacing: 16) {
                     statBlock("净权利金", String(format: "%.2f", s.netPremium),
                              color: s.netPremium > 0 ? .red : .green)

@@ -390,6 +390,14 @@ public enum BuiltinFunctions {
             HT_SINEFunction(),
             HT_LEADSINEFunction(),
             HT_TRENDMODEFunction(),
+            // 麦语言扩展（第 41 批 · v15.25 · 资金管理 · trader 实战）
+            KELLYFunction(),
+            OPTIMALFFunction(),
+            POSITIONSIZEFunction(),
+            RISKPCTFunction(),
+            REWARDRATIOFunction(),
+            EQUITYFunction(),
+            MARTINGALEFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

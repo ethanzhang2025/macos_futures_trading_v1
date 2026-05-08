@@ -145,6 +145,9 @@ public struct MaiLangCodeView: NSViewRepresentable {
         var parent: MaiLangCodeView
         weak var textView: NSTextView?
         nonisolated(unsafe) var visibleObserver: NSObjectProtocol?
+        /// 防 applyHighlight 内部 setSelectedRange 反递归触发 textViewDidChangeSelection 死循环
+        /// （v15.25 Mac 切机暴露 · makeNSView 设 tv.string 即触发栈溢出 SIGSEGV）
+        private var isApplyingHighlight = false
 
         init(_ parent: MaiLangCodeView) { self.parent = parent }
 
@@ -189,9 +192,12 @@ public struct MaiLangCodeView: NSViewRepresentable {
         /// v15.22 batch21 · 同步刷新当前行浅背景高亮
         /// v15.22 batch23 · 同步报选区范围（NSRange）给批量操作
         public func textViewDidChangeSelection(_ notification: Notification) {
+            guard !isApplyingHighlight else { return }
             guard let tv = notification.object as? NSTextView else { return }
             // batch21 · 光标移动时刷当前行高亮（不重 tokenize · 仅重 attribute · 短文档性能 OK）
+            isApplyingHighlight = true
             parent.applyHighlight(to: tv)
+            isApplyingHighlight = false
             let range = tv.selectedRange()
             if let cb = parent.onCursorChange {
                 let (line, col) = lineColumn(in: tv.string, at: range.location)

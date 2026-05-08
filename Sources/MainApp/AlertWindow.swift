@@ -297,14 +297,14 @@ struct AlertWindow: View {
         return HStack(spacing: 24) {
             Text("🔔 预警面板").font(.title2).bold()
             Divider().frame(height: 24)
-            stat("总数", "\(alerts.count)")
-            stat("活跃", "\(counts.active)", color: .green)
-            stat("已触发", "\(counts.triggered)", color: .red)
-            stat("已暂停", "\(counts.paused)", color: .secondary)
+            stat(L("总数"), "\(alerts.count)")
+            stat(L("活跃"), "\(counts.active)", color: .green)
+            stat(L("已触发"), "\(counts.triggered)", color: .red)
+            stat(L("已暂停"), "\(counts.paused)", color: .secondary)
             // v15.20 batch79 · 触发活跃度统计（24h / 本周 · trader 看预警系统是否活跃）
             Divider().frame(height: 24)
-            stat("24h 触发", "\(triggerCounts.last24h)", color: triggerCounts.last24h > 0 ? .orange : .secondary)
-            stat("本周触发", "\(triggerCounts.thisWeek)", color: .secondary)
+            stat(L("24h 触发"), "\(triggerCounts.last24h)", color: triggerCounts.last24h > 0 ? .orange : .secondary)
+            stat(L("本周触发"), "\(triggerCounts.thisWeek)", color: .secondary)
             Spacer()
             Menu {
                 Button("添加预警…") { sheetState = .add }
@@ -1312,10 +1312,10 @@ struct AlertWindow: View {
 
     private func statusLabel(_ s: AlertStatus) -> String {
         switch s {
-        case .active:    return "活跃"
-        case .triggered: return "已触发（冷却中）"
-        case .paused:    return "已暂停"
-        case .cancelled: return "已取消"
+        case .active:    return L("活跃")
+        case .triggered: return L("已触发（冷却中）")
+        case .paused:    return L("已暂停")
+        case .cancelled: return L("已取消")
         }
     }
 
@@ -1827,10 +1827,10 @@ extension AlertStatus {
     /// 中文标签（badge + Picker 共用）
     var displayLabel: String {
         switch self {
-        case .active:    return "活跃"
-        case .triggered: return "已触发"
-        case .paused:    return "暂停"
-        case .cancelled: return "已取消"
+        case .active:    return L("活跃")
+        case .triggered: return L("已触发")
+        case .paused:    return L("暂停")
+        case .cancelled: return L("已取消")
         }
     }
 

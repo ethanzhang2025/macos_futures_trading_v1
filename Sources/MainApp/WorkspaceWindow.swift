@@ -377,7 +377,7 @@ struct WorkspaceWindow: View {
             Image(systemName: isActive ? "star.fill" : "rectangle.stack")
                 .foregroundColor(isActive ? .accentColor : .secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(template.name)
+                Text(L(template.name))
                     .fontWeight(isActive ? .semibold : .regular)
                 HStack(spacing: 4) {
                     Text("\(template.windows.count) 窗口")
@@ -438,7 +438,7 @@ struct WorkspaceWindow: View {
         HStack(spacing: 8) {
             Image(systemName: "rectangle.stack")
                 .foregroundColor(.accentColor)
-            Text(template.name)
+            Text(L(template.name))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -488,7 +488,7 @@ struct WorkspaceWindow: View {
         return VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack(alignment: .firstTextBaseline) {
-                Text(template.name)
+                Text(L(template.name))
                     .font(.title2)
                     .fontWeight(.semibold)
                 Text(template.kind.displayName)
@@ -1231,12 +1231,12 @@ private struct ApplyGridSheet: View {
 fileprivate extension WindowGridPreset {
     var displayName: String {
         switch self {
-        case .single:      return "单窗口"
-        case .horizontal2: return "1×2 横排"
-        case .vertical2:   return "2×1 竖排"
-        case .grid2x2:     return "2×2 四宫"
-        case .grid2x3:     return "2×3 六宫"
-        case .grid3x2:     return "3×2 六宫"
+        case .single:      return L("单窗口")
+        case .horizontal2: return L("1×2 横排")
+        case .vertical2:   return L("2×1 竖排")
+        case .grid2x2:     return L("2×2 四宫")
+        case .grid2x3:     return L("2×3 六宫")
+        case .grid3x2:     return L("3×2 六宫")
         }
     }
 }

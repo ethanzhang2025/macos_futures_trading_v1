@@ -751,12 +751,12 @@ struct WatchlistWindow: View {
     private var instrumentColumnsHeader: some View {
         HStack(spacing: 0) {
             Spacer().frame(width: 24)
-            sortableHeaderCell("合约", field: .instrumentID, width: 100, alignment: .leading)
-            sortableHeaderCell("最新价", field: .lastPrice, width: 90, alignment: .trailing)
+            sortableHeaderCell(L("合约"), field: .instrumentID, width: 100, alignment: .leading)
+            sortableHeaderCell(L("最新价"), field: .lastPrice, width: 90, alignment: .trailing)
             Spacer().frame(width: 16)
-            sortableHeaderCell("涨跌幅", field: .changePct, width: 80, alignment: .trailing)
+            sortableHeaderCell(L("涨跌幅"), field: .changePct, width: 80, alignment: .trailing)
             Spacer().frame(width: 16)
-            sortableHeaderCell("持仓量", field: .openInterest, width: 80, alignment: .trailing)
+            sortableHeaderCell(L("持仓量"), field: .openInterest, width: 80, alignment: .trailing)
             Spacer()
         }
         .font(.system(size: 11, design: .monospaced))

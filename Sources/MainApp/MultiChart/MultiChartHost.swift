@@ -1320,12 +1320,12 @@ struct MultiChartHost: View {
 private extension WindowGridPreset {
     var label: String {
         switch self {
-        case .single:      return "1×1（单图）"
-        case .horizontal2: return "1×2（横向）"
-        case .vertical2:   return "2×1（纵向）"
-        case .grid2x2:     return "2×2（四宫）"
-        case .grid2x3:     return "2×3（六宫横）"
-        case .grid3x2:     return "3×2（六宫竖）"
+        case .single:      return L("1×1（单图）")
+        case .horizontal2: return L("1×2（横向）")
+        case .vertical2:   return L("2×1（纵向）")
+        case .grid2x2:     return L("2×2（四宫）")
+        case .grid2x3:     return L("2×3（六宫横）")
+        case .grid3x2:     return L("3×2（六宫竖）")
         }
     }
 }

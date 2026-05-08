@@ -129,7 +129,7 @@ struct TrainingRulesPanel: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(rule.kind.displayName)
+                    Text(L(rule.kind.displayName))
                         .font(.system(size: 13, weight: .medium))
                     Text("\(formatThreshold(rule.threshold)) \(rule.kind.thresholdUnit)")
                         .font(.system(size: 13, design: .monospaced))
@@ -200,7 +200,7 @@ private struct RuleEditSheet: View {
                 Text("类型").frame(width: 70, alignment: .leading)
                 Picker("", selection: $kind) {
                     ForEach(DisciplineRuleKind.allCases, id: \.self) { k in
-                        Text(k.displayName).tag(k)
+                        Text(L(k.displayName)).tag(k)
                     }
                 }
                 .labelsHidden()

@@ -383,8 +383,8 @@ struct JournalWindow: View {
         HStack(spacing: 24) {
             Text("📔 交易日志").font(.title2).bold()
             Divider().frame(height: 24)
-            stat("总成交", "\(trades.count) 笔")
-            stat("总日志", "\(journals.count) 篇")
+            stat(L("总成交"), "\(trades.count) 笔")
+            stat(L("总日志"), "\(journals.count) 篇")
             // v15.23 batch172 · 今日 / 本周 chip（trader 一眼看节奏）
             todayWeekChips
             Spacer()

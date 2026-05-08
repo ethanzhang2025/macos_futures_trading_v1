@@ -819,3 +819,39 @@
 
 /* Training 顶状态 */
 "准备就绪" = "Ready";
+
+/* WP-i18n Batch C · 列头 / KPI / chartCard / 模板 / 状态 enum 等含插值与 String 字段（v15.25 / 第三轮收尾） */
+
+/* AlertStatus 状态标签 */
+"已触发（冷却中）" = "Triggered (Cooling)";
+"已取消" = "Cancelled";
+"暂停" = "Paused";
+
+/* WorkspaceWindow.WindowGridPreset.displayName */
+"单窗口" = "Single";
+"1×2 横排" = "1×2 Horizontal";
+"2×1 竖排" = "2×1 Vertical";
+"2×3 六宫" = "2×3 (6-Grid)";
+"3×2 六宫" = "3×2 (6-Grid)";
+
+/* MultiChartHost.WindowGridPreset.label */
+"1×1（单图）" = "1×1 (Single)";
+"1×2（横向）" = "1×2 (Horizontal)";
+"2×1（纵向）" = "2×1 (Vertical)";
+"2×3（六宫横）" = "2×3 (6-Grid Horiz)";
+"3×2（六宫竖）" = "3×2 (6-Grid Vert)";
+
+/* ReviewWindow chartCard 标题（与代码 raw 字符串严格一致） */
+"月度盈亏" = "Monthly P&L";
+"持仓时间" = "Holding Duration";
+"时长 × 盈亏" = "Duration × PnL";
+
+/* Training 5 条规则名（DisciplineRuleKind displayName · MainApp 端 L() 转译） */
+"单笔止损百分比" = "Per-Trade Stop Loss %";
+"持仓时长上限" = "Max Holding Duration";
+"加仓次数上限" = "Max Pyramiding";
+"单日亏损上限" = "Daily Loss Limit";
+"单日交易次数上限" = "Daily Trade Count Limit";
+
+/* JournalWindow TableColumn */
+"开/平" = "Open/Close";

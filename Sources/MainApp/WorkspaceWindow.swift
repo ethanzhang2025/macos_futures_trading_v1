@@ -537,7 +537,7 @@ struct WorkspaceWindow: View {
     }
 
     private func windowsCard(_ template: WorkspaceTemplate) -> some View {
-        infoCard("窗口布局（\(template.windows.count) 个）") {
+        infoCard("\(L("窗口布局")) (\(template.windows.count))") {
             HStack {
                 Button {
                     sheetState = .addWindow(template: template)
@@ -581,7 +581,7 @@ struct WorkspaceWindow: View {
                 .font(.system(.body, design: .monospaced))
                 .fontWeight(.medium)
                 .frame(width: 80, alignment: .leading)
-            Text(window.period.displayName)
+            Text(L(window.period.displayName))
                 .font(.system(.body, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .leading)
@@ -613,7 +613,7 @@ struct WorkspaceWindow: View {
     }
 
     private func shortcutCard(_ template: WorkspaceTemplate) -> some View {
-        infoCard("一键切换快捷键") {
+        infoCard(L("一键切换快捷键")) {
             HStack {
                 if let shortcut = template.shortcut {
                     Text(formatShortcut(shortcut))
@@ -666,7 +666,7 @@ struct WorkspaceWindow: View {
                 Image(systemName: "star.fill")
                     .foregroundColor(.accentColor)
                     .font(.caption)
-                Text("当前激活：\(active.name)")
+                Text("\(L("当前激活")): \(L(active.name))")
                     .font(.caption2)
             } else {
                 Text("未设置激活模板")

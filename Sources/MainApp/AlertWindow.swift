@@ -1848,22 +1848,22 @@ extension NotificationChannelKind {
     /// 单字简写（列表通道列展示）
     var shortLabel: String {
         switch self {
-        case .inApp:        return "内"
-        case .systemNotice: return "通"
-        case .sound:        return "声"
-        case .console:      return "控"
-        case .file:         return "文"
+        case .inApp:        return L("内")
+        case .systemNotice: return L("通")
+        case .sound:        return L("声")
+        case .console:      return L("控")
+        case .file:         return L("文")
         }
     }
 
     /// 完整中文名（Form Toggle 标题用）
     var displayLabel: String {
         switch self {
-        case .inApp:        return "App 内浮窗"
-        case .systemNotice: return "系统通知中心"
-        case .sound:        return "声音"
-        case .console:      return "控制台日志"
-        case .file:         return "文件日志"
+        case .inApp:        return L("App 内浮窗")
+        case .systemNotice: return L("系统通知中心")
+        case .sound:        return L("声音")
+        case .console:      return L("控制台日志")
+        case .file:         return L("文件日志")
         }
     }
 }

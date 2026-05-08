@@ -895,13 +895,13 @@ struct JournalWindow: View {
             .width(min: 70, ideal: 80)
 
             TableColumn("方向") { t in
-                Text(t.direction.displayName)
+                Text(L(t.direction.displayName))
                     .foregroundColor(t.direction == .buy ? .red : .green)
             }
             .width(min: 50, ideal: 60)
 
             TableColumn("开/平") { t in
-                Text(t.offsetFlag.displayName)
+                Text(L(t.offsetFlag.displayName))
             }
             .width(min: 60, ideal: 70)
 
@@ -1742,11 +1742,11 @@ private struct ImportSheet: View {
                     Text(trade.instrumentID)
                         .font(.system(.caption, design: .monospaced))
                         .frame(width: 70, alignment: .leading)
-                    Text(trade.direction.displayName)
+                    Text(L(trade.direction.displayName))
                         .font(.caption)
                         .foregroundColor(trade.direction == .buy ? .red : .green)
                         .frame(width: 24)
-                    Text(trade.offsetFlag.displayName)
+                    Text(L(trade.offsetFlag.displayName))
                         .font(.caption)
                         .frame(width: 40)
                     Text("\(trade.volume) @ \(trade.price.description)")
@@ -2036,11 +2036,11 @@ private struct JournalEditorSheet: View {
             Text(trade.instrumentID)
                 .font(.system(.caption, design: .monospaced))
                 .frame(width: 72, alignment: .leading)
-            Text(trade.direction.displayName)
+            Text(L(trade.direction.displayName))
                 .font(.caption)
                 .foregroundColor(trade.direction == .buy ? .red : .green)
                 .frame(width: 24)
-            Text(trade.offsetFlag.displayName)
+            Text(L(trade.offsetFlag.displayName))
                 .font(.caption)
                 .frame(width: 40)
             Text("\(trade.volume)手 @ \(trade.price.description)")

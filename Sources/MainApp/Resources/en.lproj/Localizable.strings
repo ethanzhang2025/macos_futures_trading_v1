@@ -477,8 +477,8 @@
 "导出报告" = "Export Report";
 "尚未配置任何纪律规则" = "No discipline rules configured yet";
 "工作区模板" = "Workspace Templates";
-"平仓" = "Close Position";
-"开仓" = "Open Position";
+"平仓" = "Close";
+"开仓" = "Open";
 "开始" = "Start";
 "开始模拟训练" = "Start Training";
 "开始第一次模拟训练后，记录与评分会出现在这里" = "Records and scores appear here after the first training session";
@@ -855,3 +855,23 @@
 
 /* JournalWindow TableColumn */
 "开/平" = "Open/Close";
+
+/* WP-i18n Batch D · enum displayName 数据列 + Workspace 标签收尾 */
+
+/* NotificationChannelKind shortLabel（单字简写 · 列表通道列展示） */
+"内" = "In";
+"通" = "Notif";
+"声" = "Snd";
+"控" = "Con";
+"文" = "Log";
+
+/* NotificationChannelKind displayLabel（Form Toggle 标题用） */
+"App 内浮窗" = "In-App Banner";
+"系统通知中心" = "macOS Notification Center";
+"声音" = "Sound";
+"控制台日志" = "Console Log";
+"文件日志" = "File Log";
+
+/* WorkspaceWindow 标签 */
+"窗口布局" = "Layout";
+"一键切换快捷键" = "Quick-Switch Shortcut";

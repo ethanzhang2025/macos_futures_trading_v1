@@ -382,6 +382,14 @@ public enum BuiltinFunctions {
             TPRMAFunction(),
             HLAVGMAFunction(),
             OCAVGMAFunction(),
+            // 麦语言扩展（第 40 批 · v15.25 · Hilbert 变换 · Ehlers 风格）
+            HT_TRENDLINEFunction(),
+            HT_PHASORFunction(),
+            HT_DCPHASEFunction(),
+            HT_DCPERIODFunction(),
+            HT_SINEFunction(),
+            HT_LEADSINEFunction(),
+            HT_TRENDMODEFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

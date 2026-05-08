@@ -238,11 +238,8 @@ struct MultiChartCellCanvas: View {
                 guard let cb = onHoverIndexChange else { return }
                 switch phase {
                 case .active(let location):
-                    let n = bars.count
-                    guard n > 0, geo.size.width > 0 else { return }
-                    let normalized = max(0, min(1, location.x / geo.size.width))
-                    let idx = min(n - 1, Int(normalized * CGFloat(n)))
-                    cb(idx)
+                    // v15.39 · 复用 ChartHitTester（取代手写 normalized 计算 · 与主图 hit-test 同口径）
+                    cb(ChartHitTester.barIndex(atX: location.x, width: geo.size.width, barCount: bars.count))
                 case .ended:
                     cb(nil)
                 }

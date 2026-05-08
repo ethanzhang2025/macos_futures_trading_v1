@@ -79,11 +79,8 @@ public struct KLineSessionDividerView: View {
     }
 
     private func xPosition(barIndex: Int, width: CGFloat) -> CGFloat? {
-        let visible = max(1, viewport.visibleCount)
-        let lo = viewport.startIndex
-        guard barIndex >= lo, barIndex < lo + visible else { return nil }
-        let xRatio = (CGFloat(barIndex - lo) + 0.5) / CGFloat(visible)
-        return xRatio * width
+        // v15.39 · 复用 ChartHitTester · 与十字光标 / hover 反向 hit-test 同口径
+        ChartHitTester.xPosition(forBarIndex: barIndex, width: width, viewport: viewport)
     }
 
     private func drawDividers(ctx: GraphicsContext, size: CGSize) {

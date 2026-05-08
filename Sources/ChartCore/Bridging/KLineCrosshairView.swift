@@ -109,10 +109,10 @@ public struct KLineCrosshairView: View {
     }
 
     private func computeBarInfo(at pt: CGPoint, in size: CGSize) -> BarInfo? {
-        let visibleCount = max(1, viewport.visibleCount)
-        let xRatio = max(0, min(1, pt.x / size.width))
-        let barIndex = viewport.startIndex + Int(xRatio * CGFloat(visibleCount))
-        guard barIndex >= 0, barIndex < bars.count else { return nil }
+        // v15.39 · 复用 ChartHitTester（取代手写 xRatio 计算 · 边界 clamp 与 barCount 校验统一）
+        guard let barIndex = ChartHitTester.barIndex(
+            atX: pt.x, width: size.width, viewport: viewport, barCount: bars.count
+        ) else { return nil }
         let bar = bars[barIndex]
         let prevClose: Decimal? = barIndex > 0 ? bars[barIndex - 1].close : nil
         // v15.20 batch67 · 量比（前 5 根均值 · 不足时退化）
@@ -124,12 +124,8 @@ public struct KLineCrosshairView: View {
             guard avg > 0 else { return nil }
             return Double(bar.volume) / avg
         }()
-        // y → price · 顶 0 = upperBound · 底 1 = lowerBound
-        let lo = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
-        let hi = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
-        let yRatio = 1.0 - max(0, min(1, Double(pt.y / size.height)))
-        let priceDouble = lo + (hi - lo) * yRatio
-        return BarInfo(bar: bar, cursorPrice: Decimal(priceDouble), prevClose: prevClose, volumeRatio: volumeRatio)
+        let cursorPrice = ChartHitTester.price(atY: pt.y, height: size.height, priceRange: priceRange)
+        return BarInfo(bar: bar, cursorPrice: cursorPrice, prevClose: prevClose, volumeRatio: volumeRatio)
     }
 
     private func crosshairLines(at pt: CGPoint, in size: CGSize) -> some View {

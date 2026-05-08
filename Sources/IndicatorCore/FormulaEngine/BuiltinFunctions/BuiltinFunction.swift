@@ -318,6 +318,14 @@ public enum BuiltinFunctions {
             WICKRATIOFunction(),
             PRICEDISTFunction(),
             RANGEPCTFunction(),
+            // 麦语言扩展（第 32 批 · v15.25 · 线性回归 4 件套 + 加权平均）
+            LINREGRFunction(),
+            LINREGSLOPEFunction(),
+            LINREGINTFunction(),
+            LINREGR2Function(),
+            TRIMAFunction(),
+            EXPSMOOTHINGFunction(),
+            WEIGHTEDMEANFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

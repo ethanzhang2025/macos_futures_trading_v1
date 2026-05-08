@@ -182,6 +182,14 @@ public enum BuiltinFunctions {
             BOLLUFunction(),
             BOLLLFunction(),
             KDJKFunction(),
+            // 麦语言扩展（第 15 批 · v15.25 · KDJ 配套 + 布林带宽度 + K 线类型/角度/RSI差）
+            KDJDFunction(),
+            KDJJFunction(),
+            BOLLWFunction(),
+            BOLLPCTFunction(),
+            TYPINGFunction(),
+            MAANGLEFunction(),
+            RSIDIVFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

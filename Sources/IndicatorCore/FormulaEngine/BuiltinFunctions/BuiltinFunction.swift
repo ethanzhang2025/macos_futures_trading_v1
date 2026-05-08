@@ -198,6 +198,14 @@ public enum BuiltinFunctions {
             KVOFunction(),
             RVIFunction(),
             BETAFunction(),
+            // 麦语言扩展（第 17 批 · v15.25 · ICHIMOKU 一目均衡 4 线 + Donchian 通道 3 线）
+            ICHITENKANFunction(),
+            ICHIKIJUNFunction(),
+            ICHISPANAFunction(),
+            ICHISPANBFunction(),
+            DONCHIANUFunction(),
+            DONCHIANLFunction(),
+            DONCHIANMFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

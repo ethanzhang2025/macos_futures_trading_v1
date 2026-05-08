@@ -958,7 +958,7 @@
     - CloudKit container + iPadApp.entitlements 配置（可选 · 不配跑 Mock）
     - 8 大类 ~50 项视觉验收（应用壳 / 自选 / 图表 / 多周期 / 同步 / Settings / 行情 detail / 视觉细节）
 
-### 🟡 WP-62 · 麦语言基础版 30-50 函数（v15.25 batch10 第 3 批落地 · ~99% 兼容）
+### 🟡 WP-62 · 麦语言基础版 30-50 函数（v15.25 batch10/11 第 3+4 批落地 · ~99.5% 兼容）
 - **时点**：M8
 - **负责**：你
 - **依赖**：Legacy FormulaEngine（已 ~95% 完成 · v6.0+ 第 1+2 批扩展 10 函数）
@@ -1021,6 +1021,29 @@
     - DRAWICON/STICKLINE/DRAWBAND 画图函数（留 ChartCore）
     - WINNER/COST 筹码分布（需筹码模型）
     - REVERSE 命名非标准（跳过）
+- **已交付**（v15.25 batch11 · 2026-05-08 · 麦语言扩展第 4 批 · 66 → 71 函数 · 兼容度 ~99% → ~99.5%）：
+  - **新增 5 函数**（DMI 三件套 + TRIX + CORREL · trader 进阶趋势 / 套利）：
+    - `MaiYuYanBatch4.swift`（新文件 · 5 实现 + 3 内部 helper）
+    - **PDI(N)** · Plus Directional Indicator (+DI) · DMI 趋势强度
+    - **MDI(N)** · Minus Directional Indicator (-DI) · DMI 配套
+    - **ADX(N)** · Average Directional Index · 趋势强度判定（>25 强趋势）
+    - **TRIX(N)** · 三重 EMA 平滑变化率 · 趋势识别 / 假突破过滤
+    - **CORREL(X, Y, N)** · N 周期滚动相关系数 · 套利对冲 trader 用
+    - `BuiltinFunction.swift` 注册 5 函数到 `BuiltinFunctions.all`
+  - **设计取舍**：
+    - DMI 三件套共享 `DMIComputer.smoothed`（避免 +DM/-DM/TR 重复算 · Karpathy "避免过度复杂"反其道）
+    - Wilder smoothing 单独抽 `WilderSmoother`（DMI 与 ADX 共用 · α=1/N 等价 SMA(X,N,1)）
+    - EMA 单独抽 `EMASmoother`（TRIX 用 · 不复用全局 EMAFunction · 避免 args 协议负担）
+    - CORREL Decimal → Double sqrt → Decimal 转换（与 SQRT/LOG 现有模式一致 · 损失 ~1e-15 · 测试 ±1e-6 容差）
+  - **测试**：+11 测试 +1 suite · `Tests/IndicatorCoreTests/FormulaEngineTests/MaiYuYanExtensionBatch4Tests.swift`
+    - PDI 2 项（上涨段 > 下跌段 / 范围 [0,100]）
+    - MDI 2 项（下跌段 > 上涨段 / 范围 [0,100]）
+    - ADX 2 项（趋势段 > 横盘段 / 范围 [0,100]）
+    - TRIX 2 项（上涨 > 0 / 下跌 < 0 / 第一根 nil）
+    - CORREL 3 项（自身相关=1 / 反相关=-1 / 范围 [-1,1] 含浮点容差）
+    - 用 16 根趋势序列（上涨5 + 横盘3 + 下跌5 + 横盘3）· 验证趋势 vs 横盘行为
+  - **回归**：Linux swift test 1649/314 → **1660/315 全绿** 14.5s · 0 flaky · 0 回归
+  - **Stage A 麦语言完整收尾轨迹**：v6.0+ 第 1 批（51→56）+ 第 2 批（56→61）+ 第 3 批（61→66）+ 第 4 批（66→71）= 总 +20 函数 · 兼容度 85% → ~99.5%
 - **MaiYuYanFormulaDemo · 第 18 个真数据 demo**（v6.0+ · 2026-04-26 · 第 1+2 批 10 函数真行情验证）：
   - 位置：`Tools/MaiYuYanFormulaDemo/main.swift` · `swift run MaiYuYanFormulaDemo`（~3-5s 含 Sina 拉取）
   - 4 段：拉 Sina RB0 60min K 线 / 跑 8 文华公式 / 10 新函数覆盖验证 / 总结

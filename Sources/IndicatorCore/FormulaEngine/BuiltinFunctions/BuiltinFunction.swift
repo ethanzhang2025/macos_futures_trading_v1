@@ -96,6 +96,12 @@ public enum BuiltinFunctions {
             TROUGHFunction(),
             HHVCROSSFunction(),
             REFVFunction(),
+            // 麦语言扩展（第 4 批 · v15.25 兼容度 ~99% → ~99.5% · DMI 三件套 + TRIX + CORREL）
+            PDIFunction(),
+            MDIFunction(),
+            ADXFunction(),
+            TRIXFunction(),
+            CORRELFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

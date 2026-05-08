@@ -398,6 +398,14 @@ public enum BuiltinFunctions {
             REWARDRATIOFunction(),
             EQUITYFunction(),
             MARTINGALEFunction(),
+            // 麦语言扩展（第 42 批 · v15.25 · 期货专属 · 期限结构 / 基差 / 跨月）
+            BASISFunction(),
+            ROLLYIELDFunction(),
+            TERMSTRUCTFunction(),
+            CONTANGOFunction(),
+            BACKWARDATIONFunction(),
+            CONTRACTSPREADFunction(),
+            FRONTMONTHFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

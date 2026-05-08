@@ -270,6 +270,14 @@ public enum BuiltinFunctions {
             MAXDDFunction(),
             MAXDDPCTFunction(),
             DRAWDOWNFunction(),
+            // 麦语言扩展（第 26 批 · v15.25 · 盈亏统计 · 组合管理 trader 必备）
+            GAINSFunction(),
+            LOSSESFunction(),
+            WINRATEFunction(),
+            AVGUPFunction(),
+            AVGDOWNFunction(),
+            PROFITRATIOFunction(),
+            EXPECTANCYFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

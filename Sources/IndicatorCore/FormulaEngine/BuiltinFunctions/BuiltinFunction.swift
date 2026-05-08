@@ -278,6 +278,14 @@ public enum BuiltinFunctions {
             AVGDOWNFunction(),
             PROFITRATIOFunction(),
             EXPECTANCYFunction(),
+            // 麦语言扩展（第 27 批 · v15.25 · 数据预处理 + 高级统计）
+            PCTRETURNFunction(),
+            LOGRETURNFunction(),
+            DETRENDFunction(),
+            KURTFunction(),
+            SKEWFunction(),
+            SHARPEFunction(),
+            ANNUALSTDFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

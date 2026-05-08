@@ -144,7 +144,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
     public final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: MaiLangCodeView
         weak var textView: NSTextView?
-        var visibleObserver: NSObjectProtocol?
+        nonisolated(unsafe) var visibleObserver: NSObjectProtocol?
 
         init(_ parent: MaiLangCodeView) { self.parent = parent }
 

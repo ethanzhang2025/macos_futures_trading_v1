@@ -753,3 +753,69 @@
 "切换主题（%@）" = "Toggle Theme (%@)";
 "→ 浅色" = "→ Light";
 "→ 深色" = "→ Dark";
+
+/* WP-i18n Batch B · enum rawValue + displayName + 列头 + KPI + chartCard 标题（v15.25 / 第二轮收尾） */
+
+/* enum rawValue 走 L() 翻译（ChartMode / AlertTab / JournalTab / TrainingTab） */
+"实盘" = "Live";
+"回放" = "Replay";
+"预警列表" = "Alert List";
+"触发历史" = "Trigger History";
+"通知日志" = "Notification Log";
+"成交记录" = "Trades";
+"规则" = "Rules";
+"实时" = "Live";
+"历史" = "History";
+
+/* WorkspaceWindow.Kind displayName + 默认模板名 */
+"盘前" = "Pre-Market";
+"盘中" = "Intra-Day";
+"盘后" = "Post-Market";
+"自定义" = "Custom";
+"盘前看大盘" = "Pre-Market Overview";
+"盘中主交易" = "Intra-Day Trading";
+"盘后复盘" = "Post-Market Review";
+"自定义模板 1" = "Custom Template 1";
+
+/* FormulaEditor */
+"未保存修改" = "Unsaved Changes";
+
+/* AlertWindow KPI 卡 */
+"总数" = "Total";
+"活跃" = "Active";
+"已触发" = "Triggered";
+"已暂停" = "Paused";
+"24h 触发" = "24h Triggers";
+"本周触发" = "This Week Triggers";
+
+/* WatchlistWindow 列头 */
+"最新价" = "Last";
+"涨跌幅" = "Change %";
+"持仓量" = "OI";
+
+/* JournalWindow KPI + 列头 */
+"总成交" = "Total Trades";
+"总日志" = "Total Journals";
+"成交价" = "Price";
+"金额" = "Amount";
+"手续费" = "Fees";
+"来源" = "Source";
+
+/* ReviewWindow 12 chartCard 副标题 */
+"分布直方" = "PnL Distribution";
+"胜率曲线" = "Win Rate Curve";
+"品种矩阵" = "Instrument Matrix";
+"最大回撤" = "Max Drawdown";
+"盈亏比" = "Profit/Loss Ratio";
+"时段分析" = "Session PnL";
+"连胜连败曲线" = "Win/Loss Streak";
+"心理风险标签" = "Psychology Tags";
+"日历热力图" = "PnL Heatmap";
+
+/* MultiChart 网格名 */
+"2×2 四宫" = "2×2 (Quad)";
+"2×2（四宫）" = "2×2 (Quad)";
+"tick 实时" = "Tick Live";
+
+/* Training 顶状态 */
+"准备就绪" = "Ready";

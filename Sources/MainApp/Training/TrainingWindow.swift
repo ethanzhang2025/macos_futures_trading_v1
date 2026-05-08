@@ -28,6 +28,7 @@ private enum TrainingTab: String, CaseIterable, Identifiable {
     case live  = "实时"
     case history = "历史"
     var id: String { rawValue }
+    var displayName: String { L(rawValue) }
 }
 
 struct TrainingWindow: View {
@@ -195,7 +196,7 @@ struct TrainingWindow: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text(emojiFor(t))
-                        Text(t.rawValue)
+                        Text(t.displayName)
                             .font(.system(size: 13, weight: tab == t ? .semibold : .regular))
                         if t == .live, !viewModel.liveViolations.isEmpty {
                             Text("\(viewModel.liveViolations.count)")

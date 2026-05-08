@@ -902,10 +902,10 @@ struct WorkspaceWindow: View {
 fileprivate extension WorkspaceTemplate.Kind {
     var displayName: String {
         switch self {
-        case .preMarket:  return "盘前"
-        case .inMarket:   return "盘中"
-        case .postMarket: return "盘后"
-        case .custom:     return "自定义"
+        case .preMarket:  return L("盘前")
+        case .inMarket:   return L("盘中")
+        case .postMarket: return L("盘后")
+        case .custom:     return L("自定义")
         }
     }
 
@@ -1447,7 +1447,7 @@ private enum MockWorkspaceBook {
 
         // 盘前看大盘（1 全屏窗口 · IF0 60min · 隔夜分析）
         book.addTemplate(
-            name: "盘前看大盘",
+            name: L("盘前看大盘"),
             kind: .preMarket,
             windows: [
                 WindowLayout(
@@ -1462,7 +1462,7 @@ private enum MockWorkspaceBook {
 
         // 盘中主交易（4 windows · 2x2 grid · RB0 主战场）
         book.addTemplate(
-            name: "盘中主交易",
+            name: L("盘中主交易"),
             kind: .inMarket,
             windows: WindowGridPreset.grid2x2.applyTo([
                 WindowLayout(instrumentID: "RB0", period: .minute5, indicatorIDs: ["MA5", "MA20", "BOLL"]),
@@ -1475,7 +1475,7 @@ private enum MockWorkspaceBook {
 
         // 盘后复盘（2 windows · vertical · 日线）
         book.addTemplate(
-            name: "盘后复盘",
+            name: L("盘后复盘"),
             kind: .postMarket,
             windows: WindowGridPreset.vertical2.applyTo([
                 WindowLayout(instrumentID: "RB0", period: .daily, indicatorIDs: ["MA20", "MA60", "BOLL", "MACD"]),
@@ -1486,7 +1486,7 @@ private enum MockWorkspaceBook {
 
         // 自定义（空模板 · 演示空 state · commit 3 用网格预设填充）
         book.addTemplate(
-            name: "自定义模板 1",
+            name: L("自定义模板 1"),
             kind: .custom,
             now: now
         )

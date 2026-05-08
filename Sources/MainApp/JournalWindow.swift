@@ -29,6 +29,7 @@ private enum JournalTab: String, CaseIterable, Identifiable {
     case trades   = "成交记录"
     case journals = "交易日志"
     var id: String { rawValue }
+    var displayName: String { L(rawValue) }
 }
 
 // MARK: - 日志视图模式（commit 4/4）
@@ -489,7 +490,7 @@ struct JournalWindow: View {
         Picker("", selection: $selectedTab) {
             ForEach(JournalTab.allCases) { t in
                 let count = t == .trades ? trades.count : journals.count
-                Text("\(t.rawValue) \(count)").tag(t)
+                Text("\(t.displayName) \(count)").tag(t)
             }
         }
         .pickerStyle(.segmented)

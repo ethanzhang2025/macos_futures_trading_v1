@@ -26,7 +26,7 @@ public struct FormulaEditorWindow: View {
     @AppStorage("viewState.v1.formulaEditor.fontSize") private var fontSizeStored: Double = 13
     /// v15.22 batch7 · 片段库 · 用户自定义公式模板（JSON 持久化 · 跨会话保留）
     @AppStorage("viewState.v1.formulaEditor.snippets") private var snippetsJSON: String = ""
-    @State private var statusMessage: String = "未保存修改"
+    @State private var statusMessage: String = L("未保存修改")
     @State private var showSnippetSaveSheet: Bool = false
     @State private var newSnippetName: String = ""
     /// v15.22 batch5 · 编译验证结果（nil = 未验证 / "" = 通过 / 否则错误信息）

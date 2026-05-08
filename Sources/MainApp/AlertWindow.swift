@@ -27,6 +27,7 @@ private enum AlertTab: String, CaseIterable, Identifiable {
     case history = "触发历史"
     case console = "通知日志"
     var id: String { rawValue }
+    var displayName: String { L(rawValue) }
 }
 
 // MARK: - Sheet 状态（add / edit 二态）
@@ -407,7 +408,7 @@ struct AlertWindow: View {
     private var tabBar: some View {
         Picker("", selection: $selectedTab) {
             ForEach(AlertTab.allCases) { t in
-                Text(t.rawValue).tag(t)
+                Text(t.displayName).tag(t)
             }
         }
         .pickerStyle(.segmented)

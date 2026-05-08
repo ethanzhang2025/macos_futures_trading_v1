@@ -124,7 +124,7 @@ enum ChartMode: String, CaseIterable, Identifiable {
     case live   = "实盘"
     case replay = "回放"
     var id: String { rawValue }
-    var displayName: String { rawValue }
+    var displayName: String { L(rawValue) }
 }
 
 // MARK: - Scene 容器（每窗口独立 state）

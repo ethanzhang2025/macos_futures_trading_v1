@@ -310,6 +310,14 @@ public enum BuiltinFunctions {
             TRIMMEANFunction(),
             MAXSTREAKFunction(),
             TIMEINRANGEFunction(),
+            // 麦语言扩展（第 31 批 · v15.25 · K 线细节统计 + 距离/振幅）
+            GAPSIZEFunction(),
+            BODYPCTFunction(),
+            UPPERWICKFunction(),
+            LOWERWICKFunction(),
+            WICKRATIOFunction(),
+            PRICEDISTFunction(),
+            RANGEPCTFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

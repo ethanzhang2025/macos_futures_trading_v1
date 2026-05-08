@@ -222,6 +222,14 @@ public enum BuiltinFunctions {
             ZSCOREFunction(),
             NORMFunction(),
             EMDFunction(),
+            // 麦语言扩展（第 20 批 · v15.25 · 实用辅助 CLAMP/SAFEDIV/NAFILL/CUM*/MAXIDX）
+            CLAMPMINFunction(),
+            CLAMPMAXFunction(),
+            SAFEDIVFunction(),
+            NAFILLFunction(),
+            CUMSUMFunction(),
+            CUMPRODFunction(),
+            MAXIDXFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

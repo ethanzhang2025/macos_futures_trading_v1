@@ -342,6 +342,14 @@ public enum BuiltinFunctions {
             HADIRFunction(),
             SARDIRFunction(),
             PRICEACTIONFunction(),
+            // 麦语言扩展（第 35 批 · v15.25 · 数学辅助函数）
+            POSITIVEFunction(),
+            NEGATIVEFunction(),
+            CLIPFunction(),
+            HEAVISIDEFunction(),
+            SQUAREDFunction(),
+            CUBEDFunction(),
+            INVERTFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

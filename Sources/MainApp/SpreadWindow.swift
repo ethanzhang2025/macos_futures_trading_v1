@@ -24,9 +24,33 @@ struct SpreadWindow: View {
     @State private var period: KLinePeriod = .minute15
     @State private var spreadValues: [SpreadValue] = []
     @State private var statistics: SpreadStatistics = .empty
+    /// v15.37 V2 · 滚动 Z 时序（主图标信号点用）
+    @State private var rollingZScores: [Double] = []
+    /// v15.37 V2 · 信号序列（主图叠加 ▲▼ 标识）
+    @State private var signals: [SpreadSignal] = []
+    /// v15.37 V2 · 价差直方图（底部副图用）
+    @State private var histogram: SpreadHistogram = .empty
+    /// v15.37 V2 · 副图模式（none = 无副图 · histogram = 分布直方图）
+    @State private var subChartMode: SubChartMode = .histogram
+    /// v15.37 V2 · 回测 sheet 显隐
+    @State private var backtestSheetPresented: Bool = false
+    /// v15.37 V2 · 滚动 Z 窗口（trader 可调）
+    @State private var rollingWindow: Int = 30
 
     private var selectedPair: SpreadPair {
         SpreadPresets.byID[selectedPairID] ?? SpreadPresets.all.first!
+    }
+
+    enum SubChartMode: String, CaseIterable, Identifiable {
+        case none, histogram, rollingZ
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .none:      return "无"
+            case .histogram: return "直方图"
+            case .rollingZ:  return "滚动 Z"
+            }
+        }
     }
 
     var body: some View {
@@ -35,10 +59,29 @@ struct SpreadWindow: View {
             Divider()
             statisticsHUD
             Divider()
-            spreadChart
+            if subChartMode == .none {
+                spreadChart
+            } else {
+                VStack(spacing: 0) {
+                    spreadChart
+                        .frame(maxHeight: .infinity)
+                    Divider()
+                    subChartView
+                        .frame(height: 160)
+                }
+            }
         }
-        .frame(minWidth: 920, minHeight: 540)
+        .frame(minWidth: 920, minHeight: 600)
         .task(id: selectedPairID) { reload() }
+        .onChange(of: rollingWindow) { _, _ in recomputeV2() }
+        .sheet(isPresented: $backtestSheetPresented) {
+            SpreadBacktestSheet(
+                pair: selectedPair,
+                values: spreadValues,
+                rollingWindow: rollingWindow,
+                isPresented: $backtestSheetPresented
+            )
+        }
     }
 
     // MARK: - Toolbar
@@ -74,11 +117,39 @@ struct SpreadWindow: View {
                 .labelsHidden()
             }
 
+            // v15.37 V2 · 滚动 Z 窗口
+            HStack(spacing: 6) {
+                Text("Z 窗口").font(.callout).foregroundColor(.secondary)
+                Stepper(value: $rollingWindow, in: 5...200, step: 5) {
+                    Text("\(rollingWindow)").font(.callout.monospaced())
+                        .frame(minWidth: 28)
+                }
+            }
+
+            // v15.37 V2 · 副图模式
+            HStack(spacing: 6) {
+                Text("副图").font(.callout).foregroundColor(.secondary)
+                Picker("", selection: $subChartMode) {
+                    ForEach(SubChartMode.allCases) { m in
+                        Text(m.displayName).tag(m)
+                    }
+                }
+                .frame(width: 100)
+                .labelsHidden()
+            }
+
             Spacer()
 
             Text("\(selectedPair.leg1.ratio > 0 ? "+" : "")\(selectedPair.leg1.ratio)·\(selectedPair.leg1.instrumentID) / \(selectedPair.leg2.ratio > 0 ? "+" : "")\(selectedPair.leg2.ratio)·\(selectedPair.leg2.instrumentID)")
                 .font(.caption.monospaced())
                 .foregroundColor(.secondary)
+
+            Button {
+                backtestSheetPresented = true
+            } label: {
+                Label("回测", systemImage: "chart.line.uptrend.xyaxis")
+            }
+            .help("基于滚动 Z 阈值跑套利回测 · 出 PnL 曲线 + 胜率 + maxDD")
 
             Button {
                 reload()
@@ -201,6 +272,139 @@ struct SpreadWindow: View {
         let lastPt = CGPoint(x: CGFloat(lastIdx) * step, y: yFor(values[lastIdx]))
         let dot = Path(ellipseIn: CGRect(x: lastPt.x - 3.5, y: lastPt.y - 3.5, width: 7, height: 7))
         ctx.fill(dot, with: .color(.cyan))
+
+        // v15.37 V2 · 信号点（▲ entry / ▼ exit · 红做空 / 绿做多）
+        for sig in signals where sig.index < values.count {
+            let x = CGFloat(sig.index) * step
+            let y = yFor(values[sig.index])
+            drawSignalMarker(ctx: ctx, at: CGPoint(x: x, y: y), signal: sig)
+        }
+    }
+
+    /// 信号 marker：上三角 = entry · 下三角 = exit · 颜色按 side
+    private func drawSignalMarker(ctx: GraphicsContext, at point: CGPoint, signal: SpreadSignal) {
+        let color: Color
+        switch signal.side {
+        case .long:  color = .green
+        case .short: color = .red
+        }
+        var path = Path()
+        let size: CGFloat = 6
+        switch signal.action {
+        case .entry:
+            // 上三角（▲）· entry 位置在点上方稍微偏移
+            let cx = point.x
+            let cy = point.y - 10
+            path.move(to: CGPoint(x: cx, y: cy - size))
+            path.addLine(to: CGPoint(x: cx - size, y: cy + size))
+            path.addLine(to: CGPoint(x: cx + size, y: cy + size))
+            path.closeSubpath()
+            ctx.fill(path, with: .color(color))
+            ctx.stroke(path, with: .color(.white.opacity(0.7)), lineWidth: 0.6)
+        case .exit:
+            // 下三角（▼）· exit 在点下方
+            let cx = point.x
+            let cy = point.y + 10
+            path.move(to: CGPoint(x: cx, y: cy + size))
+            path.addLine(to: CGPoint(x: cx - size, y: cy - size))
+            path.addLine(to: CGPoint(x: cx + size, y: cy - size))
+            path.closeSubpath()
+            ctx.fill(path, with: .color(color.opacity(0.7)))
+            ctx.stroke(path, with: .color(.white.opacity(0.5)), lineWidth: 0.6)
+        }
+    }
+
+    // MARK: - V2 副图（直方图 / 滚动 Z）
+
+    @ViewBuilder
+    private var subChartView: some View {
+        Canvas { ctx, size in
+            switch subChartMode {
+            case .none:      break
+            case .histogram: drawHistogram(ctx: ctx, size: size)
+                            // header label 单独画在 onSubChartLabel
+            case .rollingZ:  drawRollingZ(ctx: ctx, size: size)
+            }
+        }
+        .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+    }
+
+    private func drawHistogram(ctx: GraphicsContext, size: CGSize) {
+        let h = histogram
+        guard !h.bins.isEmpty else {
+            let text = Text("无直方图数据").font(.system(size: 11)).foregroundColor(.secondary)
+            ctx.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2), anchor: .center)
+            return
+        }
+        let maxC = h.bins.map { $0.count }.max() ?? 1
+        let binW = size.width / CGFloat(h.bins.count)
+        let pad: CGFloat = 1
+        for (i, bin) in h.bins.enumerated() {
+            let normalized = Double(bin.count) / Double(max(maxC, 1))
+            let height = CGFloat(normalized) * (size.height - 16)
+            let rect = CGRect(
+                x: CGFloat(i) * binW + pad,
+                y: size.height - height,
+                width: binW - 2 * pad,
+                height: height
+            )
+            let isCurrent = i == h.currentBinIndex
+            let isMode = i == h.modeBinIndex
+            let color: Color
+            if isCurrent { color = .cyan }
+            else if isMode { color = .yellow.opacity(0.7) }
+            else { color = .gray.opacity(0.55) }
+            ctx.fill(Path(rect), with: .color(color))
+        }
+        // 顶部标题
+        let title = Text("📊 价差分布（\(h.bins.count) bins · cyan=当前 · yellow=众数 · 共 \(h.totalCount) 样本）")
+            .font(.system(size: 10))
+            .foregroundColor(.secondary)
+        ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
+    }
+
+    private func drawRollingZ(ctx: GraphicsContext, size: CGSize) {
+        guard rollingZScores.count >= 2 else {
+            let text = Text("滚动 Z 不足（窗口 \(rollingWindow)）")
+                .font(.system(size: 11)).foregroundColor(.secondary)
+            ctx.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2), anchor: .center)
+            return
+        }
+        // Y 范围 [-3.5, 3.5]（覆盖大部分极值 · 极端值会出范围）
+        let viewMin: Double = -3.5
+        let viewMax: Double = 3.5
+        let n = rollingZScores.count
+        let step = size.width / CGFloat(n - 1)
+        func yFor(_ z: Double) -> CGFloat {
+            CGFloat(1 - (z - viewMin) / (viewMax - viewMin)) * size.height
+        }
+        // ±2σ 阈值线（橙虚）
+        for level: Double in [2, -2] {
+            var line = Path()
+            line.move(to: CGPoint(x: 0, y: yFor(level)))
+            line.addLine(to: CGPoint(x: size.width, y: yFor(level)))
+            ctx.stroke(line, with: .color(.orange.opacity(0.4)),
+                       style: StrokeStyle(lineWidth: 0.8, dash: [3, 3]))
+        }
+        // 0 线（白虚）
+        var zeroLine = Path()
+        zeroLine.move(to: CGPoint(x: 0, y: yFor(0)))
+        zeroLine.addLine(to: CGPoint(x: size.width, y: yFor(0)))
+        ctx.stroke(zeroLine, with: .color(.white.opacity(0.30)),
+                   style: StrokeStyle(lineWidth: 0.8, dash: [4, 4]))
+        // Z 折线（cyan）
+        var path = Path()
+        for (i, z) in rollingZScores.enumerated() {
+            let pt = CGPoint(x: CGFloat(i) * step, y: yFor(z))
+            if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+        }
+        ctx.stroke(path, with: .color(.cyan.opacity(0.85)),
+                   style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+        // 标题
+        let title = Text("📈 滚动 Z-score（窗口 \(rollingWindow) · 橙线 ±2σ 阈值）")
+            .font(.system(size: 10))
+            .foregroundColor(.secondary)
+        ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }
 
     // MARK: - 数据加载
@@ -223,6 +427,14 @@ struct SpreadWindow: View {
         )
         spreadValues = SpreadCalculator.calculate(pair: pair, leg1Bars: leg1Bars, leg2Bars: leg2Bars)
         statistics = SpreadStatisticsCalculator.compute(spreadValues)
+        recomputeV2()
+    }
+
+    /// v15.37 V2 · 重算滚动 Z + 信号 + 直方图（reload 后 / Z 窗口变化时调）
+    private func recomputeV2() {
+        rollingZScores = SpreadStatisticsCalculator.rollingZScores(spreadValues, window: rollingWindow)
+        signals = SpreadSignalGenerator.generate(values: spreadValues, rollingZScores: rollingZScores)
+        histogram = SpreadHistogramCalculator.compute(spreadValues)
     }
 
     private func fmt(_ v: Decimal) -> String {

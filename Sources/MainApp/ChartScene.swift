@@ -2528,12 +2528,7 @@ struct ChartContentView: View {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
         let todayStart = cal.startOfDay(for: Date())
-        // 找第一根 closeTime ≥ todayStart 的 K 线 · open 即为开盘价
-        return bars.first { bar in
-            // KLine 用 openTime · v1 简化：closeTime fallback openTime + period.seconds
-            let bClose = bar.closeTime
-            return bClose >= todayStart
-        }?.open
+        return bars.first { bar in bar.openTime >= todayStart }?.open
     }
 
     @ViewBuilder

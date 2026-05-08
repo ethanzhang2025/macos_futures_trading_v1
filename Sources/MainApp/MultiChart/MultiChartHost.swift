@@ -344,8 +344,7 @@ struct MultiChartHost: View {
     }
 
     /// v15.23 batch104 · 综合 6 cell 多空评级总览（trader 全景看市场情绪 · 强多/震荡/强空 数量）
-    @ViewBuilder
-    private var cellsBullSummaryView: some View {
+    private var cellsBullCounts: (bull: Int, neutral: Int, bear: Int) {
         var bull = 0, neutral = 0, bear = 0
         let cellCount = activeCellCount
         for i in 0..<cellCount {
@@ -362,6 +361,15 @@ struct MultiChartHost: View {
             else if s >= 0, s <= 2 { bear += 1 }
             else if s == 3 { neutral += 1 }
         }
+        return (bull, neutral, bear)
+    }
+
+    @ViewBuilder
+    private var cellsBullSummaryView: some View {
+        let counts = cellsBullCounts
+        let bull = counts.bull
+        let neutral = counts.neutral
+        let bear = counts.bear
         HStack(spacing: 5) {
             if bull > 0 {
                 Text("📈\(bull)")
@@ -482,7 +490,7 @@ struct MultiChartHost: View {
                     let oi = b.openInterest
                     let prevOI = idx >= 1 ? bars[idx - 1].openInterest : oi
                     let oiUp = oi >= prevOI
-                    Text(String(format: "OI %.1f万", Double(oi) / 10000))
+                    Text(String(format: "OI %.1f万", (oi as NSDecimalNumber).doubleValue / 10000))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.blue.opacity(0.9))
                     Text(oiUp ? "↑增仓" : "↓减仓")
@@ -1172,11 +1180,11 @@ struct MultiChartHost: View {
             onVWAPToggle: { updateCell(idx) { $0.showVWAP.toggle() } },
             onFibonacciToggle: { updateCell(idx) { $0.showFibonacci.toggle() } },
             onPivotPointsToggle: { updateCell(idx) { $0.showPivotPoints.toggle() } },
-            onTimeShareToggle: { updateCell(idx) { $0.isTimeShareMode.toggle() } },
             onSubChartTap: { sub in updateCell(idx) {
                 $0.subChart = sub
-                $0.showVolume = (sub == .volume)  // 同步 legacy 字段（兼容旧 path）
+                $0.showVolume = (sub == .volume)
             } },
+            onTimeShareToggle: { updateCell(idx) { $0.isTimeShareMode.toggle() } },
             onPushToMain: { pushToMainChart(state) }
         )
     }

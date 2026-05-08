@@ -1154,8 +1154,7 @@ struct AlertWindow: View {
             let t = Self.timeFormatter.string(from: e.triggeredAt)
             let price = fmtDecimal(e.triggerPrice)
             let condition = e.conditionSnapshot.displayDescription
-            let channels = e.channelsTriggered.map(\.shortLabel).sorted().joined(separator: "·")
-            lines.append("| \(t) | \(e.alertName) | \(e.instrumentID) | \(price) | \(condition) | \(channels) |")
+            lines.append("| \(t) | \(e.alertName) | \(e.instrumentID) | \(price) | \(condition) | - |")
         }
         Pasteboard.copy(lines.joined(separator: "\n"))
         Toast.info("已复制", "\(entries.count) 条触发历史 → Markdown 表格已在剪贴板。")

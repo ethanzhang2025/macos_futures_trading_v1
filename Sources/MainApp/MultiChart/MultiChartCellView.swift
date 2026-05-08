@@ -475,13 +475,15 @@ struct MultiChartCellView: View {
     /// v15.23 batch79-95 · 副图 Menu icon（按当前选择切换图标）
     private var subChartIcon: String {
         switch state.subChart {
-        case .none: return "chart.bar"               // 灰色 outline
-        case .volume: return "chart.bar.fill"       // 实心柱（量）
-        case .kdj: return "waveform.path.ecg"       // 心电图（KDJ）
-        case .macd: return "chart.xyaxis.line"      // 趋势线（MACD）
-        case .rsi: return "gauge.with.dots.needle.50percent"  // 仪表（RSI 强弱）
-        case .oi: return "person.3.fill"            // 三人（持仓量 · 主力意图）
-        case .atr: return "tornado"                  // 龙卷风（ATR 波动率 · 风险）
+        case .none: return "chart.bar"
+        case .volume: return "chart.bar.fill"
+        case .kdj: return "waveform.path.ecg"
+        case .macd: return "chart.xyaxis.line"
+        case .rsi: return "gauge.with.dots.needle.50percent"
+        case .oi: return "person.3.fill"
+        case .atr: return "tornado"
+        case .cci: return "arrow.up.arrow.down"
+        case .wr: return "arrow.left.and.right"
         }
     }
 

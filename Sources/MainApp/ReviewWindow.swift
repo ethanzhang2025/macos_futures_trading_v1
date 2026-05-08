@@ -929,25 +929,25 @@ struct ReviewWindow: View {
         )
     }
 
-    @ViewBuilder
-    private func heatCell(bucket: DailyPnLBucket?, day: Date, maxAbs: Double, size: CGFloat) -> some View {
-        let bgColor: Color
-        let toolTip: String
+    private func heatStyle(bucket: DailyPnLBucket?, day: Date, maxAbs: Double) -> (Color, String) {
         if let b = bucket {
             let pnl = (b.realizedPnL as NSDecimalNumber).doubleValue
             let level = maxAbs > 0 ? min(1.0, abs(pnl) / maxAbs) : 0
-            bgColor = heatColor(level: level, isWin: b.realizedPnL > 0)
             let dateStr = Self.formatDay(day)
-            toolTip = "\(dateStr) · \(b.tradeCount) 笔 · ¥\(signedDecimal(b.realizedPnL))"
-        } else {
-            bgColor = Color.secondary.opacity(0.08)
-            toolTip = Self.formatDay(day) + " · 无交易"
+            return (heatColor(level: level, isWin: b.realizedPnL > 0),
+                    "\(dateStr) · \(b.tradeCount) 笔 · ¥\(signedDecimal(b.realizedPnL))")
         }
+        return (Color.secondary.opacity(0.08), Self.formatDay(day) + " · 无交易")
+    }
+
+    @ViewBuilder
+    private func heatCell(bucket: DailyPnLBucket?, day: Date, maxAbs: Double, size: CGFloat) -> some View {
+        let style = heatStyle(bucket: bucket, day: day, maxAbs: maxAbs)
         Rectangle()
-            .fill(bgColor)
+            .fill(style.0)
             .frame(width: size, height: size)
             .cornerRadius(2)
-            .help(toolTip)
+            .help(style.1)
     }
 
     private func heatColor(level: Double, isWin: Bool) -> Color {

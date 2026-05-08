@@ -248,27 +248,23 @@ public struct FormulaEditorWindow: View {
         .sheet(isPresented: $showOutlineSheet) {
             let allOutline = MaiLangOutline.parse(sourceText)
             let allLintWarns = MaiLangLint.analyze(sourceText)
-            // v15.23 batch139 · 搜索过滤（query 大小写不敏感 · 命中变量名/警告 message）
             let q = outlineSearchQuery.trimmingCharacters(in: .whitespaces).lowercased()
-            var filteredOutline = q.isEmpty ? allOutline
-                          : allOutline.filter { $0.name.lowercased().contains(q) }
-            // v15.23 batch140 · 仅输出 toggle
-            if outlineShowOutputsOnly {
-                filteredOutline = filteredOutline.filter { $0.isOutput }
-            }
-            // v15.23 batch140 · 排序
-            let outline: [MaiLangOutlineEntry]
-            switch outlineSortKey {
-            case .lineAsc:
-                outline = filteredOutline  // 已是行号升序
-            case .nameAsc:
-                outline = filteredOutline.sorted { $0.name.lowercased() < $1.name.lowercased() }
-            case .typeFirst:
-                outline = filteredOutline.sorted { (a, b) in
-                    if a.isOutput != b.isOutput { return a.isOutput && !b.isOutput }
-                    return a.line < b.line
+            let outline: [MaiLangOutlineEntry] = {
+                let searchFiltered = q.isEmpty ? allOutline
+                    : allOutline.filter { $0.name.lowercased().contains(q) }
+                let outputFiltered = outlineShowOutputsOnly
+                    ? searchFiltered.filter { $0.isOutput }
+                    : searchFiltered
+                switch outlineSortKey {
+                case .lineAsc: return outputFiltered
+                case .nameAsc: return outputFiltered.sorted { $0.name.lowercased() < $1.name.lowercased() }
+                case .typeFirst:
+                    return outputFiltered.sorted { a, b in
+                        if a.isOutput != b.isOutput { return a.isOutput && !b.isOutput }
+                        return a.line < b.line
+                    }
                 }
-            }
+            }()
             let lintWarns = q.isEmpty ? allLintWarns
                           : allLintWarns.filter { $0.message.lowercased().contains(q) }
             let deps = MaiLangDependencies.analyze(sourceText)
@@ -952,11 +948,11 @@ public struct FormulaEditorWindow: View {
                 let unusedCount = lintWarnings.filter { $0.kind == .unusedVariable }.count
                 let dupCount = lintWarnings.filter { $0.kind == .duplicateDefinition }.count
                 let colorCount = lintWarnings.filter { $0.kind == .missingColorAttribute }.count
-                var parts: [String] = []
-                if unusedCount > 0 { parts.append("\(unusedCount) 未用") }
-                if dupCount > 0 { parts.append("\(dupCount) 重复") }
-                if colorCount > 0 { parts.append("\(colorCount) 无色") }
-                let chipText = parts.joined(separator: " · ")
+                let chipText = [
+                    unusedCount > 0 ? "\(unusedCount) 未用" : nil,
+                    dupCount > 0 ? "\(dupCount) 重复" : nil,
+                    colorCount > 0 ? "\(colorCount) 无色" : nil,
+                ].compactMap { $0 }.joined(separator: " · ")
                 Button {
                     pendingGotoLine = lintWarnings.first?.line
                 } label: {

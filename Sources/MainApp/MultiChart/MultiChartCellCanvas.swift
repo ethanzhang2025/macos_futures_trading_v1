@@ -263,7 +263,7 @@ struct MultiChartCellCanvas: View {
     // MARK: - Candles
 
     private func drawCandles(in ctx: GraphicsContext, rect: CGRect) {
-        let opens = bars.map { (bars[0].open as NSDecimalNumber).doubleValue }
+        let opens = bars.map { ($0.open as NSDecimalNumber).doubleValue }
         let highs = bars.map { ($0.high as NSDecimalNumber).doubleValue }
         let lows = bars.map { ($0.low as NSDecimalNumber).doubleValue }
         let closes = bars.map { ($0.close as NSDecimalNumber).doubleValue }
@@ -883,7 +883,7 @@ struct MultiChartCellCanvas: View {
     private func drawOI(in ctx: GraphicsContext, rect: CGRect) {
         let n = bars.count
         guard n >= 2 else { return }
-        let ois = bars.map { Double($0.openInterest) }
+        let ois = bars.map { ($0.openInterest as NSDecimalNumber).doubleValue }
         guard let maxOI = ois.max(), let minOI = ois.min() else { return }
         // 全 0 数据（mock 老数据）→ 平线提示无 OI · 仅画一条灰线
         guard maxOI > 0 else {
@@ -1468,7 +1468,7 @@ enum MultiChartMockData {
                 low: Decimal(low),
                 close: Decimal(close),
                 volume: volume,
-                openInterest: oi,
+                openInterest: Decimal(oi),
                 turnover: 0
             ))
             price = close

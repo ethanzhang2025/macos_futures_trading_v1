@@ -326,13 +326,13 @@ public struct MaiLangCodeView: NSViewRepresentable {
         public func textView(_ textView: NSTextView,
                              completions words: [String],
                              forPartialWordRange charRange: NSRange,
-                             indexOfSelectedItem index: UnsafeMutablePointer<Int>) -> [String] {
+                             indexOfSelectedItem index: UnsafeMutablePointer<Int>?) -> [String] {
             let prefix = (textView.string as NSString).substring(with: charRange).uppercased()
             guard !prefix.isEmpty else { return [] }
             let candidates = MaiLangSyntaxHighlighter.allCompletionCandidates
                 .filter { $0.hasPrefix(prefix) }
-            if !candidates.isEmpty {
-                index.pointee = 0
+            if !candidates.isEmpty, let idx = index {
+                idx.pointee = 0
             }
             return candidates
         }

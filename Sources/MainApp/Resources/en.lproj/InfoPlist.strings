@@ -1,0 +1,3 @@
+/* App name (used by system About / Quit / Hide / Help menu items) */
+"CFBundleDisplayName" = "FuturesTerminal";
+"CFBundleName" = "FuturesTerminal";

@@ -1,0 +1,21 @@
+/* Top-level menu / window titles (v15.25 WP-i18n P2) */
+
+"K 线图表" = "K-Line";
+"自选合约" = "Watchlist";
+"复盘" = "Replay";
+"预警" = "Alerts";
+"预警面板" = "Alerts";
+"交易日志" = "Trade Journal";
+"工作区模板" = "Workspace Templates";
+"模拟交易" = "Paper Trading";
+"模拟训练" = "Training";
+"模拟训练（⌘⇧T）" = "Training (⌘⇧T)";
+"多图表" = "Multi-Chart";
+"多图表（⌘⌥M）" = "Multi-Chart (⌘⌥M)";
+"公式编辑器" = "Formula Editor";
+"公式编辑器（⌘⌥F）" = "Formula Editor (⌘⌥F)";
+"视图" = "View";
+"工具" = "Tools";
+"新建图表" = "New Chart";
+"复盘工作台" = "Replay Workspace";
+"导入文华公式（.wh）" = "Import WH Formula (.wh)";

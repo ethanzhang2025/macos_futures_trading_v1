@@ -1,0 +1,3 @@
+/* App 名（系统菜单 About / Quit / Hide / Help 用此名 · zh-Hans） */
+"CFBundleDisplayName" = "期货终端";
+"CFBundleName" = "期货终端";

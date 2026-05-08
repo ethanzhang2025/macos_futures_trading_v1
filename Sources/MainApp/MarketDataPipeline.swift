@@ -51,17 +51,12 @@ final class MarketDataPipeline {
         }
     }
 
-    /// 主图可切换的合约清单（v12.16 动态主力月）
-    /// 4 主连续（RB0/IF0/AU0/CU0）+ 4 active 月份合约（DominantMonthCalculator 按品种规则推断 · 半年自动续期）
-    /// 实测 2026-04-29 主力月：rb2609 / i2609 / au2606 / IF2605（与 SinaMonthlyContractDemo oi 排序吻合）
-    /// 实时报价对小写 + I 字母合约 v12.3 W1 修复后全支持 · K 线端点 v12.6 SinaKLineGranularityDemo 验证 type=1/5/15/30/60 全支持
+    /// 主图可切换的合约清单（v15.26 行情列表大补全 · 派生自 ChineseFuturesProducts）
+    /// 60+ 品种 × (主连续 + 主力月份) ≈ 120 合约 · 6 大交易所全覆盖
+    /// 主力月份按 DominantMonthCalculator 各品种规则推断 · 半年自动续期
+    /// 实时报价对小写 + I 字母合约 v12.3 W1 修复后全支持 · K 线端点 v12.6 验证 type=1/5/15/30/60 全支持
     static var supportedContracts: [String] {
-        let mainContinuous = ["RB0", "IF0", "AU0", "CU0"]
-        let activeMonthlyPrefixes = ["rb", "i", "au", "IF"]
-        let activeMonthly = activeMonthlyPrefixes.compactMap {
-            DominantMonthCalculator.dominantContract(prefix: $0)
-        }
-        return mainContinuous + activeMonthly
+        ChineseFuturesProducts.allSupportedInstrumentIDs
     }
 
     /// 主图可切换的周期清单（spike 保守 6 个 · 秒级/周月 spike 阶段不暴露）

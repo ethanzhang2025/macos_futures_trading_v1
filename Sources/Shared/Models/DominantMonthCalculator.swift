@@ -57,15 +57,20 @@ private struct MonthlyRule {
         "i":  .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "j":  .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "jm": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "sf": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "sm": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
 
-        // 农产品 · 化工
+        // 农产品（DCE [1,5,9]）
         "m":  .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "y":  .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "p":  .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "c":  .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "cs": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "a":  .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
-        "sr": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
-        "cf": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "b":  .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "jd": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
+
+        // 化工（DCE + CZCE · [1,5,9]）
         "ta": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "ma": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "eg": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
@@ -73,26 +78,60 @@ private struct MonthlyRule {
         "pp": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "eb": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
         "l":  .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "pg": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
+        "fg": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "sa": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "ur": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "px": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "sh": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "pr": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
 
-        // 贵金属（双月 [2,4,6,8,10,12] 主力 · 跳近 1 月）
+        // 软商品 · 油脂（CZCE · 多 [1,5,9]）
+        "sr": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "cf": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "rm": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "oi": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "ap": .init(allowedMonths: [1, 3, 5, 7, 11], skipNearMonths: 1),
+        "cj": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "pk": .init(allowedMonths: [1, 3, 4, 10, 11], skipNearMonths: 1),
+
+        // 贵金属（SHFE · 双月 [2,4,6,8,10,12] · 跳近 1 月）
         "au": .init(allowedMonths: [2, 4, 6, 8, 10, 12], skipNearMonths: 1),
         "ag": .init(allowedMonths: [2, 4, 6, 8, 10, 12], skipNearMonths: 1),
 
-        // 有色（月月有合约 · 主力通常下月或近月 · 跳近 1 月避开交割）
+        // 有色（SHFE · 月月有 · 跳近 1 月）
         "cu": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
         "al": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
         "zn": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
         "pb": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
         "sn": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
         "ni": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
+        "ss": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
 
-        // 原油（双月 + 跳近）
+        // 能化（SHFE + INE）
+        "fu": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "bu": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
+        "ru": .init(allowedMonths: [1, 3, 4, 5, 6, 7, 8, 9, 10, 11], skipNearMonths: 1),
+        "sp": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
         "sc": .init(allowedMonths: [2, 4, 6, 8, 10, 12], skipNearMonths: 1),
+        "lu": .init(allowedMonths: [1, 5, 9], skipNearMonths: 1),
+        "nr": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
+        "bc": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
 
-        // 金融期货（月月有 · 主力为最近月 · 不跳近）
+        // 金融期货 · 股指（CFFEX · 月月有 · 主力为最近月 · 不跳近）
         "if": .init(allowedMonths: Array(1...12), skipNearMonths: 0),
         "ic": .init(allowedMonths: Array(1...12), skipNearMonths: 0),
         "im": .init(allowedMonths: Array(1...12), skipNearMonths: 0),
         "ih": .init(allowedMonths: Array(1...12), skipNearMonths: 0),
+
+        // 金融期货 · 国债（CFFEX · 季月 [3,6,9,12] · 不跳近）
+        "t":  .init(allowedMonths: [3, 6, 9, 12], skipNearMonths: 0),
+        "tf": .init(allowedMonths: [3, 6, 9, 12], skipNearMonths: 0),
+        "ts": .init(allowedMonths: [3, 6, 9, 12], skipNearMonths: 0),
+        "tl": .init(allowedMonths: [3, 6, 9, 12], skipNearMonths: 0),
+
+        // 新能源（GFEX · 月月有 · 跳近 1 月）
+        "si": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
+        "lc": .init(allowedMonths: Array(1...12), skipNearMonths: 1),
     ]
 }

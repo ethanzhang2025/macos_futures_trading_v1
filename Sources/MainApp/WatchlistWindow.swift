@@ -1611,22 +1611,41 @@ private struct QuickPasteSheet: View {
 // MARK: - Mock 数据（commit 1 静态 · commit 4 + M5 替换）
 
 private enum MockWatchlistBook {
-    /// 2 组共 8 合约 · 全部 ∈ MarketDataPipeline.supportedContracts · 双击任意合约可直接切主图
-    /// 主力月份组：贴近用户真实持仓盯盘（rb2609 螺纹 / i2609 铁矿 / au2606 黄金 / IF2605 股指）
-    /// 主连续组：跨多年合约连续 K 线分析（RB0/IF0/AU0/CU0）
+    /// v15.26 行情列表大补全 · 11 类目分组（黑色/有色/贵金属/农产品/油脂/化工/能化/软商品/股指/国债/新能源）
+    /// 派生自 ChineseFuturesProducts.byCategory · 60+ 品种主连续合约 · 按用户视角分类
+    /// 双击任意合约可直接切主图 · 全部 ∈ supportedContracts
     static func generate() -> WatchlistBook {
         var book = WatchlistBook()
         let now = Date()
-        let groups: [(name: String, ids: [String])] = [
-            ("主力月份", ["rb2609", "i2609", "au2606", "IF2605"]),
-            ("主连续",   ["RB0", "IF0", "AU0", "CU0"])
+
+        // 11 类目顺序：用户最常看的在前
+        let categoryOrder: [ChineseFuturesProducts.Category] = [
+            .黑色, .有色, .贵金属, .能化, .化工, .油脂, .农产品, .软商品, .股指, .国债, .新能源
         ]
-        for (name, ids) in groups {
-            let groupID = book.addGroup(name: name, now: now).id
-            for id in ids {
+
+        for category in categoryOrder {
+            guard let entries = ChineseFuturesProducts.byCategory[category], !entries.isEmpty else { continue }
+            let groupID = book.addGroup(name: category.rawValue, now: now).id
+            // 每品种主连续合约（X0）· 视角更稳定 · 不会跨期切换
+            for entry in entries {
+                let id = entry.productID.uppercased() + "0"
                 book.addInstrument(id, to: groupID, now: now)
             }
         }
+
+        // 经典「主力月份」组 · 保留传统盯盘视角（贴近真实持仓 · 半年自动续期）
+        let mainMonthIDs = ChineseFuturesProducts.allDominantMonthIDs
+        if !mainMonthIDs.isEmpty {
+            let mainGroupID = book.addGroup(name: "主力月份", now: now).id
+            // 仅保留用户最熟悉的 8 个核心品种主力月（避免 60+ 一次铺满）
+            let coreProducts = ["rb", "i", "j", "cu", "au", "ag", "m", "IF"]
+            for productID in coreProducts {
+                if let dominantID = DominantMonthCalculator.dominantContract(prefix: productID) {
+                    book.addInstrument(dominantID, to: mainGroupID, now: now)
+                }
+            }
+        }
+
         return book
     }
 }
@@ -1634,14 +1653,82 @@ private enum MockWatchlistBook {
 private enum MockQuote {
     /// 静态 Mock 行情 · commit 4 起替换为 NotificationCenter 推送的真实数据流
     /// 涨跌幅约定：正数前缀 "+" · 负数自带 "-" · 颜色由 hasPrefix("-") 判定
+    /// v15.26 行情列表大补全 · 60+ 品种主连续 mock 报价（接 CTP 真行情后整段废弃）
     private static let table: [String: (price: String, changePct: String, openInt: String)] = [
+        // 黑色
         "RB0": ("3245",   "+1.21%", "1.2M"),
-        "IF0": ("3856.4", "-0.45%", "180K"),
-        "AU0": ("612.5",  "+0.83%", "320K"),
-        "CU0": ("78650",  "+2.05%", "150K"),
         "HC0": ("3450",   "-0.32%", "850K"),
         "I0":  ("812.5",  "+1.78%", "640K"),
-        "AG0": ("7890",   "+1.45%", "560K")
+        "J0":  ("1925",   "+0.45%", "320K"),
+        "JM0": ("1180",   "-0.78%", "280K"),
+        "SF0": ("6420",   "+0.32%",  "85K"),
+        "SM0": ("6180",   "-0.55%",  "92K"),
+        // 有色
+        "CU0": ("78650",  "+2.05%", "150K"),
+        "AL0": ("19450",  "+0.85%", "240K"),
+        "ZN0": ("23150",  "-0.65%", "180K"),
+        "PB0": ("17320",  "+0.32%",  "65K"),
+        "SN0": ("215800", "+1.45%",  "32K"),
+        "NI0": ("125400", "-1.20%",  "78K"),
+        "SS0": ("13280",  "-0.42%", "120K"),
+        "BC0": ("69820",  "+1.85%",  "45K"),
+        // 贵金属
+        "AU0": ("612.5",  "+0.83%", "320K"),
+        "AG0": ("7890",   "+1.45%", "560K"),
+        // 能化
+        "SC0": ("485.2",  "+1.92%", "180K"),
+        "LU0": ("3520",   "+0.85%",  "65K"),
+        "NR0": ("11250",  "-0.45%",  "85K"),
+        "FU0": ("3145",   "+1.32%", "240K"),
+        "BU0": ("3680",   "-0.28%",  "92K"),
+        "RU0": ("13420",  "+0.65%", "180K"),
+        "SP0": ("5840",   "-0.85%", "120K"),
+        // 化工
+        "L0":  ("8350",   "+0.45%", "180K"),
+        "PP0": ("7820",   "-0.32%", "240K"),
+        "V0":  ("5640",   "+0.85%", "320K"),
+        "EG0": ("4520",   "-0.65%", "180K"),
+        "EB0": ("8945",   "+1.20%",  "85K"),
+        "PG0": ("4820",   "+0.45%",  "92K"),
+        "TA0": ("5680",   "-0.85%", "240K"),
+        "MA0": ("2485",   "+0.65%", "180K"),
+        "FG0": ("1320",   "-1.15%", "320K"),
+        "SA0": ("1620",   "+0.95%", "240K"),
+        "UR0": ("1780",   "-0.45%", "180K"),
+        "PX0": ("7220",   "+1.45%",  "65K"),
+        "SH0": ("2280",   "+0.85%",  "45K"),
+        "PR0": ("6450",   "-0.65%",  "32K"),
+        // 油脂
+        "M0":  ("3180",   "+0.65%", "560K"),
+        "Y0":  ("8240",   "+1.05%", "320K"),
+        "P0":  ("8920",   "+1.45%", "180K"),
+        "OI0": ("9180",   "+0.85%", "120K"),
+        "RM0": ("2820",   "+0.32%", "240K"),
+        // 农产品
+        "A0":  ("4280",   "-0.45%", "180K"),
+        "B0":  ("3850",   "+0.32%",  "65K"),
+        "C0":  ("2380",   "+0.85%", "320K"),
+        "CS0": ("2780",   "-0.65%", "180K"),
+        "JD0": ("3420",   "+1.20%", "120K"),
+        // 软商品
+        "SR0": ("6420",   "-0.85%", "240K"),
+        "CF0": ("14580",  "+0.45%", "180K"),
+        "AP0": ("8240",   "+1.65%", "120K"),
+        "CJ0": ("12380",  "-0.85%",  "45K"),
+        "PK0": ("8920",   "+0.65%",  "85K"),
+        // 股指
+        "IF0": ("3856.4", "-0.45%", "180K"),
+        "IH0": ("2820.8", "-0.65%", "120K"),
+        "IC0": ("5680.2", "+0.85%", "150K"),
+        "IM0": ("6420.5", "+1.20%",  "92K"),
+        // 国债
+        "T0":  ("104.85", "+0.08%",  "85K"),
+        "TF0": ("103.42", "+0.05%",  "65K"),
+        "TS0": ("101.85", "+0.02%",  "45K"),
+        "TL0": ("108.20", "+0.15%",  "32K"),
+        // 新能源
+        "SI0": ("12480",  "+0.85%",  "85K"),
+        "LC0": ("82500",  "+1.45%",  "65K"),
     ]
 
     static func price(for id: String) -> String { table[id]?.price ?? "—" }

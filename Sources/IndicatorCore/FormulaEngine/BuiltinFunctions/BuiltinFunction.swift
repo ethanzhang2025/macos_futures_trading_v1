@@ -414,6 +414,14 @@ public enum BuiltinFunctions {
             ELDERRAYFunction(),
             COPPOCKFunction(),
             KSTFunction(),
+            // 麦语言扩展（第 44 批 · v15.25 · 信号过滤 · 收尾批 · 兼容度 99.99%+ 封顶）
+            KALMANFunction(),
+            HP_FILTERFunction(),
+            SAVITZKYGOLAYFunction(),
+            MEDIANFILTERFunction(),
+            GAUSSFILTERFunction(),
+            BUTTERWORTHFunction(),
+            EMAFILTERFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

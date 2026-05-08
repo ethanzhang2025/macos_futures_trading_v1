@@ -15,6 +15,7 @@ import AppKit
 import Foundation
 import Shared
 import DataCore
+import ChartCore
 
 // MARK: - 主窗口
 
@@ -36,6 +37,8 @@ struct SpreadWindow: View {
     @State private var backtestSheetPresented: Bool = false
     /// v15.37 V2 · 滚动 Z 窗口（trader 可调）
     @State private var rollingWindow: Int = 30
+    /// v15.40 · 主图 hover 点（鼠标在 spreadChart 内的像素坐标 · nil = 鼠标已离开）
+    @State private var spreadHoverPoint: CGPoint?
 
     private var selectedPair: SpreadPair {
         SpreadPresets.byID[selectedPairID] ?? SpreadPresets.all.first!
@@ -203,11 +206,155 @@ struct SpreadWindow: View {
     // MARK: - 价差图
 
     private var spreadChart: some View {
-        Canvas { ctx, size in
-            drawSpread(ctx, size: size)
+        GeometryReader { geom in
+            ZStack {
+                Canvas { ctx, size in
+                    drawSpread(ctx, size: size)
+                }
+                .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let pt): spreadHoverPoint = pt
+                        case .ended: spreadHoverPoint = nil
+                        }
+                    }
+
+                if let pt = spreadHoverPoint, spreadValues.count >= 2,
+                   let info = spreadHoverInfo(at: pt, in: geom.size) {
+                    spreadCrosshair(at: pt, snapX: info.snapX, in: geom.size)
+                    spreadHoverTooltip(info: info)
+                        .position(tooltipPosition(near: pt, in: geom.size,
+                                                   tooltipSize: CGSize(width: 220, height: 200)))
+                        .allowsHitTesting(false)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+    }
+
+    /// 主图 hover 信息
+    private struct SpreadHoverInfo {
+        let index: Int
+        let value: Double
+        let zScore: Double?       // 滚动 Z（不足 window 为 nil）
+        let signal: SpreadSignal?
+        let snapX: CGFloat        // 吸附到 bar 上的 x（视觉对齐）
+    }
+
+    private func spreadHoverInfo(at pt: CGPoint, in size: CGSize) -> SpreadHoverInfo? {
+        guard let i = ChartHitTester.barIndex(
+            atX: pt.x, width: size.width, barCount: spreadValues.count
+        ) else { return nil }
+        let v = NSDecimalNumber(decimal: spreadValues[i].value).doubleValue
+        // 套利主图采用 (n-1) 等距步长（drawSpread 同公式）· snapX 必须复刻
+        let n = spreadValues.count
+        let step = (n > 1) ? size.width / CGFloat(n - 1) : size.width
+        let snapX = CGFloat(i) * step
+        let z: Double? = (i < rollingZScores.count && i >= rollingWindow - 1) ? rollingZScores[i] : nil
+        let sig = signals.first { $0.index == i }
+        return SpreadHoverInfo(index: i, value: v, zScore: z, signal: sig, snapX: snapX)
+    }
+
+    private func spreadCrosshair(at pt: CGPoint, snapX: CGFloat, in size: CGSize) -> some View {
+        Path { p in
+            // 横线跟鼠标 y · 竖线吸附到 bar
+            p.move(to: CGPoint(x: 0, y: pt.y))
+            p.addLine(to: CGPoint(x: size.width, y: pt.y))
+            p.move(to: CGPoint(x: snapX, y: 0))
+            p.addLine(to: CGPoint(x: snapX, y: size.height))
+        }
+        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        .allowsHitTesting(false)
+    }
+
+    private func spreadHoverTooltip(info: SpreadHoverInfo) -> some View {
+        let upper = NSDecimalNumber(decimal: statistics.upperBand2σ).doubleValue
+        let lower = NSDecimalNumber(decimal: statistics.lowerBand2σ).doubleValue
+        let mean = NSDecimalNumber(decimal: statistics.mean).doubleValue
+        let zText: String = info.zScore.map { String(format: "%.2f", $0) } ?? "—"
+        let zColor: Color = info.zScore.map { abs($0) >= 2 ? .orange : .white.opacity(0.85) } ?? .secondary
+        let sigText: String?
+        let sigColor: Color
+        if let s = info.signal {
+            let action = s.action == .entry ? "进场" : "出场"
+            let side = s.side == .long ? "做多" : "做空"
+            sigText = "\(side) · \(action)"
+            sigColor = s.side == .long ? .green : .red
+        } else {
+            sigText = nil
+            sigColor = .secondary
+        }
+        let sv = spreadValues[info.index]
+        let leg1 = NSDecimalNumber(decimal: sv.leg1Close).doubleValue
+        let leg2 = NSDecimalNumber(decimal: sv.leg2Close).doubleValue
+        let timeText = spreadHoverTimeFormatter.string(from: sv.openTime)
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(timeText)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.white.opacity(0.7))
+            Text("点 #\(info.index + 1) / \(spreadValues.count)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.white.opacity(0.55))
+            Divider().background(Color.white.opacity(0.3))
+            tooltipRow("价差", String(format: "%.2f", info.value), color: .cyan)
+            tooltipRow(selectedPair.leg1.instrumentID, String(format: "%.2f", leg1), color: .white.opacity(0.85))
+            tooltipRow(selectedPair.leg2.instrumentID, String(format: "%.2f", leg2), color: .white.opacity(0.85))
+            tooltipRow("均值", fmt(statistics.mean), color: .white.opacity(0.7))
+            tooltipRow("Z", zText, color: zColor)
+            tooltipRow("+2σ", String(format: "%.2f", upper), color: .orange.opacity(0.85))
+            tooltipRow("-2σ", String(format: "%.2f", lower), color: .orange.opacity(0.85))
+            tooltipRow("距均", String(format: "%+.2f", info.value - mean),
+                       color: info.value >= mean ? .green : .red)
+            if let s = sigText {
+                Divider().background(Color.white.opacity(0.3))
+                tooltipRow("信号", s, color: sigColor)
+            }
+        }
+        .padding(8)
+        .frame(width: 220, alignment: .leading)
+        .background(Color.black.opacity(0.85))
+        .cornerRadius(6)
+        .overlay(RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+    }
+
+    private var spreadHoverTimeFormatter: DateFormatter {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        switch period {
+        case .daily, .weekly:    f.dateFormat = "yyyy-MM-dd"
+        case .monthly:           f.dateFormat = "yyyy-MM"
+        case .minute30, .hour1:  f.dateFormat = "yy-MM-dd HH:mm"
+        default:                 f.dateFormat = "MM-dd HH:mm"
+        }
+        return f
+    }
+
+    private func tooltipRow(_ label: String, _ value: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.white.opacity(0.65))
+                .frame(width: 32, alignment: .leading)
+            Text(value)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(color)
+            Spacer()
+        }
+    }
+
+    /// 默认右下偏移 · 接边翻转
+    private func tooltipPosition(near pt: CGPoint, in size: CGSize, tooltipSize: CGSize) -> CGPoint {
+        let dx: CGFloat = pt.x + 12 + tooltipSize.width / 2 < size.width
+            ? tooltipSize.width / 2 + 12
+            : -tooltipSize.width / 2 - 12
+        let dy: CGFloat = pt.y + 12 + tooltipSize.height / 2 < size.height
+            ? tooltipSize.height / 2 + 12
+            : -tooltipSize.height / 2 - 12
+        return CGPoint(x: pt.x + dx, y: pt.y + dy)
     }
 
     private func drawSpread(_ ctx: GraphicsContext, size: CGSize) {

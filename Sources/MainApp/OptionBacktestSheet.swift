@@ -14,6 +14,7 @@ import SwiftUI
 import Foundation
 import Shared
 import DataCore
+import ChartCore
 
 struct OptionBacktestSheet: View {
 
@@ -32,6 +33,8 @@ struct OptionBacktestSheet: View {
     // MARK: - 结果
 
     @State private var result: OptionBacktestResult?
+    /// v15.40 · 回测图 hover（整块 Canvas 共享 · PnL/Spot 两区双联动）
+    @State private var backtestHoverPoint: CGPoint?
 
     // MARK: - 轨迹模式
 
@@ -243,11 +246,169 @@ struct OptionBacktestSheet: View {
     }
 
     private func resultChart(_ r: OptionBacktestResult) -> some View {
-        Canvas { ctx, size in
-            drawBacktestChart(ctx: ctx, size: size, result: r)
+        GeometryReader { geom in
+            ZStack {
+                Canvas { ctx, size in
+                    drawBacktestChart(ctx: ctx, size: size, result: r)
+                }
+                .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let pt): backtestHoverPoint = pt
+                        case .ended: backtestHoverPoint = nil
+                        }
+                    }
+
+                if let pt = backtestHoverPoint, r.curve.count >= 2,
+                   let info = backtestHoverInfo(at: pt, in: geom.size, result: r) {
+                    backtestCrosshair(at: pt, snapX: info.snapX, in: geom.size, layout: info.layout)
+                    backtestHoverTooltip(info: info)
+                        .position(tooltipPosition(near: pt, in: geom.size,
+                                                   tooltipSize: CGSize(width: 200, height: 165)))
+                        .allowsHitTesting(false)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+    }
+
+    // 双图布局（与 drawBacktestChart 公式严格对齐）
+    private struct BacktestLayout {
+        let pnlRect: CGRect
+        let spotRect: CGRect
+    }
+
+    private func backtestLayout(in size: CGSize) -> BacktestLayout {
+        let pnlH = size.height * 0.65
+        let gapH: CGFloat = 16
+        let spotH = size.height - pnlH - gapH
+        return BacktestLayout(
+            pnlRect: CGRect(x: 0, y: 0, width: size.width, height: pnlH),
+            spotRect: CGRect(x: 0, y: pnlH + gapH, width: size.width, height: spotH)
+        )
+    }
+
+    /// 回测 hover 信息
+    private struct BacktestHoverInfo {
+        let index: Int        // day index ∈ [0, curve.count)
+        let date: Date
+        let spotPrice: Double
+        let totalPnL: Double
+        let optionMTM: Double
+        let underlyingMTM: Double
+        let snapX: CGFloat
+        let layout: BacktestLayout
+        let cursorRegion: CursorRegion  // 鼠标所在区
+    }
+
+    private enum CursorRegion { case pnl, spot, gap }
+
+    private func backtestHoverInfo(
+        at pt: CGPoint, in size: CGSize, result r: OptionBacktestResult
+    ) -> BacktestHoverInfo? {
+        let layout = backtestLayout(in: size)
+        guard let i = ChartHitTester.barIndex(
+            atX: pt.x, width: size.width, barCount: r.curve.count
+        ) else { return nil }
+        let n = r.curve.count
+        let xStep = (n > 1) ? size.width / CGFloat(n - 1) : size.width
+        let snapX = CGFloat(i) * xStep
+        let region: CursorRegion
+        if layout.pnlRect.contains(pt) { region = .pnl }
+        else if layout.spotRect.contains(pt) { region = .spot }
+        else { region = .gap }
+        let p = r.curve[i]
+        return BacktestHoverInfo(
+            index: i, date: p.date,
+            spotPrice: p.spotPrice, totalPnL: p.totalPnL,
+            optionMTM: p.optionMTM, underlyingMTM: p.underlyingMTM,
+            snapX: snapX, layout: layout, cursorRegion: region
+        )
+    }
+
+    /// 双联动十字线：竖线贯穿 size（PnL/spot 同 x 同步对齐）· 横线只在所在 rect 内
+    private func backtestCrosshair(
+        at pt: CGPoint, snapX: CGFloat, in size: CGSize, layout: BacktestLayout
+    ) -> some View {
+        Path { p in
+            // 竖线贯穿（双图 day index 联动 · 视觉上一眼对齐）
+            p.move(to: CGPoint(x: snapX, y: 0))
+            p.addLine(to: CGPoint(x: snapX, y: size.height))
+            // 横线仅在所在 rect 内
+            if layout.pnlRect.contains(pt) {
+                p.move(to: CGPoint(x: layout.pnlRect.minX, y: pt.y))
+                p.addLine(to: CGPoint(x: layout.pnlRect.maxX, y: pt.y))
+            } else if layout.spotRect.contains(pt) {
+                p.move(to: CGPoint(x: layout.spotRect.minX, y: pt.y))
+                p.addLine(to: CGPoint(x: layout.spotRect.maxX, y: pt.y))
+            }
+        }
+        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        .allowsHitTesting(false)
+    }
+
+    private func backtestHoverTooltip(info: BacktestHoverInfo) -> some View {
+        let pnlColor: Color = info.totalPnL > 0 ? .green : (info.totalPnL < 0 ? .red : .yellow)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "yyyy-MM-dd"
+        let dateText = f.string(from: info.date)
+        let entry = strategy.underlyingEntryPrice
+        let spotDiff = info.spotPrice - entry
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(dateText)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.white.opacity(0.7))
+            Text("第 \(info.index + 1) / \(holdingDays) 天")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.white.opacity(0.55))
+            Divider().background(Color.white.opacity(0.3))
+            backtestRow("总 PnL", String(format: "%+.2f", info.totalPnL), color: pnlColor)
+            backtestRow("期权", String(format: "%+.2f", info.optionMTM),
+                        color: info.optionMTM >= 0 ? .green.opacity(0.85) : .red.opacity(0.85))
+            if strategy.underlyingPositionSize > 0 {
+                backtestRow("标的", String(format: "%+.2f", info.underlyingMTM),
+                            color: info.underlyingMTM >= 0 ? .green.opacity(0.85) : .red.opacity(0.85))
+            }
+            Divider().background(Color.white.opacity(0.3))
+            backtestRow("Spot", String(format: "%.2f", info.spotPrice), color: .cyan)
+            if strategy.underlyingPositionSize > 0 {
+                backtestRow("距入场", String(format: "%@%.2f", spotDiff >= 0 ? "+" : "", spotDiff),
+                            color: spotDiff >= 0 ? .green.opacity(0.85) : .red.opacity(0.85))
+            }
+        }
+        .padding(8)
+        .frame(width: 200, alignment: .leading)
+        .background(Color.black.opacity(0.85))
+        .cornerRadius(6)
+        .overlay(RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+    }
+
+    private func backtestRow(_ label: String, _ value: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.white.opacity(0.65))
+                .frame(width: 50, alignment: .leading)
+            Text(value)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(color)
+            Spacer()
+        }
+    }
+
+    private func tooltipPosition(near pt: CGPoint, in size: CGSize, tooltipSize: CGSize) -> CGPoint {
+        let dx: CGFloat = pt.x + 12 + tooltipSize.width / 2 < size.width
+            ? tooltipSize.width / 2 + 12
+            : -tooltipSize.width / 2 - 12
+        let dy: CGFloat = pt.y + 12 + tooltipSize.height / 2 < size.height
+            ? tooltipSize.height / 2 + 12
+            : -tooltipSize.height / 2 - 12
+        return CGPoint(x: pt.x + dx, y: pt.y + dy)
     }
 
     // MARK: - 绘图

@@ -14,6 +14,7 @@ import AppKit
 import Foundation
 import Shared
 import DataCore
+import ChartCore
 
 // MARK: - 主窗口
 
@@ -33,6 +34,8 @@ struct OptionWindow: View {
     @State private var strategyExtraStrike: Double = 4000
     /// v15.36 · 期权 Phase 6.4 · 回测 sheet 显隐
     @State private var backtestSheetPresented: Bool = false
+    /// v15.40 · PnL 图 hover（鼠标在 strategyPnLChart 内的像素 · nil = 离开）
+    @State private var pnlHoverPoint: CGPoint?
 
     private var meta: OptionPresets.UnderlyingMeta? {
         OptionPresets.byUnderlyingID[selectedUnderlyingID]
@@ -397,11 +400,167 @@ struct OptionWindow: View {
     }
 
     private var strategyPnLChart: some View {
-        Canvas { ctx, size in
-            drawPnLChart(ctx, size: size)
+        GeometryReader { geom in
+            ZStack {
+                Canvas { ctx, size in
+                    drawPnLChart(ctx, size: size)
+                }
+                .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let pt): pnlHoverPoint = pt
+                        case .ended: pnlHoverPoint = nil
+                        }
+                    }
+
+                if let pt = pnlHoverPoint, let s = currentStrategy {
+                    let analysis = OptionPayoffAnalyzer.analyze(strategy: s, sampleCount: 200)
+                    if !analysis.curve.isEmpty,
+                       let info = optionHoverInfo(at: pt, in: geom.size, analysis: analysis) {
+                        optionCrosshair(at: pt, snapX: info.snapX, in: geom.size)
+                        optionHoverTooltip(info: info, strategy: s, analysis: analysis)
+                            .position(tooltipPosition(near: pt, in: geom.size,
+                                                      tooltipSize: CGSize(width: 220, height: 175)))
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+    }
+
+    /// PnL 图 hover 信息
+    private struct OptionPnLHoverInfo {
+        let index: Int
+        let spotPrice: Double
+        let pnl: Double
+        let snapX: CGFloat   // 视觉对齐到 sample 上
+    }
+
+    private func optionHoverInfo(
+        at pt: CGPoint, in size: CGSize, analysis: PayoffAnalysis
+    ) -> OptionPnLHoverInfo? {
+        guard let i = ChartHitTester.barIndex(
+            atX: pt.x, width: size.width, barCount: analysis.curve.count
+        ) else { return nil }
+        let n = analysis.curve.count
+        let xStep = (n > 1) ? size.width / CGFloat(n - 1) : size.width
+        let snapX = CGFloat(i) * xStep
+        return OptionPnLHoverInfo(
+            index: i,
+            spotPrice: analysis.curve[i].spotPrice,
+            pnl: analysis.curve[i].pnl,
+            snapX: snapX
+        )
+    }
+
+    private func optionCrosshair(at pt: CGPoint, snapX: CGFloat, in size: CGSize) -> some View {
+        Path { p in
+            p.move(to: CGPoint(x: 0, y: pt.y))
+            p.addLine(to: CGPoint(x: size.width, y: pt.y))
+            p.move(to: CGPoint(x: snapX, y: 0))
+            p.addLine(to: CGPoint(x: snapX, y: size.height))
+        }
+        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        .allowsHitTesting(false)
+    }
+
+    private func optionHoverTooltip(
+        info: OptionPnLHoverInfo, strategy: OptionStrategy, analysis: PayoffAnalysis
+    ) -> some View {
+        let pnlColor: Color = info.pnl > 0 ? .green : (info.pnl < 0 ? .red : .yellow)
+        let diffSpot = info.spotPrice - spotPrice
+        // 最近 breakeven 距离（绝对值最小）
+        let nearestBE = analysis.breakevens.min(by: { abs($0 - info.spotPrice) < abs($1 - info.spotPrice) })
+        let beText: String
+        if let be = nearestBE {
+            let d = info.spotPrice - be
+            beText = String(format: "%@%.2f", d >= 0 ? "+" : "", d)
+        } else {
+            beText = "—"
+        }
+        // 各 leg ITM 状态（hover spot 下）
+        let legSummary = strategy.legs.map { leg -> String in
+            let strike = NSDecimalNumber(decimal: leg.contract.strikePrice).doubleValue
+            let isITM: Bool
+            switch leg.contract.type {
+            case .call: isITM = info.spotPrice > strike
+            case .put:  isITM = info.spotPrice < strike
+            }
+            let cp = leg.contract.type == .call ? "C" : "P"
+            let sd = leg.direction == .long ? "+" : "-"
+            return "\(sd)\(cp)\(String(format: "%.0f", strike))\(isITM ? "✓" : "·")"
+        }.joined(separator: " ")
+        let isAtSpot = abs(info.spotPrice - spotPrice) < (analysis.curve.count > 1
+            ? (analysis.curve.last!.spotPrice - analysis.curve.first!.spotPrice) / Double(analysis.curve.count - 1) * 1.5
+            : 0.01)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(String(format: "spot %.2f", info.spotPrice))
+                    .font(.system(size: 11, design: .monospaced).bold())
+                    .foregroundColor(.cyan)
+                if isAtSpot {
+                    Text("≈现价")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.cyan.opacity(0.7))
+                }
+            }
+            Text("点 #\(info.index + 1) / \(analysis.curve.count)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.white.opacity(0.55))
+            Divider().background(Color.white.opacity(0.3))
+            optionTooltipRow("PnL", String(format: "%+.2f", info.pnl), color: pnlColor)
+            optionTooltipRow("距现价", String(format: "%@%.2f", diffSpot >= 0 ? "+" : "", diffSpot),
+                             color: diffSpot >= 0 ? .green.opacity(0.85) : .red.opacity(0.85))
+            optionTooltipRow("距盈亏点", beText,
+                             color: nearestBE.map { abs(info.spotPrice - $0) < 1 ? .yellow : .white.opacity(0.7) } ?? .secondary)
+            Divider().background(Color.white.opacity(0.3))
+            HStack {
+                Text("Leg")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.65))
+                    .frame(width: 32, alignment: .leading)
+                Text(legSummary)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.85))
+                Spacer()
+            }
+            Text("✓=ITM · ·=OTM · +=买 · -=卖")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.white.opacity(0.4))
+        }
+        .padding(8)
+        .frame(width: 220, alignment: .leading)
+        .background(Color.black.opacity(0.85))
+        .cornerRadius(6)
+        .overlay(RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+    }
+
+    private func optionTooltipRow(_ label: String, _ value: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.white.opacity(0.65))
+                .frame(width: 50, alignment: .leading)
+            Text(value)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(color)
+            Spacer()
+        }
+    }
+
+    private func tooltipPosition(near pt: CGPoint, in size: CGSize, tooltipSize: CGSize) -> CGPoint {
+        let dx: CGFloat = pt.x + 12 + tooltipSize.width / 2 < size.width
+            ? tooltipSize.width / 2 + 12
+            : -tooltipSize.width / 2 - 12
+        let dy: CGFloat = pt.y + 12 + tooltipSize.height / 2 < size.height
+            ? tooltipSize.height / 2 + 12
+            : -tooltipSize.height / 2 - 12
+        return CGPoint(x: pt.x + dx, y: pt.y + dy)
     }
 
     private func drawPnLChart(_ ctx: GraphicsContext, size: CGSize) {

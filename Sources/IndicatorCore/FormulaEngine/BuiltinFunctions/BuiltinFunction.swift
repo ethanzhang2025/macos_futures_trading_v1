@@ -286,6 +286,14 @@ public enum BuiltinFunctions {
             SKEWFunction(),
             SHARPEFunction(),
             ANNUALSTDFunction(),
+            // 麦语言扩展（第 28 批 · v15.25 · 线性缩放 + K 线统计比率）
+            SCALEFunction(),
+            LERPFunction(),
+            GREENRATIOFunction(),
+            REDRATIOFunction(),
+            AVGBODYFunction(),
+            AVGRANGEFunction(),
+            BODYRATIOFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

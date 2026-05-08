@@ -307,6 +307,7 @@ struct FuturesTerminalApp: App {
                 OpenTradingButton()
                 OpenTrainingButton()  // v15.23 batch14 · WP-54 模拟训练 ⌘⇧T
                 OpenMultiChartButton() // v15.23 batch50 · WP-44 多图表 ⌘⌥M
+                OpenSpreadButton()     // v15.27 · WP-套利分析 ⌘⌥S
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -402,6 +403,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 920, height: 640)
+
+        // v15.27 · WP-套利分析（⌘⌥S · 12 经典对 + 价差图 + ±2σ 通道 + Z-score 统计）
+        WindowGroup("套利分析", id: "spread") {
+            SpreadWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1080, height: 680)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -513,6 +521,15 @@ private struct OpenMultiChartButton: View {
     var body: some View {
         Button("多图表（⌘⌥M）") { openWindow(id: "multichart") }
             .keyboardShortcut("m", modifiers: [.command, .option])
+    }
+}
+
+/// v15.27 · WP-套利分析入口（⌘⌥S · 12 经典对 + 价差图 + Z-score 统计）
+private struct OpenSpreadButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("套利分析（⌘⌥S）") { openWindow(id: "spread") }
+            .keyboardShortcut("s", modifiers: [.command, .option])
     }
 }
 

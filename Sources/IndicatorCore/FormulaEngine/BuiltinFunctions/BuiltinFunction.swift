@@ -102,6 +102,14 @@ public enum BuiltinFunctions {
             ADXFunction(),
             TRIXFunction(),
             CORRELFunction(),
+            // 麦语言扩展（第 5 批 · v15.25 兼容度 ~99.5% → ~99.8% · trader 主流核心 7 函数）
+            CCIFunction(),
+            WRFunction(),
+            ROCFunction(),
+            MOMFunction(),
+            OBVFunction(),
+            MFIFunction(),
+            TEMAFunction(),
         ]
         var dict: [String: BuiltinFunction] = [:]
         for fn in functions { dict[fn.name] = fn }

@@ -317,6 +317,7 @@ struct FuturesTerminalApp: App {
                 OpenCalendarSpreadButton() // v15.50 · WP-套利 跨期 ⌘⌥X
                 OpenInstrumentDashboardButton() // v15.51 · WP-行情 品种深度分析 ⌘⌥I
                 OpenSessionCompareButton()      // v15.52 · WP-行情 时段对比 ⌘⌥T
+                OpenAnomalyMonitorButton()      // v15.54 · WP-行情 异常品种监控 ⌘⌥A
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -482,6 +483,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1100, height: 760)
+
+        // v15.54 · WP-行情 异常品种监控（⌘⌥A · 5 维度全市场扫描 · 价格/持仓/资金/背离/离群）
+        WindowGroup("异常品种监控", id: "anomalyMonitor") {
+            AnomalyMonitorWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1180, height: 780)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -683,6 +691,15 @@ private struct OpenSessionCompareButton: View {
     var body: some View {
         Button("时段对比（⌘⌥T）") { openWindow(id: "sessionCompare") }
             .keyboardShortcut("t", modifiers: [.command, .option])
+    }
+}
+
+/// v15.54 · WP-行情 异常品种监控入口（⌘⌥A · 5 维度全市场扫描）
+private struct OpenAnomalyMonitorButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("异常品种监控（⌘⌥A）") { openWindow(id: "anomalyMonitor") }
+            .keyboardShortcut("a", modifiers: [.command, .option])
     }
 }
 

@@ -127,6 +127,7 @@ public struct DrawingsOverlayView: View {
         case .polygon:          drawPolygon(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacciFan:     drawFibonacciFan(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .priceZone:        drawPriceZone(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .gannFan:          drawGannFan(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         }
 
         if isSelected, !isPending {
@@ -195,6 +196,37 @@ public struct DrawingsOverlayView: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(color)
             ctx.draw(text, at: CGPoint(x: 4, y: y - 8))
+        }
+    }
+
+    /// v15.89 江恩扇形 · 两点定 1×1 单位 · 9 角度射线（1×8 → 1×1 → 8×1）· 1×1 主线加粗
+    private func drawGannFan(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let a = CGPoint(x: xForBar(d.startPoint.barIndex, size: size), y: yForPrice(d.startPoint.price, size: size))
+        let b = CGPoint(x: xForBar(end.barIndex, size: size), y: yForPrice(end.price, size: size))
+        let unitDx = b.x - a.x
+        let unitDy = b.y - a.y
+        guard abs(unitDx) > 0.0001 else { return }
+        for angle in GannAngles.standard {
+            let ratio = CGFloat(angle.num) / CGFloat(angle.den)
+            let dx = unitDx
+            let dy = unitDy * ratio
+            guard abs(dx) > 0.0001 || abs(dy) > 0.0001 else { continue }
+            let t = Self.pitchforkExtensionScale(a: a, dx: dx, dy: dy, size: size)
+            let rayEnd = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
+            var ray = Path()
+            ray.move(to: a)
+            ray.addLine(to: rayEnd)
+            // 1×1 主线加粗 + 全不透明 · 其他细 + 半透明
+            let isMain = (angle.num == 1 && angle.den == 1)
+            let strokeWidth = isMain ? width : width * 0.7
+            let strokeOpacity = isMain ? opacity : 0.55 * opacity
+            ctx.stroke(ray, with: .color(color.opacity(strokeOpacity)), style: StrokeStyle(lineWidth: strokeWidth, dash: dash))
+            // 角度标签（紧贴射线末端）
+            let labelText = Text(angle.label)
+                .font(.system(size: 9, weight: isMain ? .semibold : .regular, design: .monospaced))
+                .foregroundColor(color)
+            ctx.draw(labelText, at: CGPoint(x: rayEnd.x - 14, y: rayEnd.y - 6))
         }
     }
 
@@ -415,6 +447,7 @@ public struct DrawingsOverlayView: View {
         case .polygon:         return Color(red: 0.85, green: 0.40, blue: 0.65)  // 玫红（v13.31）
         case .fibonacciFan:    return Color(red: 1.00, green: 0.42, blue: 0.42)  // 珊瑚红（v15.87 · 与 fibonacci 橙区分）
         case .priceZone:       return Color(red: 0.55, green: 0.85, blue: 0.65)  // 薄荷绿（v15.88 · 关键支撑/阻力区域）
+        case .gannFan:         return Color(red: 0.40, green: 0.60, blue: 0.95)  // 靛蓝（v15.89 · 与 horizontalLine 蓝区分）
         }
     }
 

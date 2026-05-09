@@ -26,6 +26,7 @@ struct DrawingFactoryTests {
         #expect(pg?.type == .polygon)
         #expect(Drawing.fibonacciFan(from: point(0, 100), to: point(10, 110)).type == .fibonacciFan)
         #expect(Drawing.priceZone(from: point(0, 110), to: point(0, 100)).type == .priceZone)
+        #expect(Drawing.gannFan(from: point(0, 100), to: point(10, 110)).type == .gannFan)
     }
 
     @Test("v13.31 多边形 factory · 至少 3 点 / 少于 3 返回 nil / startPoint+extraPoints 映射")
@@ -518,6 +519,45 @@ struct DrawingGeometryTests {
     func priceZonePointsContract() {
         #expect(DrawingType.priceZone.pointsNeeded == 2)
         #expect(DrawingType.priceZone.needsTwoPoints)
+    }
+
+    @Test("v15.89 江恩扇形 · 9 角度标准定义（1×8 → 1×1 → 8×1）")
+    func gannAnglesStandard() {
+        let angles = GannAngles.standard
+        #expect(angles.count == 9)
+        #expect(angles[0].num == 1 && angles[0].den == 8 && angles[0].label == "1×8")
+        #expect(angles[4].num == 1 && angles[4].den == 1 && angles[4].label == "1×1")  // 主线
+        #expect(angles[8].num == 8 && angles[8].den == 1 && angles[8].label == "8×1")
+    }
+
+    @Test("v15.89 江恩扇形 · 1×1 单位下各角度目标价（atBar = end.barIndex）")
+    func gannFanTargetsAtEndBar() {
+        // 起点 (0, 100) · 终点 (10, 200) · 1×1 单位 = 10 bar / 100 price
+        // 在 atBar = 10 处 · unit × timeOffset = 100（即 1×1 主线达 200）
+        let d = Drawing.gannFan(from: point(0, 100), to: point(10, 200))
+        let prices = DrawingGeometry.gannFanTargetPrices(for: d, atBar: 10)
+        #expect(prices.count == 9)
+        #expect(prices[4] == 200)   // 1×1 = 100 + 100 × 1 = 200
+        #expect(prices[5] == 300)   // 2×1 = 100 + 100 × 2 = 300
+        #expect(prices[3] == 150)   // 1×2 = 100 + 100 × 0.5 = 150
+        #expect(prices[8] == 900)   // 8×1 = 100 + 100 × 8 = 900
+        #expect(prices[0] == Decimal(string: "112.5"))   // 1×8 = 100 + 100 × 0.125
+    }
+
+    @Test("v15.89 江恩扇形 · dx == 0 / 非匹配 / 缺 endPoint 返回空")
+    func gannFanEdgeCases() {
+        // 非匹配类型
+        let trend = Drawing.trendLine(from: point(0, 100), to: point(10, 200))
+        #expect(DrawingGeometry.gannFanTargetPrices(for: trend, atBar: 5).isEmpty)
+        // dx == 0（同 barIndex 退化）
+        let degenerate = Drawing.gannFan(from: point(5, 100), to: point(5, 200))
+        #expect(DrawingGeometry.gannFanTargetPrices(for: degenerate, atBar: 5).isEmpty)
+    }
+
+    @Test("v15.89 江恩扇形 · pointsNeeded == 2")
+    func gannFanPointsContract() {
+        #expect(DrawingType.gannFan.pointsNeeded == 2)
+        #expect(DrawingType.gannFan.needsTwoPoints)
     }
 
     @Test("priceDistance 趋势线垂直差")

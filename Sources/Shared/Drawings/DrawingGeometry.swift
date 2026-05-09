@@ -31,6 +31,22 @@ public enum FibonacciLevels {
     ]
 }
 
+/// 江恩 9 角度（v15.89 · num/den 表示 ratio = num × dy_unit / den · 1×1 = 主线 45°）
+public enum GannAngles {
+    /// (num, den, label) · 排序从最缓（1×8）到最陡（8×1）· 1×1 居中
+    public static let standard: [(num: Int, den: Int, label: String)] = [
+        (1, 8, "1×8"),
+        (1, 4, "1×4"),
+        (1, 3, "1×3"),
+        (1, 2, "1×2"),
+        (1, 1, "1×1"),
+        (2, 1, "2×1"),
+        (3, 1, "3×1"),
+        (4, 1, "4×1"),
+        (8, 1, "8×1")
+    ]
+}
+
 public enum DrawingGeometry {
 
     /// 斐波那契回调线的价格序列
@@ -118,5 +134,21 @@ public enum DrawingGeometry {
         let p1 = drawing.startPoint.price
         let p2 = end.price
         return (upper: max(p1, p2), lower: min(p1, p2))
+    }
+
+    /// v15.89 江恩扇形 · 各角度在 atBar 处的目标价格
+    /// - 1×1 单位 = (end.barIndex - start.barIndex) bar = (end.price - start.price) price
+    /// - ratio[i] = num/den · 第 i 条射线在 atBar 处 = start.price + (atBar - startBar) × unit × num / den
+    /// - Returns: 与 angles 同长 · 非 gannFan / 缺 endPoint / dx == 0 时返回空
+    public static func gannFanTargetPrices(for drawing: Drawing, atBar: Int, angles: [(num: Int, den: Int, label: String)] = GannAngles.standard) -> [Decimal] {
+        guard drawing.type == .gannFan, let end = drawing.endPoint else { return [] }
+        let startBar = drawing.startPoint.barIndex
+        let dx = end.barIndex - startBar
+        guard dx != 0 else { return [] }
+        let unit = (end.price - drawing.startPoint.price) / Decimal(dx)
+        let timeOffset = Decimal(atBar - startBar)
+        return angles.map { angle in
+            drawing.startPoint.price + timeOffset * unit * Decimal(angle.num) / Decimal(angle.den)
+        }
     }
 }

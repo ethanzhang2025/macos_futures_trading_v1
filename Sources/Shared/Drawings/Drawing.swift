@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 = 12 种
+/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 · v15.89 江恩扇形 = 13 种
 public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case trendLine        // 趋势线（两点）
     case horizontalLine   // 水平线（单点价格）
@@ -18,12 +18,13 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case polygon          // 多边形（任意 N≥3 点闭合 · v13.31 · 用户连续点击 + 工具栏"完成"按钮触发）
     case fibonacciFan     // 斐波那契扇形（v15.87 · 两点定 0/100% · 从 start 发射 3 条核心 fib 射线 38.2%/50%/61.8%）
     case priceZone        // 价格区域（v15.88 · 两点定上下价格 · 全图横跨 · 半透明填充 · 关键支撑/阻力带）
+    case gannFan          // 江恩扇形（v15.89 · 两点定 1×1 单位 · 从 start 发射 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）
 
     /// 完成画线所需的点数 · v13.31 polygon 用 0 表示动态（用户主动触发完成）
     public var pointsNeeded: Int {
         switch self {
         case .horizontalLine, .text: return 1
-        case .trendLine, .rectangle, .parallelChannel, .fibonacci, .fibonacciFan, .ellipse, .ruler, .priceZone: return 2
+        case .trendLine, .rectangle, .parallelChannel, .fibonacci, .fibonacciFan, .ellipse, .ruler, .priceZone, .gannFan: return 2
         case .pitchfork: return 3
         case .polygon: return 0  // 0 = 动态点数 · 用户点 N 次后主动触发完成
         }
@@ -194,5 +195,10 @@ extension Drawing {
     /// 价格区域（v15.88 · 两点定上下价格 · 全图横跨 · 半透明填充 · barIndex 仅作锚点 · 渲染忽略）
     public static func priceZone(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
         Drawing(type: .priceZone, startPoint: start, endPoint: end)
+    }
+
+    /// 江恩扇形（v15.89 · 两点定 1×1 单位（dx bar = dy price）· 9 角度射线从 start 发射）
+    public static func gannFan(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
+        Drawing(type: .gannFan, startPoint: start, endPoint: end)
     }
 }

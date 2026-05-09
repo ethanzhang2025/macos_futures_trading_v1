@@ -90,6 +90,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .polygon:         return "多边形"
     case .fibonacciFan:    return "斐波那契扇形"
     case .priceZone:       return "价格区域"
+    case .gannFan:         return "江恩扇形"
     }
 }
 
@@ -891,6 +892,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
             drawingToolButton(icon: "wand.and.rays", tool: .fibonacciFan, help: "斐波那契扇形（双点 · 38.2/50/61.8 三射线）")
             drawingToolButton(icon: "rectangle.split.1x2", tool: .priceZone, help: "价格区域（双点 · 上下价格全图横跨 · 关键支撑/阻力带）")
+            drawingToolButton(icon: "fanblades", tool: .gannFan, help: "江恩扇形（双点定 1×1 · 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）")
             drawingToolButton(icon: "circle", tool: .ellipse, help: "椭圆（双点对角）")
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
             drawingToolButton(icon: "tuningfork", tool: .pitchfork, help: "Andrew's Pitchfork（3 点 · 中线 + 上下平行轨）")
@@ -1207,6 +1209,7 @@ struct ChartScene: View {
         case .parallelChannel:  return .channel
         case .fibonacci:        return .channel
         case .fibonacciFan:     return .channel
+        case .gannFan:          return .channel
         case .priceZone:        return .keyLevel
         case .text:             return .annotation
         case .rectangle:        return .keyLevel
@@ -4006,6 +4009,26 @@ struct ChartContentView: View {
             let yLower = screenPoint(DrawingPoint(barIndex: drawing.startPoint.barIndex, price: bounds.lower)).y
             if p.y >= yUpper && p.y <= yLower { return 0 }
             return min(abs(p.y - yUpper), abs(p.y - yLower))
+
+        case .gannFan:
+            // v15.89 江恩扇形 · 9 角度射线最小线段距离 · 与渲染共用同一 t 延伸
+            guard let end = drawing.endPoint else { return .infinity }
+            let a = screenPoint(drawing.startPoint)
+            let b = screenPoint(end)
+            let unitDx = b.x - a.x
+            let unitDy = b.y - a.y
+            guard abs(unitDx) > 0.0001 else { return .infinity }
+            var minD: CGFloat = .infinity
+            for angle in GannAngles.standard {
+                let ratio = CGFloat(angle.num) / CGFloat(angle.den)
+                let dx = unitDx
+                let dy = unitDy * ratio
+                guard abs(dx) > 0.0001 || abs(dy) > 0.0001 else { continue }
+                let t = DrawingsOverlayView.pitchforkExtensionScale(a: a, dx: dx, dy: dy, size: size)
+                let rayEnd = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
+                minD = min(minD, Self.pointToSegmentDistance(p, a, rayEnd))
+            }
+            return minD
         }
     }
 
@@ -4039,6 +4062,8 @@ struct ChartContentView: View {
             return Drawing.fibonacciFan(from: firstPoint, to: hoverPoint)
         case .priceZone:
             return Drawing.priceZone(from: firstPoint, to: hoverPoint)
+        case .gannFan:
+            return Drawing.gannFan(from: firstPoint, to: hoverPoint)
         case .rectangle:
             return Drawing.rectangle(from: firstPoint, to: hoverPoint)
         case .trendLine:

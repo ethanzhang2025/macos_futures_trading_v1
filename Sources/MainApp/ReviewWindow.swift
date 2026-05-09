@@ -626,9 +626,11 @@ struct ReviewWindow: View {
             positions: s.closedPositions, year: year, month: month
         )
         // v16.15 · 拼接训练 annex · 月份 [start, end) Asia/Shanghai
-        var comps = DateComponents()
-        comps.year = year; comps.month = month; comps.day = 1
-        let monthStart = cal.date(from: comps) ?? Date()
+        var monthStartComps = DateComponents()
+        monthStartComps.year = year
+        monthStartComps.month = month
+        monthStartComps.day = 1
+        let monthStart = cal.date(from: monthStartComps) ?? Date()
         let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
         md += "\n" + TrainingMarkdownReport.generateMonthlyAnnex(
             TrainingLogPersistence.load(), start: monthStart, end: monthEnd

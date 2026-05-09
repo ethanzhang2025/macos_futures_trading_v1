@@ -315,7 +315,7 @@ struct TrainingHistoryPanel: View {
         var path = Path()
         for (i, s) in scores.enumerated() {
             let pt = CGPoint(x: CGFloat(i) * xStep, y: yFor(s))
-            i == 0 ? path.move(to: pt) : path.addLine(to: pt)
+            if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
         }
         ctx.stroke(path, with: .color(.accentColor), lineWidth: 1.5)
         // 端点圆点（最后一笔加大）

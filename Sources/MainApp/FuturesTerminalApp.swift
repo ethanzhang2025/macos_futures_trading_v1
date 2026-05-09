@@ -314,6 +314,7 @@ struct FuturesTerminalApp: App {
                 OpenPositionButton()   // v15.47 · WP-行情 多空持仓 ⌘⌥P
                 OpenCorrelationButton() // v15.48 · WP-行情 关联性矩阵 ⌘⌥C
                 OpenMoneyFlowButton()   // v15.49 · WP-行情 资金流向 ⌘⌥N
+                OpenCalendarSpreadButton() // v15.50 · WP-套利 跨期 ⌘⌥X
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -458,6 +459,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1100, height: 720)
+
+        // v15.50 · WP-套利 跨期（⌘⌥X · 同品种近-远月价差 + contango/backwardation 判定）
+        WindowGroup("跨期套利", id: "calendarSpread") {
+            CalendarSpreadWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1080, height: 760)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -632,6 +640,15 @@ private struct OpenMoneyFlowButton: View {
     var body: some View {
         Button("资金流向（⌘⌥N）") { openWindow(id: "moneyflow") }
             .keyboardShortcut("n", modifiers: [.command, .option])
+    }
+}
+
+/// v15.50 · WP-套利 跨期入口（⌘⌥X · 同品种近月-远月价差 + contango/backwardation）
+private struct OpenCalendarSpreadButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("跨期套利（⌘⌥X）") { openWindow(id: "calendarSpread") }
+            .keyboardShortcut("x", modifiers: [.command, .option])
     }
 }
 

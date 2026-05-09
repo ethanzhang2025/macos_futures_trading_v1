@@ -22,6 +22,7 @@ struct HeatmapWindow: View {
 
     @State private var sortMode: SortMode = .bySector
     @State private var hoveredID: String?
+    @Environment(\.openWindow) private var openWindow
 
     enum SortMode: String, CaseIterable, Identifiable {
         case bySector       // 按板块归属
@@ -167,8 +168,10 @@ struct HeatmapWindow: View {
         }
         let isHovered = hoveredID == inst.id
         return Button {
-            // v1：仅打 print（v2 加 NotificationCenter 事件 → 主图切合约）
-            NSLog("Heatmap click: \(inst.id)")
+            // v15.44 v2：复用 watchlistInstrumentSelected 通道（与 ⌘L 自选 / ⌘B 预警同机制）
+            // 主图 ChartScene 接收后切合约 · 默认在 chart 窗口前置
+            openWindow(id: "chart")
+            NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: inst.id)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
@@ -226,7 +229,7 @@ struct HeatmapWindow: View {
             }
             .cornerRadius(2)
             Spacer()
-            Text("· 红涨 / 绿跌 · 强度 ∝ |涨跌幅| / 4% · hover 看完整数据 · 点击切主图（v2）")
+            Text("· 红涨 / 绿跌 · 强度 ∝ |涨跌幅| / 4% · hover 看完整数据 · 点击切主图")
                 .font(.caption2).foregroundColor(.secondary)
         }
         .padding(.horizontal, 14).padding(.vertical, 8)

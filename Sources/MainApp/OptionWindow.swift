@@ -36,6 +36,10 @@ struct OptionWindow: View {
     @State private var backtestSheetPresented: Bool = false
     /// v15.40 · PnL 图 hover（鼠标在 strategyPnLChart 内的像素 · nil = 离开）
     @State private var pnlHoverPoint: CGPoint?
+    /// v15.42 · IV smile 副图 hover（鼠标在 ivSmileChart 内的像素 · nil = 离开）
+    @State private var ivSmileHoverPoint: CGPoint?
+    /// v15.42 · IV smile 翼端 skew（笑容陡峭度 · 0=无 smile / 0.5=典型笑 / 1=极端 skew）
+    @State private var ivSmileSkew: Double = 0.5
 
     private var meta: OptionPresets.UnderlyingMeta? {
         OptionPresets.byUnderlyingID[selectedUnderlyingID]
@@ -296,7 +300,28 @@ struct OptionWindow: View {
             strategyHUD
             Divider()
             strategyPnLChart
+                .frame(maxHeight: .infinity)
+            Divider()
+            ivSmileToolbar
+            ivSmileChart
+                .frame(height: 160)
         }
+    }
+
+    /// IV smile 顶部工具条（skew 可调 · 0.0-1.0）
+    private var ivSmileToolbar: some View {
+        HStack(spacing: 10) {
+            Text("IV smile").font(.caption.bold()).foregroundColor(.secondary)
+            Spacer()
+            Text("skew").font(.caption2).foregroundColor(.secondary)
+            Stepper(value: $ivSmileSkew, in: 0.0...1.0, step: 0.1) {
+                Text(String(format: "%.1f", ivSmileSkew))
+                    .font(.caption.monospaced())
+                    .frame(minWidth: 28)
+            }
+            .frame(width: 110)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
     }
 
     private var strategyToolbar: some View {
@@ -677,6 +702,211 @@ struct OptionWindow: View {
             strategyMidStrike  = atm
             strategyHighStrike = atm + 2 * step
         }
+    }
+
+    // MARK: - v15.42 · IV smile 副图（trader 看波动率结构）
+
+    /// IV smile mock 公式（笑容形状 · 远 ATM IV 高 / ATM 低）
+    /// - Parameter strike: 行权价
+    /// - Parameter spot: 标的现价
+    /// - Parameter baseIV: ATM 平价 IV（用户输入的 assumedVol）
+    /// - Parameter skew: 翼端陡峭度（0=flat / 0.5=典型笑 / 1=极端）
+    /// - Returns: 该 strike 处的 IV
+    private func mockSmileIV(strike: Double, spot: Double, baseIV: Double, skew: Double) -> Double {
+        guard spot > 0, strike > 0 else { return baseIV }
+        let m = log(strike / spot)               // log-moneyness
+        // 二次型 + 偏斜：左翼（K<S）IV 高 +0.05 · 右翼（K>S）IV 低 -0.02（put skew · 经典股票）
+        let curvature = skew * m * m * 4         // 笑容曲率 ∝ m²
+        let putSkew = m < 0 ? skew * (-m) * 0.30 : -skew * m * 0.10
+        return max(0.01, baseIV * (1 + curvature) + putSkew)
+    }
+
+    private var ivSmileChart: some View {
+        GeometryReader { geom in
+            ZStack {
+                Canvas { ctx, size in
+                    drawIVSmile(ctx: ctx, size: size)
+                }
+                .background(ChartTheme.dark.background)
+
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let pt): ivSmileHoverPoint = pt
+                        case .ended: ivSmileHoverPoint = nil
+                        }
+                    }
+
+                if let pt = ivSmileHoverPoint, let slice = selectedSlice, !slice.rows.isEmpty,
+                   let info = ivSmileHoverInfo(at: pt, in: geom.size, slice: slice) {
+                    ivSmileCrosshair(at: pt, snapX: info.snapX, in: geom.size)
+                    ivSmileTooltip(info: info)
+                        .position(tooltipPosition(near: pt, in: geom.size,
+                                                   tooltipSize: CGSize(width: 200, height: 130)))
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    private func drawIVSmile(ctx: GraphicsContext, size: CGSize) {
+        guard let slice = selectedSlice, !slice.rows.isEmpty else {
+            let text = Text("无期权链 · IV smile 不可用")
+                .font(ChartTheme.fontSubvalue).foregroundColor(.secondary)
+            ctx.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2), anchor: .center)
+            return
+        }
+        let rows = slice.rows
+        let strikes = rows.map { NSDecimalNumber(decimal: $0.strikePrice).doubleValue }
+        guard let minK = strikes.min(), let maxK = strikes.max(), maxK > minK else { return }
+
+        // 双线：call IV (cyan) · put IV (orange) · ATM 处吻合
+        let callIVs = strikes.map { mockSmileIV(strike: $0, spot: spotPrice, baseIV: assumedVol, skew: ivSmileSkew) }
+        let putIVs  = strikes.map { mockSmileIV(strike: $0, spot: spotPrice, baseIV: assumedVol, skew: ivSmileSkew) + 0.005 }
+
+        let allIVs = callIVs + putIVs
+        guard let minIV = allIVs.min(), let maxIV = allIVs.max(), maxIV > minIV else { return }
+        let pad = max(0.005, (maxIV - minIV) * 0.15)
+        let viewMinIV = minIV - pad
+        let viewMaxIV = maxIV + pad
+        let viewRangeIV = viewMaxIV - viewMinIV
+        let kRange = maxK - minK
+
+        func xFor(_ k: Double) -> CGFloat { CGFloat((k - minK) / kRange) * size.width }
+        func yFor(_ iv: Double) -> CGFloat {
+            CGFloat(1 - (iv - viewMinIV) / viewRangeIV) * (size.height - 22) + 16
+        }
+
+        // 现价垂线（cyan 虚）
+        if spotPrice >= minK && spotPrice <= maxK {
+            var line = Path()
+            line.move(to: CGPoint(x: xFor(spotPrice), y: 16))
+            line.addLine(to: CGPoint(x: xFor(spotPrice), y: size.height - 6))
+            ctx.stroke(line, with: .color(ChartTheme.chartSpotLine),
+                       style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+        }
+
+        // baseIV 水平线（白虚 · ATM IV）
+        var baseLine = Path()
+        baseLine.move(to: CGPoint(x: 0, y: yFor(assumedVol)))
+        baseLine.addLine(to: CGPoint(x: size.width, y: yFor(assumedVol)))
+        ctx.stroke(baseLine, with: .color(ChartTheme.chartLineSecondary),
+                   style: StrokeStyle(lineWidth: 0.8, dash: [4, 4]))
+
+        // call IV 折线（cyan · 实线）
+        var callPath = Path()
+        for (i, iv) in callIVs.enumerated() {
+            let pt = CGPoint(x: xFor(strikes[i]), y: yFor(iv))
+            if i == 0 { callPath.move(to: pt) } else { callPath.addLine(to: pt) }
+        }
+        ctx.stroke(callPath, with: .color(ChartTheme.chartLine),
+                   style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+
+        // put IV 折线（orange · 实线 · 略高于 call · put skew 视觉）
+        var putPath = Path()
+        for (i, iv) in putIVs.enumerated() {
+            let pt = CGPoint(x: xFor(strikes[i]), y: yFor(iv))
+            if i == 0 { putPath.move(to: pt) } else { putPath.addLine(to: pt) }
+        }
+        ctx.stroke(putPath, with: .color(.orange.opacity(0.85)),
+                   style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+
+        // strike 数据点（圆点）
+        for (i, k) in strikes.enumerated() {
+            let cx = xFor(k)
+            let cy1 = yFor(callIVs[i])
+            let cy2 = yFor(putIVs[i])
+            ctx.fill(Path(ellipseIn: CGRect(x: cx - 2, y: cy1 - 2, width: 4, height: 4)),
+                     with: .color(ChartTheme.chartLine))
+            ctx.fill(Path(ellipseIn: CGRect(x: cx - 2, y: cy2 - 2, width: 4, height: 4)),
+                     with: .color(.orange.opacity(0.85)))
+            _ = k
+        }
+
+        // 顶部标题 + skew 提示
+        let skewLabel: String
+        switch ivSmileSkew {
+        case 0..<0.2: skewLabel = "平坦"
+        case 0.2..<0.4: skewLabel = "微笑"
+        case 0.4..<0.7: skewLabel = "标准笑"
+        default: skewLabel = "陡笑"
+        }
+        let title = Text("📈 IV smile（cyan=call · orange=put · skew=\(String(format: "%.1f", ivSmileSkew)) \(skewLabel)）")
+            .font(ChartTheme.fontSubvalue).foregroundColor(.secondary)
+        ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
+    }
+
+    /// IV smile hover 信息
+    private struct IVSmileHoverInfo {
+        let strike: Double
+        let callIV: Double
+        let putIV: Double
+        let snapX: CGFloat
+    }
+
+    private func ivSmileHoverInfo(at pt: CGPoint, in size: CGSize, slice: OptionChainSlice) -> IVSmileHoverInfo? {
+        let rows = slice.rows
+        let strikes = rows.map { NSDecimalNumber(decimal: $0.strikePrice).doubleValue }
+        guard let minK = strikes.min(), let maxK = strikes.max(), maxK > minK else { return nil }
+        let kRange = maxK - minK
+        // 鼠标 x 反推 strike · 找最近的 row
+        let xRatio = max(0, min(1, pt.x / size.width))
+        let cursorK = minK + xRatio * kRange
+        guard let i = strikes.indices.min(by: { abs(strikes[$0] - cursorK) < abs(strikes[$1] - cursorK) }) else { return nil }
+        let k = strikes[i]
+        let snapX = CGFloat((k - minK) / kRange) * size.width
+        let callIV = mockSmileIV(strike: k, spot: spotPrice, baseIV: assumedVol, skew: ivSmileSkew)
+        let putIV = callIV + 0.005
+        return IVSmileHoverInfo(strike: k, callIV: callIV, putIV: putIV, snapX: snapX)
+    }
+
+    private func ivSmileCrosshair(at pt: CGPoint, snapX: CGFloat, in size: CGSize) -> some View {
+        Path { p in
+            p.move(to: CGPoint(x: 0, y: pt.y))
+            p.addLine(to: CGPoint(x: size.width, y: pt.y))
+            p.move(to: CGPoint(x: snapX, y: 0))
+            p.addLine(to: CGPoint(x: snapX, y: size.height))
+        }
+        .stroke(ChartTheme.crosshairLine,
+                style: StrokeStyle(lineWidth: ChartTheme.crosshairLineWidth, dash: ChartTheme.crosshairDash))
+        .allowsHitTesting(false)
+    }
+
+    private func ivSmileTooltip(info: IVSmileHoverInfo) -> some View {
+        let isATM = abs(info.strike - spotPrice) < 0.5
+        let moneyness = info.strike > spotPrice ? "OTM Call / ITM Put"
+                      : (info.strike < spotPrice ? "ITM Call / OTM Put" : "ATM")
+        let skewVsBase = info.callIV - assumedVol
+        let skewColor: Color = skewVsBase > 0.005 ? ChartTheme.chartLossEmphasized
+                             : (skewVsBase < -0.005 ? ChartTheme.chartProfitEmphasized : ChartTheme.tooltipSecondary)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(String(format: "K %.0f", info.strike))
+                    .font(ChartTheme.fontValueBold)
+                    .foregroundColor(ChartTheme.tooltipPrimary)
+                if isATM {
+                    Text("ATM")
+                        .font(ChartTheme.fontHint)
+                        .foregroundColor(ChartTheme.chartLine)
+                }
+            }
+            Text(moneyness)
+                .font(ChartTheme.fontSubvalue)
+                .foregroundColor(ChartTheme.tooltipMuted)
+            Divider().background(ChartTheme.tooltipDivider)
+            optionTooltipRow("call IV", String(format: "%.1f%%", info.callIV * 100), color: ChartTheme.chartLine)
+            optionTooltipRow("put IV", String(format: "%.1f%%", info.putIV * 100), color: .orange.opacity(0.85))
+            optionTooltipRow("base", String(format: "%.1f%%", assumedVol * 100), color: ChartTheme.tooltipSecondary)
+            optionTooltipRow("vs base", String(format: "%@%.1f%%", skewVsBase >= 0 ? "+" : "", skewVsBase * 100),
+                             color: skewColor)
+        }
+        .padding(ChartTheme.tooltipPadding)
+        .frame(width: 200, alignment: .leading)
+        .background(ChartTheme.tooltipBackground)
+        .cornerRadius(ChartTheme.tooltipCornerRadius)
+        .overlay(RoundedRectangle(cornerRadius: ChartTheme.tooltipCornerRadius)
+                    .stroke(ChartTheme.tooltipBorder, lineWidth: ChartTheme.tooltipBorderWidth))
     }
 }
 

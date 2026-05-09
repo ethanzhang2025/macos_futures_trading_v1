@@ -90,7 +90,8 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .polygon:         return "多边形"
     case .fibonacciFan:    return "斐波那契扇形"
     case .priceZone:       return "价格区域"
-    case .gannFan:         return "江恩扇形"
+    case .gannFan:           return "江恩扇形"
+    case .fibonacciTimeZone: return "斐波那契时间区"
     }
 }
 
@@ -893,6 +894,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "wand.and.rays", tool: .fibonacciFan, help: "斐波那契扇形（双点 · 38.2/50/61.8 三射线）")
             drawingToolButton(icon: "rectangle.split.1x2", tool: .priceZone, help: "价格区域（双点 · 上下价格全图横跨 · 关键支撑/阻力带）")
             drawingToolButton(icon: "fanblades", tool: .gannFan, help: "江恩扇形（双点定 1×1 · 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）")
+            drawingToolButton(icon: "calendar.badge.clock", tool: .fibonacciTimeZone, help: "斐波那契时间区（双点定 1 fib 间隔 · 8 条垂直线 F1/F2/F3/F5/F8/F13/F21/F34）")
             drawingToolButton(icon: "circle", tool: .ellipse, help: "椭圆（双点对角）")
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
             drawingToolButton(icon: "tuningfork", tool: .pitchfork, help: "Andrew's Pitchfork（3 点 · 中线 + 上下平行轨）")
@@ -1210,6 +1212,7 @@ struct ChartScene: View {
         case .fibonacci:        return .channel
         case .fibonacciFan:     return .channel
         case .gannFan:          return .channel
+        case .fibonacciTimeZone:return .channel
         case .priceZone:        return .keyLevel
         case .text:             return .annotation
         case .rectangle:        return .keyLevel
@@ -4029,6 +4032,17 @@ struct ChartContentView: View {
                 minD = min(minD, Self.pointToSegmentDistance(p, a, rayEnd))
             }
             return minD
+
+        case .fibonacciTimeZone:
+            // v15.90 斐波那契时间区 · 8 条垂直线最小水平距离
+            let bars = DrawingGeometry.fibonacciTimeZoneBars(for: drawing)
+            guard !bars.isEmpty else { return .infinity }
+            var minD: CGFloat = .infinity
+            for bar in bars {
+                let x = screenPoint(DrawingPoint(barIndex: bar, price: drawing.startPoint.price)).x
+                minD = min(minD, abs(p.x - x))
+            }
+            return minD
         }
     }
 
@@ -4064,6 +4078,8 @@ struct ChartContentView: View {
             return Drawing.priceZone(from: firstPoint, to: hoverPoint)
         case .gannFan:
             return Drawing.gannFan(from: firstPoint, to: hoverPoint)
+        case .fibonacciTimeZone:
+            return Drawing.fibonacciTimeZone(from: firstPoint, to: hoverPoint)
         case .rectangle:
             return Drawing.rectangle(from: firstPoint, to: hoverPoint)
         case .trendLine:

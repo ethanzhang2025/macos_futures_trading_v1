@@ -47,6 +47,11 @@ public enum GannAngles {
     ]
 }
 
+/// 斐波那契时间区数列（v15.90 · 1, 2, 3, 5, 8, 13, 21, 34 · 自然 fib 数列前 8 项）
+public enum FibonacciSequence {
+    public static let standard: [Int] = [1, 2, 3, 5, 8, 13, 21, 34]
+}
+
 public enum DrawingGeometry {
 
     /// 斐波那契回调线的价格序列
@@ -150,5 +155,17 @@ public enum DrawingGeometry {
         return angles.map { angle in
             drawing.startPoint.price + timeOffset * unit * Decimal(angle.num) / Decimal(angle.den)
         }
+    }
+
+    /// v15.90 斐波那契时间区 · 各 fib 数对应的 barIndex
+    /// - 起点 startBar · 1 fib 间隔 dx = end.barIndex - startBar
+    /// - 第 i 条线在 startBar + dx × sequence[i]
+    /// - Returns: 与 sequence 同长 · 非 fibonacciTimeZone / 缺 endPoint / dx <= 0 时返回空
+    public static func fibonacciTimeZoneBars(for drawing: Drawing, sequence: [Int] = FibonacciSequence.standard) -> [Int] {
+        guard drawing.type == .fibonacciTimeZone, let end = drawing.endPoint else { return [] }
+        let startBar = drawing.startPoint.barIndex
+        let dx = end.barIndex - startBar
+        guard dx > 0 else { return [] }
+        return sequence.map { startBar + dx * $0 }
     }
 }

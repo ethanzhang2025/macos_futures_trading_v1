@@ -128,6 +128,7 @@ public struct DrawingsOverlayView: View {
         case .fibonacciFan:     drawFibonacciFan(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .priceZone:        drawPriceZone(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .gannFan:          drawGannFan(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .fibonacciTimeZone:drawFibonacciTimeZone(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         }
 
         if isSelected, !isPending {
@@ -196,6 +197,26 @@ public struct DrawingsOverlayView: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(color)
             ctx.draw(text, at: CGPoint(x: 4, y: y - 8))
+        }
+    }
+
+    /// v15.90 斐波那契时间区 · 8 条全图垂直线（F1/F2/F3/F5/F8/F13/F21/F34）· 顶部 label
+    private func drawFibonacciTimeZone(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        let bars = DrawingGeometry.fibonacciTimeZoneBars(for: d)
+        let sequence = FibonacciSequence.standard
+        for (i, bar) in bars.enumerated() {
+            let x = xForBar(bar, size: size)
+            // 超出可见范围跳过（仍保留几何含义 · 仅不画）
+            if x < 0 || x > size.width { continue }
+            var path = Path()
+            path.move(to: CGPoint(x: x, y: 0))
+            path.addLine(to: CGPoint(x: x, y: size.height))
+            ctx.stroke(path, with: .color(color.opacity(0.7 * opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: dash))
+            let label = "F\(sequence[i])"
+            let text = Text(label)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(color)
+            ctx.draw(text, at: CGPoint(x: x + 12, y: 12))
         }
     }
 
@@ -448,6 +469,7 @@ public struct DrawingsOverlayView: View {
         case .fibonacciFan:    return Color(red: 1.00, green: 0.42, blue: 0.42)  // 珊瑚红（v15.87 · 与 fibonacci 橙区分）
         case .priceZone:       return Color(red: 0.55, green: 0.85, blue: 0.65)  // 薄荷绿（v15.88 · 关键支撑/阻力区域）
         case .gannFan:         return Color(red: 0.40, green: 0.60, blue: 0.95)  // 靛蓝（v15.89 · 与 horizontalLine 蓝区分）
+        case .fibonacciTimeZone: return Color(red: 0.65, green: 0.55, blue: 0.95)  // 紫罗兰（v15.90 · 时间维度 fib）
         }
     }
 

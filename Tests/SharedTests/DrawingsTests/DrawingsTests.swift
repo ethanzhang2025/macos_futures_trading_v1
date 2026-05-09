@@ -27,6 +27,7 @@ struct DrawingFactoryTests {
         #expect(Drawing.fibonacciFan(from: point(0, 100), to: point(10, 110)).type == .fibonacciFan)
         #expect(Drawing.priceZone(from: point(0, 110), to: point(0, 100)).type == .priceZone)
         #expect(Drawing.gannFan(from: point(0, 100), to: point(10, 110)).type == .gannFan)
+        #expect(Drawing.fibonacciTimeZone(from: point(0, 100), to: point(10, 100)).type == .fibonacciTimeZone)
     }
 
     @Test("v13.31 多边形 factory · 至少 3 点 / 少于 3 返回 nil / startPoint+extraPoints 映射")
@@ -558,6 +559,41 @@ struct DrawingGeometryTests {
     func gannFanPointsContract() {
         #expect(DrawingType.gannFan.pointsNeeded == 2)
         #expect(DrawingType.gannFan.needsTwoPoints)
+    }
+
+    @Test("v15.90 斐波那契时间区 · 8 条 fib 数列垂直线（1/2/3/5/8/13/21/34）")
+    func fibonacciTimeZoneSequence() {
+        #expect(FibonacciSequence.standard == [1, 2, 3, 5, 8, 13, 21, 34])
+    }
+
+    @Test("v15.90 斐波那契时间区 · barIndex 计算（dx = 5 时 F1=5/F8=40/F34=170）")
+    func fibonacciTimeZoneBars() {
+        // 起点 bar=10 · 终点 bar=15 · dx = 5
+        let d = Drawing.fibonacciTimeZone(from: point(10, 100), to: point(15, 100))
+        let bars = DrawingGeometry.fibonacciTimeZoneBars(for: d)
+        #expect(bars.count == 8)
+        #expect(bars[0] == 15)    // F1: 10 + 5×1 = 15
+        #expect(bars[4] == 50)    // F8: 10 + 5×8 = 50
+        #expect(bars[7] == 180)   // F34: 10 + 5×34 = 180
+    }
+
+    @Test("v15.90 斐波那契时间区 · dx <= 0 / 非匹配类型返回空")
+    func fibonacciTimeZoneEdgeCases() {
+        // 非匹配
+        let trend = Drawing.trendLine(from: point(0, 100), to: point(10, 100))
+        #expect(DrawingGeometry.fibonacciTimeZoneBars(for: trend).isEmpty)
+        // dx == 0
+        let degenerate = Drawing.fibonacciTimeZone(from: point(5, 100), to: point(5, 100))
+        #expect(DrawingGeometry.fibonacciTimeZoneBars(for: degenerate).isEmpty)
+        // dx < 0（终点在起点之前 · 反向无意义）
+        let backward = Drawing.fibonacciTimeZone(from: point(10, 100), to: point(5, 100))
+        #expect(DrawingGeometry.fibonacciTimeZoneBars(for: backward).isEmpty)
+    }
+
+    @Test("v15.90 斐波那契时间区 · pointsNeeded == 2")
+    func fibonacciTimeZonePointsContract() {
+        #expect(DrawingType.fibonacciTimeZone.pointsNeeded == 2)
+        #expect(DrawingType.fibonacciTimeZone.needsTwoPoints)
     }
 
     @Test("priceDistance 趋势线垂直差")

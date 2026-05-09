@@ -57,6 +57,63 @@ public struct InstrumentAnomalyHistory: Sendable, Equatable, Identifiable {
 
     /// 最大日异常次数（sparkline y 轴归一化用）
     public var peakDayCount: Int { entries.map(\.count).max() ?? 0 }
+
+    // MARK: - v15.61 周/月对比聚合
+
+    /// 本周（最近 7 天）总异常数
+    public var thisWeekCount: Int {
+        entries.suffix(7).map(\.count).reduce(0, +)
+    }
+
+    /// 上周（倒数 8-14 天）总异常数
+    public var lastWeekCount: Int {
+        let n = entries.count
+        guard n >= 14 else { return 0 }
+        return entries[(n - 14)..<(n - 7)].map(\.count).reduce(0, +)
+    }
+
+    /// 本周相对上周差值
+    public var weekDelta: Int { thisWeekCount - lastWeekCount }
+
+    /// 本周相对上周百分比变化（[-1, +∞]）· 上周 0 → 本周 > 0 时返 +1（+100% 兜底）
+    public var weekDeltaPct: Double {
+        if lastWeekCount > 0 {
+            return Double(weekDelta) / Double(lastWeekCount)
+        }
+        return thisWeekCount > 0 ? 1.0 : 0.0
+    }
+
+    /// 周趋势方向（≥ +20% 上升 · ≤ -20% 下降 · 中间持平）
+    public var weekTrend: WeekTrend {
+        let pct = weekDeltaPct
+        if pct >= 0.20 { return .surging }
+        if pct <= -0.20 { return .easing }
+        return .flat
+    }
+}
+
+/// 周趋势方向
+public enum WeekTrend: String, Sendable, Codable {
+    case surging   // 异动加剧（≥ +20%）· 红
+    case easing    // 异动减弱（≤ -20%）· 绿
+    case flat      // 持平
+
+    public var displayName: String {
+        switch self {
+        case .surging: return "加剧"
+        case .easing:  return "减弱"
+        case .flat:    return "持平"
+        }
+    }
+
+    /// SF Symbol 图标
+    public var icon: String {
+        switch self {
+        case .surging: return "arrow.up.right.circle.fill"
+        case .easing:  return "arrow.down.right.circle.fill"
+        case .flat:    return "minus.circle"
+        }
+    }
 }
 
 public enum AnomalyHistoryGenerator {

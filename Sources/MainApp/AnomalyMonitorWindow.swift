@@ -45,6 +45,7 @@ struct AnomalyMonitorWindow: View {
         case kindBreakdown  // 5 类型分布
         case sectorBreakdown // 板块异常分布
         case historyBacktest // v15.59 · 30d 异常频次回溯 + sparkline
+        case weeklyTrend    // v15.61 · 本周 vs 上周对比（异动加剧/减弱）
 
         var id: String { rawValue }
         var displayName: String {
@@ -53,6 +54,7 @@ struct AnomalyMonitorWindow: View {
             case .kindBreakdown: return "类型分布"
             case .sectorBreakdown: return "板块分布"
             case .historyBacktest: return "30d 频次回溯"
+            case .weeklyTrend: return "周对比"
             }
         }
     }
@@ -82,6 +84,7 @@ struct AnomalyMonitorWindow: View {
             case .kindBreakdown:  kindBreakdownView
             case .sectorBreakdown: sectorBreakdownView
             case .historyBacktest: historyBacktestView
+            case .weeklyTrend:    weeklyTrendView
             }
             Divider()
             legendBar
@@ -105,7 +108,7 @@ struct AnomalyMonitorWindow: View {
                     ForEach(ViewMode.allCases) { m in Text(m.displayName).tag(m) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 420)
+                .frame(width: 500)
                 .labelsHidden()
             }
 
@@ -612,6 +615,178 @@ struct AnomalyMonitorWindow: View {
                     .help("\(k.displayName) · 30d \(c) 次")
             }
         }
+    }
+
+    // MARK: - 周对比视图（v15.61）
+
+    private var weeklyTrendView: some View {
+        // 取 30d 历史 · 但用周对比派生属性（thisWeek/lastWeek）排序
+        let history = AnomalyHistoryGenerator.generate(days: 30)
+        let filtered: [InstrumentAnomalyHistory] = {
+            switch sectorFilter {
+            case .all: return history
+            case .sector(let s): return history.filter { $0.sector == s }
+            }
+        }()
+        // 按"加剧最严重"排序：本周相对上周 Δ% 降序（先看异动突然加剧的品种）
+        let sorted = filtered.sorted { lhs, rhs in
+            // surging 优先 · 同 trend 内按 |Δ%| × 本周量 综合排
+            if lhs.weekTrend != rhs.weekTrend {
+                let order: (WeekTrend) -> Int = {
+                    switch $0 { case .surging: return 0; case .easing: return 2; case .flat: return 1 }
+                }
+                return order(lhs.weekTrend) < order(rhs.weekTrend)
+            }
+            return lhs.weekDelta > rhs.weekDelta
+        }
+        // 周对比统计
+        let surgingCount = sorted.filter { $0.weekTrend == .surging }.count
+        let easingCount = sorted.filter { $0.weekTrend == .easing }.count
+        let flatCount = sorted.filter { $0.weekTrend == .flat }.count
+
+        return VStack(spacing: 0) {
+            weeklyTrendStatsBar(surging: surgingCount, easing: easingCount, flat: flatCount)
+            Divider()
+            weeklyTrendHeader
+            if sorted.isEmpty {
+                Text("当前过滤无数据").font(.callout).foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(Array(sorted.enumerated()), id: \.element.id) { (rank, h) in
+                            weeklyTrendRow(rank: rank + 1, history: h)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func weeklyTrendStatsBar(surging: Int, easing: Int, flat: Int) -> some View {
+        HStack(spacing: 22) {
+            statBlock("加剧 ↑20%+", "\(surging)", color: ChartTheme.chartLoss)
+            statBlock("减弱 ↓20%+", "\(easing)", color: ChartTheme.chartProfit)
+            statBlock("持平", "\(flat)", color: .secondary)
+            Spacer()
+            Text("本周 7d vs 上周 7d · 异动突然加剧的品种值得重点跟踪")
+                .font(.caption2).foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+        .background(Color.secondary.opacity(0.04))
+    }
+
+    private var weeklyTrendHeader: some View {
+        HStack(spacing: 0) {
+            Text("#").font(.caption.bold()).foregroundColor(.secondary).frame(width: 36, alignment: .trailing)
+            Text("品种").font(.caption.bold()).foregroundColor(.secondary).frame(width: 130, alignment: .leading)
+            Text("板块").font(.caption.bold()).foregroundColor(.secondary).frame(width: 80, alignment: .leading)
+            Text("本周").font(.caption.bold()).foregroundColor(.secondary).frame(width: 50, alignment: .trailing)
+            Text("上周").font(.caption.bold()).foregroundColor(.secondary).frame(width: 50, alignment: .trailing)
+            Text("Δ").font(.caption.bold()).foregroundColor(.secondary).frame(width: 50, alignment: .trailing)
+            Text("Δ%").font(.caption.bold()).foregroundColor(.secondary).frame(width: 70, alignment: .trailing)
+            Spacer().frame(width: 14)
+            Text("趋势").font(.caption.bold()).foregroundColor(.secondary).frame(width: 80, alignment: .leading)
+            Text("30d 总").font(.caption.bold()).foregroundColor(.secondary).frame(width: 60, alignment: .trailing)
+            Spacer()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.06))
+    }
+
+    private func weeklyTrendRow(rank: Int, history h: InstrumentAnomalyHistory) -> some View {
+        Button {
+            openWindow(id: "chart")
+            NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: h.instrumentID)
+        } label: {
+            HStack(spacing: 0) {
+                Text("\(rank)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+
+                HStack(spacing: 6) {
+                    Text(h.instrumentID)
+                        .font(.system(size: 11, design: .monospaced).bold())
+                        .frame(width: 50, alignment: .leading)
+                    Text(h.instrumentName)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(width: 130, alignment: .leading)
+
+                Label(h.sector.displayName, systemImage: h.sector.icon)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(width: 80, alignment: .leading)
+                    .lineLimit(1)
+
+                Text("\(h.thisWeekCount)")
+                    .font(.system(size: 11, design: .monospaced).bold())
+                    .foregroundColor(weekCountColor(h.thisWeekCount))
+                    .frame(width: 50, alignment: .trailing)
+
+                Text("\(h.lastWeekCount)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 50, alignment: .trailing)
+
+                Text(h.weekDelta > 0 ? "+\(h.weekDelta)" : "\(h.weekDelta)")
+                    .font(.system(size: 11, design: .monospaced).bold())
+                    .foregroundColor(deltaColor(h.weekDelta))
+                    .frame(width: 50, alignment: .trailing)
+
+                Text(formatPct(h.weekDeltaPct))
+                    .font(.system(size: 11, design: .monospaced).bold())
+                    .foregroundColor(trendColor(h.weekTrend))
+                    .frame(width: 70, alignment: .trailing)
+
+                Spacer().frame(width: 14)
+
+                Label(h.weekTrend.displayName, systemImage: h.weekTrend.icon)
+                    .font(.caption.bold())
+                    .foregroundColor(trendColor(h.weekTrend))
+                    .frame(width: 80, alignment: .leading)
+
+                Text("\(h.totalCount)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 60, alignment: .trailing)
+
+                Spacer()
+            }
+            .padding(.horizontal, 14).padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(h.instrumentName)（\(h.instrumentID)）本周 \(h.thisWeekCount) vs 上周 \(h.lastWeekCount) · \(h.weekTrend.displayName) \(formatPct(h.weekDeltaPct)) · 点击切主图")
+    }
+
+    private func weekCountColor(_ c: Int) -> Color {
+        if c >= 15 { return ChartTheme.chartLoss }
+        if c >= 8  { return .orange }
+        return .primary
+    }
+
+    private func deltaColor(_ d: Int) -> Color {
+        if d > 5 { return ChartTheme.chartLoss }
+        if d < -5 { return ChartTheme.chartProfit }
+        return .secondary
+    }
+
+    private func trendColor(_ t: WeekTrend) -> Color {
+        switch t {
+        case .surging: return ChartTheme.chartLoss
+        case .easing:  return ChartTheme.chartProfit
+        case .flat:    return .secondary
+        }
+    }
+
+    private func formatPct(_ pct: Double) -> String {
+        if pct == 0 { return "0%" }
+        if abs(pct) >= 10 { return String(format: "%+.0fx", pct) }  // > 1000% 显示 +Nx
+        return String(format: "%+.0f%%", pct * 100)
     }
 
     // MARK: - 图例栏

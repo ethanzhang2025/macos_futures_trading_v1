@@ -87,9 +87,9 @@ struct DrawingFactoryTests {
 
 @Suite("Drawing Codable 往返")
 struct DrawingCodableTests {
-    @Test("9 种序列化 + 反序列化等价（v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork）")
+    @Test("14 种序列化 + 反序列化等价（含 v13.31 polygon · v15.87 fibonacciFan · v15.88 priceZone · v15.89 gannFan · v15.90 fibonacciTimeZone）")
     func roundTrip() throws {
-        let drawings = [
+        let drawings: [Drawing] = [
             Drawing.trendLine(from: point(0, 100), to: point(10, 120)),
             Drawing.horizontalLine(price: Decimal(string: "3550.5")!),
             Drawing.rectangle(from: point(2, 95), to: point(8, 115)),
@@ -98,8 +98,14 @@ struct DrawingCodableTests {
             Drawing.text(at: point(5, 105), content: "测试"),
             Drawing.ellipse(from: point(0, 100), to: point(10, 120)),
             Drawing.ruler(from: point(0, 100), to: point(10, 130)),
-            Drawing.pitchfork(handle: point(0, 100), upper: point(10, 120), lower: point(10, 80))
+            Drawing.pitchfork(handle: point(0, 100), upper: point(10, 120), lower: point(10, 80)),
+            Drawing.polygon(points: [point(0, 100), point(5, 110), point(10, 100)])!,
+            Drawing.fibonacciFan(from: point(0, 100), to: point(10, 200)),
+            Drawing.priceZone(from: point(0, 110), to: point(0, 100)),
+            Drawing.gannFan(from: point(0, 100), to: point(10, 200)),
+            Drawing.fibonacciTimeZone(from: point(0, 100), to: point(10, 100))
         ]
+        #expect(drawings.count == DrawingType.allCases.count, "Codable 往返应覆盖全部 \(DrawingType.allCases.count) 种 DrawingType")
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
         for d in drawings {

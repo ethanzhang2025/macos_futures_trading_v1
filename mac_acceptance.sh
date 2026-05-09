@@ -32,35 +32,31 @@ APP_PID=""
 
 mkdir -p "$SHOTS_DIR"
 
-# ─── 兜底上传函数（任何阶段退出都尝试上传）───
+# ─── 按阶段精选上传文件（节省 token · 不传无关大文件）───
+#
+# 策略：
+#   - 总传 exit_summary.txt（小 · 一目了然）
+#   - P1 build 失败 → 只传 01_build_error_extract.txt（精简）
+#   - test 失败 → 只传 02_test_failures.txt（精简）· 不传 02_test.log 全量（500KB+）
+#   - 截图失败 → 传 02c_capture.log + 02b_app_stdout_tail.txt
+#   - P5 全 OK → 传 shots/ + summary.txt（不传 build/test 详情）
+#   - demo log 永远小（< 1KB）· 总传
 upload_results() {
     local rc=$?
-    # 写一份 exit summary 让 Linux 端知道脚本走到哪里
+    local phase="${COMPLETED_PHASES:-未到 P1}"
+
+    # ── exit_summary.txt（总传 · ≤ 1KB）──
     {
         echo "# Mac 切机验收 · 退出 summary · $(date '+%Y-%m-%d %H:%M:%S')"
         echo ""
-        echo "## 退出码 / 阶段"
-        echo "- 脚本退出码: $rc"
-        echo "- 完成阶段: ${COMPLETED_PHASES:-未到 P1}"
-        if [[ -n "${BUILD_RC:-}" ]]; then
-            echo "- Build RC: $BUILD_RC $([[ $BUILD_RC -eq 0 ]] && echo '✅' || echo '❌')"
-        fi
-        if [[ -n "${TEST_RC:-}" ]]; then
-            echo "- Test RC: $TEST_RC $([[ $TEST_RC -eq 0 ]] && echo '✅' || echo '❌')"
-        fi
-        echo ""
-        echo "## 已生成文件"
-        ls -la "$OUT_DIR" 2>/dev/null | sed 's/^/    /'
+        echo "退出码: $rc · 阶段: $phase"
+        [[ -n "${BUILD_RC:-}" ]] && echo "Build RC: $BUILD_RC $([[ $BUILD_RC -eq 0 ]] && echo '✅' || echo '❌')"
+        [[ -n "${TEST_RC:-}" ]]  && echo "Test RC:  $TEST_RC $([[ $TEST_RC -eq 0 ]] && echo '✅' || echo '❌')"
         if [[ -d "$SHOTS_DIR" ]]; then
             local n=$(ls "$SHOTS_DIR" 2>/dev/null | wc -l | tr -d ' ')
-            echo ""
-            echo "## 截图（共 $n 张）"
-            ls "$SHOTS_DIR" 2>/dev/null | sort | sed 's/^/    /'
+            echo "截图: $n 张"
         fi
-        echo ""
-        echo "## 系统信息"
-        echo "- macOS: $(sw_vers -productVersion 2>/dev/null || echo '?')"
-        echo "- swift: $(swift --version 2>&1 | head -1 || echo '?')"
+        echo "macOS: $(sw_vers -productVersion 2>/dev/null) · swift: $(swift --version 2>&1 | head -1 | awk -F'version' '{print $NF}' | awk '{print $1}')"
     } > "$OUT_DIR/exit_summary.txt"
 
     # 兜底关 app（如果还在跑）
@@ -70,18 +66,74 @@ upload_results() {
     osascript -e 'tell application "MainApp" to quit' 2>/dev/null || true
     osascript -e 'tell application "FuturesTerminal" to quit' 2>/dev/null || true
 
-    # 尝试上传（任何情况都试）
+    # ── 决定上传文件清单（按阶段精选）──
+    local upload_list=("exit_summary.txt")
+
+    # P1 build 失败：只传精简错误
+    if [[ "$phase" == *"build 失败"* ]]; then
+        [[ -f "$OUT_DIR/01_build_error_extract.txt" ]] && upload_list+=("01_build_error_extract.txt")
+    fi
+
+    # test 失败：精简 fail context（不传 02_test.log 全量 500KB+）
+    if [[ "${TEST_RC:-0}" -ne 0 ]] && [[ -f "$OUT_DIR/02_test.log" ]]; then
+        # 提取 swift testing ✘ + Expectation failed + 末尾统计 + 上下 5 行
+        {
+            echo "# Test 失败精简（02_test.log 总 $(wc -l < "$OUT_DIR/02_test.log" | tr -d ' ') 行）"
+            echo ""
+            echo "## 失败 case"
+            grep -nE "✘|Expectation failed|recorded an issue" "$OUT_DIR/02_test.log" | head -40
+            echo ""
+            echo "## 末尾统计"
+            grep -E "Test run with|Executed [0-9]+ tests" "$OUT_DIR/02_test.log" | tail -5
+        } > "$OUT_DIR/02_test_failures_extract.txt"
+        upload_list+=("02_test_failures_extract.txt")
+    fi
+
+    # P2 截图阶段：失败时传 capture log + app stdout tail
+    if [[ -f "$OUT_DIR/02c_capture.log" ]]; then
+        local shot_n=$(ls "$SHOTS_DIR" 2>/dev/null | wc -l | tr -d ' ')
+        if [[ "$shot_n" -lt 20 ]]; then
+            upload_list+=("02c_capture.log")
+            # app stdout 末 50 行（看启动是否正常 · 不传全量 15KB warning）
+            if [[ -f "$OUT_DIR/02b_app_stdout.log" ]]; then
+                tail -50 "$OUT_DIR/02b_app_stdout.log" > "$OUT_DIR/02b_app_stdout_tail.txt"
+                upload_list+=("02b_app_stdout_tail.txt")
+            fi
+        fi
+    fi
+
+    # demo log（永远 < 1KB · 总传）
+    [[ -f "$OUT_DIR/03_demo.log" ]] && upload_list+=("03_demo.log")
+
+    # P5 全 OK：传 shots/ + summary
+    if [[ "$phase" == *"P5"* ]] || [[ "$phase" == *"P4 summary 完成"* ]]; then
+        [[ -f "$OUT_DIR/summary.txt" ]] && upload_list+=("summary.txt")
+        local shot_n=$(ls "$SHOTS_DIR" 2>/dev/null | wc -l | tr -d ' ')
+        if [[ "$shot_n" -gt 0 ]]; then
+            upload_list+=("shots")
+        fi
+    fi
+
+    # ── 上传 ──
     echo ""
-    echo "▶ 上传当前所有结果（即使中途失败也传）→ beelink@vvsvr:$REMOTE_DIR"
+    echo "▶ 上传精选文件（${#upload_list[@]} 项）→ beelink@vvsvr:$REMOTE_DIR"
     if ssh -o ConnectTimeout=5 beelink@vvsvr "echo ok" > /dev/null 2>&1; then
-        ssh beelink@vvsvr "mkdir -p $REMOTE_DIR"
-        scp -r "$OUT_DIR"/* beelink@vvsvr:"$REMOTE_DIR/" 2>&1 | tail -5
-        echo "✅ 上传完成 · 远程: beelink@vvsvr:$REMOTE_DIR"
+        # 远端清空旧（避免上次残留干扰分析）
+        ssh beelink@vvsvr "rm -rf $REMOTE_DIR && mkdir -p $REMOTE_DIR"
+        for f in "${upload_list[@]}"; do
+            if [[ -e "$OUT_DIR/$f" ]]; then
+                scp -rq "$OUT_DIR/$f" beelink@vvsvr:"$REMOTE_DIR/" && echo "  ✓ $f"
+            fi
+        done
+        echo "✅ 上传完成"
+        echo "本地完整日志保留：$OUT_DIR"
         echo ""
-        echo "请告诉 Linux 端 Claude：「Mac 验收脚本退出码 $rc · 完成阶段 ${COMPLETED_PHASES:-未到 P1} · 看图」"
+        echo "请告诉 Linux 端 Claude：「Mac 验收脚本退出码 $rc · 完成阶段 $phase · 看图」"
     else
-        echo "⚠️ SSH 不通 · 手动 scp："
-        echo "    scp -r $OUT_DIR beelink@vvsvr:~/debug_img/"
+        echo "⚠️ SSH 不通 · 手动 scp 精选："
+        for f in "${upload_list[@]}"; do
+            echo "    scp -r $OUT_DIR/$f beelink@vvsvr:$REMOTE_DIR/"
+        done
     fi
 }
 trap upload_results EXIT

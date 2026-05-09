@@ -494,9 +494,11 @@ struct FuturesTerminalApp: App {
 
         // v15.55 · WP-套利 价差 alert（⌘⌥W · 26 对全市场偏离 · 12 跨品种 + 14 跨期）
         // v15.57 · 注入 alertEvaluator · 行 + 按钮一键加 ⌘B 预警面板
+        // v15.67 · 注入 storeManager · spread alert 真持久化（重启恢复）
         WindowGroup("价差套利 alert", id: "spreadAlert") {
             SpreadAlertWindow()
                 .environment(\.alertEvaluator, alertEvaluator)
+                .environment(\.storeManager, storeManager)
                 .followingChartTheme()
         }
         .defaultSize(width: 1280, height: 760)

@@ -17,6 +17,7 @@ import Foundation
 import Shared
 import DataCore
 import AlertCore
+import StoreCore
 
 struct SpreadAlertWindow: View {
 
@@ -29,6 +30,7 @@ struct SpreadAlertWindow: View {
     @State private var addedSpreadIDs: Set<String> = []
     @Environment(\.openWindow) private var openWindow
     @Environment(\.alertEvaluator) private var alertEvaluator
+    @Environment(\.storeManager) private var storeManager
 
     enum DirectionFilter: String, CaseIterable, Identifiable {
         case all
@@ -94,10 +96,25 @@ struct SpreadAlertWindow: View {
         .animation(.easeInOut(duration: 0.18), value: addedAlertToast)
         .frame(minWidth: 1180, minHeight: 720)
         .task {
+            // v15.67 · 启动时把持久化 spread alerts 注入 evaluator（防 ⌘B 未打开时无 alerts 监听）
+            await loadPersistedSpreadAlertsToEvaluator()
             // 启动时同步已存在的 spreadDeviation alerts → 按钮显 ✓
             await refreshAddedSpreadIDs()
             // v15.60 · 启动周期扫描 · 60s 间隔喂 evaluator → 真触发已加预警的 spread alerts
             await runEvaluatorPushLoop()
+        }
+    }
+
+    /// v15.67 · 启动时把 alertConfig 中的 spread alerts 注入 evaluator
+    /// evaluator.addAlert 同 ID 覆盖 · ⌘B 也调过 addAlert 时不重复
+    private func loadPersistedSpreadAlertsToEvaluator() async {
+        guard let evaluator = alertEvaluator,
+              let store = storeManager?.alertConfig,
+              let persisted = (try? await store.load()) ?? nil else { return }
+        for a in persisted {
+            if case .spreadDeviation = a.condition {
+                await evaluator.addAlert(a)
+            }
         }
     }
 
@@ -139,10 +156,30 @@ struct SpreadAlertWindow: View {
         }
         let alert = makeAlert(from: evt)
         Task {
+            // 1. evaluator 内存 · 60s 周期扫描真触发用
             await evaluator.addAlert(alert)
             addedSpreadIDs.insert(evt.spreadID)
+            // 2. v15.67 持久化 alertConfig · 重启恢复
+            await persistSpreadAlert(alert)
+            // 3. 通知已打开的 ⌘B AlertWindow · UI 立即更新
+            NotificationCenter.default.post(name: .alertAddedFromChart, object: alert)
             showToast("已加到 ⌘B 预警面板：\(evt.spreadName)")
         }
+    }
+
+    /// v15.67 · 把 spread alert 写入 alertConfig store（重启时 ⌘B .task 加载会含此条）
+    /// 防重：同 spreadID + isCalendar 的 spread alert 已存在 → 不重复 append
+    private func persistSpreadAlert(_ alert: Alert) async {
+        guard let store = storeManager?.alertConfig else { return }
+        let existing = (try? await store.load()) ?? []
+        let alreadyExists = existing.contains { existingAlert in
+            guard case let .spreadDeviation(eID, eCal, _) = existingAlert.condition,
+                  case let .spreadDeviation(nID, nCal, _) = alert.condition
+            else { return false }
+            return eID == nID && eCal == nCal
+        }
+        guard !alreadyExists else { return }
+        try? await store.save(existing + [alert])
     }
 
     /// SpreadAlertEvent → AlertCore.Alert 转换
@@ -183,12 +220,22 @@ struct SpreadAlertWindow: View {
     }
 
     private func refreshAddedSpreadIDs() async {
-        guard let evaluator = alertEvaluator else { return }
-        let all = await evaluator.allAlerts()
+        // v15.67 · 优先 alertConfig store（重启后真数据源）· evaluator 仅当前 session
         var ids: Set<String> = []
-        for a in all {
-            if case let .spreadDeviation(spreadID, _, _) = a.condition {
-                ids.insert(spreadID)
+        if let store = storeManager?.alertConfig,
+           let persisted = (try? await store.load()) ?? nil {
+            for a in persisted {
+                if case let .spreadDeviation(spreadID, _, _) = a.condition {
+                    ids.insert(spreadID)
+                }
+            }
+        }
+        // evaluator 内存（兜底 · 当 store 不可用 · 开发期）
+        if let evaluator = alertEvaluator {
+            for a in await evaluator.allAlerts() {
+                if case let .spreadDeviation(spreadID, _, _) = a.condition {
+                    ids.insert(spreadID)
+                }
             }
         }
         addedSpreadIDs = ids

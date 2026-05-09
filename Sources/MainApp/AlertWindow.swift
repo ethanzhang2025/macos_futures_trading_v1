@@ -1154,9 +1154,9 @@ struct AlertWindow: View {
         HStack(spacing: 8) {
             Text("时间").frame(width: 150, alignment: .leading)
             Text("预警").frame(maxWidth: .infinity, alignment: .leading)
-            Text("合约").frame(width: 60, alignment: .leading)
+            Text("合约 / 价差").frame(width: 100, alignment: .leading)  // v15.66 · 同 alertRow 一致
             Text("触发价").frame(width: 80, alignment: .trailing)
-            Text("条件").frame(width: 200, alignment: .leading)
+            Text("条件").frame(width: 220, alignment: .leading)
         }
         .font(.system(size: 11, design: .monospaced))
         .foregroundColor(.secondary)
@@ -1204,6 +1204,23 @@ struct AlertWindow: View {
         }
     }
 
+    /// v15.66 · 历史 row spread alert instrumentColumn（同 v15.63 alertRow 渲染）
+    @ViewBuilder
+    private func historyInstrumentColumn(for e: AlertHistoryEntry) -> some View {
+        if case let .spreadDeviation(id, cal, _) = e.conditionSnapshot {
+            HStack(spacing: 4) {
+                Image(systemName: cal ? "calendar" : "arrow.left.and.right")
+                    .font(.system(size: 10))
+                    .foregroundColor(cal ? .cyan : .orange)
+                Text(AlertCondition.spreadDisplayName(id: id, isCalendar: cal))
+                    .font(.system(size: 11, design: .monospaced))
+                    .lineLimit(1)
+            }
+        } else {
+            Text(e.instrumentID)
+        }
+    }
+
     private func historyRow(_ e: AlertHistoryEntry) -> some View {
         let isExpanded = expandedHistoryID == e.id
         let alertStillExists = alerts.contains { $0.id == e.alertID }
@@ -1218,12 +1235,14 @@ struct AlertWindow: View {
                     .foregroundColor(.secondary)
                     .help("Unix 时间戳：\(Int(e.triggeredAt.timeIntervalSince1970))（已含秒级精度）")
                 Text(e.alertName).frame(maxWidth: .infinity, alignment: .leading)
-                Text(e.instrumentID).frame(width: 60, alignment: .leading)
+                // v15.66 · 历史 row 同 alertRow 一致：spread alert 显价差对名 + 图标
+                historyInstrumentColumn(for: e)
+                    .frame(width: 100, alignment: .leading)
                 Text(fmtDecimal(e.triggerPrice))
                     .frame(width: 80, alignment: .trailing)
                     .foregroundColor(.red.opacity(0.8))
                 Text(e.conditionSnapshot.displayDescription)
-                    .frame(width: 200, alignment: .leading)
+                    .frame(width: 220, alignment: .leading)
                     .foregroundColor(.secondary)
                 // v15.21 batch122 · 末尾加触发距今 age（与 alert row batch80 一致 · trader 看历史新旧度）
                 Text(Self.compactAge(from: e.triggeredAt))

@@ -205,6 +205,9 @@ struct JournalWindow: View {
     // v16.0 · 复盘 v2 · trade 行点击 setup chip 弹编辑（trader 给单笔打策略标签 · 让 SetupMatrix 真在工作流跑起来）
     @State private var pendingSetupTrade: Trade?
 
+    // v16.4 · 批量打标 · 选中多笔 trades 后弹 sheet 一次打同 setup
+    @State private var showBatchSetupSheet: Bool = false
+
     // v15.23 batch183 · 搜索框 focus（⌘F 聚焦）
     @FocusState private var focusedSearchField: SearchField?
 
@@ -300,6 +303,15 @@ struct JournalWindow: View {
                 knownSetups: knownSetups
             ) { newSetup in
                 applySetup(newSetup, to: trade)
+            }
+        }
+        // v16.4 · 批量打标 sheet（trader 选中多笔 trade 后 toolbar 按钮触发）
+        .sheet(isPresented: $showBatchSetupSheet) {
+            BatchSetupEditorSheet(
+                tradeCount: selectedTradeIDs.count,
+                knownSetups: knownSetups
+            ) { newSetup in
+                applyBatchSetup(newSetup, to: selectedTradeIDs)
             }
         }
         .confirmationDialog(
@@ -617,6 +629,15 @@ struct JournalWindow: View {
             }
             .tooltip("导出当前过滤 / 搜索后的 trades CSV（含 BOM Excel 友好）")
             .disabled(filteredTrades.isEmpty)
+
+            // v16.4 · 批量打标按钮（选中 ≥ 1 时 enable · 一次给所有选中 trade 打同一 setup）
+            Button {
+                showBatchSetupSheet = true
+            } label: {
+                Label("批量打标 (\(selectedTradeIDs.count))", systemImage: "tag.fill")
+            }
+            .tooltip("给选中的 \(selectedTradeIDs.count) 笔 trade 一次打同一 setup 策略标签 · 复盘 v2 SetupMatrix（v16.4）")
+            .disabled(selectedTradeIDs.isEmpty)
 
             Spacer()
 
@@ -1555,6 +1576,20 @@ struct JournalWindow: View {
         trades[idx] = updated
         Toast.info("已更新策略标签",
                    "\(trade.instrumentID) · \(updated.setup ?? "(已清除)")")
+    }
+
+    /// v16.4 · 批量给选中 trades 打 setup（onChange 单次触发批量持久化）· 仅对真变更的笔计数
+    private func applyBatchSetup(_ setup: String?, to ids: Set<UUID>) {
+        let cleanSetup = setup?.isEmpty == true ? nil : setup
+        var changed = 0
+        for i in trades.indices where ids.contains(trades[i].id) {
+            if trades[i].setup != cleanSetup {
+                trades[i].setup = cleanSetup
+                changed += 1
+            }
+        }
+        Toast.info("批量打标完成",
+                   "已更新 \(changed) / \(ids.count) 笔 · setup = \(cleanSetup ?? "(已清除)")")
     }
 
     // MARK: - 日志 Mutations（commit 3/4）
@@ -2583,12 +2618,95 @@ private struct SetupEditorSheet: View {
 
     /// 候选标签 chip 流（点击填入 TextField）· 与 SwiftUI HStack wrap 同模式
     private func chipFlow(_ items: [String], color: Color) -> some View {
-        // SwiftUI 没原生 wrap layout · 用 LazyVGrid 模拟（adaptive minimum 60 · trader 标签短）
+        SetupChipFlow(items: items, color: color, setupText: $setupText)
+    }
+}
+
+// MARK: - v16.4 · BatchSetupEditorSheet（批量给多笔 trade 打 setup）
+//
+// 与 SetupEditorSheet 同样的 chip flow 选择 + 自由输入逻辑 · 区别：
+// - 无单 trade 上下文 · 标题改"批量给 N 笔打 setup"
+// - 起始值 = ""（多笔 setup 可能不一致 · 不预填混乱值 · 强制让 trader 显式选）
+// - 支持"清除标签"按钮（统一清除所有选中笔的 setup · 需 trader 主动确认）
+// - canSubmit：非空时即可（与 nil 状态等价 batch 不参考"未变化"）
+
+private struct BatchSetupEditorSheet: View {
+
+    let tradeCount: Int
+    let knownSetups: [String]
+    let onApply: (String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var setupText: String = ""
+
+    private static let presetSetups: [String] = ["突破", "回踩", "背离", "趋势顺势", "区间反转"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("批量打 setup 标签").font(.title2).bold()
+                Spacer()
+                Text("将应用到已选 \(tradeCount) 笔 trade")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            Form {
+                TextField("自由输入 setup（如 突破 / 回踩 / 自定义）", text: $setupText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 360)
+
+                if !knownSetups.isEmpty {
+                    LabeledContent("已用标签") {
+                        SetupChipFlow(items: knownSetups, color: .accentColor, setupText: $setupText)
+                    }
+                }
+
+                LabeledContent("常见预设") {
+                    SetupChipFlow(items: Self.presetSetups, color: .secondary, setupText: $setupText)
+                }
+
+                Text("提示：批量打标会覆盖所有选中 trade 的 setup（含已标的）· 仅真变更才计入 \"已更新 X 笔\"")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .formStyle(.grouped)
+
+            HStack {
+                Button("批量清除", role: .destructive) {
+                    onApply(nil)
+                    dismiss()
+                }
+                .tooltip("把选中 \(tradeCount) 笔 trade 的 setup 全部清空（不可撤销 · onChange 立即持久化）")
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("批量打标") {
+                    let trimmed = setupText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    onApply(trimmed.isEmpty ? nil : trimmed)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(setupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 520, height: 380)
+    }
+}
+
+/// v16.4 · setup chip flow 共享 ViewBuilder（SetupEditorSheet 与 BatchSetupEditorSheet 共用）
+/// 抽出避免重复 chipFlow LazyVGrid 实现
+private struct SetupChipFlow: View {
+    let items: [String]
+    let color: Color
+    @Binding var setupText: String
+
+    var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 70, maximum: 140), spacing: 6)], alignment: .leading, spacing: 6) {
             ForEach(items, id: \.self) { item in
-                Button {
-                    setupText = item
-                } label: {
+                Button { setupText = item } label: {
                     Text(item)
                         .font(.system(size: 11, design: .monospaced))
                         .padding(.horizontal, 8)

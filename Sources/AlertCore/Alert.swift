@@ -64,10 +64,18 @@ public enum AlertCondition: Sendable, Codable, Equatable, Hashable {
     /// - isCalendar: true=跨期 · false=跨品种
     /// - zThreshold: |Z-score| 触发阈值（典型 2.0 = ±2σ）
     ///
-    /// v1 placeholder · evaluator.onTick / onBar 不评估（return false）·
-    /// 数据持久化 + UI 列表展示 ✓ · 真触发逻辑 v2 真行情接入时加 onSpreadValue() 路径。
+    /// v15.60 · evaluator.onSpreadValue() 真触发已接通 · caller 周期性扫描喂 series
     /// instrumentID 字段保留近月合约 · UI 通过 spreadID 反查 SpreadPresets 显示价差名。
     case spreadDeviation(spreadID: String, isCalendar: Bool, zThreshold: Decimal)
+}
+
+/// 价差时序点抽象（v15.60 · onSpreadValue 入参 · 不引 DataCore dep）
+///
+/// DataCore.SpreadValue 实现此协议（仅暴露 value）· AlertCore 不依赖 DataCore 具体类型
+/// caller 转换：values.map { SpreadValueLikeImpl(value: $0.value) }
+/// （或直接 conform DataCore.SpreadValue 到此协议）
+public protocol SpreadValueLike: Sendable {
+    var value: Decimal { get }
 }
 
 /// 预警状态

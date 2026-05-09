@@ -184,6 +184,58 @@ public actor AlertEvaluator {
         }
     }
 
+    /// onSpreadValue · v15.60 价差时序驱动方法（spreadDeviation 真触发）
+    /// 上层 caller（SpreadAlertWindow timer / v2 真行情 SpreadValue stream）每次新点到达调用
+    /// - Parameters:
+    ///   - values: spread 时序（升序 · ≥ 30 点用作 baseline · evaluator 内部不缓存 · caller 维护）
+    ///   - spreadID: 价差对 ID（"rb-hc" / "rb-05-10"）· 与 alert.condition.spreadDeviation.spreadID 匹配
+    ///   - isCalendar: 跨期 · 与 condition 字段匹配
+    ///   - now: 当前时间（注入便于测试）
+    ///
+    /// 评估逻辑：取 last point z-score · |z| ≥ alert.zThreshold + alert.canTrigger → 触发
+    /// 注意：spread alert 的 alert.instrumentID 字段保留近月 · 与 spreadID 解耦
+    public func onSpreadValue(values: [SpreadValueLike], spreadID: String, isCalendar: Bool, now: Date = Date()) async {
+        guard values.count >= 30 else { return }
+        // 计算 mean / stdDev / current → zScore（与 SpreadStatisticsCalculator 同公式 · 此处去 DataCore dep）
+        let series = values.map(\.value)
+        let n = series.count
+        let mean = series.reduce(Decimal(0), +) / Decimal(n)
+        let variance = series.reduce(Decimal(0)) { acc, v in
+            let diff = v - mean
+            return acc + diff * diff
+        } / Decimal(n - 1)
+        let stdDev = sqrtDecimal(variance)
+        guard stdDev > 0 else { return }
+        let current = series.last ?? 0
+        let zRaw = NSDecimalNumber(decimal: (current - mean) / stdDev).doubleValue
+        let absZ = abs(zRaw)
+
+        for alert in alerts.values where alert.canTrigger(at: now) {
+            guard case let .spreadDeviation(altSpread, altIsCal, threshold) = alert.condition else { continue }
+            guard altSpread == spreadID, altIsCal == isCalendar else { continue }
+            let thresholdDouble = NSDecimalNumber(decimal: threshold).doubleValue
+            guard absZ >= thresholdDouble else { continue }
+            let direction = zRaw >= 0 ? "上轨突破" : "下轨突破"
+            let kindLabel = isCalendar ? "跨期" : "跨品种"
+            let event = AlertTriggeredEvent(
+                alertID: alert.id,
+                alertName: alert.name,
+                instrumentID: alert.instrumentID,
+                triggerPrice: current,
+                triggeredAt: now,
+                message: "\(kindLabel) 价差 \(spreadID) \(direction) · |z|=\(String(format: "%.2f", absZ))（阈值 \(thresholdDouble)）"
+            )
+            await fire(event: event, alert: alert, now: now)
+        }
+    }
+
+    /// 牛顿迭代 sqrt（Decimal · 与 SpreadStatisticsCalculator 同实现）· 仅 onSpreadValue 用
+    private func sqrtDecimal(_ value: Decimal) -> Decimal {
+        guard value > 0 else { return 0 }
+        let dval = NSDecimalNumber(decimal: value).doubleValue
+        return Decimal(dval.squareRoot())
+    }
+
     /// onBar · 完成 K 线驱动方法（指标条件预警）
     /// ChartScene 在 .completedBar 时与 onTick 并行调用 · spec.period 不匹配时不评估
     /// - Parameters:

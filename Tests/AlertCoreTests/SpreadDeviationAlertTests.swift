@@ -130,4 +130,121 @@ struct SpreadDeviationAlertTests {
         let cond = AlertCondition.spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.0)
         #expect(AlertHistoryStatistics.ConditionKind.of(cond) == .spread)
     }
+
+    // MARK: - v15.60 · onSpreadValue 真触发
+
+    private struct StubSV: SpreadValueLike {
+        let value: Decimal
+        init(_ v: Decimal) { self.value = v }
+    }
+
+    /// 30 个均值 100 + 1 个 200 偏离点 · 强烈偏离触发上轨
+    private func makeStrongUpper() -> [SpreadValueLike] {
+        var arr: [SpreadValueLike] = (0..<30).map { _ in StubSV(100) }
+        arr.append(StubSV(200))
+        return arr
+    }
+
+    @Test("onSpreadValue · 强偏离 + 匹配 spreadID/isCalendar → 触发")
+    func onSpreadValue_triggersOnMatchingAlert() async {
+        let evaluator = AlertEvaluator()
+        let alert = Alert(
+            name: "[价差] rb-hc",
+            instrumentID: "RB0",
+            condition: .spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.0)
+        )
+        await evaluator.addAlert(alert)
+        await evaluator.onSpreadValue(values: makeStrongUpper(), spreadID: "rb-hc", isCalendar: false)
+
+        let after = await evaluator.allAlerts()
+        #expect(after.first?.lastTriggeredAt != nil)
+    }
+
+    @Test("onSpreadValue · spreadID 不匹配 → 不触发")
+    func onSpreadValue_skipsWrongSpreadID() async {
+        let evaluator = AlertEvaluator()
+        let alert = Alert(
+            name: "[价差] rb-hc",
+            instrumentID: "RB0",
+            condition: .spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.0)
+        )
+        await evaluator.addAlert(alert)
+        // 强偏离但 spreadID 是别的
+        await evaluator.onSpreadValue(values: makeStrongUpper(), spreadID: "au-80ag", isCalendar: false)
+
+        let after = await evaluator.allAlerts()
+        #expect(after.first?.lastTriggeredAt == nil)
+    }
+
+    @Test("onSpreadValue · isCalendar 不匹配（同 ID 但跨期/跨品种 mismatch）→ 不触发")
+    func onSpreadValue_skipsWrongCalendarFlag() async {
+        let evaluator = AlertEvaluator()
+        let alert = Alert(
+            name: "[价差] x",
+            instrumentID: "X",
+            condition: .spreadDeviation(spreadID: "x", isCalendar: false, zThreshold: 2.0)
+        )
+        await evaluator.addAlert(alert)
+        await evaluator.onSpreadValue(values: makeStrongUpper(), spreadID: "x", isCalendar: true)
+
+        let after = await evaluator.allAlerts()
+        #expect(after.first?.lastTriggeredAt == nil)
+    }
+
+    @Test("onSpreadValue · 弱偏离（|z| < threshold）→ 不触发")
+    func onSpreadValue_skipsWeakDeviation() async {
+        let evaluator = AlertEvaluator()
+        let alert = Alert(
+            name: "[价差] rb-hc",
+            instrumentID: "RB0",
+            condition: .spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.0)
+        )
+        await evaluator.addAlert(alert)
+        // 30 点小幅波动 0..29 · stdDev 大 · current 在尾部 z 接近 1.71 < 2
+        let values: [SpreadValueLike] = (0..<30).map { StubSV(Decimal($0)) }
+        await evaluator.onSpreadValue(values: values, spreadID: "rb-hc", isCalendar: false)
+
+        let after = await evaluator.allAlerts()
+        #expect(after.first?.lastTriggeredAt == nil)
+    }
+
+    @Test("onSpreadValue · 样本不足 30 → 不评估")
+    func onSpreadValue_skipsBelowMinSamples() async {
+        let evaluator = AlertEvaluator()
+        let alert = Alert(
+            name: "[价差] rb-hc",
+            instrumentID: "RB0",
+            condition: .spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.0)
+        )
+        await evaluator.addAlert(alert)
+        // 仅 5 点 · 不足 30
+        let values: [SpreadValueLike] = (0..<5).map { _ in StubSV(100) } + [StubSV(500)]
+        await evaluator.onSpreadValue(values: values, spreadID: "rb-hc", isCalendar: false)
+
+        let after = await evaluator.allAlerts()
+        #expect(after.first?.lastTriggeredAt == nil)
+    }
+
+    @Test("onSpreadValue · cooldown 期间不重复触发")
+    func onSpreadValue_respectsCooldown() async {
+        let evaluator = AlertEvaluator()
+        let alert = Alert(
+            name: "[价差] rb-hc",
+            instrumentID: "RB0",
+            condition: .spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.0),
+            cooldownSeconds: 600  // 10 分钟
+        )
+        await evaluator.addAlert(alert)
+
+        let now1 = Date()
+        await evaluator.onSpreadValue(values: makeStrongUpper(), spreadID: "rb-hc", isCalendar: false, now: now1)
+        let firstTrigger = await evaluator.allAlerts().first?.lastTriggeredAt
+        #expect(firstTrigger == now1)
+
+        // 30s 后重扫 · 强偏离仍在 · 但 cooldown 未过 → lastTriggeredAt 不变
+        let now2 = now1.addingTimeInterval(30)
+        await evaluator.onSpreadValue(values: makeStrongUpper(), spreadID: "rb-hc", isCalendar: false, now: now2)
+        let secondTrigger = await evaluator.allAlerts().first?.lastTriggeredAt
+        #expect(secondTrigger == now1)  // 未刷新
+    }
 }

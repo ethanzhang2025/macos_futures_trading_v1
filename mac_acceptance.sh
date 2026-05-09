@@ -82,11 +82,23 @@ upload_results() {
     local rc=$?
     local phase="${COMPLETED_PHASES:-未到 P1}"
 
+    # ── 判断是否是脚本启动早期失败（连 P1 都没进）──
+    local early_abort=false
+    if [[ "$phase" == "开始" ]] || [[ "$phase" == "未到 P1" ]]; then
+        early_abort=true
+    fi
+
     # ── exit_summary.txt（总传 · ≤ 1KB）──
     {
         echo "# Mac 切机验收 · 退出 summary · $(date '+%Y-%m-%d %H:%M:%S')"
         echo ""
-        echo "退出码: $rc · 阶段: $phase"
+        if $early_abort; then
+            echo "🚨 脚本启动即失败 · 未进入任何 phase"
+            echo "退出码: $rc"
+            echo "可能原因：bash 语法错 / 未定义变量 / 编辑引入非 ASCII 字符（v15.84+ 曾遇到）"
+        else
+            echo "退出码: $rc · 阶段: $phase"
+        fi
         [[ -n "${BUILD_RC:-}" ]] && echo "Build RC: $BUILD_RC $([[ $BUILD_RC -eq 0 ]] && echo '✅' || echo '❌')"
         [[ -n "${TEST_RC:-}" ]]  && echo "Test RC:  $TEST_RC $([[ $TEST_RC -eq 0 ]] && echo '✅' || echo '❌')"
         if [[ -d "$SHOTS_DIR" ]]; then
@@ -153,23 +165,30 @@ upload_results() {
 
     # ── 上传 ──
     echo ""
-    echo "▶ 上传精选文件（${#upload_list[@]} 项）→ beelink@vvsvr:$REMOTE_DIR"
+    if $early_abort; then
+        echo "🚨 脚本启动即失败 · 仅上传 exit_summary（远端 Claude 看错误信息）"
+    else
+        echo "▶ 上传精选文件（${#upload_list[@]} 项）→ beelink@vvsvr:${REMOTE_DIR}"
+    fi
     if ssh -o ConnectTimeout=5 beelink@vvsvr "echo ok" > /dev/null 2>&1; then
-        # 远端清空旧（避免上次残留干扰分析）
-        ssh beelink@vvsvr "rm -rf $REMOTE_DIR && mkdir -p $REMOTE_DIR"
+        ssh beelink@vvsvr "rm -rf ${REMOTE_DIR} && mkdir -p ${REMOTE_DIR}"
         for f in "${upload_list[@]}"; do
             if [[ -e "$OUT_DIR/$f" ]]; then
-                scp -rq "$OUT_DIR/$f" beelink@vvsvr:"$REMOTE_DIR/" && echo "  ✓ $f"
+                scp -rq "$OUT_DIR/$f" beelink@vvsvr:"${REMOTE_DIR}/" && echo "  ✓ $f"
             fi
         done
-        echo "✅ 上传完成"
-        echo "本地完整日志保留：$OUT_DIR"
-        echo ""
-        echo "请告诉 Linux 端 Claude：「Mac 验收脚本退出码 $rc · 完成阶段 $phase · 看图」"
+        if $early_abort; then
+            echo ""
+            echo "❌ 脚本根本没启动 · 远端 Claude 看 exit_summary.txt 定位错误"
+            echo "请告诉 Linux 端：「脚本启动失败 · 退出码 ${rc} · 看 exit_summary」"
+        else
+            echo "✅ 上传完成 · 本地完整日志保留：$OUT_DIR"
+            echo "请告诉 Linux 端 Claude：「Mac 验收脚本退出码 ${rc} · 完成阶段 ${phase} · 看图」"
+        fi
     else
         echo "⚠️ SSH 不通 · 手动 scp 精选："
         for f in "${upload_list[@]}"; do
-            echo "    scp -r $OUT_DIR/$f beelink@vvsvr:$REMOTE_DIR/"
+            echo "    scp -r $OUT_DIR/$f beelink@vvsvr:${REMOTE_DIR}/"
         done
     fi
 }
@@ -179,7 +198,7 @@ COMPLETED_PHASES="开始"
 
 echo "════════════════════════════════════════════════════"
 echo " Mac 切机自动化验收 · v15.82+"
-echo " 模式：$([ "$SHOTS_FILTER" != "all" ] && echo "仅截图 [$SHOTS_FILTER]" || echo "全自动")"
+echo " 模式：$([ "${SHOTS_FILTER}" != "all" ] && echo "仅截图 [${SHOTS_FILTER}]" || echo "全自动")"
 echo " 跳过：$([ "$SKIP_BUILD" = true ] && echo "build " || echo "")$([ "$SKIP_TEST" = true ] && echo "test " || echo "")$([ "$SKIP_DEMO" = true ] && echo "demo" || echo "")"
 echo " 输出 → $OUT_DIR"
 echo "════════════════════════════════════════════════════"
@@ -189,7 +208,7 @@ date
 TEST_SUMMARY=""
 if [[ "$SKIP_BUILD" = true ]]; then
     echo ""
-    echo "⏭️  Phase 1/5 跳过（--skip-build · 默认走 incremental build path = $BUILD_PATH）"
+    echo "⏭️  Phase 1/5 跳过（--skip-build · 默认走 incremental build path = ${BUILD_PATH}）"
     BUILD_RC=0
     TEST_RC=0
     COMPLETED_PHASES="P1 跳过"
@@ -237,7 +256,7 @@ echo ""
 if [[ "$SHOTS_FILTER" == "all" ]]; then
     echo "▶ Phase 2/5 · 启动 app + 自动截图 23 窗口（~3min）"
 else
-    echo "▶ Phase 2/5 · 启动 app + 仅截图 [$SHOTS_FILTER]（~$(echo "$SHOTS_FILTER" | tr ',' '\n' | wc -l | tr -d ' ')×8s）"
+    echo "▶ Phase 2/5 · 启动 app + 仅截图 [${SHOTS_FILTER}]（~$(echo "${SHOTS_FILTER}" | tr ',' '\n' | wc -l | tr -d ' ')×8s）"
     # filter 模式只清掉指定的 shots（保留其他历史）· 而非整个 SHOTS_DIR
     IFS=',' read -ra FILT_SEQS <<< "$SHOTS_FILTER"
     for s in "${FILT_SEQS[@]}"; do
@@ -255,7 +274,7 @@ sleep 8
 
 # 调用 AppleScript（filter 第二参数）
 if [[ ! -f "$SCRIPT_DIR/mac_acceptance_capture.applescript" ]]; then
-    echo "⚠️ 未找到 mac_acceptance_capture.applescript（在 $SCRIPT_DIR）"
+    echo "⚠️ 未找到 mac_acceptance_capture.applescript（在 ${SCRIPT_DIR}）"
 else
     osascript "$SCRIPT_DIR/mac_acceptance_capture.applescript" "$SHOTS_DIR" "$SHOTS_FILTER" 2>&1 | tee "$OUT_DIR/02c_capture.log"
 fi

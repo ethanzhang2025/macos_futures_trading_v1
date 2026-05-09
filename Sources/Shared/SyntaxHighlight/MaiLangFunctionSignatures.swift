@@ -244,6 +244,42 @@ public enum MaiLangFunctionSignatures {
         sig("ZLEMA",      ["周期 N"],            "零滞后 EMA（默认 10 · 趋势跟踪）",        .均线),
         sig("VWMA",       ["周期 N"],            "量加权均线（按 VOLUME 权重）",            .均线),
         sig("CONNORSRSI", ["周期 N"],            "Connors RSI（短线超买超卖 · 默认 3/2/100）", .高级),
+        // v16.12 · 第 4 批 30 个 trader 实战必用 · BuiltinFunction 注册表已实现
+        // K 线形态识别 14（日内/复盘必用 · 1=匹配 0=不匹配）
+        sig("ISDOJI",         [],                "是否十字星（开盘 ≈ 收盘）",                .逻辑),
+        sig("ISHAMMER",       [],                "是否锤子线（长下影 + 小实体 + 短上影）",   .逻辑),
+        sig("ISINVHAMMER",    [],                "是否倒锤线（长上影 + 小实体 + 短下影）",   .逻辑),
+        sig("ISBULLENG",      [],                "是否看涨吞没（前阴当阳 + 当阳实体覆盖前阴）", .逻辑),
+        sig("ISBEARENG",      [],                "是否看跌吞没（前阳当阴 + 当阴实体覆盖前阳）", .逻辑),
+        sig("ISMORNINGSTAR",  [],                "是否早晨之星（3 根 K · 阴 + 小阴/阳 + 大阳）", .逻辑),
+        sig("ISEVENINGSTAR",  [],                "是否黄昏之星（3 根 K · 阳 + 小阳/阴 + 大阴）", .逻辑),
+        sig("ISDARKCLOUD",    [],                "是否乌云盖顶（前阳当阴 + 当阴实体过中点）", .逻辑),
+        sig("ISPIERCING",     [],                "是否刺透形态（前阴当阳 + 当阳实体过中点）", .逻辑),
+        sig("ISHARAMI",       [],                "是否孕线（前实体覆盖当根 · 反转预警）",    .逻辑),
+        sig("ISLONGBODY",     [],                "是否长实体（实体 > 平均范围 · 趋势强）",   .逻辑),
+        sig("ISGAPUP",        [],                "是否跳空高开（OPEN > 前根 HIGH）",         .逻辑),
+        sig("ISGAPDOWN",      [],                "是否跳空低开（OPEN < 前根 LOW）",          .逻辑),
+        sig("ISSHAVENTOP",    [],                "是否光头线（HIGH ≈ max(O,C) · 无上影）",  .逻辑),
+        // 烛台辅助 5（price action 量化）
+        sig("UPPERWICK",      [],                "上影线长度（HIGH - max(O,C)）",            .价量),
+        sig("LOWERWICK",      [],                "下影线长度（min(O,C) - LOW）",             .价量),
+        sig("BODYPCT",        [],                "实体占整根 K 百分比 |O-C|/(H-L) × 100",   .价量),
+        sig("BODYRATIO",      ["周期 N"],        "实体相对 N 周期均值比",                  .价量),
+        sig("WICKRATIO",      [],                "影线 / 实体比（反 doji / 锤子）",          .价量),
+        // 风险评估高级 5（trader 系统评估 · 与 v16.7 SHARPE/SORTINO 续）
+        sig("CALMAR",         ["收益序列", "周期 N"], "卡玛比率（年化收益 / |最大回撤|）",   .统计),
+        sig("EXPECTANCY",     ["盈亏序列"],      "数学期望（胜率 × 平均盈 - 败率 × 平均亏）", .统计),
+        sig("OPTIMALF",       ["盈亏序列"],      "最优 f（Ralph Vince · 最优杠杆比）",       .统计),
+        sig("POSITIONSIZE",   ["资金", "风险率", "止损"], "仓位（资金 × 风险率 / 止损点）",  .统计),
+        sig("RISKPCT",        ["仓位", "止损", "资金"], "单笔风险百分比（仓位 × 止损 / 资金）", .统计),
+        // 价格派生 3（OHLC 加工 · trader 高频量价指标基础）
+        sig("TYP",            [],                "典型价 (H+L+C)/3",                       .价量),
+        sig("MEDPRICE",       [],                "中位价 (H+L)/2",                          .价量),
+        sig("AVGPRICE",       [],                "平均价 (O+H+L+C)/4",                      .价量),
+        // 统计高级 3（量化研究用）
+        sig("ZSCORE",         ["序列", "周期 N"], "Z 分数（标准化偏离 · 默认 20）",          .统计),
+        sig("SKEW",           ["序列", "周期 N"], "偏度（默认 20 · 分布对称性）",            .统计),
+        sig("KURT",           ["序列", "周期 N"], "峰度（默认 20 · 分布尖峭度）",            .统计),
     ]
 
     /// v15.22 batch35 · 模糊搜索（name + summary 均不区分大小写 · 中文 summary 不受影响 · 空 query → 返回全部）

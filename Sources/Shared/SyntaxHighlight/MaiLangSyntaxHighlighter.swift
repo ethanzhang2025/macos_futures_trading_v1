@@ -113,6 +113,14 @@ public enum MaiLangSyntaxHighlighter {
         "SHARPE", "SORTINO", "KELLY",
         "DKX", "WVAD", "KST",
         "KAMA", "ZLEMA", "VWMA", "CONNORSRSI",
+        // v16.12 · 第 4 批 30 个 trader 实战必用（K 线形态 + 烛台 + 风险高级 + 价格 + 统计）
+        "ISDOJI", "ISHAMMER", "ISINVHAMMER", "ISBULLENG", "ISBEARENG",
+        "ISMORNINGSTAR", "ISEVENINGSTAR", "ISDARKCLOUD", "ISPIERCING",
+        "ISHARAMI", "ISLONGBODY", "ISGAPUP", "ISGAPDOWN", "ISSHAVENTOP",
+        "UPPERWICK", "LOWERWICK", "BODYPCT", "BODYRATIO", "WICKRATIO",
+        "CALMAR", "EXPECTANCY", "OPTIMALF", "POSITIONSIZE", "RISKPCT",
+        "TYP", "MEDPRICE", "AVGPRICE",
+        "ZSCORE", "SKEW", "KURT",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

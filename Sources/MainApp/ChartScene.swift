@@ -4324,6 +4324,11 @@ struct ChartContentView: View {
                     Text(lagger).foregroundColor(chartTheme.candleBear)
                 }
             }
+            // v15.73 组合异常（≥3 类同时命中 · 不命中时整行隐藏避免冗余）
+            if hudFields.fields.contains(.comboAnomaly), let combo = comboAnomalyInfo {
+                Text(combo.headline)
+                    .foregroundColor(comboHUDColor(combo.severityLevel))
+            }
             // 视觉迭代第 4 项：调试信息（视野/帧时）· v15.14 用户可关 · 默认开
             if hudFields.fields.contains(.debug) {
                 Text("可见 \(viewport.visibleCount) · 起点 \(viewport.startIndex)/\(bars.count) · 帧 \(String(format: "%.1f", lastFrameMs))ms")
@@ -4378,6 +4383,20 @@ struct ChartContentView: View {
     /// 命中前缀（如 "rb2509" 命中 "RB"）· 不命中返 nil（fallback 不显示该 HUD 行）
     private var sectorInfo: SectorHUDInfo? {
         SectorHUDInfo.compute(instrumentID: instrumentLabel)
+    }
+
+    /// v15.73 · 组合异常 HUD（≥3 类同时命中 · 全市场扫描 + 聚合 · 不命中返 nil）
+    private var comboAnomalyInfo: ComboHUDInfo? {
+        ComboHUDInfo.compute(instrumentID: instrumentLabel)
+    }
+
+    /// v15.73 · combo HUD 颜色 · 5 类红 · 4 类橙 · 3 类黄
+    private func comboHUDColor(_ level: ComboHUDInfo.SeverityLevel) -> Color {
+        switch level {
+        case .high: return chartTheme.candleBear
+        case .mid:  return .orange
+        case .low:  return .yellow
+        }
     }
 
     /// v15.20 batch54 · ATR(14) Wilder · 取末位值 · 数据不足返回 nil

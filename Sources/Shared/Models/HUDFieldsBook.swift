@@ -21,6 +21,7 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
     case atr           // v15.20 batch54 · ATR(14) Wilder · trader 设止损用
     case timestamp     // 最新 K 线时间戳
     case sectorInfo    // v15.56 · 板块归属 + 板块平均涨跌 + 龙头/弱势（trader 横向感知）
+    case comboAnomaly  // v15.73 · 当前合约组合异常状态（同品种 ≥3 类同时命中 = 真信号）
     case debug         // 调试信息（视野/起点/帧时 · v13.x 之前默认行为）
 
     public var id: String { rawValue }
@@ -36,6 +37,7 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
         case .atr:          return "ATR(14) 真实波幅均值"
         case .timestamp:    return "时间戳"
         case .sectorInfo:   return "板块归属（板块均值 / 龙头 / 弱势）"
+        case .comboAnomaly: return "组合异常（≥3 类同时命中 · trader 真信号）"
         case .debug:        return "调试信息（可见/起点/帧时）"
         }
     }
@@ -52,6 +54,7 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
         case .atr:          return "waveform.path"
         case .timestamp:    return "clock"
         case .sectorInfo:   return "rectangle.3.group.fill"
+        case .comboAnomaly: return "sparkles"
         case .debug:        return "ladybug.fill"
         }
     }
@@ -68,6 +71,7 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
         case .atr:          return "ATR(14) 24.5"
         case .timestamp:    return "时间 2026-05-08 14:30"
         case .sectorInfo:   return "板块 黑色系 · 均 +0.45% · 偏多 36%"
+        case .comboAnomaly: return "异常 4/5 · 价/持/资/背 · combo 72"
         case .debug:        return "可见 120 · 起点 45/300 · 帧 2.4ms"
         }
     }
@@ -77,7 +81,7 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
     /// v15.20 batch54：amplitude 跟 change 后 · volumeRatio 跟 volume 后 · atr 跟 openInterest 后
     /// v15.56：sectorInfo 放 atr 后 / debug 前（横向板块对比 · 与 ATR 同视觉权重）
     public static let displayOrder: [HUDFieldKind] = [
-        .timestamp, .ohlc, .change, .amplitude, .volume, .volumeRatio, .openInterest, .atr, .sectorInfo, .debug
+        .timestamp, .ohlc, .change, .amplitude, .volume, .volumeRatio, .openInterest, .atr, .sectorInfo, .comboAnomaly, .debug
     ]
 }
 

@@ -15,10 +15,10 @@ struct HUDFieldsBookTests {
         #expect(d.fields.count == 2)
     }
 
-    @Test("HUDFieldKind allCases 10 类完整（v15.56 加 sectorInfo）")
+    @Test("HUDFieldKind allCases 11 类完整（v15.73 加 comboAnomaly）")
     func allCases() {
         let cases = HUDFieldKind.allCases
-        #expect(cases.count == 10)
+        #expect(cases.count == 11)
         #expect(cases.contains(.ohlc))
         #expect(cases.contains(.change))
         #expect(cases.contains(.amplitude))
@@ -28,15 +28,16 @@ struct HUDFieldsBookTests {
         #expect(cases.contains(.atr))
         #expect(cases.contains(.timestamp))
         #expect(cases.contains(.sectorInfo))
+        #expect(cases.contains(.comboAnomaly))
         #expect(cases.contains(.debug))
     }
 
-    @Test("displayOrder 与 ChartScene HUD 渲染顺序对齐（v15.56 sectorInfo 跟 atr 后 / debug 前）")
+    @Test("displayOrder 与 ChartScene HUD 渲染顺序对齐（v15.73 comboAnomaly 跟 sectorInfo 后 / debug 前）")
     func displayOrder() {
         let order = HUDFieldKind.displayOrder
         #expect(order == [
             .timestamp, .ohlc, .change, .amplitude,
-            .volume, .volumeRatio, .openInterest, .atr, .sectorInfo, .debug
+            .volume, .volumeRatio, .openInterest, .atr, .sectorInfo, .comboAnomaly, .debug
         ])
         #expect(Set(order) == Set(HUDFieldKind.allCases))  // 不漏 / 不重
     }
@@ -58,7 +59,7 @@ struct HUDFieldsBookTests {
         #expect(HUDFieldKind.sectorInfo.sampleText.contains("板块"))
     }
 
-    @Test("displayName 全 10 类中文化（v15.56 加 sectorInfo）")
+    @Test("displayName 全 11 类中文化（v15.73 加 comboAnomaly）")
     func displayNames() {
         #expect(HUDFieldKind.ohlc.displayName.contains("OHLC"))
         #expect(HUDFieldKind.change.displayName == "涨跌幅")
@@ -69,6 +70,7 @@ struct HUDFieldsBookTests {
         #expect(HUDFieldKind.atr.displayName.contains("ATR"))
         #expect(HUDFieldKind.timestamp.displayName == "时间戳")
         #expect(HUDFieldKind.sectorInfo.displayName.contains("板块"))
+        #expect(HUDFieldKind.comboAnomaly.displayName.contains("组合异常"))
         #expect(HUDFieldKind.debug.displayName.contains("调试"))
     }
 

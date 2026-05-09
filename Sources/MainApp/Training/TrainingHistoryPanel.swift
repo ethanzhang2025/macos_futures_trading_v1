@@ -148,7 +148,7 @@ struct TrainingHistoryPanel: View {
                 } label: {
                     Label("导出报告", systemImage: "square.and.arrow.up")
                 }
-                .help("生成 markdown 月报 / 周报（trader 月度 + 周度复盘双节奏）")
+                .tooltip("生成 markdown 月报 / 周报（trader 月度 + 周度复盘双节奏）")
             }
             // v15.23 batch130 · 时间段筛选 Menu（只在有 session 时显示）
             if !viewModel.log.sessions.isEmpty {
@@ -160,7 +160,7 @@ struct TrainingHistoryPanel: View {
                 } label: {
                     Label(filterPeriod.rawValue, systemImage: filterPeriod.icon)
                 }
-                .help("按时间段筛选历史训练（与形态筛选互补 · 同时 AND）")
+                .tooltip("按时间段筛选历史训练（与形态筛选互补 · 同时 AND）")
                 // v15.23 batch136 · 排序 Menu
                 Menu {
                     ForEach(SortKey.allCases, id: \.self) { k in
@@ -170,7 +170,7 @@ struct TrainingHistoryPanel: View {
                 } label: {
                     Label(sortKey.rawValue, systemImage: sortKey.icon)
                 }
-                .help("排序 · 5 选（日期降序默认 / 总分升降 / 盈亏升降）")
+                .tooltip("排序 · 5 选（日期降序默认 / 总分升降 / 盈亏升降）")
             }
             // v15.23 batch122 · 形态筛选 Menu（只在有 session 时显示）
             if !viewModel.log.sessions.isEmpty {
@@ -194,13 +194,13 @@ struct TrainingHistoryPanel: View {
                               systemImage: "line.3.horizontal.decrease.circle")
                     }
                 }
-                .help("按形态筛选历史训练（看自己在哪类行情成绩好/弱）")
+                .tooltip("按形态筛选历史训练（看自己在哪类行情成绩好/弱）")
                 Button(role: .destructive) {
                     showClearConfirm = true
                 } label: {
                     Label("清空", systemImage: "trash")
                 }
-                .help("清空全部历史训练记录")
+                .tooltip("清空全部历史训练记录")
             }
         }
         .padding(.horizontal, 12)
@@ -292,7 +292,7 @@ struct TrainingHistoryPanel: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 22)
-            .help("调整本周训练目标（3/5/7/10/15 次）")
+            .tooltip("调整本周训练目标（3/5/7/10/15 次）")
         }
     }
 
@@ -321,7 +321,7 @@ struct TrainingHistoryPanel: View {
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary)
             }
-            .help("本周 \(thisWeekCount) 次（平均 \(thisWeekAvg) 分） vs 上周 \(lastWeekSessions.count) 次（平均 \(lastWeekAvg) 分）")
+            .tooltip("本周 \(thisWeekCount) 次（平均 \(thisWeekAvg) 分） vs 上周 \(lastWeekSessions.count) 次（平均 \(lastWeekAvg) 分）")
         }
     }
 
@@ -351,7 +351,7 @@ struct TrainingHistoryPanel: View {
                     .opacity(n == 0 ? 0.4 : 1)
                 }
                 .buttonStyle(.plain)
-                .help("\(pat.displayName) · \(n) 次")
+                .tooltip("\(pat.displayName) · \(n) 次")
             }
         }
     }

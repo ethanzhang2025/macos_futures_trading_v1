@@ -143,7 +143,7 @@ struct MultiChartHost: View {
                         .font(.caption)
                         .foregroundColor(.orange)
                 }
-                .help("\(lockedCount) cell 已锁定 · 防误操作 swap/copy/reset")
+                .tooltip("\(lockedCount) cell 已锁定 · 防误操作 swap/copy/reset")
             }
 
             // v15.23 batch53 · focus 模式提示
@@ -192,7 +192,7 @@ struct MultiChartHost: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 80)
-            .help("一键把所有 cell 设为同周期（多合约比对）/ 同合约（多周期比对）")
+            .tooltip("一键把所有 cell 设为同周期（多合约比对）/ 同合约（多周期比对）")
 
             // v15.23 batch55 · 布局预设 Menu
             Menu {
@@ -210,7 +210,7 @@ struct MultiChartHost: View {
                             Button(layout.name) {
                                 applyLayout(layout)
                             }
-                            .help("\(layout.preset.label) · \(layout.cells.count) cell")
+                            .tooltip("\(layout.preset.label) · \(layout.cells.count) cell")
                         }
                     }
                     Divider()
@@ -238,7 +238,7 @@ struct MultiChartHost: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 110)
-            .help("保存 / 加载 / 删除自定义多图表布局")
+            .tooltip("保存 / 加载 / 删除自定义多图表布局")
 
             // v15.23 batch56 · auto-tick toggle
             Button {
@@ -248,7 +248,7 @@ struct MultiChartHost: View {
                     .foregroundColor(autoTickEnabled ? .green : .secondary)
             }
             .buttonStyle(.borderless)
-            .help(autoTickEnabled ? "实时抖动开（每秒 mock tick）" : "已暂停 mock tick")
+            .tooltip(autoTickEnabled ? "实时抖动开（每秒 mock tick）" : "已暂停 mock tick")
 
             // v15.23 batch100 · 截图导出 PNG（trader 复盘工具）
             Button {
@@ -258,7 +258,7 @@ struct MultiChartHost: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.borderless)
-            .help("一键截图整张多图表为 PNG（trader 复盘 / 分享同事）")
+            .tooltip("一键截图整张多图表为 PNG（trader 复盘 / 分享同事）")
 
             // v15.23 batch60 · 帮助面板
             Button {
@@ -268,13 +268,13 @@ struct MultiChartHost: View {
             }
             .buttonStyle(.borderless)
             .keyboardShortcut("?", modifiers: [.command, .shift])
-            .help("显示所有功能与快捷键（⌘⇧?）")
+            .tooltip("显示所有功能与快捷键（⌘⇧?）")
 
             // v15.23 batch53 · 快捷键提示（hover 显示）
             Text("⌘⌥1-6 切布局")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-                .help("⌘⌥1=单图 / 2=横 / 3=纵 / 4=四宫 / 5=2×3 / 6=3×2 · 双击 cell 全屏 · Esc 退出")
+                .tooltip("⌘⌥1=单图 / 2=横 / 3=纵 / 4=四宫 / 5=2×3 / 6=3×2 · 双击 cell 全屏 · Esc 退出")
 
             Button {
                 resetAllCells()
@@ -282,7 +282,7 @@ struct MultiChartHost: View {
                 Label("重置 cells", systemImage: "arrow.counterclockwise")
             }
             .buttonStyle(.borderless)
-            .help("把所有 cell 还原为默认合约 + 周期")
+            .tooltip("把所有 cell 还原为默认合约 + 周期")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -392,7 +392,7 @@ struct MultiChartHost: View {
                     .foregroundColor(.secondary)
             }
         }
-        .help("综合评级总览（cell 数）：📈 偏多+强多（4-7 分）/ → 震荡（3 分）/ 📉 偏空+强空（0-2 分）")
+        .tooltip("综合评级总览（cell 数）：📈 偏多+强多（4-7 分）/ → 震荡（3 分）/ 📉 偏空+强空（0-2 分）")
     }
 
     /// v15.23 batch69 · hover 时显示某 cell 的 K 线 [idx] OHLC + volume

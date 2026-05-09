@@ -332,7 +332,7 @@ struct SessionCompareWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(inst.name) · \(compareMode.sessionALabel) \(String(format: "%+.2f%%", row.sessionA)) · \(compareMode.sessionBLabel) \(String(format: "%+.2f%%", row.sessionB))")
+        .tooltip("\(inst.name) · \(compareMode.sessionALabel) \(String(format: "%+.2f%%", row.sessionA)) · \(compareMode.sessionBLabel) \(String(format: "%+.2f%%", row.sessionB))")
     }
 
     /// 双时段横条对比：左侧 sessionA 从中点向左 / 右侧 sessionB 从中点向右

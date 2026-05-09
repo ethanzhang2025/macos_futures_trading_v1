@@ -348,7 +348,7 @@ struct WatchlistWindow: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
-                .help("立即刷新报价（⌘⇧R · 不等 5s 周期）")
+                .tooltip("立即刷新报价（⌘⇧R · 不等 5s 周期）")
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button {
                     importWatchlistFromFile()
@@ -356,7 +356,7 @@ struct WatchlistWindow: View {
                     Image(systemName: "square.and.arrow.down")
                 }
                 .buttonStyle(.borderless)
-                .help("导入自选合约（.txt 文华格式 · .csv 自由表格）")
+                .tooltip("导入自选合约（.txt 文华格式 · .csv 自由表格）")
 
                 // v15.23 batch199 · 导出分组合约列表（当前 / 全部 二选一）
                 Menu {
@@ -379,7 +379,7 @@ struct WatchlistWindow: View {
                 }
                 .menuStyle(.borderlessButton)
                 .frame(maxWidth: 28)
-                .help("导出合约列表（.txt 文华兼容 · trader 备份/分享）")
+                .tooltip("导出合约列表（.txt 文华兼容 · trader 备份/分享）")
                 .disabled(book.groups.isEmpty)
                 Button {
                     showQuickPasteSheet = true
@@ -387,7 +387,7 @@ struct WatchlistWindow: View {
                     Image(systemName: "doc.on.clipboard")
                 }
                 .buttonStyle(.borderless)
-                .help("快速粘贴合约（⌘⇧V · 任意分隔符）")
+                .tooltip("快速粘贴合约（⌘⇧V · 任意分隔符）")
                 .keyboardShortcut("v", modifiers: [.command, .shift])
                 Button {
                     sheetState = .addGroup
@@ -395,7 +395,7 @@ struct WatchlistWindow: View {
                     Image(systemName: "plus")
                 }
                 .buttonStyle(.borderless)
-                .help("添加分组（⌘⇧G）")
+                .tooltip("添加分组（⌘⇧G）")
                 .keyboardShortcut("g", modifiers: [.command, .shift])
             }
             .padding(.horizontal, 12)
@@ -611,7 +611,7 @@ struct WatchlistWindow: View {
                         }
                         .buttonStyle(.borderless)
                         .keyboardShortcut(.escape, modifiers: [])
-                        .help("清空搜索（Esc）")
+                        .tooltip("清空搜索（Esc）")
                     }
                 }
                 Button("") { isAggregatedSearchFocused = true }
@@ -630,10 +630,10 @@ struct WatchlistWindow: View {
                 } label: {
                     Label("批量预警", systemImage: "bell.badge")
                 }
-                .help("按涨跌幅排序后取前 N · 一键创建涨/跌停预警 · 默认 paused 防触发风暴")
+                .tooltip("按涨跌幅排序后取前 N · 一键创建涨/跌停预警 · 默认 paused 防触发风暴")
                 Button("退出聚合视图") { showAllAggregated = false }
                     .buttonStyle(.borderless)
-                    .help("回到分组视图")
+                    .tooltip("回到分组视图")
             }
             .padding(16)
 
@@ -686,7 +686,7 @@ struct WatchlistWindow: View {
                 .fontWeight(abs(pctValue ?? 0) >= 2 ? .bold : .regular)
                 .foregroundColor(Self.priceColor(pctValue))
                 .frame(width: 80, alignment: .trailing)
-                .help(detailedChangeText(for: id))   // v15.21 batch133 · hover 显示绝对涨跌 + 振幅
+                .tooltip(detailedChangeText(for: id))   // v15.21 batch133 · hover 显示绝对涨跌 + 振幅
             Spacer().frame(width: 16)
             Text(openInterestText(for: id))
                 .font(.system(.body, design: .monospaced))
@@ -751,7 +751,7 @@ struct WatchlistWindow: View {
                             Image(systemName: "xmark.circle.fill").foregroundColor(.secondary).font(.caption)
                         }
                         .buttonStyle(.borderless)
-                        .help("清空搜索")
+                        .tooltip("清空搜索")
                     }
                 }
                 // v15.38 V2 · 高级过滤 menu
@@ -762,7 +762,7 @@ struct WatchlistWindow: View {
                 } label: {
                     Label("添加合约", systemImage: "plus")
                 }
-                .help("添加合约到「\(group.name)」（⌘⇧I）")
+                .tooltip("添加合约到「\(group.name)」（⌘⇧I）")
                 .keyboardShortcut("i", modifiers: [.command, .shift])
             }
             .padding(16)
@@ -860,7 +860,7 @@ struct WatchlistWindow: View {
         }
         .menuStyle(.borderlessButton)
         .frame(width: 90)
-        .help("按字段排序：包含成交量 / 涨跌 / 振幅 等扩展字段")
+        .tooltip("按字段排序：包含成交量 / 涨跌 / 振幅 等扩展字段")
     }
 
     /// v15.20 batch59 · 可点击表头单元格（同字段切升降序 · 异字段切到该字段降序起）
@@ -879,7 +879,7 @@ struct WatchlistWindow: View {
                     sortAscending = false   // 默认降序（涨幅榜从高到低）
                 }
             }
-            .help("点击按\(title)排序 · 再点切升降序 · 拖拽行自动切回手动")
+            .tooltip("点击按\(title)排序 · 再点切升降序 · 拖拽行自动切回手动")
     }
 
     /// v15.20 batch59 · 按 sortField + sortAscending 排序合约 ID（v15.38 V2 加 filter preset + 分组搜索）
@@ -960,7 +960,7 @@ struct WatchlistWindow: View {
                     : "line.3.horizontal.decrease.circle.fill")
                 .foregroundColor(filterPreset == .all ? .primary : .accentColor)
         }
-        .help("按涨跌幅 / 涨跌停 / 活跃度过滤合约")
+        .tooltip("按涨跌幅 / 涨跌停 / 活跃度过滤合约")
     }
 
     /// 视图统计 HUD（涨跌家数 + 平均涨幅 + 涨停跌停数 + 极值合约 ID）
@@ -1033,7 +1033,7 @@ struct WatchlistWindow: View {
                 .foregroundColor(bias >= 0 ? .red : .green)
                 .frame(width: 36, alignment: .trailing)
         }
-        .help("多空偏向（涨家数 - 跌家数）/ 总数 · 红=偏多 · 绿=偏空")
+        .tooltip("多空偏向（涨家数 - 跌家数）/ 总数 · 红=偏多 · 绿=偏空")
     }
 
     private func instrumentRow(id: String, index: Int, groupID: UUID) -> some View {
@@ -1059,7 +1059,7 @@ struct WatchlistWindow: View {
                 .fontWeight(abs(pctValue ?? 0) >= 2 ? .bold : .regular)
                 .foregroundColor(Self.priceColor(pctValue))
                 .frame(width: 80, alignment: .trailing)
-                .help(detailedChangeText(for: id))   // v15.21 batch133 · hover 显示绝对涨跌 + 振幅
+                .tooltip(detailedChangeText(for: id))   // v15.21 batch133 · hover 显示绝对涨跌 + 振幅
             Spacer().frame(width: 16)
             Text(openInterestText(for: id))
                 .font(.system(.body, design: .monospaced))
@@ -1109,7 +1109,7 @@ struct WatchlistWindow: View {
                     Button(preset.displayName) {
                         createAlertPreset(preset, instrumentID: id)
                     }
-                    .help(preset.helpText)
+                    .tooltip(preset.helpText)
                 }
                 Divider()
                 Button("全部 6 类一次创建") {
@@ -1536,7 +1536,7 @@ struct WatchlistWindow: View {
             .foregroundColor(.white)
             .padding(.horizontal, 5).padding(.vertical, 1)
             .background(comboBadgeColor(c), in: RoundedRectangle(cornerRadius: 3))
-            .help(comboHelpText(c))
+            .tooltip(comboHelpText(c))
         } else {
             Text("—").font(.caption2).foregroundColor(.secondary.opacity(0.4))
         }

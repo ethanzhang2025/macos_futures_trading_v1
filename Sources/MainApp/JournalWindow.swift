@@ -394,7 +394,7 @@ struct JournalWindow: View {
                 Label("导入", systemImage: "square.and.arrow.down")
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
-            .help("导入交割单 CSV（⌘⇧M · 文华 / 通用格式）")
+            .tooltip("导入交割单 CSV（⌘⇧M · 文华 / 通用格式）")
 
             // v15.18 · 导出 CSV 菜单（闭合持仓 / Trade 流水二选一）
             Menu {
@@ -410,7 +410,7 @@ struct JournalWindow: View {
             .menuStyle(.borderlessButton)
             .frame(width: 80)
             .disabled(trades.isEmpty)
-            .help("导出 CSV · 含 BOM · Excel 中文友好")
+            .tooltip("导出 CSV · 含 BOM · Excel 中文友好")
 
             Text("commit 4/4 · WP-53 收官")
                 .font(.caption2)
@@ -480,7 +480,7 @@ struct JournalWindow: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("\(leading) · 成交 / 日志（点击跳转日志 + filter \(period.rawValue)）")
+        .tooltip("\(leading) · 成交 / 日志（点击跳转日志 + filter \(period.rawValue)）")
     }
 
     // MARK: - Tab 栏
@@ -497,7 +497,7 @@ struct JournalWindow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .labelsHidden()
-        .help("⌘1 成交记录 · ⌘2 交易日志 · ⌘⇧? 帮助")
+        .tooltip("⌘1 成交记录 · ⌘2 交易日志 · ⌘⇧? 帮助")
     }
 
     @ViewBuilder
@@ -580,7 +580,7 @@ struct JournalWindow: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 180)
-            .help("合约筛选（自动从导入的成交列举）")
+            .tooltip("合约筛选（自动从导入的成交列举）")
             .disabled(trades.isEmpty)
 
             // v15.23 batch174 · 排序 Menu（4 档 · 持久化）
@@ -594,7 +594,7 @@ struct JournalWindow: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 120)
-            .help("成交排序方式（4 档 · 持久化）")
+            .tooltip("成交排序方式（4 档 · 持久化）")
             .disabled(trades.isEmpty)
 
             // v15.23 batch180 · 导出当前 filter 后的 trades CSV
@@ -603,7 +603,7 @@ struct JournalWindow: View {
             } label: {
                 Label("导出 filter", systemImage: "arrow.up.doc")
             }
-            .help("导出当前过滤 / 搜索后的 trades CSV（含 BOM Excel 友好）")
+            .tooltip("导出当前过滤 / 搜索后的 trades CSV（含 BOM Excel 友好）")
             .disabled(filteredTrades.isEmpty)
 
             Spacer()
@@ -621,7 +621,7 @@ struct JournalWindow: View {
                     .foregroundColor(.secondary)
                     .monospacedDigit()
             }
-            .help("名义金额 = price × volume（不含 volumeMultiple）· 当前 filter 合计")
+            .tooltip("名义金额 = price × volume（不含 volumeMultiple）· 当前 filter 合计")
 
             Text("\(filteredTrades.count) / \(trades.count) 笔")
                 .font(.caption)
@@ -714,7 +714,7 @@ struct JournalWindow: View {
                 Label("新建日志", systemImage: "plus.bubble")
             }
             .keyboardShortcut("j", modifiers: [.command, .shift])
-            .help("新建日志（⌘⇧J）")
+            .tooltip("新建日志（⌘⇧J）")
 
             Button {
                 presentAutoGenerate()
@@ -722,7 +722,7 @@ struct JournalWindow: View {
                 Label("自动生成", systemImage: "wand.and.stars")
             }
             .keyboardShortcut("a", modifiers: [.command, .shift])
-            .help("从成交记录自动生成日志草稿（⌘⇧A · 按合约 + 8h 时间窗口聚合）")
+            .tooltip("从成交记录自动生成日志草稿（⌘⇧A · 按合约 + 8h 时间窗口聚合）")
             .disabled(trades.isEmpty)
 
             Divider().frame(height: 18)
@@ -750,7 +750,7 @@ struct JournalWindow: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 110)
-            .help("情绪筛选（5 类 · 全部）")
+            .tooltip("情绪筛选（5 类 · 全部）")
 
             // v15.23 batch166 · 偏差 filter Menu（8 类 + 全部）
             Menu {
@@ -766,7 +766,7 @@ struct JournalWindow: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 110)
-            .help("偏差筛选（8 类 · 全部）")
+            .tooltip("偏差筛选（8 类 · 全部）")
 
             Spacer()
 
@@ -779,7 +779,7 @@ struct JournalWindow: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 100)
-            .help("月报 4 段 markdown · 当前 filter 自动应用")
+            .tooltip("月报 4 段 markdown · 当前 filter 自动应用")
             .disabled(journals.isEmpty)
 
             // v15.23 batch164 · 排序 Menu（5 档 · 仅列表模式有意义 · 月度模式按月份排序固定）
@@ -793,7 +793,7 @@ struct JournalWindow: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 110)
-            .help("排序方式（5 档 · 持久化）")
+            .tooltip("排序方式（5 档 · 持久化）")
             .disabled(journalViewMode != .list)
 
             Picker("视图", selection: $journalViewMode) {
@@ -831,7 +831,7 @@ struct JournalWindow: View {
                 .padding(.vertical, 3)
                 .background(Color.purple.opacity(0.15))
                 .clipShape(Capsule())
-                .help("仅显示关联此成交的日志 · ✕ 清除")
+                .tooltip("仅显示关联此成交的日志 · ✕ 清除")
             }
 
             // v15.23 batch188 · period filter chip（today/week/month · 点击 X 清除）
@@ -854,7 +854,7 @@ struct JournalWindow: View {
                 .padding(.vertical, 3)
                 .background(Color.orange.opacity(0.15))
                 .clipShape(Capsule())
-                .help("时间段过滤 · 点 ✕ 清除")
+                .tooltip("时间段过滤 · 点 ✕ 清除")
             }
 
             // v15.23 batch170 · 月份 filter chip（点击 X 清除）
@@ -878,7 +878,7 @@ struct JournalWindow: View {
                 .padding(.vertical, 3)
                 .background(Color.accentColor.opacity(0.15))
                 .clipShape(Capsule())
-                .help("月份过滤 · 点 ✕ 清除")
+                .tooltip("月份过滤 · 点 ✕ 清除")
             }
         }
         .padding(.horizontal, 16)
@@ -1941,7 +1941,7 @@ private struct JournalEditorSheet: View {
                                     .foregroundColor(.green)
                                     .background(Color.green.opacity(0.15))
                                     .clipShape(Capsule())
-                                    .help("点 ✕ 删除「\(tag)」")
+                                    .tooltip("点 ✕ 删除「\(tag)」")
                                 }
                             }
                             .padding(.vertical, 2)
@@ -1969,7 +1969,7 @@ private struct JournalEditorSheet: View {
                                                 .clipShape(Capsule())
                                         }
                                         .buttonStyle(.plain)
-                                        .help("追加 \(tag) 到当前标签")
+                                        .tooltip("追加 \(tag) 到当前标签")
                                     }
                                 }
                                 .padding(.vertical, 2)
@@ -2233,7 +2233,7 @@ private struct MonthlyCard: View {
                     Image(systemName: "arrow.right.circle")
                         .foregroundColor(.accentColor)
                         .font(.caption)
-                        .help("点击跳转到列表 · 仅显示本月日志")
+                        .tooltip("点击跳转到列表 · 仅显示本月日志")
                 }
             }
 

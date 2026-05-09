@@ -152,7 +152,7 @@ struct SpreadWindow: View {
             } label: {
                 Label("回测", systemImage: "chart.line.uptrend.xyaxis")
             }
-            .help("基于滚动 Z 阈值跑套利回测 · 出 PnL 曲线 + 胜率 + maxDD")
+            .tooltip("基于滚动 Z 阈值跑套利回测 · 出 PnL 曲线 + 胜率 + maxDD")
 
             Button {
                 reload()

@@ -278,7 +278,7 @@ struct PositionWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(rowHelpText(inst, row: row))
+        .tooltip(rowHelpText(inst, row: row))
     }
 
     @ViewBuilder

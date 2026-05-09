@@ -105,7 +105,7 @@ struct TrainingViolationFeed: View {
                 .pickerStyle(.segmented)
                 .frame(width: 200)
                 .labelsHidden()
-                .help("按严重度筛选实时违规")
+                .tooltip("按严重度筛选实时违规")
             }
 
             // v15.23 batch142 · 声音提醒齿轮 Menu
@@ -116,7 +116,7 @@ struct TrainingViolationFeed: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 28)
-            .help("声音提醒（默认开 · trader 看主图时听到提醒）")
+            .tooltip("声音提醒（默认开 · trader 看主图时听到提醒）")
 
             if !viewModel.liveViolations.isEmpty {
                 Button {
@@ -124,7 +124,7 @@ struct TrainingViolationFeed: View {
                 } label: {
                     Label("清空", systemImage: "trash")
                 }
-                .help("仅清当前 feed · 不影响 session 评分")
+                .tooltip("仅清当前 feed · 不影响 session 评分")
             }
         }
         .padding(.horizontal, 12)

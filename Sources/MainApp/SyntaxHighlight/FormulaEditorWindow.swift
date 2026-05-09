@@ -165,7 +165,7 @@ public struct FormulaEditorWindow: View {
                                     .font(.system(size: 9))
                             }
                             .buttonStyle(.borderless)
-                            .help("关闭 split 对比")
+                            .tooltip("关闭 split 对比")
                         }
                         .padding(.horizontal, 8).padding(.vertical, 4)
                         .background(Color.secondary.opacity(0.06))
@@ -290,7 +290,7 @@ public struct FormulaEditorWindow: View {
                         Image(systemName: "doc.on.doc")
                     }
                     .buttonStyle(.borderless)
-                    .help("复制大纲为 markdown · 粘贴到笔记/分享公式结构")
+                    .tooltip("复制大纲为 markdown · 粘贴到笔记/分享公式结构")
                     // v15.23 batch140 · 排序 + 仅输出 toggle
                     Menu {
                         Section("排序") {
@@ -306,7 +306,7 @@ public struct FormulaEditorWindow: View {
                     }
                     .menuStyle(.borderlessButton)
                     .frame(width: 28)
-                    .help("排序选项 + 仅显示输出变量过滤")
+                    .tooltip("排序选项 + 仅显示输出变量过滤")
                     Button("关闭") { showOutlineSheet = false }.keyboardShortcut(.cancelAction)
                 }
                 .padding(12)
@@ -371,13 +371,13 @@ public struct FormulaEditorWindow: View {
                                                     Text("→ \(d.uses.joined(separator: ", "))")
                                                         .font(.caption2)
                                                         .foregroundColor(.cyan)
-                                                        .help("依赖：\(d.uses.joined(separator: ", "))")
+                                                        .tooltip("依赖：\(d.uses.joined(separator: ", "))")
                                                 }
                                                 if !d.usedBy.isEmpty {
                                                     Text("← \(d.usedBy.joined(separator: ", "))")
                                                         .font(.caption2)
                                                         .foregroundColor(.orange)
-                                                        .help("被引用：\(d.usedBy.joined(separator: ", "))")
+                                                        .tooltip("被引用：\(d.usedBy.joined(separator: ", "))")
                                                 }
                                             }
                                         }
@@ -643,7 +643,7 @@ public struct FormulaEditorWindow: View {
                 Label("打开 .wh", systemImage: "folder")
             }
             .keyboardShortcut("o", modifiers: [.command])
-            .help("从 .wh / .txt 文件加载（⌘O）")
+            .tooltip("从 .wh / .txt 文件加载（⌘O）")
             // v15.23 batch47 · 最近文件 Menu（cap 5 · 最新在前）
             Menu {
                 let recents = recentFiles
@@ -654,7 +654,7 @@ public struct FormulaEditorWindow: View {
                         Button(url.lastPathComponent) {
                             loadRecentFile(url)
                         }
-                        .help(url.path)
+                        .tooltip(url.path)
                     }
                     Divider()
                     Button("清空最近") { clearRecentFiles() }
@@ -664,7 +664,7 @@ public struct FormulaEditorWindow: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 32)
-            .help("最近文件（最多 5 · 点击直接加载到当前 tab）")
+            .tooltip("最近文件（最多 5 · 点击直接加载到当前 tab）")
             Button {
                 saveFile()
             } label: {
@@ -672,7 +672,7 @@ public struct FormulaEditorWindow: View {
             }
             .keyboardShortcut("s", modifiers: [.command])
             .disabled(sourceText.isEmpty)
-            .help("保存到 .wh / .txt 文件（⌘S）")
+            .tooltip("保存到 .wh / .txt 文件（⌘S）")
             Menu {
                 Button("复制全文（纯文本）") { copyAllToPasteboard() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
@@ -682,7 +682,7 @@ public struct FormulaEditorWindow: View {
             } label: {
                 Label("复制", systemImage: "doc.on.doc")
             }
-            .help("复制公式（⌘⇧C 纯文本 / ⌘⌥C Markdown 代码块）")
+            .tooltip("复制公式（⌘⇧C 纯文本 / ⌘⌥C Markdown 代码块）")
             // v15.22 batch5 · 编译验证（⌘B · 走 IndicatorCore Lexer + Parser · 第一个错误精确定位）
             Button {
                 compileNow()
@@ -690,7 +690,7 @@ public struct FormulaEditorWindow: View {
                 Label("编译验证", systemImage: "checkmark.shield")
             }
             .keyboardShortcut("b", modifiers: [.command])
-            .help("用 IndicatorCore Lexer + Parser 验证公式 · 错误显示行列（⌘B）")
+            .tooltip("用 IndicatorCore Lexer + Parser 验证公式 · 错误显示行列（⌘B）")
             // v15.23 batch41 · 格式化公式（⌘⇧F · MaiLangFormatter 一键归一）
             Button {
                 formatNow()
@@ -698,7 +698,7 @@ public struct FormulaEditorWindow: View {
                 Label("格式化", systemImage: "wand.and.stars")
             }
             .keyboardShortcut("f", modifiers: [.command, .shift])
-            .help("一键格式化公式 · 大写关键字 + 空白归一 + 逗号空格（⌘⇧F）")
+            .tooltip("一键格式化公式 · 大写关键字 + 空白归一 + 逗号空格（⌘⇧F）")
             // v15.22 batch15 · 注释切换（⌘/ · 麦语言行注释 // · 当前行 toggle）
             Button {
                 toggleLineComment()
@@ -706,7 +706,7 @@ public struct FormulaEditorWindow: View {
                 Label("注释切换", systemImage: "text.append")
             }
             .keyboardShortcut("/", modifiers: [.command])
-            .help("注释 / 取消注释当前行（⌘/）")
+            .tooltip("注释 / 取消注释当前行（⌘/）")
             // v15.22 batch17 · 删除当前行（⌘⇧K · VSCode 经典）
             Button {
                 deleteCurrentLine()
@@ -714,7 +714,7 @@ public struct FormulaEditorWindow: View {
                 Label("删除行", systemImage: "minus.rectangle")
             }
             .keyboardShortcut("k", modifiers: [.command, .shift])
-            .help("删除当前光标所在行（⌘⇧K）")
+            .tooltip("删除当前光标所在行（⌘⇧K）")
             // v15.22 batch18 · 复制当前行到下一行（⌘D · VSCode/Sublime 经典）
             Button {
                 duplicateCurrentLine()
@@ -722,21 +722,21 @@ public struct FormulaEditorWindow: View {
                 Label("复制行", systemImage: "plus.rectangle.on.rectangle")
             }
             .keyboardShortcut("d", modifiers: [.command])
-            .help("复制当前光标所在行到下一行（⌘D）")
+            .tooltip("复制当前光标所在行到下一行（⌘D）")
             // v15.22 batch19 · 上下移动当前行（⌥↑/⌥↓ · VSCode/Sublime 经典）
             Button { moveCurrentLine(up: true) } label: { Image(systemName: "arrow.up.square") }
                 .keyboardShortcut(.upArrow, modifiers: [.option])
-                .help("当前行上移（⌥↑）")
+                .tooltip("当前行上移（⌥↑）")
             Button { moveCurrentLine(up: false) } label: { Image(systemName: "arrow.down.square") }
                 .keyboardShortcut(.downArrow, modifiers: [.option])
-                .help("当前行下移（⌥↓）")
+                .tooltip("当前行下移（⌥↓）")
             // v15.22 batch25 · 缩进/反缩进选中行（⌘]/⌘[ · VSCode 经典）
             Button { indentLines(by: 1) } label: { Image(systemName: "increase.indent") }
                 .keyboardShortcut("]", modifiers: [.command])
-                .help("缩进选中行（⌘]）")
+                .tooltip("缩进选中行（⌘]）")
             Button { indentLines(by: -1) } label: { Image(systemName: "decrease.indent") }
                 .keyboardShortcut("[", modifiers: [.command])
-                .help("反缩进选中行（⌘[）")
+                .tooltip("反缩进选中行（⌘[）")
             // v15.22 batch28 · 函数库面板（73 函数 9 分类 · 浏览 + 复制函数签名）
             Button {
                 showFunctionsPanel = true
@@ -744,7 +744,7 @@ public struct FormulaEditorWindow: View {
                 Label("函数库", systemImage: "function")
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
-            .help("浏览 73 个内置函数（⌘⇧L · 按分类 · 复制签名）")
+            .tooltip("浏览 73 个内置函数（⌘⇧L · 按分类 · 复制签名）")
             // v15.22 batch29 · 跳转到行（⌘L · 与 batch20 行号/batch24 点击行号联动）
             Button {
                 gotoLineInput = "\(cursorLine)"
@@ -753,7 +753,7 @@ public struct FormulaEditorWindow: View {
                 Label("跳转到行", systemImage: "arrow.right.to.line")
             }
             .keyboardShortcut("l", modifiers: [.command])
-            .help("跳转到指定行（⌘L · 输入行号）")
+            .tooltip("跳转到指定行（⌘L · 输入行号）")
             // v15.22 batch34 · 快捷键帮助面板（⌘⇧? · trader 学习编辑器 22+ 快捷键）
             Button {
                 showHelpSheet = true
@@ -761,7 +761,7 @@ public struct FormulaEditorWindow: View {
                 Label("帮助", systemImage: "questionmark.circle")
             }
             .keyboardShortcut("?", modifiers: [.command, .shift])
-            .help("查看所有编辑器快捷键（⌘⇧?）")
+            .tooltip("查看所有编辑器快捷键（⌘⇧?）")
             // v15.22 batch37 · 公式大纲（⌘⇧O · 解析变量定义 · 点击跳转）
             Button {
                 showOutlineSheet = true
@@ -769,7 +769,7 @@ public struct FormulaEditorWindow: View {
                 Label("大纲", systemImage: "list.bullet.indent")
             }
             .keyboardShortcut("o", modifiers: [.command, .shift])
-            .help("公式大纲（⌘⇧O · 变量定义列表 · 点击跳转）")
+            .tooltip("公式大纲（⌘⇧O · 变量定义列表 · 点击跳转）")
             // v15.23 batch129 · split 视图（⌘\ 切换 · 选 tab 同屏只读对比）
             Menu {
                 if splitTabIdx != nil {
@@ -792,7 +792,7 @@ public struct FormulaEditorWindow: View {
                 Label("分屏",
                       systemImage: splitTabIdx != nil ? "square.split.2x1.fill" : "square.split.2x1")
             }
-            .help("split 视图（⌘\\ 切换 · 选另一 tab 同屏只读对比 · trader 比对 MACD vs KDJ 实现）")
+            .tooltip("split 视图（⌘\\ 切换 · 选另一 tab 同屏只读对比 · trader 比对 MACD vs KDJ 实现）")
             // v15.23 batch105/109 · minimap 缩略图（⌘⇧M 切换 + Menu 选宽度 4 档）
             Menu {
                 Button(showMinimap ? "▣ 隐藏 minimap" : "▢ 显示 minimap") {
@@ -812,7 +812,7 @@ public struct FormulaEditorWindow: View {
                 Label("缩略图",
                       systemImage: showMinimap ? "rectangle.righthalf.inset.filled" : "rectangle.righthalf.inset")
             }
-            .help("minimap 缩略图（⌘⇧M 切换 · 宽度 4 档 · 拖动跳转 · 持久化）")
+            .tooltip("minimap 缩略图（⌘⇧M 切换 · 宽度 4 档 · 拖动跳转 · 持久化）")
             // v15.22 batch36 · 字体大小调节（⌘=放大 / ⌘-缩小 / ⌘0 重置 · 持久化）
             Menu {
                 Button("放大字体（⌘=）") {
@@ -832,7 +832,7 @@ public struct FormulaEditorWindow: View {
             } label: {
                 Label("字体", systemImage: "textformat.size")
             }
-            .help("字体大小（⌘= 放大 / ⌘- 缩小 / ⌘0 重置 · 持久化）")
+            .tooltip("字体大小（⌘= 放大 / ⌘- 缩小 / ⌘0 重置 · 持久化）")
             // v15.22 batch8 · 内置示例公式 Menu（trader 学习 · 一键加载标准实现）
             Menu {
                 ForEach(Self.builtinExamples, id: \.name) { ex in
@@ -840,12 +840,12 @@ public struct FormulaEditorWindow: View {
                         sourceText = ex.text
                         statusMessage = "已加载示例：\(ex.name)"
                     }
-                    .help(ex.description)
+                    .tooltip(ex.description)
                 }
             } label: {
                 Label("示例", systemImage: "books.vertical.fill")
             }
-            .help("加载内置标准公式示例（MACD / KDJ / RSI / BOLL 等）")
+            .tooltip("加载内置标准公式示例（MACD / KDJ / RSI / BOLL 等）")
             // v15.22 batch7 · 片段库 Menu（保存当前 / 加载已存 · trader 自定义模板）
             Menu {
                 Button("💾 保存当前为片段…") {
@@ -874,7 +874,7 @@ public struct FormulaEditorWindow: View {
             } label: {
                 Label("片段库", systemImage: "books.vertical")
             }
-            .help("保存当前公式为命名片段 / 加载已存片段（@AppStorage 持久化）")
+            .tooltip("保存当前公式为命名片段 / 加载已存片段（@AppStorage 持久化）")
             Spacer()
             // v15.23 batch45/123 · 编辑器选项（保存自动格式化 + 清行末空格）
             Menu {
@@ -890,7 +890,7 @@ public struct FormulaEditorWindow: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 32)
-            .help("编辑器选项 · 保存自动格式化等")
+            .tooltip("编辑器选项 · 保存自动格式化等")
             // 主题切换
             Picker("主题", selection: $schemeRaw) {
                 Text("🌙 暗色").tag("dark")
@@ -916,7 +916,7 @@ public struct FormulaEditorWindow: View {
                     Text("Tab \(activeIdx + 1)/\(tabs.count)")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.accentColor.opacity(0.8))
-                        .help("当前 tab \(activeIdx + 1) · 共 \(tabs.count) 个 · ⌘⌥← / → 切换")
+                        .tooltip("当前 tab \(activeIdx + 1) · 共 \(tabs.count) 个 · ⌘⌥← / → 切换")
                     Image(systemName: active.fileURL == nil ? "doc" : "doc.text")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
@@ -925,7 +925,7 @@ public struct FormulaEditorWindow: View {
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.secondary)
                             .lineLimit(1)
-                            .help(url.path)
+                            .tooltip(url.path)
                     } else {
                         Text("未保存")
                             .font(.system(size: 11))
@@ -933,7 +933,7 @@ public struct FormulaEditorWindow: View {
                     }
                     if active.isDirty {
                         Circle().fill(Color.orange).frame(width: 6, height: 6)
-                            .help("有未保存修改")
+                            .tooltip("有未保存修改")
                     }
                 }
                 Divider().frame(height: 12)
@@ -966,7 +966,7 @@ public struct FormulaEditorWindow: View {
                     }
                 }
                 .buttonStyle(.borderless)
-                .help(lintWarnings.prefix(5).map { "第 \($0.line) 行 · \($0.message)" }
+                .tooltip(lintWarnings.prefix(5).map { "第 \($0.line) 行 · \($0.message)" }
                       .joined(separator: "\n") +
                       (lintWarnings.count > 5 ? "\n... 还有 \(lintWarnings.count - 5) 个" : ""))
             }
@@ -974,7 +974,7 @@ public struct FormulaEditorWindow: View {
             Text("光标 \(cursorLine):\(cursorCol)")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
-                .help("当前光标位置（行:列 · 与编译错误定位对齐）")
+                .tooltip("当前光标位置（行:列 · 与编译错误定位对齐）")
             // v15.22 batch27 · 当前光标 token 函数签名（与 batch26 静态表联动 · IDE 教学体验）
             if let sig = currentTokenSig {
                 Text("📖 \(sig)")
@@ -982,7 +982,7 @@ public struct FormulaEditorWindow: View {
                     .foregroundColor(.accentColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .help("当前光标处函数签名（参考 batch26 内置签名表 · 73 个函数）")
+                    .tooltip("当前光标处函数签名（参考 batch26 内置签名表 · 73 个函数）")
             }
             // token 数（与 highlighter 同源）
             let tokenCount = MaiLangSyntaxHighlighter.tokenize(sourceText).count
@@ -1008,7 +1008,7 @@ public struct FormulaEditorWindow: View {
                             .font(.system(size: 10))
                     }
                     .buttonStyle(.borderless)
-                    .help("复制错误信息（粘贴到搜索/AI 求助）")
+                    .tooltip("复制错误信息（粘贴到搜索/AI 求助）")
                 }
             }
             Spacer()
@@ -1352,13 +1352,13 @@ public struct FormulaEditorWindow: View {
                 statusMessage = "已插入：\(snippet)"
             }
             .buttonStyle(.borderless)
-            .help("插入 \(sig.formatted) 到当前光标位置（关闭面板）")
+            .tooltip("插入 \(sig.formatted) 到当前光标位置（关闭面板）")
             Button("复制") {
                 Pasteboard.copy(sig.formatted)
                 statusMessage = "已复制：\(sig.formatted)"
             }
             .buttonStyle(.borderless)
-            .help("复制 \(sig.formatted) 到剪贴板（保持面板打开）")
+            .tooltip("复制 \(sig.formatted) 到剪贴板（保持面板打开）")
         }
         .padding(.vertical, 2)
     }
@@ -1695,7 +1695,7 @@ struct FormulaTabBar: View {
                         .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.plain)
-                .help("新建 tab（⌘⇧N）")
+                .tooltip("新建 tab（⌘⇧N）")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -1731,7 +1731,7 @@ struct FormulaTabBar: View {
                         .font(.system(size: 8))
                 }
                 .buttonStyle(.plain)
-                .help("关闭（⌘⇧W）")
+                .tooltip("关闭（⌘⇧W）")
             }
         }
         .padding(.horizontal, 10)

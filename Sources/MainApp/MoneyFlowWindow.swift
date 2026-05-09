@@ -289,7 +289,7 @@ struct MoneyFlowWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(rowHelpText(inst, row: row))
+        .tooltip(rowHelpText(inst, row: row))
     }
 
     /// v15.77 · 组合异常徽章（命中才显示）
@@ -385,7 +385,7 @@ struct MoneyFlowWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(sector.displayName)板块净流入 \(String(format: "%+.1fM", value)) · 点击查看该板块品种榜")
+        .tooltip("\(sector.displayName)板块净流入 \(String(format: "%+.1fM", value)) · 点击查看该板块品种榜")
     }
 
     // MARK: - Legend

@@ -442,7 +442,7 @@ struct InstrumentDashboardWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("点击切到 \(inst.name)")
+        .tooltip("点击切到 \(inst.name)")
     }
 
     private var relatedInstrumentsPanel: some View {
@@ -487,7 +487,7 @@ struct InstrumentDashboardWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("点击切到 \(inst.name) · r=\(String(format: "%.3f", r))")
+        .tooltip("点击切到 \(inst.name) · r=\(String(format: "%.3f", r))")
     }
 
     private var tradingTips: some View {

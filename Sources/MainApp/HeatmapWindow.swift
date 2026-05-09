@@ -105,7 +105,7 @@ struct HeatmapWindow: View {
                     .font(.caption)
             }
             .toggleStyle(.checkbox)
-            .help("显示组合异常品种（≥3 类同时命中 = 真信号）的角标 + 边框")
+            .tooltip("显示组合异常品种（≥3 类同时命中 = 真信号）的角标 + 边框")
 
             // 全市场总览：涨家数 / 跌家数 / 平均涨幅 · v15.76 加 combo 计数
             let total = SectorPresets.all
@@ -124,7 +124,7 @@ struct HeatmapWindow: View {
                     Label("\(comboCount) Combo", systemImage: "sparkles")
                         .font(.caption.monospaced())
                         .foregroundColor(.orange)
-                        .help("\(comboCount) 个品种命中组合异常（≥3 类）· ⌘⌥A 第 6 视图查详情")
+                        .tooltip("\(comboCount) 个品种命中组合异常（≥3 类）· ⌘⌥A 第 6 视图查详情")
                 }
             }
             .padding(.trailing, 14)
@@ -253,7 +253,7 @@ struct HeatmapWindow: View {
             .animation(.easeOut(duration: 0.10), value: isHovered)
         }
         .buttonStyle(.plain)
-        .help(cellHelpText(inst, combo: combo))
+        .tooltip(cellHelpText(inst, combo: combo))
         .onHover { isOver in
             hoveredID = isOver ? inst.id : nil
         }

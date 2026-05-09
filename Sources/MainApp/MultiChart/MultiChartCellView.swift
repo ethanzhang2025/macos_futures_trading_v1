@@ -220,7 +220,7 @@ struct MultiChartCellView: View {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 10))
                     .foregroundColor(.orange)
-                    .help("已锁定 · 右键解锁")
+                    .tooltip("已锁定 · 右键解锁")
             }
             Menu {
                 ForEach(Self.instrumentPool, id: \.self) { id in
@@ -242,7 +242,7 @@ struct MultiChartCellView: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 60)
-            .help("切换合约（当前：\(Self.instrumentDisplayName[state.instrumentID] ?? state.instrumentID) · \(state.instrumentID)）")
+            .tooltip("切换合约（当前：\(Self.instrumentDisplayName[state.instrumentID] ?? state.instrumentID) · \(state.instrumentID)）")
 
             Menu {
                 ForEach(Self.periodPool, id: \.self) { p in
@@ -255,7 +255,7 @@ struct MultiChartCellView: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 50)
-            .help("切换周期")
+            .tooltip("切换周期")
 
             dataStateDot
 
@@ -264,7 +264,7 @@ struct MultiChartCellView: View {
                 Text(fresh)
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(freshnessColor)
-                    .help("距上一次行情更新（snapshot / completedBar）的时长 · > 5 分钟标红警告")
+                    .tooltip("距上一次行情更新（snapshot / completedBar）的时长 · > 5 分钟标红警告")
             }
 
             // v15.23 batch83 · 末根 K 线倒计时（短周期 trader 节奏感 · 仅真行情 + ≤1h 周期）
@@ -272,7 +272,7 @@ struct MultiChartCellView: View {
                 Text("⏱\(cd)")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.secondary)
-                    .help("距下根 \(state.period.rawValue) K 线 close（按本地系统时间对齐周期边界）")
+                    .tooltip("距下根 \(state.period.rawValue) K 线 close（按本地系统时间对齐周期边界）")
             }
 
             Spacer()
@@ -302,7 +302,7 @@ struct MultiChartCellView: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 26)
-            .help("副图：\(state.subChart.displayName)（点击切换 量 / KDJ / 无）")
+            .tooltip("副图：\(state.subChart.displayName)（点击切换 量 / KDJ / 无）")
 
             // v15.23 batch93 · K 线 ⇋ 分时折线切换（trader 真盘工具）
             Button {
@@ -313,7 +313,7 @@ struct MultiChartCellView: View {
                     .foregroundColor(state.isTimeShareMode ? .red.opacity(0.85) : .secondary)
             }
             .buttonStyle(.borderless)
-            .help(state.isTimeShareMode ? "切回 K 线（蜡烛图）" : "切到分时折线（trader 真盘看图）")
+            .tooltip(state.isTimeShareMode ? "切回 K 线（蜡烛图）" : "切到分时折线（trader 真盘看图）")
 
             // v15.23 batch88 · 主图指标 Menu 收纳（MA 4 均线 / BOLL / SAR 三选多 · 减少 toolbar 拥挤）
             Menu {
@@ -365,7 +365,7 @@ struct MultiChartCellView: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 22)
-            .help("主图指标：MA \(state.showIndicators ? "✓" : "⬜") · BOLL \(state.showBoll ? "✓" : "⬜") · SAR \(state.showSAR ? "✓" : "⬜")")
+            .tooltip("主图指标：MA \(state.showIndicators ? "✓" : "⬜") · BOLL \(state.showBoll ? "✓" : "⬜") · SAR \(state.showSAR ? "✓" : "⬜")")
 
             Button {
                 onPushToMain()
@@ -374,7 +374,7 @@ struct MultiChartCellView: View {
                     .font(.system(size: 11))
             }
             .buttonStyle(.borderless)
-            .help("在主图打开 \(state.instrumentID)（深入分析 · 完整指标/画线/复盘）")
+            .tooltip("在主图打开 \(state.instrumentID)（深入分析 · 完整指标/画线/复盘）")
 
             Text("#\(idx + 1)")
                 .font(.caption2)
@@ -393,17 +393,17 @@ struct MultiChartCellView: View {
             Circle()
                 .fill(Color.gray)
                 .frame(width: 6, height: 6)
-                .help("加载中…")
+                .tooltip("加载中…")
         case .live:
             Circle()
                 .fill(Color.green)
                 .frame(width: 6, height: 6)
-                .help("Sina 真行情（实时轮询）/ 本地缓存（离线兜底）· 数据真实")
+                .tooltip("Sina 真行情（实时轮询）/ 本地缓存（离线兜底）· 数据真实")
         case .mock:
             Circle()
                 .fill(Color.yellow)
                 .frame(width: 6, height: 6)
-                .help("Mock 兜底（行情不可达 / 合约暂不支持 · 仅 UI 演示）")
+                .tooltip("Mock 兜底（行情不可达 / 合约暂不支持 · 仅 UI 演示）")
         }
     }
 
@@ -498,7 +498,7 @@ struct MultiChartCellView: View {
                 Text("\(r.emoji)\(r.text)")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(r.color)
-                    .help("综合 7 项指标多空评级（\(score)/7）：MA20/MA60 位置 · 多头排列 · KDJ 多头 · MACD 金叉")
+                    .tooltip("综合 7 项指标多空评级（\(score)/7）：MA20/MA60 位置 · 多头排列 · KDJ 多头 · MACD 金叉")
             }
         }
     }
@@ -521,7 +521,7 @@ struct MultiChartCellView: View {
                 Text(String(format: "%+.2f%%", pct))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(pctIsUp ? .red.opacity(0.8) : .green.opacity(0.8))
-                    .help("区间累计涨跌幅（(末根 close - 首根 close) / 首根 close）")
+                    .tooltip("区间累计涨跌幅（(末根 close - 首根 close) / 首根 close）")
             }
         }
     }

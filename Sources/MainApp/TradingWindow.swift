@@ -110,7 +110,7 @@ struct TradingWindow: View {
                 Label("导出 CSV", systemImage: "square.and.arrow.up")
             }
             .buttonStyle(.borderless)
-            .help("当日交割单 · 委托 / 成交 / 持仓 三表合一 UTF-8 BOM")
+            .tooltip("当日交割单 · 委托 / 成交 / 持仓 三表合一 UTF-8 BOM")
 
             // v15.6 重置账户（清持久化快照 · 重建 100w 初始）
             Button {
@@ -119,7 +119,7 @@ struct TradingWindow: View {
                 Label("重置账户", systemImage: "arrow.counterclockwise.circle")
             }
             .buttonStyle(.borderless)
-            .help("清空所有委托/成交/持仓/资金曲线 · 资金恢复 1,000,000")
+            .tooltip("清空所有委托/成交/持仓/资金曲线 · 资金恢复 1,000,000")
         }
         .padding(.horizontal, 16)
         .frame(height: 56)

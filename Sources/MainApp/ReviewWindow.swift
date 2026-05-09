@@ -181,21 +181,21 @@ struct ReviewWindow: View {
                     Image(systemName: "chevron.left")
                 }
                 .keyboardShortcut(.leftArrow, modifiers: [])
-                .help("上一张（←）")
+                .tooltip("上一张（←）")
                 Button {
                     navigateZoomedCard(by: 1)
                 } label: {
                     Image(systemName: "chevron.right")
                 }
                 .keyboardShortcut(.rightArrow, modifiers: [])
-                .help("下一张（→）")
+                .tooltip("下一张（→）")
                 Button {
                     exportChartCardPNG(title: card.title, subtitle: card.subtitle, content: card.content)
                 } label: {
                     Label("导出 PNG", systemImage: "camera")
                 }
                 .keyboardShortcut("s", modifiers: [.command])
-                .help("导出全屏视图为 PNG（⌘S）")
+                .tooltip("导出全屏视图为 PNG（⌘S）")
                 Button("关闭") { zoomedCard = nil }
                     .keyboardShortcut(.cancelAction)
             }
@@ -370,7 +370,7 @@ struct ReviewWindow: View {
                     }
                 }
                 .frame(width: 110)
-                .help("筛选复盘区间 · 全部 / 7 天 / 30 天 / 当月 / 月份 / 季度")
+                .tooltip("筛选复盘区间 · 全部 / 7 天 / 30 天 / 当月 / 月份 / 季度")
 
                 // v15.23 batch203 · 合约 filter Menu（自动列举 allPositions 中的所有 instrumentID）
                 let instruments = Array(Set(allPositions.map { $0.instrumentID })).sorted()
@@ -384,7 +384,7 @@ struct ReviewWindow: View {
                     }
                 }
                 .frame(width: 130)
-                .help("按合约筛选复盘 · 与区间 filter 互补 · 自动从 closed positions 列举")
+                .tooltip("按合约筛选复盘 · 与区间 filter 互补 · 自动从 closed positions 列举")
 
                 // v15.23 batch205 · 当前合约 filter 时 · 加跳主图 button（trader 看绩效后想去图上验证）
                 if let inst = filterInstrument {
@@ -396,7 +396,7 @@ struct ReviewWindow: View {
                         Image(systemName: "chart.line.uptrend.xyaxis")
                     }
                     .buttonStyle(.borderless)
-                    .help("在主图查看「\(inst)」（v15.23 batch205）")
+                    .tooltip("在主图查看「\(inst)」（v15.23 batch205）")
                 }
 
                 stat("成交", "\(s.tradeCount) 笔")
@@ -415,7 +415,7 @@ struct ReviewWindow: View {
                 }
                 .buttonStyle(.borderless)
                 .keyboardShortcut("c", modifiers: [.command, .shift])
-                .help("复制全部 stat 行（成交/闭合/总 PnL/胜率/Sharpe/Sortino 等 · 一段文本 · ⌘⇧C）")
+                .tooltip("复制全部 stat 行（成交/闭合/总 PnL/胜率/Sharpe/Sortino 等 · 一段文本 · ⌘⇧C）")
                 Text("v1 mock · 待 M5 接 JournalStore 真数据")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
@@ -433,14 +433,14 @@ struct ReviewWindow: View {
                 stat("最大单笔亏", "¥\(decimal(s.profitability.largestLoss))")
                 Spacer()
                 Button("导出月报…") { exportMonthlyReport(s) }
-                    .help("生成本月 Markdown 复盘报告 · 含全套指标 + 心理标签 + 品种/时段分布（⌘E）")
+                    .tooltip("生成本月 Markdown 复盘报告 · 含全套指标 + 心理标签 + 品种/时段分布（⌘E）")
                     .keyboardShortcut("e", modifiers: [.command])
                 // v15.23 batch196 · 周报（最近 7 天 · 与月报互补）
                 Button("导出周报…") { exportWeeklyReport(s) }
-                    .help("生成最近 7 天 Markdown 周报告（⌘⌥E · trader 周复盘节奏）")
+                    .tooltip("生成最近 7 天 Markdown 周报告（⌘⌥E · trader 周复盘节奏）")
                     .keyboardShortcut("e", modifiers: [.command, .option])
                 Button("导出全部图…") { exportAllChartCards(s) }
-                    .help("一键导出全部 12 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v15.23 加日历热力 + 时长散点）")
+                    .tooltip("一键导出全部 12 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v15.23 加日历热力 + 时长散点）")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 // v15.21 batch114 · ⌘R 重新加载复盘数据（trader 实时数据更新或纠错重算）
                 Button {
@@ -451,7 +451,7 @@ struct ReviewWindow: View {
                 }
                 .buttonStyle(.borderless)
                 .keyboardShortcut("r", modifiers: [.command, .shift])
-                .help("重新加载复盘数据（⌘⇧R）· 重算所有指标")
+                .tooltip("重新加载复盘数据（⌘⇧R）· 重算所有指标")
             }
             .padding(.bottom, 4)
         }
@@ -608,14 +608,14 @@ struct ReviewWindow: View {
                     Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption)
                 }
                 .buttonStyle(.borderless)
-                .help("放大查看本图（双击 card 也可）")
+                .tooltip("放大查看本图（双击 card 也可）")
                 Button {
                     exportChartCardPNG(title: title, subtitle: subtitle, content: body)
                 } label: {
                     Image(systemName: "camera").font(.caption)
                 }
                 .buttonStyle(.borderless)
-                .help("导出本图为 PNG")
+                .tooltip("导出本图为 PNG")
             }
             Text(subtitle)
                 .font(.system(size: 11, design: .monospaced))
@@ -687,7 +687,7 @@ struct ReviewWindow: View {
                 Task { await loadMockReview() }
             }
             .keyboardShortcut(.defaultAction)
-            .help("重新尝试加载复盘数据 · 网络/IO 暂态错误时点此恢复")
+            .tooltip("重新尝试加载复盘数据 · 网络/IO 暂态错误时点此恢复")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -947,7 +947,7 @@ struct ReviewWindow: View {
             .fill(style.0)
             .frame(width: size, height: size)
             .cornerRadius(2)
-            .help(style.1)
+            .tooltip(style.1)
     }
 
     private func heatColor(level: Double, isWin: Bool) -> Color {

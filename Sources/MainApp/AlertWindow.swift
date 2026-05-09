@@ -351,17 +351,17 @@ struct AlertWindow: View {
                 Text("📋 一键创建模板（trader 常用）").font(.caption).foregroundColor(.secondary)
                 ForEach(AlertPreset.allCases) { preset in
                     Button(preset.displayName) { presentPresetSheet(preset) }
-                        .help(preset.helpText)
+                        .tooltip(preset.helpText)
                 }
                 Divider()
                 Button("全部 6 类一次创建…") { presentPresetSheet(nil) }
-                    .help("一次创建 6 类常用预警 · 适合新合约入场快速布防")
+                    .tooltip("一次创建 6 类常用预警 · 适合新合约入场快速布防")
             } label: {
                 Label("添加", systemImage: "plus")
             }
             .menuStyle(.borderlessButton)
             .frame(maxWidth: 80)
-            .help("添加预警 / 一键模板")
+            .tooltip("添加预警 / 一键模板")
 
             // v15.23 batch198 · 导出 alerts 配置 CSV（trader 备份 / 团队分享）
             // v15.23 batch207 · 加 ⌘E 快捷键
@@ -372,7 +372,7 @@ struct AlertWindow: View {
             }
             .buttonStyle(.borderless)
             .keyboardShortcut("e", modifiers: [.command])
-            .help("导出预警配置 CSV（含 BOM Excel 友好 · 8 字段 · ⌘E）")
+            .tooltip("导出预警配置 CSV（含 BOM Excel 友好 · 8 字段 · ⌘E）")
             .disabled(alerts.isEmpty)
         }
         .padding(.horizontal, 16)
@@ -559,7 +559,7 @@ struct AlertWindow: View {
                         }
                         .buttonStyle(.borderless)
                         .keyboardShortcut(.escape, modifiers: [])
-                        .help("清空搜索（Esc）")
+                        .tooltip("清空搜索（Esc）")
                     }
                 }
                 Button("") { isAlertSearchFocused = true }
@@ -576,7 +576,7 @@ struct AlertWindow: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: 360)
-                .help("按条件类型过滤 · 价格类/价差类/指标类/异动")
+                .tooltip("按条件类型过滤 · 价格类/价差类/指标类/异动")
                 Text("合约筛选").font(.caption).foregroundColor(.secondary)
                 Picker("", selection: $alertInstrumentFilter) {
                     Text("全部 (\(alerts.count))").tag("")
@@ -594,16 +594,16 @@ struct AlertWindow: View {
                         .foregroundColor(.blue)
                     Button("批量暂停") { batchPauseSelected() }
                         .buttonStyle(.borderless)
-                        .help("把选中的 active/triggered 预警转为 paused")
+                        .tooltip("把选中的 active/triggered 预警转为 paused")
                     Button("批量恢复") { batchResumeSelected() }
                         .buttonStyle(.borderless)
-                        .help("把选中的 paused 预警转为 active")
+                        .tooltip("把选中的 paused 预警转为 active")
                     Button("批量复制") { batchDuplicateSelected() }
                         .buttonStyle(.borderless)
-                        .help("每条复制一份 · 名后缀（副本）· 默认 paused")
+                        .tooltip("每条复制一份 · 名后缀（副本）· 默认 paused")
                     Button("重置冷却") { batchResetCooldownSelected() }
                         .buttonStyle(.borderless)
-                        .help("清 lastTriggeredAt · triggered 回 active · 立即可再触发")
+                        .tooltip("清 lastTriggeredAt · triggered 回 active · 立即可再触发")
                     // v15.21 batch127 · 批量改通道 + 改 cooldown（trader 实战：开盘前/关键时段统一调整）
                     Menu("批量通道") {
                         Button("仅 inApp（静音盘中）")    { batchSetChannelsSelected([.inApp]) }
@@ -611,22 +611,22 @@ struct AlertWindow: View {
                         Button("inApp + 声音")          { batchSetChannelsSelected([.inApp, .sound]) }
                         Button("全通道（关键 alert）")    { batchSetChannelsSelected(Set(NotificationChannelKind.allCases)) }
                     }
-                    .help("批量替换选中预警的通道（覆盖式 · 不合并）")
+                    .tooltip("批量替换选中预警的通道（覆盖式 · 不合并）")
                     Menu("批量 cooldown") {
                         Button("30 秒（高频）")  { batchSetCooldownSelected(30) }
                         Button("60 秒（默认）")  { batchSetCooldownSelected(60) }
                         Button("5 分钟（趋势）") { batchSetCooldownSelected(300) }
                         Button("30 分钟（长波段）") { batchSetCooldownSelected(1800) }
                     }
-                    .help("批量调整选中预警的 cooldown 秒数")
+                    .tooltip("批量调整选中预警的 cooldown 秒数")
                     Button("批量删除") { batchDeleteSelected() }
                         .buttonStyle(.borderless)
                         .foregroundColor(.red)
-                        .help("彻底删除选中的预警")
+                        .tooltip("彻底删除选中的预警")
                     Button("清空选择") { selectedAlertIDs.removeAll() }
                         .buttonStyle(.borderless)
                         .keyboardShortcut(.escape, modifiers: [])
-                        .help("取消所有选中（Esc）")
+                        .tooltip("取消所有选中（Esc）")
                 }
                 Spacer()
                 // v15.20 batch69 · 排序 Menu（持久化 · 同字段切升降）
@@ -646,17 +646,17 @@ struct AlertWindow: View {
                           systemImage: "arrow.up.arrow.down")
                         .font(.caption)
                 }
-                .help("按字段排序 · 同字段再选切升降序")
+                .tooltip("按字段排序 · 同字段再选切升降序")
                 if filteredAlerts.allSatisfy({ selectedAlertIDs.contains($0.id) }) && !filteredAlerts.isEmpty {
                     Button("全不选") { selectedAlertIDs.subtract(filteredAlerts.map(\.id)) }
                         .buttonStyle(.borderless)
                         .font(.caption)
-                        .help("全部取消选中（⌘⇧A）")
+                        .tooltip("全部取消选中（⌘⇧A）")
                 } else {
                     Button("全选") { selectedAlertIDs.formUnion(filteredAlerts.map(\.id)) }
                         .buttonStyle(.borderless)
                         .font(.caption)
-                        .help("全选当前显示的预警（⌘A）")
+                        .tooltip("全选当前显示的预警（⌘A）")
                 }
                 // v15.21 batch99 · ⌘A 全选 / ⌘⇧A 全不选 · 不可见快捷键 · trader 批量操作前快速选齐
                 Button("") { selectedAlertIDs.formUnion(filteredAlerts.map(\.id)) }
@@ -712,7 +712,7 @@ struct AlertWindow: View {
                     .font(.system(size: 11, design: .monospaced))
                     .lineLimit(1)
             }
-            .help(cal ? "跨期价差对 · 关联近月 \(a.instrumentID)" : "跨品种价差对 · 关联 \(a.instrumentID)")
+            .tooltip(cal ? "跨期价差对 · 关联近月 \(a.instrumentID)" : "跨品种价差对 · 关联 \(a.instrumentID)")
         } else {
             Text(a.instrumentID)
         }
@@ -732,9 +732,9 @@ struct AlertWindow: View {
                         selectedAlertIDs.insert(a.id)
                     }
                 }
-            // v15.21 batch125 · row 字段 .help() tooltip · trader 列宽 truncate 时鼠标悬停看完整
+            // v15.21 batch125 · row 字段 .tooltip() tooltip · trader 列宽 truncate 时鼠标悬停看完整
             Text(a.name).frame(maxWidth: .infinity, alignment: .leading)
-                .help(a.name.count > 30 ? a.name : "")   // 长名才提示 · 短名不打扰
+                .tooltip(a.name.count > 30 ? a.name : "")   // 长名才提示 · 短名不打扰
             // v15.63 · spread alert 显 价差对名 + 图标 · 普通 alert 显 instrumentID
             instrumentColumn(for: a)
                 .frame(width: 100, alignment: .leading)
@@ -742,17 +742,17 @@ struct AlertWindow: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .help(a.condition.displayDescription)    // 完整条件 · 复杂指标条件经常超 200px
+                .tooltip(a.condition.displayDescription)    // 完整条件 · 复杂指标条件经常超 200px
             // v15.21 batch116 · 状态 badge 点击切换 active/paused（最直观入口 · 与"暂停"按钮 / contextMenu 三入口）
             statusBadgeWithAge(a)
                 .frame(width: 70, alignment: .center)
                 .contentShape(Rectangle())
                 .onTapGesture { toggleStatus(a) }
-                .help("点击切换暂停 / 恢复（cancelled 状态不响应）")
+                .tooltip("点击切换暂停 / 恢复（cancelled 状态不响应）")
             Text(a.channels.map(\.shortLabel).sorted().joined(separator: "·"))
                 .frame(width: 80, alignment: .leading)
                 .foregroundColor(.secondary)
-                .help(a.channels.map(\.displayLabel).sorted().joined(separator: " / "))   // batch125 · 通道全名
+                .tooltip(a.channels.map(\.displayLabel).sorted().joined(separator: " / "))   // batch125 · 通道全名
             Text("\(Int(a.cooldownSeconds))s")
                 .frame(width: 50, alignment: .trailing)
                 .foregroundColor(.secondary)
@@ -814,7 +814,7 @@ struct AlertWindow: View {
                 Image(systemName: "paperplane.circle").foregroundColor(.purple)
             }
             .buttonStyle(.borderless)
-            .help("测试触发（走 channel 通知 + 加历史）")
+            .tooltip("测试触发（走 channel 通知 + 加历史）")
 
             Button {
                 toggleStatus(a)
@@ -823,7 +823,7 @@ struct AlertWindow: View {
                     .foregroundColor(a.status == .paused ? .green : .orange)
             }
             .buttonStyle(.borderless)
-            .help(a.status == .paused ? "恢复" : "暂停")
+            .tooltip(a.status == .paused ? "恢复" : "暂停")
             .disabled(a.status == .cancelled)
 
             Button {
@@ -832,7 +832,7 @@ struct AlertWindow: View {
                 Image(systemName: "square.and.pencil").foregroundColor(.blue)
             }
             .buttonStyle(.borderless)
-            .help("编辑")
+            .tooltip("编辑")
 
             Button {
                 pendingDeleteAlert = a   // v15.21 batch135 · 弹确认对话框防误删
@@ -840,7 +840,7 @@ struct AlertWindow: View {
                 Image(systemName: "trash").foregroundColor(.red)
             }
             .buttonStyle(.borderless)
-            .help("删除（弹确认）")
+            .tooltip("删除（弹确认）")
         }
         .font(.system(size: 14))
     }
@@ -1107,7 +1107,7 @@ struct AlertWindow: View {
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .help(count > 0 ? "\(h):00 触发 \(count) 次" : "\(h):00 无触发")
+                .tooltip(count > 0 ? "\(h):00 触发 \(count) 次" : "\(h):00 无触发")
             }
         }
         .frame(height: 50)
@@ -1147,7 +1147,7 @@ struct AlertWindow: View {
                     }
                     .buttonStyle(.borderless)
                     .keyboardShortcut(.escape, modifiers: [])
-                    .help("清空搜索（Esc）")
+                    .tooltip("清空搜索（Esc）")
                 }
             }
             // v15.21 batch93 · ⌘F 聚焦搜索框（视觉零占用 · 仅快捷键拦截）
@@ -1164,12 +1164,12 @@ struct AlertWindow: View {
             Button("导出 CSV…") { exportHistoryCSV() }
                 .disabled(filteredHistory.isEmpty)
                 .keyboardShortcut("e", modifiers: [.command, .shift])
-                .help("导出当前筛选窗口的触发历史为 CSV · ⌘⇧E")
+                .tooltip("导出当前筛选窗口的触发历史为 CSV · ⌘⇧E")
             // v15.21 batch111 · 复制为 Markdown 表格（不弹保存 · 直接 Pasteboard · trader 贴 IM/邮件）
             Button("复制 Markdown") { copyHistoryAsMarkdown() }
                 .disabled(filteredHistory.isEmpty)
                 .keyboardShortcut("c", modifiers: [.command, .shift])
-                .help("复制当前筛选窗口的触发历史为 Markdown 表格到剪贴板（⌘⇧C）")
+                .tooltip("复制当前筛选窗口的触发历史为 Markdown 表格到剪贴板（⌘⇧C）")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -1290,7 +1290,7 @@ struct AlertWindow: View {
                 Text(Self.timeFormatter.string(from: e.triggeredAt))
                     .frame(width: 138, alignment: .leading)
                     .foregroundColor(.secondary)
-                    .help("Unix 时间戳：\(Int(e.triggeredAt.timeIntervalSince1970))（已含秒级精度）")
+                    .tooltip("Unix 时间戳：\(Int(e.triggeredAt.timeIntervalSince1970))（已含秒级精度）")
                 Text(e.alertName).frame(maxWidth: .infinity, alignment: .leading)
                 // v15.66 · 历史 row 同 alertRow 一致：spread alert 显价差对名 + 图标
                 historyInstrumentColumn(for: e)
@@ -1377,7 +1377,7 @@ struct AlertWindow: View {
             HStack(spacing: 8) {
                 Button("复制详情") { copyHistoryDetail(e) }
                     .buttonStyle(.borderless)
-                    .help("把完整触发信息复制到剪贴板（IM/邮件分享）")
+                    .tooltip("把完整触发信息复制到剪贴板（IM/邮件分享）")
                 if alertStillExists {
                     Button("跳到预警列表") {
                         selectedTab = .list
@@ -1385,7 +1385,7 @@ struct AlertWindow: View {
                         alertInstrumentFilter = ""
                     }
                     .buttonStyle(.borderless)
-                    .help("切到预警 Tab · 选中并清除合约筛选以确保可见")
+                    .tooltip("切到预警 Tab · 选中并清除合约筛选以确保可见")
                 }
                 Spacer()
                 Button("收起") { expandedHistoryID = nil }
@@ -1745,7 +1745,7 @@ struct AddOrEditAlertSheet: View {
                                 storedDefaultCooldown = max(0, draft.cooldownSeconds)
                             }
                             .buttonStyle(.borderless)
-                            .help("把当前冷却秒数保存为新预警默认值（持久化 · 重启保留）")
+                            .tooltip("把当前冷却秒数保存为新预警默认值（持久化 · 重启保留）")
                             .disabled(draft.cooldownSeconds == storedDefaultCooldown)
                         }
                     }

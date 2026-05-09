@@ -73,7 +73,7 @@ struct TrainingScenarioThumbnail: View {
                 .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
         )
         .cornerRadius(3)
-        .help("\(pattern.displayName) 形态预览（mock 60 根 K 线）")
+        .tooltip("\(pattern.displayName) 形态预览（mock 60 根 K 线）")
     }
 }
 #endif

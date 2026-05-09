@@ -109,7 +109,7 @@ struct SectorWindow: View {
                         .font(.caption)
                 }
                 .buttonStyle(.borderless)
-                .help(sortDescending ? "降序（点切换升序）" : "升序（点切换降序）")
+                .tooltip(sortDescending ? "降序（点切换升序）" : "升序（点切换降序）")
             }
             .padding(.trailing, 14)
         }
@@ -285,7 +285,7 @@ struct SectorWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(rowHelpText(inst))
+        .tooltip(rowHelpText(inst))
     }
 
     /// v15.77 · 组合异常徽章（命中才显示）

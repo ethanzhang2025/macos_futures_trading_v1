@@ -47,7 +47,7 @@ struct TrainingControlBar: View {
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(streak.isWinning ? .red : .blue)
                 }
-                .help(streak.isWinning
+                .tooltip(streak.isWinning
                       ? "连胜 \(streak.count) 次 · 别飘 · 守纪律"
                       : "连败 \(streak.count) 次 · 状态可能不对 · 考虑休息")
             }
@@ -73,7 +73,7 @@ struct TrainingControlBar: View {
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(isOvertime ? .orange : .secondary)
                     }
-                    .help("推荐时长 \(rec) 分钟 · 已练 \(elapsedMin) 分 · 超时表示可结束")
+                    .tooltip("推荐时长 \(rec) 分钟 · 已练 \(elapsedMin) 分 · 超时表示可结束")
                 }
 
                 Text("违规 \(errorCount) · 警告 \(warningCount)")
@@ -109,7 +109,7 @@ struct TrainingControlBar: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut("e", modifiers: [.command, .shift])
-                .help("结束训练并评分（⌘⇧E）")
+                .tooltip("结束训练并评分（⌘⇧E）")
             } else {
                 Button {
                     showStart = true
@@ -119,7 +119,7 @@ struct TrainingControlBar: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut("s", modifiers: [.command, .shift])
-                .help("开始模拟训练（⌘⇧S）")
+                .tooltip("开始模拟训练（⌘⇧S）")
             }
 
             if let f = feedback {

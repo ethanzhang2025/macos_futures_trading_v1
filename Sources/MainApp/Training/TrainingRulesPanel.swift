@@ -60,7 +60,7 @@ struct TrainingRulesPanel: View {
             } label: {
                 Label("添加", systemImage: "plus")
             }
-            .help("添加新规则")
+            .tooltip("添加新规则")
             Menu {
                 Button("一键导入 5 条推荐") { viewModel.importRecommended() }
                 Button("清空所有规则", role: .destructive) { viewModel.clearRules() }
@@ -148,7 +148,7 @@ struct TrainingRulesPanel: View {
                 Image(systemName: "pencil")
             }
             .buttonStyle(.borderless)
-            .help("编辑")
+            .tooltip("编辑")
         }
         .opacity(rule.enabled ? 1.0 : 0.5)
         .padding(.vertical, 4)

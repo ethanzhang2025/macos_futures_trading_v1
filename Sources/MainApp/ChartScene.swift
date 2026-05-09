@@ -1082,7 +1082,7 @@ struct ChartScene: View {
         }
         .menuStyle(.borderlessButton)
         .frame(width: 28)
-        .help("画线模板（保存常用 / 一键插入 · 跨合约复用）")
+        .tooltip("画线模板（保存常用 / 一键插入 · 跨合约复用）")
     }
 
     /// v13.16 从模板实例化新画线 · 锚点重定位到最新 30 根 bar 区间（可见区附近）· 价格保留模板原值
@@ -1414,7 +1414,7 @@ struct ChartScene: View {
             }
             .buttonStyle(.borderless)
             .frame(width: 90)
-            .help("副图指标多选（至少 1 · 最多 4 · 点空白关闭弹窗）")
+            .tooltip("副图指标多选（至少 1 · 最多 4 · 点空白关闭弹窗）")
             .popover(isPresented: $showSubIndicatorPicker, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("副图（多选 · 点空白关闭）")
@@ -1452,7 +1452,7 @@ struct ChartScene: View {
                     .font(.system(size: 13))
             }
             .buttonStyle(.borderless)
-            .help("指标参数（MA / BOLL / MACD / KDJ / RSI 周期可调）")
+            .tooltip("指标参数（MA / BOLL / MACD / KDJ / RSI 周期可调）")
 
             // v15.4 · 模拟交易快捷入口（⌘T · 与主菜单 OpenTradingButton 对齐）
             Button {
@@ -1462,7 +1462,7 @@ struct ChartScene: View {
                     .font(.system(size: 13))
             }
             .buttonStyle(.borderless)
-            .help("模拟交易（⌘T · SimNow 模拟训练）")
+            .tooltip("模拟交易（⌘T · SimNow 模拟训练）")
 
             // v15.8 · 主题切换（深色 ↔ 浅色 · UserDefaults 持久化）
             Button {
@@ -1472,7 +1472,7 @@ struct ChartScene: View {
                     .font(.system(size: 13))
             }
             .buttonStyle(.borderless)
-            .help("切换 \(chartTheme == .dark ? "浅色" : "深色") 主题")
+            .tooltip("切换 \(chartTheme == .dark ? "浅色" : "深色") 主题")
 
             // v15.14 · HUD 字段自定义按钮（OHLC / 涨跌 / 成交量 / 持仓量 / 时间 / 调试 全可选）
             Button {
@@ -1482,7 +1482,7 @@ struct ChartScene: View {
                     .font(.system(size: 13))
             }
             .buttonStyle(.borderless)
-            .help("HUD 显示字段（OHLC / 成交量 / 持仓量 / 时间 等可选）")
+            .tooltip("HUD 显示字段（OHLC / 成交量 / 持仓量 / 时间 等可选）")
 
             Spacer()
             Text("⌘N 新窗口 · ⌘L 自选 · ⌘T 模拟交易")
@@ -1805,33 +1805,33 @@ struct ChartScene: View {
                 Image(systemName: "stop.fill")
             }
             .buttonStyle(ReplayBarButtonStyle())
-            .help("停止 · 重置到第 1 根")
+            .tooltip("停止 · 重置到第 1 根")
 
             Button { Task { await onTapStepBackward() } } label: {
                 Image(systemName: "backward.frame.fill")
             }
             .buttonStyle(ReplayBarButtonStyle())
-            .help("单步后退 1 根")
+            .tooltip("单步后退 1 根")
 
             Button { Task { await onTapPlayPause() } } label: {
                 Image(systemName: replay.state == .playing ? "pause.fill" : "play.fill")
             }
             .buttonStyle(ReplayBarButtonStyle(active: replay.state == .playing))
             .keyboardShortcut(.space, modifiers: [])
-            .help(replay.state == .playing ? "暂停（空格）" : "播放（空格）")
+            .tooltip(replay.state == .playing ? "暂停（空格）" : "播放（空格）")
 
             Button { Task { await onTapStepForward() } } label: {
                 Image(systemName: "forward.frame.fill")
             }
             .buttonStyle(ReplayBarButtonStyle())
-            .help("单步前进 1 根")
+            .tooltip("单步前进 1 根")
 
             // v15.17 · 跳到末根（替代连续点 stepForward 上千次）
             Button { Task { await onTapJumpToEnd() } } label: {
                 Image(systemName: "forward.end.fill")
             }
             .buttonStyle(ReplayBarButtonStyle())
-            .help("跳到末根 K 线")
+            .tooltip("跳到末根 K 线")
 
             Divider().frame(height: 18)
 
@@ -1880,7 +1880,7 @@ struct ChartScene: View {
             in: 0...Double(max(0, total - 1))
         )
         .frame(minWidth: 200, maxWidth: .infinity)
-        .help("拖拽跳到任意 K 线（也可单步按钮走）")
+        .tooltip("拖拽跳到任意 K 线（也可单步按钮走）")
     }
 
     private var progressText: String {
@@ -2795,21 +2795,21 @@ struct ChartContentView: View {
             } label: {
                 Image(systemName: "plus.magnifyingglass").frame(width: 24, height: 24)
             }
-            .help("放大（⌘=）")
+            .tooltip("放大（⌘=）")
             Button {
                 inertiaTask?.cancel()
                 viewport = clamp(viewport.zoomed(by: 1.4))
             } label: {
                 Image(systemName: "minus.magnifyingglass").frame(width: 24, height: 24)
             }
-            .help("缩小（⌘-）")
+            .tooltip("缩小（⌘-）")
             Button {
                 inertiaTask?.cancel()
                 viewport = RenderViewport(startIndex: max(0, bars.count - 120), visibleCount: 120)
             } label: {
                 Image(systemName: "arrow.counterclockwise").frame(width: 24, height: 24)
             }
-            .help("重置缩放（⌘0）")
+            .tooltip("重置缩放（⌘0）")
         }
         .buttonStyle(.borderless)
         .padding(6)

@@ -394,7 +394,7 @@ struct OptionWindow: View {
                             .font(.caption)
                     }
                     .buttonStyle(.borderless)
-                    .help("跑历史回测 · PnL 曲线 + maxDD + Sharpe + 胜率")
+                    .tooltip("跑历史回测 · PnL 曲线 + maxDD + Sharpe + 胜率")
                 }
                 HStack(spacing: 16) {
                     statBlock("净权利金", String(format: "%.2f", s.netPremium),

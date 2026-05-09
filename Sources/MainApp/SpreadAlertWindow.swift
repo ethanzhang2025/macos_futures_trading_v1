@@ -279,7 +279,7 @@ struct SpreadAlertWindow: View {
                     .font(.caption)
             }
             .buttonStyle(.borderless)
-            .help("添加自定义价差对（任意两合约 + 比率）· 与 26 经典对一并扫描")
+            .tooltip("添加自定义价差对（任意两合约 + 比率）· 与 26 经典对一并扫描")
 
             // v15.75 · 自定义对列表（已加 ≥1 时显删除菜单）
             if !customPairs.isEmpty {
@@ -299,7 +299,7 @@ struct SpreadAlertWindow: View {
                 }
                 .menuStyle(.borderlessButton)
                 .frame(width: 24)
-                .help("管理自定义对（删除）")
+                .tooltip("管理自定义对（删除）")
             }
 
             Spacer()
@@ -526,7 +526,7 @@ struct SpreadAlertWindow: View {
                 case .calendar:        openWindow(id: "calendarSpread")
                 }
             }
-            .help("\(evt.spreadName) · \(evt.direction.displayName) · |Z| \(String(format: "%.2f", evt.absZ)) · 点击切到对应套利窗口")
+            .tooltip("\(evt.spreadName) · \(evt.direction.displayName) · |Z| \(String(format: "%.2f", evt.absZ)) · 点击切到对应套利窗口")
 
             // v15.57 · 一键加预警按钮（独立按钮 · 不嵌入信息区 tap）
             Button {
@@ -543,7 +543,7 @@ struct SpreadAlertWindow: View {
             .buttonStyle(.borderless)
             .frame(width: 64, alignment: .center)
             .disabled(isAdded)
-            .help(isAdded ? "已加到 ⌘B 预警面板（60s 周期真扫触发）" : "加到 ⌘B 预警面板（每 60s 自动扫描 · |z|≥阈值时触发系统通知）")
+            .tooltip(isAdded ? "已加到 ⌘B 预警面板（60s 周期真扫触发）" : "加到 ⌘B 预警面板（每 60s 自动扫描 · |z|≥阈值时触发系统通知）")
         }
         .padding(.horizontal, 14).padding(.vertical, 5)
     }
@@ -627,7 +627,7 @@ struct SpreadAlertWindow: View {
                          with: .color(fillColor))
             }
         }
-        .help("近 30 点 spread 走势 · 红虚线 = 上轨 +2σ · 绿虚线 = 下轨 -2σ · 末点高亮 = 当前位置")
+        .tooltip("近 30 点 spread 走势 · 红虚线 = 上轨 +2σ · 绿虚线 = 下轨 -2σ · 末点高亮 = 当前位置")
     }
 
     /// 取 spread 的最近 N 点 series（mock · 与 SpreadAlertDetector 同算法）

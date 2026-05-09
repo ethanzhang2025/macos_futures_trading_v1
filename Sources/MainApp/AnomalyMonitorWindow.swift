@@ -262,7 +262,7 @@ struct AnomalyMonitorWindow: View {
             }
             .buttonStyle(.borderless)
             .disabled(!canExportCurrentView)
-            .help(exportButtonHelp)
+            .tooltip(exportButtonHelp)
 
             Text("v1 mock · v2 接 CTP 真行情后 OI Δ + 资金流真值")
                 .font(.caption2).foregroundColor(.secondary)
@@ -488,7 +488,7 @@ struct AnomalyMonitorWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(evt.instrumentName)（\(evt.instrumentID)）· \(evt.kind.displayName) · 严重度 \(Int(evt.severity)) · 点击切主图")
+        .tooltip("\(evt.instrumentName)（\(evt.instrumentID)）· \(evt.kind.displayName) · 严重度 \(Int(evt.severity)) · 点击切主图")
     }
 
     private func severityColor(_ s: Double) -> Color {
@@ -652,7 +652,7 @@ struct AnomalyMonitorWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(row.sector.displayName) 板块异常密度 \(String(format: "%.0f%%", row.density * 100))（\(row.count) / \(row.universe)）· 点击切到列表")
+        .tooltip("\(row.sector.displayName) 板块异常密度 \(String(format: "%.0f%%", row.density * 100))（\(row.count) / \(row.universe)）· 点击切到列表")
     }
 
     private func densityColor(_ d: Double) -> Color {
@@ -768,7 +768,7 @@ struct AnomalyMonitorWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(h.instrumentName)（\(h.instrumentID)）30d 共 \(h.totalCount) 次异常 · 峰值 \(h.peakDayCount) · 点击切主图")
+        .tooltip("\(h.instrumentName)（\(h.instrumentID)）30d 共 \(h.totalCount) 次异常 · 峰值 \(h.peakDayCount) · 点击切主图")
     }
 
     /// sparkline 30 个 cell mini bar chart · 全局 peak 归一化高度
@@ -816,7 +816,7 @@ struct AnomalyMonitorWindow: View {
                     .padding(.vertical, 2)
                     .background(c > 0 ? kindColor(k).opacity(0.12) : Color.clear,
                                in: RoundedRectangle(cornerRadius: 3))
-                    .help("\(k.displayName) · 30d \(c) 次")
+                    .tooltip("\(k.displayName) · 30d \(c) 次")
             }
         }
     }
@@ -964,7 +964,7 @@ struct AnomalyMonitorWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(h.instrumentName)（\(h.instrumentID)）本周 \(h.thisWeekCount) vs 上周 \(h.lastWeekCount) · \(h.weekTrend.displayName) \(formatPct(h.weekDeltaPct)) · 点击切主图")
+        .tooltip("\(h.instrumentName)（\(h.instrumentID)）本周 \(h.thisWeekCount) vs 上周 \(h.lastWeekCount) · \(h.weekTrend.displayName) \(formatPct(h.weekDeltaPct)) · 点击切主图")
     }
 
     // MARK: - 组合异常视图（v15.70 · 同品种 ≥ minKinds 类命中）
@@ -1201,7 +1201,7 @@ struct AnomalyMonitorWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(comboHelpText(combo: combo, history: history))
+        .tooltip(comboHelpText(combo: combo, history: history))
     }
 
     private func comboHelpText(combo: ComboAnomaly, history: InstrumentAnomalyHistory?) -> String {
@@ -1226,7 +1226,7 @@ struct AnomalyMonitorWindow: View {
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .background(hit ? kindColor(k).opacity(0.14) : Color.clear,
                                in: RoundedRectangle(cornerRadius: 3))
-                    .help(k.displayName + (hit ? " · 命中" : " · 未命中"))
+                    .tooltip(k.displayName + (hit ? " · 命中" : " · 未命中"))
             }
         }
     }

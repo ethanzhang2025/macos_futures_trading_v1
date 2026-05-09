@@ -276,14 +276,14 @@ struct WorkspaceWindow: View {
                     Image(systemName: "square.and.arrow.down")
                 }
                 .buttonStyle(.borderless)
-                .help("导入 JSON · 整本替换当前模板")
+                .tooltip("导入 JSON · 整本替换当前模板")
                 Button {
                     presentExportPanel()
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
                 .buttonStyle(.borderless)
-                .help("导出 JSON · 当前 \(book.templates.count) 个模板")
+                .tooltip("导出 JSON · 当前 \(book.templates.count) 个模板")
                 .disabled(book.templates.isEmpty)
                 Menu {
                     Button("空白模板…") { sheetState = .addTemplate }
@@ -292,14 +292,14 @@ struct WorkspaceWindow: View {
                     Text("📋 场景预设（trader 一键）").font(.caption).foregroundColor(.secondary)
                     ForEach(WorkspaceScenePreset.allCases) { preset in
                         Button(preset.displayName) { addPresetTemplate(preset) }
-                            .help(preset.helpText)
+                            .tooltip(preset.helpText)
                     }
                 } label: {
                     Image(systemName: "plus")
                 }
                 .menuStyle(.borderlessButton)
                 .frame(maxWidth: 28)
-                .help("添加模板 / 场景预设")
+                .tooltip("添加模板 / 场景预设")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -515,7 +515,7 @@ struct WorkspaceWindow: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                    .help("把此模板标为当前激活（双击 sidebar 行同效）")
+                    .tooltip("把此模板标为当前激活（双击 sidebar 行同效）")
                 }
             }
             .padding(20)
@@ -554,7 +554,7 @@ struct WorkspaceWindow: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(template.windows.isEmpty)
-                .help("把当前 N 个窗口的 frame 替换为预设网格（不变合约/周期/指标）")
+                .tooltip("把当前 N 个窗口的 frame 替换为预设网格（不变合约/周期/指标）")
                 Spacer()
             }
             .padding(.bottom, 4)

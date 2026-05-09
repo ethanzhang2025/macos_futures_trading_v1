@@ -157,12 +157,11 @@ public struct ComboAnomaly: Sendable, Equatable, Identifiable, Hashable {
         self.instrumentName = instrumentName
         self.sector = sector
         self.events = events
-        let kindSet = Set(events.map(\.kind))
-        self.kinds = kindSet
+        self.kinds = Set(events.map(\.kind))
+        self.detectedAt = detectedAt
         let avg = events.isEmpty ? 0 : events.map(\.severity).reduce(0, +) / Double(events.count)
         self.avgSeverity = avg
-        let extraKinds = max(0, kindSet.count - 3)
-        self.totalSeverity = min(100.0, max(0.0, avg * (1.0 + 0.2 * Double(extraKinds))))
-        self.detectedAt = detectedAt
+        let bonus = 1.0 + 0.2 * Double(max(0, self.kinds.count - 3))
+        self.totalSeverity = min(100.0, max(0.0, avg * bonus))
     }
 }

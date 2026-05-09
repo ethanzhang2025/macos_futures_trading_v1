@@ -1,9 +1,7 @@
 // 组合异常聚合器（v15.70 · ⌘⌥A 组合异常发现）
 //
-// 输入：[AnomalyEvent]（AnomalyDetector.scan 的 events）
-// 输出：[ComboAnomaly]（按 instrumentID 聚合 · ≥ minKinds 类命中保留）
-//
 // 排序：totalSeverity desc → kindCount desc → instrumentID asc（稳定排序）
+// WHY: 严重度优先 · 同分时多类命中（更强信号）优先 · 最后 ID 保稳定输出
 
 import Foundation
 
@@ -23,9 +21,9 @@ public enum ComboAnomalyAggregator {
         let grouped = Dictionary(grouping: events, by: \.instrumentID)
         var combos: [ComboAnomaly] = []
         combos.reserveCapacity(grouped.count)
-        for (_, list) in grouped {
-            let kinds = Set(list.map(\.kind))
-            guard kinds.count >= minKinds, let first = list.first else { continue }
+        for list in grouped.values {
+            guard let first = list.first,
+                  Set(list.map(\.kind)).count >= minKinds else { continue }
             combos.append(ComboAnomaly(
                 instrumentID: first.instrumentID,
                 instrumentName: first.instrumentName,

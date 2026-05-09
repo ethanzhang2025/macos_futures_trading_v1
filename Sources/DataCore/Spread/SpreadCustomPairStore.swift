@@ -1,17 +1,11 @@
 // 用户自定义价差对持久化（v15.75 · ⌘⌥W 价差对自定义 v1）
 //
 // 存储：UserDefaults JSON · 同 HUDFieldsBook 模式（v1 简化 · 不引 SQLite store）
-// CRUD：load / save / append / remove · 防重 by id
+// 防重：by id（UI 生成 custom-yyyyMMddHHmmss-leg1-leg2 兜底防撞）
 //
-// 设计要点：
-// - SpreadPair 已 Codable · 直接 JSON 落盘
-// - 自定义对的 id 由 UI 生成（custom-yyyyMMddHHmmss-leg1-leg2 · 兜底防撞）
+// WHY:
 // - load 失败（损坏 JSON）→ 返回 [] · 不抛错（trader 不感知）
-// - append 同 id 跳过（防重）· UI 需校验 id 唯一
-//
-// 与 SpreadPresets.all 的关系：
-// - load() 返回的 custom pairs 由 caller 手动 merge 到 SpreadPresets.all
-// - 不污染 SpreadPresets（保持 preset 不变）
+// - load() 由 caller 手动 merge 到 SpreadPresets.all（不污染 preset）
 
 import Foundation
 
@@ -45,9 +39,8 @@ public enum SpreadCustomPairStore {
     @discardableResult
     public static func remove(id: String, defaults: UserDefaults = .standard) -> Bool {
         var current = load(defaults: defaults)
-        let before = current.count
-        current.removeAll { $0.id == id }
-        guard current.count != before else { return false }
+        guard let idx = current.firstIndex(where: { $0.id == id }) else { return false }
+        current.remove(at: idx)
         return save(current, defaults: defaults)
     }
 

@@ -25,6 +25,7 @@ struct SectorWindow: View {
     @State private var selectedSector: Sector = .黑色
     @State private var sortField: SortField = .changePct
     @State private var sortDescending: Bool = true
+    @Environment(\.openWindow) private var openWindow
 
     enum SortField: String, CaseIterable, Identifiable {
         case changePct, lastPrice, openInterest, name
@@ -233,32 +234,41 @@ struct SectorWindow: View {
         let priceStr = formatPrice(inst.lastPrice)
         let changeColor: Color = inst.changePct > 0 ? ChartTheme.chartLoss
                               : (inst.changePct < 0 ? ChartTheme.chartProfit : .secondary)
-        return HStack(spacing: 0) {
-            Text(inst.id)
-                .font(.system(size: 12, design: .monospaced).bold())
-                .foregroundColor(.primary)
-                .frame(width: 70, alignment: .leading)
-            Text(inst.name)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .frame(width: 100, alignment: .leading)
-            Text(priceStr)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.primary)
-                .frame(width: 100, alignment: .trailing)
-            Text(String(format: "%+.2f%%", inst.changePct))
-                .font(.system(size: 12, design: .monospaced).bold())
-                .foregroundColor(changeColor)
-                .frame(width: 100, alignment: .trailing)
-            Text(String(format: "%.0fK", inst.openInterestK))
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.secondary)
-                .frame(width: 100, alignment: .trailing)
-            Spacer()
+        return Button {
+            // v15.46 · 点击 → 主图切合约（与 ⌘⌥H 热力图同机制）
+            openWindow(id: "chart")
+            NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: inst.id)
+        } label: {
+            HStack(spacing: 0) {
+                Text(inst.id)
+                    .font(.system(size: 12, design: .monospaced).bold())
+                    .foregroundColor(.primary)
+                    .frame(width: 70, alignment: .leading)
+                Text(inst.name)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .frame(width: 100, alignment: .leading)
+                Text(priceStr)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .frame(width: 100, alignment: .trailing)
+                Text(String(format: "%+.2f%%", inst.changePct))
+                    .font(.system(size: 12, design: .monospaced).bold())
+                    .foregroundColor(changeColor)
+                    .frame(width: 100, alignment: .trailing)
+                Text(String(format: "%.0fK", inst.openInterestK))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 100, alignment: .trailing)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 26)
+            .background(rowBackground(for: inst))
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 12)
-        .frame(height: 26)
-        .background(rowBackground(for: inst))
+        .buttonStyle(.plain)
+        .help("点击切主图 · \(inst.name)（\(inst.id)）")
     }
 
     private func rowBackground(for inst: SectorInstrument) -> Color {

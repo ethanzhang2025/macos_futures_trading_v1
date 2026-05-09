@@ -311,6 +311,7 @@ struct FuturesTerminalApp: App {
                 OpenOptionButton()     // v15.32 · WP-期权工作台 ⌘⌥O
                 OpenSectorButton()     // v15.43 · WP-行情 V3 板块联动 ⌘⌥B
                 OpenHeatmapButton()    // v15.44 · WP-行情 热力地图 ⌘⌥H
+                OpenPositionButton()   // v15.47 · WP-行情 多空持仓 ⌘⌥P
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -434,6 +435,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1100, height: 720)
+
+        // v15.47 · WP-行情 多空持仓（⌘⌥P · 60+ 品种多空横条 + 净持仓）
+        WindowGroup("多空持仓", id: "position") {
+            PositionWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1080, height: 700)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -581,6 +589,15 @@ private struct OpenHeatmapButton: View {
     var body: some View {
         Button("行情热力图（⌘⌥H）") { openWindow(id: "heatmap") }
             .keyboardShortcut("h", modifiers: [.command, .option])
+    }
+}
+
+/// v15.47 · WP-行情 多空持仓入口（⌘⌥P · 60+ 品种多空横条 + 净持仓 + 市场情绪）
+private struct OpenPositionButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("多空持仓（⌘⌥P）") { openWindow(id: "position") }
+            .keyboardShortcut("p", modifiers: [.command, .option])
     }
 }
 

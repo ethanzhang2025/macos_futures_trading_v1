@@ -232,4 +232,108 @@ struct TrainingSessionLogTests {
         let decoded = try JSONDecoder().decode(TrainingSessionLog.self, from: data)
         #expect(decoded == log)
     }
+
+    // MARK: - v16.13 · 同形态历史对比
+
+    private func sessionWithPattern(_ p: TrainingScenarioPattern,
+                                    final: Decimal,
+                                    errors: Int = 0) -> TrainingSession {
+        var violations: [DisciplineViolation] = []
+        for i in 0..<errors {
+            violations.append(DisciplineViolation(
+                ruleID: UUID(), ruleKind: .stopLossPercent, occurredAt: t0,
+                severity: .error, message: "e\(i)"))
+        }
+        return TrainingSession(startedAt: t0, endedAt: t0.addingTimeInterval(3600),
+                               initialBalance: 100_000, finalBalance: final,
+                               violations: violations,
+                               scenarioPattern: p)
+    }
+
+    @Test("v16.13 · patternComparison · 无 scenarioPattern → nil")
+    func patternComparison_noPattern() {
+        var log = TrainingSessionLog()
+        let s = makeSession(final: 110_000)   // 无 pattern
+        log.addSession(s)
+        #expect(log.patternComparison(for: s.id) == nil)
+    }
+
+    @Test("v16.13 · patternComparison · 不存在 sessionID → nil")
+    func patternComparison_unknownID() {
+        let log = TrainingSessionLog()
+        #expect(log.patternComparison(for: UUID()) == nil)
+    }
+
+    @Test("v16.13 · patternComparison · 首次同形态（priorCount=0 · trend=firstTime）")
+    func patternComparison_firstTime() {
+        var log = TrainingSessionLog()
+        let s = sessionWithPattern(.uptrend, final: 110_000)
+        log.addSession(s)
+        let comp = log.patternComparison(for: s.id)
+        #expect(comp != nil)
+        #expect(comp?.priorCount == 0)
+        #expect(comp?.trendVsAverage == .firstTime)
+        #expect(comp?.isNewBest == false)   // priorCount=0 不算新高
+        #expect(comp?.deltaVsAverage == 0)
+    }
+
+    @Test("v16.13 · patternComparison · 提升 ≥ 3 分 → trend=up")
+    func patternComparison_up() {
+        var log = TrainingSessionLog()
+        log.addSession(sessionWithPattern(.uptrend, final: 100_000))   // 0% → 20+50 = 70
+        log.addSession(sessionWithPattern(.uptrend, final: 100_000))   // 同 70
+        let target = sessionWithPattern(.uptrend, final: 110_000)      // +10% → 50+50 = 100
+        log.addSession(target)
+        let comp = log.patternComparison(for: target.id)!
+        #expect(comp.priorCount == 2)
+        #expect(comp.priorAverageScore == 70)
+        #expect(comp.currentScore == 100)
+        #expect(comp.trendVsAverage == .up)
+        #expect(comp.isNewBest == true)
+        #expect(comp.deltaVsAverage == 30)
+    }
+
+    @Test("v16.13 · patternComparison · 下降 ≥ 3 分 → trend=down")
+    func patternComparison_down() {
+        var log = TrainingSessionLog()
+        log.addSession(sessionWithPattern(.uptrend, final: 110_000))   // 100
+        log.addSession(sessionWithPattern(.uptrend, final: 105_000))   // 90
+        let target = sessionWithPattern(.uptrend, final: 100_000)      // 70
+        log.addSession(target)
+        let comp = log.patternComparison(for: target.id)!
+        #expect(comp.priorCount == 2)
+        #expect(comp.trendVsAverage == .down)
+        #expect(comp.isNewBest == false)
+    }
+
+    @Test("v16.13 · patternComparison · |diff| < 3 → trend=flat")
+    func patternComparison_flat() {
+        var log = TrainingSessionLog()
+        log.addSession(sessionWithPattern(.uptrend, final: 102_000, errors: 1))  // +2% → 40 / disc 50-10=40 / total 80
+        let target = sessionWithPattern(.uptrend, final: 102_000, errors: 1)     // 同 80
+        log.addSession(target)
+        let comp = log.patternComparison(for: target.id)!
+        #expect(comp.trendVsAverage == .flat)
+        #expect(comp.deltaVsAverage == 0)
+    }
+
+    @Test("v16.13 · patternComparison · 不同形态不混合（仅同 pattern 算入 prior）")
+    func patternComparison_isolatedPatterns() {
+        var log = TrainingSessionLog()
+        log.addSession(sessionWithPattern(.oscillation, final: 100_000))  // 70 不算入 uptrend prior
+        log.addSession(sessionWithPattern(.uptrend, final: 110_000))      // 100
+        let target = sessionWithPattern(.uptrend, final: 105_000)         // 90
+        log.addSession(target)
+        let comp = log.patternComparison(for: target.id)!
+        #expect(comp.priorCount == 1)
+        #expect(comp.priorAverageScore == 100)
+    }
+
+    @Test("v16.13 · PatternComparison.Trend · emoji 映射")
+    func patternComparison_trendEmoji() {
+        #expect(PatternComparison.Trend.up.emoji == "↑")
+        #expect(PatternComparison.Trend.down.emoji == "↓")
+        #expect(PatternComparison.Trend.flat.emoji == "→")
+        #expect(PatternComparison.Trend.firstTime.emoji == "✨")
+    }
 }

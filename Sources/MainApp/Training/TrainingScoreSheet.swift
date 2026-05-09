@@ -21,6 +21,8 @@ struct TrainingScoreSheet: View {
     let onDismiss: () -> Void
     /// v15.23 batch132 · 「再练同形态」回调（pattern 非 nil 时显示按钮）
     var onRetrain: ((TrainingScenarioPattern) -> Void)? = nil
+    /// v16.13 · 同形态历史对比（caller 传 viewModel.log.patternComparison(for:) · 无历史时为 nil 不显示）
+    var comparison: PatternComparison? = nil
 
     @State private var showViolations: Bool = false
     /// v15.23 batch150 · 复制/截图反馈提示（3 秒自动清空）
@@ -31,6 +33,10 @@ struct TrainingScoreSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             header
+
+            if let comp = comparison, comp.priorCount > 0 {
+                patternComparisonStrip(comp)
+            }
 
             Divider()
 
@@ -114,11 +120,12 @@ struct TrainingScoreSheet: View {
         .frame(width: 540, height: sheetHeight)
     }
 
-    /// v16.6 · subScores 注入 200pt 五维区域 · violations 折叠展开 180pt
+    /// v16.6 · subScores 注入 200pt 五维区域 · violations 折叠展开 180pt · v16.13 · comparison 加 50pt
     private var sheetHeight: CGFloat {
         var h: CGFloat = 480
         if score.subScores != nil { h += 200 }
         if showViolations { h += 180 }
+        if let c = comparison, c.priorCount > 0 { h += 50 }
         return h
     }
 
@@ -243,6 +250,63 @@ struct TrainingScoreSheet: View {
             Text(value).font(.system(size: 12, design: .monospaced)).foregroundColor(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - v16.13 · 同形态历史对比 strip
+
+    private func patternComparisonStrip(_ comp: PatternComparison) -> some View {
+        let trend = comp.trendVsAverage
+        let avgInt = Int(comp.priorAverageScore.rounded())
+        let deltaText: String = {
+            if comp.deltaVsAverage > 0 { return "+\(comp.deltaVsAverage)" }
+            if comp.deltaVsAverage < 0 { return "\(comp.deltaVsAverage)" }
+            return "持平"
+        }()
+        return HStack(spacing: 10) {
+            Text("\(comp.pattern.emoji) \(comp.pattern.displayName)")
+                .font(.system(size: 11, weight: .medium))
+            Divider().frame(height: 16)
+            Text("同形态历史 \(comp.priorCount) 次")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            Text("均分 \(avgInt)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+            HStack(spacing: 2) {
+                Text(trend.emoji)
+                    .font(.system(size: 13))
+                    .foregroundColor(trendColor(trend))
+                Text(deltaText)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(trendColor(trend))
+            }
+            if comp.isNewBest {
+                Text("🏆 新高")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.purple)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.purple.opacity(0.12))
+                    .cornerRadius(4)
+            }
+            Spacer()
+            Text("最佳 \(comp.priorBestScore)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.06))
+        .cornerRadius(6)
+    }
+
+    private func trendColor(_ trend: PatternComparison.Trend) -> Color {
+        switch trend {
+        case .up:        return .green
+        case .down:      return .red
+        case .flat:      return .secondary
+        case .firstTime: return .blue
+        }
     }
 
     // MARK: - v16.6 · 五维细分 + weakness 提示

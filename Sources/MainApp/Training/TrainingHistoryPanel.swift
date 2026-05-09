@@ -96,7 +96,8 @@ struct TrainingHistoryPanel: View {
                                    onDismiss: { selectedSessionID = nil },
                                    onRetrain: { pattern in
                                        viewModel.pendingRetrainPattern = pattern
-                                   })
+                                   },
+                                   comparison: viewModel.log.patternComparison(for: session.id))
             }
         }
         .alert("清空全部历史？", isPresented: $showClearConfirm) {

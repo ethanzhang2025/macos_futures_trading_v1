@@ -97,4 +97,83 @@ public struct TrainingSessionLog: Sendable, Equatable, Codable {
         }
         return (count, firstIsWin)
     }
+
+    // MARK: - v16.13 · 同形态历史对比（score sheet 显示提升趋势）
+
+    /// 计算 sessionID 对应同形态的历史对比（不含 sessionID 自己）
+    /// 返回 nil 条件：sessionID 不存在 / 无 scenarioPattern / 无 score
+    public func patternComparison(for sessionID: UUID) -> PatternComparison? {
+        guard let target = session(id: sessionID),
+              let pattern = target.scenarioPattern,
+              let currentScore = score(for: sessionID)?.totalScore else { return nil }
+        let priorScores = sessions
+            .filter { $0.id != sessionID && $0.scenarioPattern == pattern }
+            .compactMap { score(for: $0.id)?.totalScore }
+        let priorAvg = priorScores.isEmpty ? 0.0
+                       : Double(priorScores.reduce(0, +)) / Double(priorScores.count)
+        return PatternComparison(
+            pattern: pattern,
+            priorCount: priorScores.count,
+            priorAverageScore: priorAvg,
+            priorBestScore: priorScores.max() ?? 0,
+            currentScore: currentScore
+        )
+    }
+}
+
+/// v16.13 · 同形态历史对比结果（trader 看分时回报"同形态 5 次 平均 75 ↑（提升 +7）"）
+public struct PatternComparison: Sendable, Equatable {
+    public let pattern: TrainingScenarioPattern
+    public let priorCount: Int               // 不含当前 session
+    public let priorAverageScore: Double     // 历史均值（priorCount=0 时为 0）
+    public let priorBestScore: Int           // 历史最佳（priorCount=0 时为 0）
+    public let currentScore: Int
+
+    public init(pattern: TrainingScenarioPattern, priorCount: Int,
+                priorAverageScore: Double, priorBestScore: Int, currentScore: Int) {
+        self.pattern = pattern
+        self.priorCount = priorCount
+        self.priorAverageScore = priorAverageScore
+        self.priorBestScore = priorBestScore
+        self.currentScore = currentScore
+    }
+
+    /// 当前分相对历史均值的趋势
+    public var trendVsAverage: Trend {
+        Trend.compute(current: currentScore, baseline: Int(priorAverageScore.rounded()), priorCount: priorCount)
+    }
+
+    /// 当前分相对历史最佳的趋势（用于"创新高"提示）
+    public var isNewBest: Bool {
+        priorCount > 0 && currentScore > priorBestScore
+    }
+
+    /// 当前分 vs 历史均值的差额（priorCount=0 时为 0）
+    public var deltaVsAverage: Int {
+        guard priorCount > 0 else { return 0 }
+        return currentScore - Int(priorAverageScore.rounded())
+    }
+
+    public enum Trend: String, Sendable, Equatable {
+        case up        // 高于均值 ≥ 3 分
+        case down      // 低于均值 ≥ 3 分
+        case flat      // 接近均值（|diff| < 3）
+        case firstTime // 历史无同形态记录
+
+        public static func compute(current: Int, baseline: Int, priorCount: Int) -> Trend {
+            guard priorCount > 0 else { return .firstTime }
+            let diff = current - baseline
+            if abs(diff) < 3 { return .flat }
+            return diff > 0 ? .up : .down
+        }
+
+        public var emoji: String {
+            switch self {
+            case .up:        return "↑"
+            case .down:      return "↓"
+            case .flat:      return "→"
+            case .firstTime: return "✨"
+            }
+        }
+    }
 }

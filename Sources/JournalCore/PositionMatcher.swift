@@ -137,7 +137,8 @@ public enum PositionMatcher {
             closePrice: closeTrade.price,
             volume: matchVolume,
             realizedPnL: realizedPnL,
-            totalCommission: totalCommission
+            totalCommission: totalCommission,
+            setup: openTrade.setup   // v15.98 · 复盘 v2 · 策略标签透传（仅开仓侧 setup 有意义）
         )
     }
 }

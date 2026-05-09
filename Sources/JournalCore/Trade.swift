@@ -34,6 +34,9 @@ public struct Trade: Sendable, Codable, Equatable, Identifiable, Hashable {
     public var commission: Decimal
     public var timestamp: Date
     public var source: TradeSource
+    /// v15.98 · 策略标签（"突破" / "回踩" / "背离" / 自定义 · trader 个性化 · nil 未标）
+    /// 复盘 v2 SetupMatrix 聚合维度 · 仅开仓 trade 上有意义（PositionMatcher 透传到 ClosedPosition）
+    public var setup: String?
 
     public init(
         id: UUID = UUID(),
@@ -45,7 +48,8 @@ public struct Trade: Sendable, Codable, Equatable, Identifiable, Hashable {
         volume: Int,
         commission: Decimal,
         timestamp: Date,
-        source: TradeSource
+        source: TradeSource,
+        setup: String? = nil
     ) {
         self.id = id
         self.tradeReference = tradeReference
@@ -57,11 +61,49 @@ public struct Trade: Sendable, Codable, Equatable, Identifiable, Hashable {
         self.commission = commission
         self.timestamp = timestamp
         self.source = source
+        self.setup = setup
     }
 
     /// 成交金额（不含手续费）= price × volume × volumeMultiple
     /// volumeMultiple 由调用方提供（来自 Contract.volumeMultiple，本结构无 contract 引用）
     public func notional(volumeMultiple: Int) -> Decimal {
         price * Decimal(volume) * Decimal(volumeMultiple)
+    }
+
+    // MARK: - Codable（兼容旧 JSON · 缺 setup 时回退 nil）
+
+    private enum CodingKeys: String, CodingKey {
+        case id, tradeReference, instrumentID, direction, offsetFlag,
+             price, volume, commission, timestamp, source, setup
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.tradeReference = try c.decode(String.self, forKey: .tradeReference)
+        self.instrumentID = try c.decode(String.self, forKey: .instrumentID)
+        self.direction = try c.decode(Direction.self, forKey: .direction)
+        self.offsetFlag = try c.decode(OffsetFlag.self, forKey: .offsetFlag)
+        self.price = try c.decode(Decimal.self, forKey: .price)
+        self.volume = try c.decode(Int.self, forKey: .volume)
+        self.commission = try c.decode(Decimal.self, forKey: .commission)
+        self.timestamp = try c.decode(Date.self, forKey: .timestamp)
+        self.source = try c.decode(TradeSource.self, forKey: .source)
+        self.setup = try c.decodeIfPresent(String.self, forKey: .setup)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(tradeReference, forKey: .tradeReference)
+        try c.encode(instrumentID, forKey: .instrumentID)
+        try c.encode(direction, forKey: .direction)
+        try c.encode(offsetFlag, forKey: .offsetFlag)
+        try c.encode(price, forKey: .price)
+        try c.encode(volume, forKey: .volume)
+        try c.encode(commission, forKey: .commission)
+        try c.encode(timestamp, forKey: .timestamp)
+        try c.encode(source, forKey: .source)
+        try c.encodeIfPresent(setup, forKey: .setup)
     }
 }

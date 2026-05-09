@@ -32,6 +32,8 @@ public struct ClosedPosition: Sendable, Codable, Equatable, Identifiable, Hashab
     public var realizedPnL: Decimal
     /// 总手续费（开 + 平）
     public var totalCommission: Decimal
+    /// v15.98 · 策略标签（透传自开仓 Trade.setup · nil 未标）
+    public var setup: String?
 
     public init(
         id: UUID = UUID(),
@@ -45,7 +47,8 @@ public struct ClosedPosition: Sendable, Codable, Equatable, Identifiable, Hashab
         closePrice: Decimal,
         volume: Int,
         realizedPnL: Decimal,
-        totalCommission: Decimal
+        totalCommission: Decimal,
+        setup: String? = nil
     ) {
         self.id = id
         self.instrumentID = instrumentID
@@ -59,6 +62,7 @@ public struct ClosedPosition: Sendable, Codable, Equatable, Identifiable, Hashab
         self.volume = volume
         self.realizedPnL = realizedPnL
         self.totalCommission = totalCommission
+        self.setup = setup
     }
 
     /// 持仓时长（秒）
@@ -68,4 +72,46 @@ public struct ClosedPosition: Sendable, Codable, Equatable, Identifiable, Hashab
 
     /// 是否盈利
     public var isWin: Bool { realizedPnL > 0 }
+
+    // MARK: - Codable（兼容旧 JSON · 缺 setup 时回退 nil）
+
+    private enum CodingKeys: String, CodingKey {
+        case id, instrumentID, side, openTradeID, closeTradeID,
+             openTime, closeTime, openPrice, closePrice, volume,
+             realizedPnL, totalCommission, setup
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.instrumentID = try c.decode(String.self, forKey: .instrumentID)
+        self.side = try c.decode(PositionSide.self, forKey: .side)
+        self.openTradeID = try c.decode(UUID.self, forKey: .openTradeID)
+        self.closeTradeID = try c.decode(UUID.self, forKey: .closeTradeID)
+        self.openTime = try c.decode(Date.self, forKey: .openTime)
+        self.closeTime = try c.decode(Date.self, forKey: .closeTime)
+        self.openPrice = try c.decode(Decimal.self, forKey: .openPrice)
+        self.closePrice = try c.decode(Decimal.self, forKey: .closePrice)
+        self.volume = try c.decode(Int.self, forKey: .volume)
+        self.realizedPnL = try c.decode(Decimal.self, forKey: .realizedPnL)
+        self.totalCommission = try c.decode(Decimal.self, forKey: .totalCommission)
+        self.setup = try c.decodeIfPresent(String.self, forKey: .setup)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(instrumentID, forKey: .instrumentID)
+        try c.encode(side, forKey: .side)
+        try c.encode(openTradeID, forKey: .openTradeID)
+        try c.encode(closeTradeID, forKey: .closeTradeID)
+        try c.encode(openTime, forKey: .openTime)
+        try c.encode(closeTime, forKey: .closeTime)
+        try c.encode(openPrice, forKey: .openPrice)
+        try c.encode(closePrice, forKey: .closePrice)
+        try c.encode(volume, forKey: .volume)
+        try c.encode(realizedPnL, forKey: .realizedPnL)
+        try c.encode(totalCommission, forKey: .totalCommission)
+        try c.encodeIfPresent(setup, forKey: .setup)
+    }
 }

@@ -40,7 +40,8 @@ public actor SQLiteJournalStore: JournalStore {
               volume INTEGER NOT NULL,
               commission TEXT NOT NULL,
               timestamp INTEGER NOT NULL,
-              source TEXT NOT NULL
+              source TEXT NOT NULL,
+              setup TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_trades_instrument_ts ON trades(instrument_id, timestamp);
             CREATE INDEX IF NOT EXISTS idx_trades_ts ON trades(timestamp);
@@ -59,6 +60,8 @@ public actor SQLiteJournalStore: JournalStore {
             );
             CREATE INDEX IF NOT EXISTS idx_journals_created ON journals(created_at);
             """)
+        // v15.98 · 老库 migration · 列已存在时 ALTER 失败被吞（try? 兜底 · SQLite 没有 ADD COLUMN IF NOT EXISTS）
+        try? await connection.exec("ALTER TABLE trades ADD COLUMN setup TEXT;")
         schemaReady = true
     }
 
@@ -72,8 +75,8 @@ public actor SQLiteJournalStore: JournalStore {
                 try await self.connection.executeReturningChanges(
                     """
                     INSERT OR REPLACE INTO trades
-                    (id, trade_reference, instrument_id, direction, offset_flag, price, volume, commission, timestamp, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    (id, trade_reference, instrument_id, direction, offset_flag, price, volume, commission, timestamp, source, setup)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                     """,
                     bind: bindings(for: t)
                 )
@@ -184,7 +187,7 @@ public actor SQLiteJournalStore: JournalStore {
 
 // MARK: - 私有：bind / decode
 
-private let tradeColumns = "id, trade_reference, instrument_id, direction, offset_flag, price, volume, commission, timestamp, source"
+private let tradeColumns = "id, trade_reference, instrument_id, direction, offset_flag, price, volume, commission, timestamp, source, setup"
 private let journalColumns = "id, trade_ids, title, reason, emotion, deviation, lesson, tags, created_at, updated_at"
 
 private func bindings(for t: Trade) -> [SQLiteValue] {
@@ -198,7 +201,8 @@ private func bindings(for t: Trade) -> [SQLiteValue] {
         .integer(Int64(t.volume)),
         .text(decimalString(t.commission)),
         .integer(toMs(t.timestamp)),
-        .text(t.source.rawValue)
+        .text(t.source.rawValue),
+        t.setup.map { .text($0) } ?? .null   // v15.98 · setup 可空 · nil → SQL NULL
     ]
 }
 
@@ -213,7 +217,8 @@ private func decodeTrade(from stmt: SQLiteStatement) -> Trade {
         volume: stmt.int(at: 6),
         commission: parseDecimal(stmt.string(at: 7)),
         timestamp: fromMs(stmt.int64(at: 8)),
-        source: TradeSource(rawValue: stmt.string(at: 9) ?? "") ?? .manual
+        source: TradeSource(rawValue: stmt.string(at: 9) ?? "") ?? .manual,
+        setup: stmt.string(at: 10)
     )
 }
 

@@ -31,6 +31,10 @@ struct ReviewWindow: View {
     /// v15.23 batch203 · 合约 filter（与 dateFilter 互补 · 自动从 allPositions 列举）
     @State private var filterInstrument: String? = nil
 
+    /// v15.99 · 复盘 v2 · 策略 setup filter（与 instrument filter 互补 · 自动从 allPositions.setup 列举）
+    /// nil = 全部 · String = 指定 setup（含 unlabeledSetupKey 显式选未标）
+    @State private var filterSetup: String? = nil
+
     /// v15.23 batch205 · 跨窗口跳主图
     @Environment(\.openWindow) private var openWindow
 
@@ -81,6 +85,15 @@ struct ReviewWindow: View {
                            "闭合 \(s.closedPositions.count) 笔 · 总 PnL ¥\(signedDecimal(s.monthlyPnL.totalPnL))")
             }
         }
+        // v15.99 · 复盘 v2 · 策略 filter 切换 → 重算 + toast
+        .onChange(of: filterSetup) { _ in
+            recomputeSummary()
+            if let s = summary {
+                let label = filterSetup ?? "全部策略"
+                Toast.info("策略 filter：\(label)",
+                           "闭合 \(s.closedPositions.count) 笔 · 总 PnL ¥\(signedDecimal(s.monthlyPnL.totalPnL))")
+            }
+        }
         .sheet(item: $zoomedCard) { card in
             zoomedCardView(card)
         }
@@ -103,7 +116,7 @@ struct ReviewWindow: View {
             ("跳主图 button (batch205)", "选中合约后 → 在主图查看（chart.line 图标 · 仅 filter 时显示）"),
             ("Toast 反馈", "切换后顶部提示新区间数据量"),
         ]),
-        ("📊 12 张图（v15.23 闭环）", [
+        ("📊 13 张图（v15.99 闭环）", [
             ("月度盈亏", "按月聚合 · 总 PnL 趋势"),
             ("分布直方", "PnL 桶 · 盈/亏笔数对比"),
             ("胜率曲线", "累积胜率 · 终值"),
@@ -116,6 +129,7 @@ struct ReviewWindow: View {
             ("心理标签", "EmotionAutoTagger 6 类"),
             ("日历热力图（v15.23 第 11）", "每日盈亏 · 周历网格"),
             ("时长×盈亏（v15.23 第 12）", "散点图 · 多绿空蓝"),
+            ("策略矩阵（v15.99 第 13）", "setup 标签 group by · 个性化策略盈亏归因 · 含 (未标) 桶"),
         ]),
         ("🔍 全屏放大", [
             ("点击 chartCard", "全屏放大查看（trader 专注分析）"),
@@ -126,7 +140,7 @@ struct ReviewWindow: View {
         ("📝 报告导出（v15.23 batch196）", [
             ("⌘E", "导出本月 markdown 月报"),
             ("⌘⌥E", "导出最近 7 天周报（与月报互补 · trader 周复盘节奏）"),
-            ("⌘⇧E", "导出全部 12 张 chartCard PNG 到目录"),
+            ("⌘⇧E", "导出全部 13 张 chartCard PNG 到目录"),
         ]),
     ]
 
@@ -242,6 +256,14 @@ struct ReviewWindow: View {
         if let inst = filterInstrument {
             filtered = filtered.filter { $0.instrumentID == inst }
         }
+        if let setup = filterSetup {
+            // unlabeledSetupKey 命中 nil/空 setup · 其它命中具名 setup（v15.99 · 复盘 v2）
+            if setup == ReviewAnalytics.unlabeledSetupKey {
+                filtered = filtered.filter { ($0.setup ?? "").isEmpty }
+            } else {
+                filtered = filtered.filter { $0.setup == setup }
+            }
+        }
         summary = ReviewSummary(
             tradeCount: totalTradeCount,
             closedPositions: filtered,
@@ -258,7 +280,8 @@ struct ReviewWindow: View {
             profitability: ReviewAnalytics.profitabilityMetrics(from: filtered),
             streakRunPoints: Self.computeStreakRunPoints(from: filtered),
             psychTagCounts: Self.computePsychTagCounts(from: filtered),
-            dailyPnL: ReviewAnalytics.dailyPnL(from: filtered)
+            dailyPnL: ReviewAnalytics.dailyPnL(from: filtered),
+            setupMatrix: ReviewAnalytics.setupMatrix(from: filtered)
         )
     }
 
@@ -338,6 +361,10 @@ struct ReviewWindow: View {
             .init(title: L("时长 × 盈亏"),
                   subtitle: "Scatter · \(s.closedPositions.count) 笔 · 多空区分",
                   content: AnyView(holdingPnLScatter(s.closedPositions))),
+            // v15.99 · 复盘 v2 · 第 13 图 · 策略矩阵（setup 标签聚合 · trader 个性化盈亏归因）
+            .init(title: L("策略矩阵"),
+                  subtitle: "SetupMatrix · \(s.setupMatrix.cells.count) 类 · 含 \"(未标)\" 桶",
+                  content: AnyView(setupMatrixView(s.setupMatrix))),
         ]
     }
 
@@ -385,6 +412,33 @@ struct ReviewWindow: View {
                 }
                 .frame(width: 130)
                 .tooltip("按合约筛选复盘 · 与区间 filter 互补 · 自动从 closed positions 列举")
+
+                // v15.99 · 复盘 v2 · 策略 setup Menu（自动从 allPositions.setup 列举 · 含未标桶）
+                let allSetups: [String] = {
+                    var keys = Set<String>()
+                    var hasUnlabeled = false
+                    for p in allPositions {
+                        if let s = p.setup, !s.isEmpty { keys.insert(s) } else { hasUnlabeled = true }
+                    }
+                    var sorted = keys.sorted()
+                    if hasUnlabeled { sorted.append(ReviewAnalytics.unlabeledSetupKey) }
+                    return sorted
+                }()
+                Menu(filterSetup ?? "全部策略") {
+                    Button("\(filterSetup == nil ? "✓ " : "")全部策略") { filterSetup = nil }
+                    if !allSetups.isEmpty { Divider() }
+                    ForEach(allSetups, id: \.self) { setup in
+                        let isOn = filterSetup == setup
+                        let n = allPositions.filter {
+                            setup == ReviewAnalytics.unlabeledSetupKey
+                                ? ($0.setup ?? "").isEmpty
+                                : $0.setup == setup
+                        }.count
+                        Button("\(isOn ? "✓ " : "")\(setup) · \(n)") { filterSetup = setup }
+                    }
+                }
+                .frame(width: 130)
+                .tooltip("按策略 setup 标签筛选 · 与合约/区间互补 · 自动从持仓列举（v15.99）")
 
                 // v15.23 batch205 · 当前合约 filter 时 · 加跳主图 button（trader 看绩效后想去图上验证）
                 if let inst = filterInstrument {
@@ -440,7 +494,7 @@ struct ReviewWindow: View {
                     .tooltip("生成最近 7 天 Markdown 周报告（⌘⌥E · trader 周复盘节奏）")
                     .keyboardShortcut("e", modifiers: [.command, .option])
                 Button("导出全部图…") { exportAllChartCards(s) }
-                    .tooltip("一键导出全部 12 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v15.23 加日历热力 + 时长散点）")
+                    .tooltip("一键导出全部 13 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v15.99 加策略矩阵）")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 // v15.21 batch114 · ⌘R 重新加载复盘数据（trader 实时数据更新或纠错重算）
                 Button {
@@ -474,7 +528,7 @@ struct ReviewWindow: View {
         dateFmt.dateFormat = "yyyyMMdd_HHmm"
         let timestamp = dateFmt.string(from: Date())
 
-        // 12 张图 · 与 content() 内 chartCard 顺序一致（v15.23 batch48-49 加日历热力 + 时长散点）
+        // 13 张图 · 与 content() 内 chartCard 顺序一致（v15.99 加策略矩阵）
         let cards: [(title: String, view: AnyView)] = [
             ("月度盈亏", AnyView(monthlyPnLChart(s.monthlyPnL))),
             ("分布直方", AnyView(pnlDistributionChart(s.pnlDistribution))),
@@ -488,6 +542,7 @@ struct ReviewWindow: View {
             ("心理风险标签", AnyView(psychTagsChart(s.psychTagCounts))),
             ("日历热力图", AnyView(dailyPnLHeatmap(s.dailyPnL))),
             ("时长×盈亏", AnyView(holdingPnLScatter(s.closedPositions))),
+            ("策略矩阵", AnyView(setupMatrixView(s.setupMatrix))),   // v15.99
         ]
 
         var failedCount = 0
@@ -1100,6 +1155,50 @@ struct ReviewWindow: View {
         }
     }
 
+    /// v15.99 · 复盘 v2 · 策略矩阵简表（setup / 笔数 / 胜率 / PnL）· 与 instrumentMatrixView 同模式
+    /// "(未标)" 桶用半透明 + 字体灰显 · 提示 trader 补 setup
+    private func setupMatrixView(_ data: SetupMatrix) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("策略").frame(maxWidth: .infinity, alignment: .leading)
+                Text("笔数").frame(width: 36, alignment: .trailing)
+                Text("胜率").frame(width: 44, alignment: .trailing)
+                Text("PnL").frame(width: 60, alignment: .trailing)
+            }
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundColor(.secondary)
+            .padding(.bottom, 4)
+            Divider()
+            if data.cells.isEmpty {
+                Text("无数据 · trader 给 Trade 打 setup 标签即可 group by")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .padding(.top, 12)
+            } else {
+                VStack(spacing: 2) {
+                    ForEach(data.cells.prefix(8), id: \.self) { cell in
+                        let isUnlabeled = cell.setup == ReviewAnalytics.unlabeledSetupKey
+                        HStack(spacing: 8) {
+                            Text(cell.setup)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .foregroundColor(isUnlabeled ? .secondary : .primary)
+                            Text("\(cell.tradeCount)")
+                                .frame(width: 36, alignment: .trailing)
+                            Text(String(format: "%.0f%%", cell.winRate * 100))
+                                .frame(width: 44, alignment: .trailing)
+                            Text(Self.formatYuan(Self.toDouble(cell.totalPnL)))
+                                .frame(width: 60, alignment: .trailing)
+                                .foregroundColor(Self.pnlColor(cell.totalPnL))
+                        }
+                        .font(.system(size: 11, design: .monospaced))
+                        .opacity(isUnlabeled ? 0.65 : 1)
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
+
     /// 盈亏比 · 左侧双柱（平均盈红 / 平均亏绿）+ 右侧 ratio 大字
     /// ratio 红绿语义与 PnL 涨红跌绿反向：≥1 盈利占优红 · <1 亏损占优绿
     private func profitLossRatioView(_ data: ProfitLossRatio) -> some View {
@@ -1237,6 +1336,8 @@ private struct ReviewSummary {
     let psychTagCounts: [(tag: EmotionAutoTagger.Tag, count: Int)]
     /// v15.23 batch48 · 第 11 图 · 日历盈亏热力图
     let dailyPnL: DailyPnL
+    /// v15.99 · 第 13 图 · 策略矩阵（trader 个性化 setup 标签聚合）
+    let setupMatrix: SetupMatrix
 }
 
 // MARK: - Mock Trades 生成器（v1 演示 · M5 替换为 JournalStore 真数据）
@@ -1244,6 +1345,7 @@ private struct ReviewSummary {
 enum MockReviewTrades {
 
     /// 4 合约 × pairCount 对开-平 trades · 60% 盈利率 · 6 月跨度 · 4 时段轮播
+    /// v15.99 · 复盘 v2 · 撒 5 类 setup 标签（含部分未标） · trader 看 SetupMatrix 聚合差异
     /// SeededRNG 让同一 seed 跑多次结果一致（演示稳定）
     static func generate(pairCount: Int, seed: UInt64 = 42) -> [Trade] {
         let symbols: [(id: String, base: Decimal, swing: Decimal)] = [
@@ -1253,6 +1355,8 @@ enum MockReviewTrades {
             ("CU0", Decimal(72500), Decimal(800)),
         ]
         let openHours = [9, 13, 21, 1]   // 早 / 午 / 夜 / 凌晨
+        // v15.99 · 5 类 setup（覆盖典型 trader 标签）+ nil（未标 · 让 trader 感知补标行为）
+        let setups: [String?] = ["突破", "回踩", "背离", "趋势顺势", "区间反转", nil]
         var rng = SeededRNG(seed: seed)
         let now = Date()
         var trades: [Trade] = []
@@ -1279,6 +1383,8 @@ enum MockReviewTrades {
             let volume = Int.random(in: 1...3, using: &rng)
             let commission = Decimal(volume) * Decimal(5)
 
+            // v15.99 · setup 按 RNG 取 · nil 透传 unlabeled 桶（约 1/6 未标 · 演示矩阵覆盖）
+            let setup = setups[Int.random(in: 0..<setups.count, using: &rng)]
             trades.append(Trade(
                 tradeReference: "MOCK-O-\(i)",
                 instrumentID: sym.id,
@@ -1288,7 +1394,8 @@ enum MockReviewTrades {
                 volume: volume,
                 commission: commission,
                 timestamp: openTime,
-                source: .manual
+                source: .manual,
+                setup: setup
             ))
             trades.append(Trade(
                 tradeReference: "MOCK-C-\(i)",

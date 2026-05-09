@@ -164,6 +164,33 @@ public struct InstrumentMatrix: Sendable, Codable, Equatable {
     }
 }
 
+// MARK: - 4b. 策略矩阵（按 setup 标签聚合 · v15.99 · 复盘 v2）
+
+public struct SetupMatrixCell: Sendable, Codable, Equatable, Hashable {
+    /// nil setup 用 "(未标)" 占位 · 让 trader 看到未标比例驱动补标行为
+    public let setup: String
+    public let tradeCount: Int
+    public let totalPnL: Decimal
+    public let winCount: Int
+    public let winRate: Double      // [0, 1]
+
+    public init(setup: String, tradeCount: Int, totalPnL: Decimal, winCount: Int, winRate: Double) {
+        self.setup = setup
+        self.tradeCount = tradeCount
+        self.totalPnL = totalPnL
+        self.winCount = winCount
+        self.winRate = winRate
+    }
+}
+
+public struct SetupMatrix: Sendable, Codable, Equatable {
+    public let cells: [SetupMatrixCell]   // 按 totalPnL 降序
+
+    public init(cells: [SetupMatrixCell]) {
+        self.cells = cells
+    }
+}
+
 // MARK: - 5. 持仓时间统计
 
 public struct HoldingDurationStats: Sendable, Codable, Equatable {

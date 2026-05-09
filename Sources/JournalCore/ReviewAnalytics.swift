@@ -194,6 +194,33 @@ public enum ReviewAnalytics {
         return InstrumentMatrix(cells: cells)
     }
 
+    // MARK: - 4b. 策略矩阵（v15.99 · 复盘 v2 · group by setup · 与 instrumentMatrix 同模式）
+
+    /// nil/空 setup 归到 "(未标)" 桶 · 让 trader 看到未标占比驱动补标行为
+    public static let unlabeledSetupKey = "(未标)"
+
+    public static func setupMatrix(from positions: [ClosedPosition]) -> SetupMatrix {
+        var bySetup: [String: (count: Int, total: Decimal, wins: Int)] = [:]
+        for position in positions {
+            let key: String = {
+                guard let s = position.setup, !s.isEmpty else { return unlabeledSetupKey }
+                return s
+            }()
+            var t = bySetup[key] ?? (0, Decimal(0), 0)
+            t.count += 1
+            t.total += position.realizedPnL
+            if position.isWin { t.wins += 1 }
+            bySetup[key] = t
+        }
+        let cells = bySetup
+            .map { (key, t) -> SetupMatrixCell in
+                let rate = t.count > 0 ? Double(t.wins) / Double(t.count) : 0
+                return SetupMatrixCell(setup: key, tradeCount: t.count, totalPnL: t.total, winCount: t.wins, winRate: rate)
+            }
+            .sorted { $0.totalPnL > $1.totalPnL }
+        return SetupMatrix(cells: cells)
+    }
+
     // MARK: - 5. 持仓时间统计
 
     public static func holdingDurationStats(from positions: [ClosedPosition]) -> HoldingDurationStats {

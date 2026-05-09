@@ -12,7 +12,7 @@ public enum TradeCSVExporter {
 
     public static let header = [
         "成交时间", "合约", "方向", "开平", "成交价", "手数",
-        "手续费", "来源"
+        "手续费", "来源", "策略"
     ]
 
     public static func export(_ trades: [Trade], timeZone: TimeZone? = nil) -> String {
@@ -33,7 +33,8 @@ public enum TradeCSVExporter {
                 NSDecimalNumber(decimal: t.price).stringValue,
                 String(t.volume),
                 NSDecimalNumber(decimal: t.commission).stringValue,
-                t.source.rawValue
+                t.source.rawValue,
+                t.setup ?? ""   // v15.98 · 复盘 v2 · 策略标签（nil/空 trader 未标）
             ]
             lines.append(row.map(escape).joined(separator: ","))
         }

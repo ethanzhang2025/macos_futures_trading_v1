@@ -21,6 +21,8 @@ struct ComboHUDInfo: Equatable {
     let totalSeverity: Double           // combo 严重度（数量加权）
     let avgSeverity: Double
     let kinds: [AnomalyKind]            // 按 AnomalyKind.allCases 顺序排列（与 UI tag 一致）
+    let rank: Int                       // 全市场 combo 位次（1-based · totalSeverity desc）
+    let totalCombos: Int                // 全市场 combo 总数
 
     /// 主标题：异常 N/5 · 类型缩写 · combo 严重度
     /// 例："异常 4/5 · 价·持·资·背 · combo 72"
@@ -28,6 +30,19 @@ struct ComboHUDInfo: Equatable {
         let abbr = kinds.map(kindAbbreviation).joined(separator: "·")
         return String(format: "异常 %d/5 · %@ · combo %d", kindCount, abbr, Int(totalSeverity))
     }
+
+    /// 副标题：位次（trader 一眼知道当前合约在全市场 combo 中的相对位置）
+    /// rank=1 / total=8 → "Top 1 / 全市场 8 combo"
+    /// rank=3 / total=8 → "位列 3 / 全市场 8 combo"
+    var subline: String {
+        if rank == 1 {
+            return String(format: "Top 1 / 全市场 %d combo", totalCombos)
+        }
+        return String(format: "位列 %d / 全市场 %d combo", rank, totalCombos)
+    }
+
+    /// 是否为全市场 combo 之首
+    var isTop: Bool { rank == 1 }
 
     /// 颜色提示：5 类满命中红 · 4 类橙 · 3 类黄
     var severityLevel: SeverityLevel {
@@ -57,7 +72,8 @@ struct ComboHUDInfo: Equatable {
         guard let me = SectorHUDInfo.matchInstrument(instrumentID) else { return nil }
         let result = AnomalyDetector.scan(instruments: SectorPresets.all)
         let combos = ComboAnomalyAggregator.aggregate(events: result.events, minKinds: minKinds)
-        guard let combo = combos.first(where: { $0.instrumentID == me.id }) else { return nil }
+        guard let idx = combos.firstIndex(where: { $0.instrumentID == me.id }) else { return nil }
+        let combo = combos[idx]
         let orderedKinds = AnomalyKind.allCases.filter { combo.kinds.contains($0) }
         return ComboHUDInfo(
             instrumentID: combo.instrumentID,
@@ -65,7 +81,9 @@ struct ComboHUDInfo: Equatable {
             kindCount: combo.kindCount,
             totalSeverity: combo.totalSeverity,
             avgSeverity: combo.avgSeverity,
-            kinds: orderedKinds
+            kinds: orderedKinds,
+            rank: idx + 1,
+            totalCombos: combos.count
         )
     }
 }

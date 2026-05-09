@@ -4325,9 +4325,13 @@ struct ChartContentView: View {
                 }
             }
             // v15.73 组合异常（≥3 类同时命中 · 不命中时整行隐藏避免冗余）
+            // v15.74 加位次副标题（trader 一眼看到全市场相对位置）
             if hudFields.fields.contains(.comboAnomaly), let combo = comboAnomalyInfo {
                 Text(combo.headline)
                     .foregroundColor(comboHUDColor(combo.severityLevel))
+                Text(combo.subline)
+                    .foregroundColor(combo.isTop ? chartTheme.candleBear : chartTheme.textSecondary)
+                    .font(.system(size: 10, design: .monospaced))
             }
             // 视觉迭代第 4 项：调试信息（视野/帧时）· v15.14 用户可关 · 默认开
             if hudFields.fields.contains(.debug) {

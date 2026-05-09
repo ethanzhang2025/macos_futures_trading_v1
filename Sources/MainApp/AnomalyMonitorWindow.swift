@@ -22,6 +22,7 @@ struct AnomalyMonitorWindow: View {
     @State private var sectorFilter: SectorFilter = .all
     @State private var viewMode: ViewMode = .list
     @State private var comboMinKinds: Int = 3  // v15.70 · 组合异常 minKinds 阈值
+    @State private var searchText: String = ""  // v15.79 · 列表/combo 视图搜索（按品种ID/名）
     @Environment(\.openWindow) private var openWindow
 
     enum SectorFilter: Hashable, Identifiable {
@@ -68,9 +69,22 @@ struct AnomalyMonitorWindow: View {
 
     private var filteredEvents: [AnomalyEvent] {
         let all = detectionResult.events
+        let scoped: [AnomalyEvent]
         switch sectorFilter {
-        case .all: return all
-        case .sector(let s): return all.filter { $0.sector == s }
+        case .all: scoped = all
+        case .sector(let s): scoped = all.filter { $0.sector == s }
+        }
+        return applySearch(scoped) { ($0.instrumentID, $0.instrumentName) }
+    }
+
+    /// v15.79 · 通用搜索过滤（按品种 ID 或名称匹配 · 大小写不敏感）
+    private func applySearch<T>(_ items: [T], extractor: (T) -> (id: String, name: String)) -> [T] {
+        let q = searchText.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return items }
+        let qUpper = q.uppercased()
+        return items.filter { item in
+            let (id, name) = extractor(item)
+            return id.uppercased().contains(qUpper) || name.contains(q)
         }
     }
 
@@ -198,6 +212,24 @@ struct AnomalyMonitorWindow: View {
                 }
                 .frame(width: 130)
                 .labelsHidden()
+            }
+
+            // v15.79 · 搜索框（按品种ID/名称过滤 · list/combo 视图共用）
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary).font(.caption)
+                TextField("搜索品种 ID 或名称（如 RB / 螺纹）", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 240)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             Spacer()
@@ -927,10 +959,12 @@ struct AnomalyMonitorWindow: View {
             case .sector(let s): return allEvents.filter { $0.sector == s }
             }
         }()
-        let combos = ComboAnomalyAggregator.aggregate(events: scopedEvents, minKinds: comboMinKinds)
-        let count5 = combos.filter { $0.kindCount == 5 }.count
-        let count4 = combos.filter { $0.kindCount == 4 }.count
-        let count3 = combos.filter { $0.kindCount == 3 }.count
+        let allCombos = ComboAnomalyAggregator.aggregate(events: scopedEvents, minKinds: comboMinKinds)
+        // v15.79 · 搜索过滤（按品种 ID/名）· stats 仍基于全集合（让 trader 看到搜索前后对比）
+        let combos = applySearch(allCombos) { ($0.instrumentID, $0.instrumentName) }
+        let count5 = allCombos.filter { $0.kindCount == 5 }.count
+        let count4 = allCombos.filter { $0.kindCount == 4 }.count
+        let count3 = allCombos.filter { $0.kindCount == 3 }.count
         // v15.72 · 30d 历史 by instrumentID（让 trader 看出 combo 是新出现还是常态）
         let historyMap: [String: InstrumentAnomalyHistory] = Dictionary(
             uniqueKeysWithValues: AnomalyHistoryGenerator.generate(days: 30).map { ($0.instrumentID, $0) }

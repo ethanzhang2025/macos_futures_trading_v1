@@ -26,6 +26,8 @@ struct TrainingHistoryPanel: View {
     @State private var filterPeriod: PeriodFilter = .all
     /// v15.23 batch136 · 排序键（默认日期降序 · 与原行为一致）
     @State private var sortKey: SortKey = .dateDesc
+    /// v16.26 · 场景名搜索（与形态/时段 filter 同时 AND · 大小写不敏感）
+    @State private var searchText: String = ""
 
     /// v15.23 batch136 · 排序枚举
     enum SortKey: String, CaseIterable {
@@ -208,6 +210,31 @@ struct TrainingHistoryPanel: View {
                     }
                 }
                 .tooltip("按形态筛选历史训练（看自己在哪类行情成绩好/弱）")
+                // v16.26 · 场景名搜索框（与 filter Menu 同时 AND · trader 历史多时快速定位）
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    TextField("搜索场景名", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                        .frame(width: 120)
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Color.secondary.opacity(0.10))
+                .cornerRadius(4)
+                .tooltip("按场景名搜索（大小写不敏感 · 与形态/时段筛选同时 AND）")
                 Button(role: .destructive) {
                     showClearConfirm = true
                 } label: {
@@ -573,6 +600,13 @@ struct TrainingHistoryPanel: View {
         if let cutoff = filterPeriod.cutoff {
             filtered = filtered.filter { $0.startedAt >= cutoff }
         }
+        // v16.26 · 场景名搜索（大小写不敏感 · 含子串即命中）
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespaces)
+        if !trimmedSearch.isEmpty {
+            filtered = filtered.filter {
+                $0.scenarioName.localizedCaseInsensitiveContains(trimmedSearch)
+            }
+        }
         // v15.23 batch136 · 排序（recentSessions 已按日期降序 · 仅非默认时重排）
         switch sortKey {
         case .dateDesc:
@@ -588,7 +622,7 @@ struct TrainingHistoryPanel: View {
         case .pnlAsc:
             filtered.sort { $0.pnl < $1.pnl }
         }
-        let hasAnyFilter = filterPattern != nil || filterPeriod != .all
+        let hasAnyFilter = filterPattern != nil || filterPeriod != .all || !trimmedSearch.isEmpty
         return List {
             if filtered.isEmpty, hasAnyFilter {
                 HStack {
@@ -601,6 +635,7 @@ struct TrainingHistoryPanel: View {
                         Button("清空筛选") {
                             filterPattern = nil
                             filterPeriod = .all
+                            searchText = ""
                         }
                         .buttonStyle(.borderless)
                     }

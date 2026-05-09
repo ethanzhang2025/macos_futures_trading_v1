@@ -189,6 +189,70 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("## 五维细分"))
     }
 
+    // MARK: - v16.15 · 月报 / 周报训练 annex
+
+    @Test("v16.15 · generateMonthlyAnnex · 空 log → 提示文案 + 训练频率建议")
+    func annex_emptyLog() {
+        let md = TrainingMarkdownReport.generateMonthlyAnnex(
+            TrainingSessionLog(),
+            start: Date().addingTimeInterval(-86400 * 30),
+            end: Date()
+        )
+        #expect(md.contains("## 训练评分关联"))
+        #expect(md.contains("本区间无训练记录"))
+    }
+
+    @Test("v16.15 · generateMonthlyAnnex · 区间外 session 不计入")
+    func annex_outOfRange() {
+        var log = TrainingSessionLog()
+        let now = Date()
+        let oldDate = now.addingTimeInterval(-86400 * 60)   // 60 天前
+        log.addSession(TrainingSession(
+            startedAt: oldDate, endedAt: oldDate.addingTimeInterval(3600),
+            initialBalance: 100_000, finalBalance: 110_000,
+            scenarioPattern: .uptrend))
+        let md = TrainingMarkdownReport.generateMonthlyAnnex(
+            log,
+            start: now.addingTimeInterval(-86400 * 7),
+            end: now
+        )
+        #expect(md.contains("本区间无训练记录"))
+    }
+
+    @Test("v16.15 · generateMonthlyAnnex · 多 pattern 表格 + 弱项加练建议")
+    func annex_patternTable() {
+        var log = TrainingSessionLog()
+        let now = Date()
+        // uptrend × 2 (高分) + oscillation × 1 (低分)
+        for _ in 0..<2 {
+            log.addSession(TrainingSession(
+                startedAt: now.addingTimeInterval(-86400),
+                endedAt: now.addingTimeInterval(-86400 + 3600),
+                initialBalance: 100_000, finalBalance: 110_000,   // total = 100
+                scenarioPattern: .uptrend))
+        }
+        log.addSession(TrainingSession(
+            startedAt: now.addingTimeInterval(-86400 * 2),
+            endedAt: now.addingTimeInterval(-86400 * 2 + 3600),
+            initialBalance: 100_000, finalBalance: 95_000,   // total < 60
+            violations: [
+                DisciplineViolation(ruleID: UUID(), ruleKind: .stopLossPercent,
+                                    occurredAt: now, severity: .error, message: "x"),
+                DisciplineViolation(ruleID: UUID(), ruleKind: .stopLossPercent,
+                                    occurredAt: now, severity: .error, message: "y"),
+            ],
+            scenarioPattern: .oscillation))
+        let md = TrainingMarkdownReport.generateMonthlyAnnex(
+            log,
+            start: now.addingTimeInterval(-86400 * 7),
+            end: now
+        )
+        #expect(md.contains("📈 上升趋势"))
+        #expect(md.contains("〰️ 震荡"))
+        #expect(md.contains("🏆 强项"))   // uptrend 100 分
+        #expect(md.contains("薄弱"))      // oscillation < 60
+    }
+
     // MARK: - v15.23 batch197 · 周报
 
     @Test("batch197 · 周报标题为「训练周报」")

@@ -593,7 +593,14 @@ struct ReviewWindow: View {
         let stamp = fmt.string(from: Date())
         panel.nameFieldStringValue = "复盘周报_截至\(stamp).md"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let md = MonthlyReportGenerator.generateWeekly(positions: s.closedPositions)
+        var md = MonthlyReportGenerator.generateWeekly(positions: s.closedPositions)
+        // v16.15 · 拼接训练 annex（持久化 log 跨窗口共享）
+        let now = Date()
+        let weekStart = Calendar(identifier: .gregorian)
+            .date(byAdding: .day, value: -7, to: now) ?? now
+        md += "\n" + TrainingMarkdownReport.generateMonthlyAnnex(
+            TrainingLogPersistence.load(), start: weekStart, end: now
+        )
         do {
             try md.data(using: .utf8)?.write(to: url, options: .atomic)
             Toast.info("导出成功", "已生成最近 7 天周报到 \(url.lastPathComponent)。")
@@ -615,8 +622,16 @@ struct ReviewWindow: View {
         panel.allowedContentTypes = [.plainText]
         panel.nameFieldStringValue = String(format: "复盘报告_%04d-%02d.md", year, month)
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let md = MonthlyReportGenerator.generate(
+        var md = MonthlyReportGenerator.generate(
             positions: s.closedPositions, year: year, month: month
+        )
+        // v16.15 · 拼接训练 annex · 月份 [start, end) Asia/Shanghai
+        var comps = DateComponents()
+        comps.year = year; comps.month = month; comps.day = 1
+        let monthStart = cal.date(from: comps) ?? Date()
+        let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
+        md += "\n" + TrainingMarkdownReport.generateMonthlyAnnex(
+            TrainingLogPersistence.load(), start: monthStart, end: monthEnd
         )
         do {
             try md.data(using: .utf8)?.write(to: url, options: .atomic)

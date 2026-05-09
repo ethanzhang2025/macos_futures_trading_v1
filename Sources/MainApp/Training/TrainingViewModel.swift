@@ -24,7 +24,9 @@ final class TrainingViewModel: ObservableObject {
     // MARK: - 持久化状态（值类型 · 等后续接 viewState.v1）
 
     @Published var book: DisciplineBook = .defaultRecommended
-    @Published var log: TrainingSessionLog = TrainingSessionLog()
+    @Published var log: TrainingSessionLog = TrainingLogPersistence.load() {
+        didSet { TrainingLogPersistence.save(log) }
+    }
 
     // MARK: - 进行中 session
 

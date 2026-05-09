@@ -194,4 +194,63 @@ public enum TrainingMarkdownReport {
         f.timeZone = TimeZone(identifier: "Asia/Shanghai")
         return f.string(from: d)
     }
+
+    // MARK: - v16.15 · 月报 / 周报 训练 annex（与 ReviewWindow.MonthlyReportGenerator 拼接）
+
+    /// 训练 annex（区间内 · 用于复盘月报/周报追加）
+    /// - 输出含：区间训练总数 + 各 pattern 计数/均分/最佳 + 弱项加练建议
+    /// - 区间内 0 训练时返回提示文案 · 不返回空字符串（让 trader 知道 annex 触发但无数据）
+    public static func generateMonthlyAnnex(_ log: TrainingSessionLog,
+                                             start: Date,
+                                             end: Date) -> String {
+        let inRange = log.sessions.filter { $0.startedAt >= start && $0.startedAt < end }
+        var md = "## 训练评分关联（M5 模拟训练 · 区间内）\n\n"
+        guard !inRange.isEmpty else {
+            md += "_本区间无训练记录 · 建议每周 ≥ 3 次同形态训练 · 与实盘 setup 形成正反馈_\n\n"
+            return md
+        }
+        let scores = inRange.compactMap { log.score(for: $0.id)?.totalScore }
+        let avg = scores.isEmpty ? 0 : scores.reduce(0, +) / scores.count
+        let best = scores.max() ?? 0
+        md += "- 训练次数：**\(inRange.count)** · 平均 **\(avg)** 分 · 最佳 **\(best)** 分\n\n"
+
+        // 各 pattern 分布
+        struct Bucket { var count = 0; var totalScore = 0; var bestScore = 0 }
+        var byPattern: [TrainingScenarioPattern: Bucket] = [:]
+        for s in inRange {
+            guard let p = s.scenarioPattern,
+                  let total = log.score(for: s.id)?.totalScore else { continue }
+            var b = byPattern[p] ?? Bucket()
+            b.count += 1
+            b.totalScore += total
+            b.bestScore = max(b.bestScore, total)
+            byPattern[p] = b
+        }
+        if byPattern.isEmpty {
+            md += "_无 pattern 标注的训练（建议从训练面板的推荐场景启动 · 自动带 pattern）_\n\n"
+            return md
+        }
+        md += "| 形态 | 次数 | 平均分 | 最佳 | 建议 |\n|---|---|---|---|---|\n"
+        for pat in TrainingScenarioPattern.allCases {
+            guard let b = byPattern[pat], b.count > 0 else { continue }
+            let patAvg = b.totalScore / b.count
+            let advice: String
+            if patAvg < 60 {
+                advice = "⚠️ 薄弱 · 加练 ≥ 3 次"
+            } else if patAvg < 70 {
+                advice = "🟡 待巩固 · 复盘+1 次"
+            } else if patAvg < 85 {
+                advice = "🟢 良好"
+            } else {
+                advice = "🏆 强项"
+            }
+            md += "| \(pat.emoji) \(pat.displayName) | \(b.count) | \(patAvg) | \(b.bestScore) | \(advice) |\n"
+        }
+        md += "\n"
+        // 全局提示：均分 < 70 时给整体建议
+        if avg < 70 {
+            md += "_⚠️ 整体训练均分 \(avg) 分（< B 级）· 建议本月加大训练频率 · 重点攻克薄弱形态_\n\n"
+        }
+        return md
+    }
 }

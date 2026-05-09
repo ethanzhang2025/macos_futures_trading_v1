@@ -93,6 +93,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
         applyHighlight(to: tv)
         // v15.23 batch106 · 监听滚动 → 报当前可视行（minimap viewport 高亮用）
         context.coordinator.attachVisibleLinesObserver(scrollView: scrollView, textView: tv)
+        // v16.10 · hover popover · 替代 .toolTip 系统 1s 延迟 · 200ms 防抖立即显示函数签名
+        context.coordinator.attachHoverTracking(textView: tv)
         return scrollView
     }
 
@@ -155,6 +157,9 @@ public struct MaiLangCodeView: NSViewRepresentable {
             if let obs = visibleObserver {
                 NotificationCenter.default.removeObserver(obs)
             }
+            if let obs = hoverScrollObserver {
+                NotificationCenter.default.removeObserver(obs)
+            }
         }
 
         /// v15.23 batch106 · 订阅 NSScrollView contentView bounds 变化 → 报可视行（minimap viewport 同步）
@@ -179,6 +184,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
         public func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
+            // v16.10 · 文本变 → token 位置失效 · 立即隐藏 hover popover
+            hideHoverPopover()
             // 文本变更 → 双 binding 同步 + 重新高亮
             DispatchQueue.main.async {
                 self.parent.text = tv.string
@@ -373,6 +380,105 @@ public struct MaiLangCodeView: NSViewRepresentable {
             }
             return candidates
         }
+
+        // MARK: - v16.10 · hover popover（替代 .toolTip 系统 1s 延迟 · 200ms 防抖立即显示）
+
+        private var hoverPopover: NSPopover?
+        private var hoverDebounce: DispatchWorkItem?
+        private var lastHoveredTokenStart: Int = -1
+        private var hoverScrollObserver: NSObjectProtocol?
+
+        /// makeNSView 末尾调用 · 注册 NSTrackingArea + scroll 隐藏观察
+        func attachHoverTracking(textView: NSTextView) {
+            self.textView = textView
+            let area = NSTrackingArea(
+                rect: textView.bounds,
+                options: [.mouseMoved, .mouseEnteredAndExited, .inVisibleRect, .activeInKeyWindow],
+                owner: self,
+                userInfo: nil
+            )
+            textView.addTrackingArea(area)
+            // window 必须接受 mouseMoved 事件 · 异步等 textView 进入 window
+            DispatchQueue.main.async { [weak textView] in
+                textView?.window?.acceptsMouseMovedEvents = true
+            }
+            // 滚动时立即隐藏 popover（位置已偏）
+            if let scroll = textView.enclosingScrollView {
+                hoverScrollObserver = NotificationCenter.default.addObserver(
+                    forName: NSView.boundsDidChangeNotification,
+                    object: scroll.contentView, queue: .main
+                ) { [weak self] _ in
+                    self?.hideHoverPopover()
+                }
+            }
+        }
+
+        @objc public func mouseEntered(with event: NSEvent) { handleHover(event) }
+        @objc public func mouseMoved(with event: NSEvent)   { handleHover(event) }
+        @objc public func mouseExited(with event: NSEvent)  { hideHoverPopover() }
+
+        private func handleHover(_ event: NSEvent) {
+            guard let tv = textView,
+                  let lm = tv.layoutManager,
+                  let tc = tv.textContainer else { return }
+            let p = tv.convert(event.locationInWindow, from: nil)
+            let pInContainer = NSPoint(x: p.x - tv.textContainerOrigin.x,
+                                       y: p.y - tv.textContainerOrigin.y)
+            let glyphIndex = lm.glyphIndex(for: pInContainer, in: tc)
+            let charIndex = lm.characterIndexForGlyph(at: glyphIndex)
+            let nsString = tv.string as NSString
+            guard charIndex < nsString.length else {
+                hideHoverPopover()
+                return
+            }
+            let tokens = MaiLangSyntaxHighlighter.tokenize(tv.string)
+            guard let token = tokens.first(where: { NSLocationInRange(charIndex, $0.range) }),
+                  token.kind == .builtinFunc,
+                  let sig = MaiLangFunctionSignatures.all[token.text.uppercased()]
+            else {
+                hideHoverPopover()
+                return
+            }
+            // 同 token 已弹 / 已排队 → 不动作（避免每次 mouseMoved 都重排）
+            if token.range.location == lastHoveredTokenStart,
+               (hoverPopover != nil || hoverDebounce != nil) {
+                return
+            }
+            lastHoveredTokenStart = token.range.location
+
+            let glyphRange = lm.glyphRange(forCharacterRange: token.range, actualCharacterRange: nil)
+            let rect = lm.boundingRect(forGlyphRange: glyphRange, in: tc)
+            let anchorRect = rect.offsetBy(dx: tv.textContainerOrigin.x, dy: tv.textContainerOrigin.y)
+            scheduleShowHoverPopover(in: tv, anchorRect: anchorRect, signature: sig)
+        }
+
+        private func scheduleShowHoverPopover(in tv: NSTextView,
+                                               anchorRect: NSRect,
+                                               signature: MaiLangFunctionSignature) {
+            hoverDebounce?.cancel()
+            let work = DispatchWorkItem { [weak self, weak tv] in
+                guard let self = self, let tv = tv else { return }
+                let popover = self.hoverPopover ?? NSPopover()
+                popover.behavior = .transient
+                popover.animates = false
+                popover.contentViewController = NSHostingController(
+                    rootView: MaiLangSignaturePopoverContent(signature: signature)
+                )
+                popover.show(relativeTo: anchorRect, of: tv, preferredEdge: .maxY)
+                self.hoverPopover = popover
+                self.hoverDebounce = nil
+            }
+            hoverDebounce = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.20, execute: work)
+        }
+
+        func hideHoverPopover() {
+            hoverDebounce?.cancel()
+            hoverDebounce = nil
+            hoverPopover?.close()
+            hoverPopover = nil
+            lastHoveredTokenStart = -1
+        }
     }
 
     // MARK: - 主题 + 高亮
@@ -410,13 +516,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
             if safeRange.length > 0 {
                 storage.addAttribute(.foregroundColor, value: color, range: safeRange)
             }
-            // v15.23 batch42 · hover popover · 已知函数 token 加 toolTip 属性
-            // NSTextView 内置悬停提示（系统 ~1s 延迟自动显示）· 不需 NSTrackingArea
-            if t.kind == .builtinFunc, safeRange.length > 0,
-               let sig = MaiLangFunctionSignatures.all[t.text.uppercased()] {
-                let tip = "\(sig.formatted)\n\n📂 \(sig.category.rawValue)\n📝 \(sig.summary)"
-                storage.addAttribute(.toolTip, value: tip as NSString, range: safeRange)
-            }
+            // v16.10 · 已知函数 hover 改走 InstantPopover（NSTrackingArea + NSPopover 200ms 防抖）
+            // 替代 v15.23 batch42 的 .toolTip 属性（系统 ~1s 延迟）· 见 Coordinator.handleMouseMoved
         }
         // v15.22 batch21 · 当前光标所在行浅背景高亮（在错误标注之前 · 错误优先覆盖）
         let cursorLoc = tv.selectedRange().location
@@ -617,6 +718,30 @@ public struct MaiLangCodeView: NSViewRepresentable {
         guard location < length else { return nil }
         let len = max(1, marker.length)
         return NSRange(location: location, length: min(len, length - location))
+    }
+}
+
+// MARK: - v16.10 · hover popover 内容视图（NSPopover 持有 · NSHostingController 包装）
+
+private struct MaiLangSignaturePopoverContent: View {
+    let signature: MaiLangFunctionSignature
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(signature.formatted)
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            HStack(spacing: 4) {
+                Text("📂")
+                    .font(.system(size: 10))
+                Text(signature.category.rawValue)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+            Text(signature.summary)
+                .font(.system(size: 11))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(minWidth: 220, idealWidth: 280, maxWidth: 360, alignment: .leading)
     }
 }
 #endif

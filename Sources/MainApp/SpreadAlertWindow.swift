@@ -16,12 +16,19 @@ import AppKit
 import Foundation
 import Shared
 import DataCore
+import AlertCore
 
 struct SpreadAlertWindow: View {
 
     @State private var thresholds: SpreadAlertThresholds = .default
     @State private var directionFilter: DirectionFilter = .all
+    /// v15.57 · "已加预警" toast · 一次显示一条 · 2.5s 自动消失
+    @State private var addedAlertToast: String? = nil
+    @State private var toastDismissTask: Task<Void, Never>? = nil
+    /// v15.57 · 已加进 evaluator 的 spreadID 集合 · 按钮显 ✓ 替代 +
+    @State private var addedSpreadIDs: Set<String> = []
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.alertEvaluator) private var alertEvaluator
 
     enum DirectionFilter: String, CaseIterable, Identifiable {
         case all
@@ -52,27 +59,108 @@ struct SpreadAlertWindow: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            Divider()
-            thresholdsBar
-            Divider()
-            statsBar
-            Divider()
-            if filteredEvents.isEmpty {
-                emptyHint
-            } else {
-                listHeader
-                ScrollView {
-                    LazyVStack(spacing: 1) {
-                        ForEach(filteredEvents) { evt in eventRow(evt) }
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                toolbar
+                Divider()
+                thresholdsBar
+                Divider()
+                statsBar
+                Divider()
+                if filteredEvents.isEmpty {
+                    emptyHint
+                } else {
+                    listHeader
+                    ScrollView {
+                        LazyVStack(spacing: 1) {
+                            ForEach(filteredEvents) { evt in eventRow(evt) }
+                        }
                     }
                 }
+                Divider()
+                legendBar
             }
-            Divider()
-            legendBar
+            // v15.57 · "已加 ⌘B" toast · 顶部居中 2.5s 自动消失
+            if let msg = addedAlertToast {
+                Text(msg)
+                    .font(.callout)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Color.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 8))
+                    .foregroundColor(.white)
+                    .padding(.top, 18)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
+        .animation(.easeInOut(duration: 0.18), value: addedAlertToast)
         .frame(minWidth: 1180, minHeight: 720)
+        .task {
+            // 启动时同步已存在的 spreadDeviation alerts → 按钮显 ✓
+            await refreshAddedSpreadIDs()
+        }
+    }
+
+    // MARK: - 一键加预警
+
+    private func handleAddAlert(_ evt: SpreadAlertEvent) {
+        guard let evaluator = alertEvaluator else {
+            showToast("⚠️ alertEvaluator 未配置（开发期 · M5 启动前）")
+            return
+        }
+        let alert = makeAlert(from: evt)
+        Task {
+            await evaluator.addAlert(alert)
+            addedSpreadIDs.insert(evt.spreadID)
+            showToast("已加到 ⌘B 预警面板：\(evt.spreadName)")
+        }
+    }
+
+    /// SpreadAlertEvent → AlertCore.Alert 转换
+    /// instrumentID 用 leg1（跨品种）/ nearMonthID（跨期）方便用户在 ⌘B 看到关联合约
+    /// condition 用 .spreadDeviation placeholder（v1 不触发 · 仅持久化展示）
+    private func makeAlert(from evt: SpreadAlertEvent) -> Alert {
+        let instrumentID: String = {
+            switch evt.kind {
+            case .crossInstrument:
+                return SpreadPresets.byID[evt.spreadID]?.leg1.instrumentID ?? evt.spreadID
+            case .calendar:
+                return CalendarSpreadPresets.byID[evt.spreadID]?.nearMonthID ?? evt.spreadID
+            }
+        }()
+        let kindLabel = evt.kind == .crossInstrument ? "跨品种" : "跨期"
+        return Alert(
+            name: "[价差·\(kindLabel)] \(evt.spreadName) \(evt.direction.displayName)",
+            instrumentID: instrumentID,
+            condition: .spreadDeviation(
+                spreadID: evt.spreadID,
+                isCalendar: evt.kind == .calendar,
+                zThreshold: Decimal(thresholds.zThreshold)
+            ),
+            channels: [.inApp, .systemNotice],
+            cooldownSeconds: 600
+        )
+    }
+
+    private func showToast(_ message: String) {
+        addedAlertToast = message
+        toastDismissTask?.cancel()
+        toastDismissTask = Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            if !Task.isCancelled {
+                await MainActor.run { addedAlertToast = nil }
+            }
+        }
+    }
+
+    private func refreshAddedSpreadIDs() async {
+        guard let evaluator = alertEvaluator else { return }
+        let all = await evaluator.allAlerts()
+        var ids: Set<String> = []
+        for a in all {
+            if case let .spreadDeviation(spreadID, _, _) = a.condition {
+                ids.insert(spreadID)
+            }
+        }
+        addedSpreadIDs = ids
     }
 
     // MARK: - Toolbar
@@ -193,6 +281,8 @@ struct SpreadAlertWindow: View {
             Text("±2σ 区间").font(.caption.bold()).foregroundColor(.secondary).frame(width: 130, alignment: .trailing)
             Spacer().frame(width: 14)
             Text("策略建议").font(.caption.bold()).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+            // v15.57 · 行尾 + 按钮列
+            Text("⌘B").font(.caption.bold()).foregroundColor(.secondary).frame(width: 64, alignment: .center)
         }
         .padding(.horizontal, 14).padding(.vertical, 6)
         .background(Color.secondary.opacity(0.06))
@@ -217,13 +307,9 @@ struct SpreadAlertWindow: View {
         let dirColor: Color = evt.direction == .upperBreached ? ChartTheme.chartLoss : ChartTheme.chartProfit
         let kindColor: Color = evt.kind == .crossInstrument ? .orange : .cyan
         let kindLabel: String = evt.kind == .crossInstrument ? "跨品种" : "跨期"
-        return Button {
-            // 跳到对应的套利窗口（跨品种 → ⌘⌥S · 跨期 → ⌘⌥X）
-            switch evt.kind {
-            case .crossInstrument: openWindow(id: "spread")
-            case .calendar:        openWindow(id: "calendarSpread")
-            }
-        } label: {
+        let isAdded = addedSpreadIDs.contains(evt.spreadID)
+        return HStack(spacing: 0) {
+            // 信息区（点击切对应套利窗口）
             HStack(spacing: 0) {
                 // |Z| 进度条
                 HStack(spacing: 4) {
@@ -298,11 +384,34 @@ struct SpreadAlertWindow: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 14).padding(.vertical, 5)
             .contentShape(Rectangle())
+            .onTapGesture {
+                // 跳到对应的套利窗口（跨品种 → ⌘⌥S · 跨期 → ⌘⌥X）
+                switch evt.kind {
+                case .crossInstrument: openWindow(id: "spread")
+                case .calendar:        openWindow(id: "calendarSpread")
+                }
+            }
+            .help("\(evt.spreadName) · \(evt.direction.displayName) · |Z| \(String(format: "%.2f", evt.absZ)) · 点击切到对应套利窗口")
+
+            // v15.57 · 一键加预警按钮（独立按钮 · 不嵌入信息区 tap）
+            Button {
+                handleAddAlert(evt)
+            } label: {
+                if isAdded {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(ChartTheme.chartLoss)
+                } else {
+                    Image(systemName: "bell.badge")
+                        .foregroundColor(.accentColor)
+                }
+            }
+            .buttonStyle(.borderless)
+            .frame(width: 64, alignment: .center)
+            .disabled(isAdded)
+            .help(isAdded ? "已加到 ⌘B 预警面板" : "加到 ⌘B 预警面板（v1 持久化展示 · v2 真行情接通后自动触发）")
         }
-        .buttonStyle(.plain)
-        .help("\(evt.spreadName) · \(evt.direction.displayName) · |Z| \(String(format: "%.2f", evt.absZ)) · \(evt.strategy) · 点击切到对应套利窗口")
+        .padding(.horizontal, 14).padding(.vertical, 5)
     }
 
     private func zColor(_ z: Double) -> Color {

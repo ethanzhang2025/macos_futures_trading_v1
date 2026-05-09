@@ -309,6 +309,7 @@ struct FuturesTerminalApp: App {
                 OpenMultiChartButton() // v15.23 batch50 · WP-44 多图表 ⌘⌥M
                 OpenSpreadButton()     // v15.27 · WP-套利分析 ⌘⌥S
                 OpenOptionButton()     // v15.32 · WP-期权工作台 ⌘⌥O
+                OpenSectorButton()     // v15.43 · WP-行情 V3 板块联动 ⌘⌥B
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -418,6 +419,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1180, height: 760)
+
+        // v15.43 · WP-行情 V3 板块联动（⌘⌥B · 11 板块 Tab + 多空偏向 + 龙头/弱势 + 板块概览）
+        WindowGroup("板块联动", id: "sector") {
+            SectorWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1080, height: 700)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -547,6 +555,15 @@ private struct OpenOptionButton: View {
     var body: some View {
         Button("期权工作台（⌘⌥O）") { openWindow(id: "option") }
             .keyboardShortcut("o", modifiers: [.command, .option])
+    }
+}
+
+/// v15.43 · WP-行情 V3 板块联动入口（⌘⌥B · 11 板块 + 多空偏向 + 龙头/弱势）
+private struct OpenSectorButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("板块联动（⌘⌥B）") { openWindow(id: "sector") }
+            .keyboardShortcut("b", modifiers: [.command, .option])
     }
 }
 

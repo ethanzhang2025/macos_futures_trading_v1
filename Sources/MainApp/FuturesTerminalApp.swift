@@ -315,6 +315,7 @@ struct FuturesTerminalApp: App {
                 OpenCorrelationButton() // v15.48 · WP-行情 关联性矩阵 ⌘⌥C
                 OpenMoneyFlowButton()   // v15.49 · WP-行情 资金流向 ⌘⌥N
                 OpenCalendarSpreadButton() // v15.50 · WP-套利 跨期 ⌘⌥X
+                OpenInstrumentDashboardButton() // v15.51 · WP-行情 品种深度分析 ⌘⌥I
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -466,6 +467,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1080, height: 760)
+
+        // v15.51 · WP-行情 品种深度分析（⌘⌥I · 一站式仪表盘 · K 线+板块情绪+相关品种+跨窗口跳转）
+        WindowGroup("品种深度分析", id: "instrumentDashboard") {
+            InstrumentDashboardWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1280, height: 780)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -649,6 +657,15 @@ private struct OpenCalendarSpreadButton: View {
     var body: some View {
         Button("跨期套利（⌘⌥X）") { openWindow(id: "calendarSpread") }
             .keyboardShortcut("x", modifiers: [.command, .option])
+    }
+}
+
+/// v15.51 · WP-行情 品种深度分析入口（⌘⌥I · 一站式仪表盘）
+private struct OpenInstrumentDashboardButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("品种深度分析（⌘⌥I）") { openWindow(id: "instrumentDashboard") }
+            .keyboardShortcut("i", modifiers: [.command, .option])
     }
 }
 

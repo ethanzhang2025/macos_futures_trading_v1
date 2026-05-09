@@ -20,6 +20,7 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
     case openInterest  // 最新 K 线 OI（期货特有）
     case atr           // v15.20 batch54 · ATR(14) Wilder · trader 设止损用
     case timestamp     // 最新 K 线时间戳
+    case sectorInfo    // v15.56 · 板块归属 + 板块平均涨跌 + 龙头/弱势（trader 横向感知）
     case debug         // 调试信息（视野/起点/帧时 · v13.x 之前默认行为）
 
     public var id: String { rawValue }
@@ -34,6 +35,7 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
         case .openInterest: return "持仓量"
         case .atr:          return "ATR(14) 真实波幅均值"
         case .timestamp:    return "时间戳"
+        case .sectorInfo:   return "板块归属（板块均值 / 龙头 / 弱势）"
         case .debug:        return "调试信息（可见/起点/帧时）"
         }
     }
@@ -41,8 +43,9 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
     /// v15.16 hotfix #10：HUD 渲染顺序（与 ChartScene.hud 内 if 链顺序一致 · 用户视觉对齐）
     /// 时间戳放最上 · debug 放最下 · 中间是数据字段
     /// v15.20 batch54：amplitude 跟 change 后 · volumeRatio 跟 volume 后 · atr 跟 openInterest 后
+    /// v15.56：sectorInfo 放 atr 后 / debug 前（横向板块对比 · 与 ATR 同视觉权重）
     public static let displayOrder: [HUDFieldKind] = [
-        .timestamp, .ohlc, .change, .amplitude, .volume, .volumeRatio, .openInterest, .atr, .debug
+        .timestamp, .ohlc, .change, .amplitude, .volume, .volumeRatio, .openInterest, .atr, .sectorInfo, .debug
     ]
 }
 

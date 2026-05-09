@@ -15,10 +15,10 @@ struct HUDFieldsBookTests {
         #expect(d.fields.count == 1)
     }
 
-    @Test("HUDFieldKind allCases 9 类完整（v15.20 batch54 加 amplitude/volumeRatio/atr）")
+    @Test("HUDFieldKind allCases 10 类完整（v15.56 加 sectorInfo）")
     func allCases() {
         let cases = HUDFieldKind.allCases
-        #expect(cases.count == 9)
+        #expect(cases.count == 10)
         #expect(cases.contains(.ohlc))
         #expect(cases.contains(.change))
         #expect(cases.contains(.amplitude))
@@ -27,20 +27,21 @@ struct HUDFieldsBookTests {
         #expect(cases.contains(.openInterest))
         #expect(cases.contains(.atr))
         #expect(cases.contains(.timestamp))
+        #expect(cases.contains(.sectorInfo))
         #expect(cases.contains(.debug))
     }
 
-    @Test("displayOrder 与 ChartScene HUD 渲染顺序对齐（v15.16 hotfix #10 · v15.20 batch54 扩 9 项）")
+    @Test("displayOrder 与 ChartScene HUD 渲染顺序对齐（v15.56 sectorInfo 跟 atr 后 / debug 前）")
     func displayOrder() {
         let order = HUDFieldKind.displayOrder
         #expect(order == [
             .timestamp, .ohlc, .change, .amplitude,
-            .volume, .volumeRatio, .openInterest, .atr, .debug
+            .volume, .volumeRatio, .openInterest, .atr, .sectorInfo, .debug
         ])
         #expect(Set(order) == Set(HUDFieldKind.allCases))  // 不漏 / 不重
     }
 
-    @Test("displayName 全 9 类中文化（v15.20 batch54 扩 amplitude/volumeRatio/atr）")
+    @Test("displayName 全 10 类中文化（v15.56 加 sectorInfo）")
     func displayNames() {
         #expect(HUDFieldKind.ohlc.displayName.contains("OHLC"))
         #expect(HUDFieldKind.change.displayName == "涨跌幅")
@@ -50,6 +51,7 @@ struct HUDFieldsBookTests {
         #expect(HUDFieldKind.openInterest.displayName == "持仓量")
         #expect(HUDFieldKind.atr.displayName.contains("ATR"))
         #expect(HUDFieldKind.timestamp.displayName == "时间戳")
+        #expect(HUDFieldKind.sectorInfo.displayName.contains("板块"))
         #expect(HUDFieldKind.debug.displayName.contains("调试"))
     }
 

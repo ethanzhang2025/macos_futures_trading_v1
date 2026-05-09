@@ -4313,6 +4313,17 @@ struct ChartContentView: View {
                     Text("ATR(14) \(fmt(atr))")
                 }
             }
+            // v15.56 板块归属（trader 横向感知 · 找到当前合约在板块内的位置）
+            if hudFields.fields.contains(.sectorInfo), let info = sectorInfo {
+                Text(info.headline)
+                    .foregroundColor(info.bullBias >= 0 ? chartTheme.candleBull : chartTheme.candleBear)
+                if let leader = info.leaderText {
+                    Text(leader).foregroundColor(chartTheme.candleBull)
+                }
+                if let lagger = info.laggerText {
+                    Text(lagger).foregroundColor(chartTheme.candleBear)
+                }
+            }
             // 视觉迭代第 4 项：调试信息（视野/帧时）· v15.14 用户可关 · 默认开
             if hudFields.fields.contains(.debug) {
                 Text("可见 \(viewport.visibleCount) · 起点 \(viewport.startIndex)/\(bars.count) · 帧 \(String(format: "%.1f", lastFrameMs))ms")
@@ -4360,6 +4371,13 @@ struct ChartContentView: View {
         let avg = Double(prior.map(\.volume).reduce(0, +)) / Double(prior.count)
         guard avg > 0 else { return nil }
         return Double(last.volume) / avg
+    }
+
+    /// v15.56 · 板块归属信息（基于 SectorPresets · 主连续 ID 匹配）
+    /// 找到当前合约在哪个板块 → 板块均值/多空偏向 + 龙头/弱势对比
+    /// 命中前缀（如 "rb2509" 命中 "RB"）· 不命中返 nil（fallback 不显示该 HUD 行）
+    private var sectorInfo: SectorHUDInfo? {
+        SectorHUDInfo.compute(instrumentID: instrumentLabel)
     }
 
     /// v15.20 batch54 · ATR(14) Wilder · 取末位值 · 数据不足返回 nil

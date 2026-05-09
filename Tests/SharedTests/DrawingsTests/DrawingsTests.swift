@@ -46,22 +46,30 @@ struct DrawingFactoryTests {
         #expect(pentagon?.extraPoints?.count == 4)
     }
 
-    @Test("pointsNeeded 契约（v13.17 引入 · 1/2/3 点对应 horizontalLine+text / 双点画线 / pitchfork）")
+    @Test("pointsNeeded 契约（14 类全覆盖 · v13.17 引入 · v15.91 补齐 · 1/2/3/0 点）")
     func pointsNeededContract() {
         // 1 点
         #expect(DrawingType.horizontalLine.pointsNeeded == 1)
         #expect(DrawingType.text.pointsNeeded == 1)
-        // 2 点（v1 + v13.13/14）
+        // 2 点（v1 + v13.13/14 + v15.87/88/89/90）
         #expect(DrawingType.trendLine.pointsNeeded == 2)
         #expect(DrawingType.rectangle.pointsNeeded == 2)
         #expect(DrawingType.parallelChannel.pointsNeeded == 2)
         #expect(DrawingType.fibonacci.pointsNeeded == 2)
         #expect(DrawingType.ellipse.pointsNeeded == 2)
         #expect(DrawingType.ruler.pointsNeeded == 2)
+        #expect(DrawingType.fibonacciFan.pointsNeeded == 2)
+        #expect(DrawingType.priceZone.pointsNeeded == 2)
+        #expect(DrawingType.gannFan.pointsNeeded == 2)
+        #expect(DrawingType.fibonacciTimeZone.pointsNeeded == 2)
         // 3 点
         #expect(DrawingType.pitchfork.pointsNeeded == 3)
         // 0 = 动态点数（多边形 · 用户主动触发完成）
         #expect(DrawingType.polygon.pointsNeeded == 0)
+
+        // 全覆盖防漏 · 加新 case 但忘记加 pointsNeeded 时此测试会失败
+        let coveredCount = 2 + 10 + 1 + 1  // 1 点 2 + 2 点 10 + 3 点 1 + 0 点 1
+        #expect(coveredCount == DrawingType.allCases.count)
 
         // needsTwoPoints 兼容入口（pointsNeeded == 2）
         #expect(DrawingType.trendLine.needsTwoPoints)

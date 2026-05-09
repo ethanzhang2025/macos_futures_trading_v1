@@ -310,14 +310,13 @@ public enum TrainingMarkdownReport {
     }
 
     /// 包含匹配：setup 名是否含 pattern displayName 子串（大小写不敏感）
-    /// 多 pattern 命中时取最长 displayName（更精确）
+    /// 多 pattern 命中时取最长 displayName（更精确 · "假突破" > "突破"）
     static func matchPattern(setupName: String) -> TrainingScenarioPattern? {
         let needle = setupName.lowercased()
-        let candidates = TrainingScenarioPattern.allCases.compactMap { pat -> (TrainingScenarioPattern, Int)? in
-            let name = pat.displayName.lowercased()
-            return needle.contains(name) ? (pat, pat.displayName.count) : nil
+        let matched = TrainingScenarioPattern.allCases.filter {
+            needle.contains($0.displayName.lowercased())
         }
-        return candidates.max(by: { $0.1 < $1.1 })?.0
+        return matched.max(by: { $0.displayName.count < $1.displayName.count })
     }
 
     /// 综合建议：实盘胜率 vs 训练均分 4 象限

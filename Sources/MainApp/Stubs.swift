@@ -50,6 +50,9 @@ private struct GeneralSettingsTab: View {
     @AppStorage("settings.defaultInstrumentID") private var defaultInstrument: String = "RB0"
     @AppStorage("settings.restoreLastSession") private var restoreLastSession: Bool = true
     @AppStorage("settings.pollingIntervalSec") private var pollingIntervalSec: Double = 5.0
+    /// v15.97 · 启动恢复上次工作区（active 模板 broadcast .workspaceTemplateActivated · M5+ 多窗口消费）
+    @AppStorage(WorkspaceRestoreDefaults.restoreEnabledKey)
+    private var restoreLastWorkspace: Bool = WorkspaceRestoreDefaults.restoreEnabledDefault
 
     private static let availableInstruments = [
         "RB0", "IF0", "AU0", "CU0", "AG0", "I0", "TA0", "MA0"
@@ -64,10 +67,11 @@ private struct GeneralSettingsTab: View {
                     }
                 }
                 Toggle("启动时恢复上次合约 / 周期", isOn: $restoreLastSession)
+                Toggle("启动时恢复上次工作区（v15.97）", isOn: $restoreLastWorkspace)
             } header: {
                 Text("启动行为").font(.headline)
             } footer: {
-                Text("修改后下次启动生效")
+                Text("修改后下次启动生效 · 工作区恢复触发 .workspaceTemplateActivated · M5+ 多窗口消费时自动应用模板布局")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }

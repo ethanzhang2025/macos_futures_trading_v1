@@ -255,6 +255,33 @@ struct FuturesTerminalApp: App {
         self.lifecycleObserver = self.analytics.map {
             AppLifecycleObserver(analytics: $0, userID: Self.anonymousUserID, uploadDriver: driver)
         }
+        // v15.97 · 工作区跨启动恢复 v2（toggle 开 + lastWorkspaceID 命中 store → broadcast 通知 M5+ 消费者）
+        // 异步执行 · 失败静默（不阻塞 App 启动）· 用 storeManager 校验 ID 真存在（防被删模板的过期 ID）
+        if let manager = self.storeManager {
+            Task { await Self.restoreLastWorkspaceIfNeeded(store: manager.workspaceBook) }
+        }
+    }
+
+    /// v15.97 · 启动恢复上次工作区 · toggle 关 / 无 lastWorkspaceID / store 内不存在 → 静默跳过
+    /// broadcast 用 .workspaceTemplateActivated 通知（与 WorkspaceWindow.activate 同口径）· object: templateID String
+    /// 延迟 1.2s 等 SwiftUI Scene 装好（首个 WindowGroup .onAppear / 监听者 onReceive 注册完）
+    private static func restoreLastWorkspaceIfNeeded(store: SQLiteWorkspaceBookStore) async {
+        let defaults = UserDefaults.standard
+        let enabled = defaults.object(forKey: WorkspaceRestoreDefaults.restoreEnabledKey) as? Bool
+            ?? WorkspaceRestoreDefaults.restoreEnabledDefault
+        guard enabled,
+              let raw = defaults.string(forKey: WorkspaceRestoreDefaults.lastWorkspaceIDKey),
+              let id = UUID(uuidString: raw),
+              let book = try? await store.load(),
+              book.template(id: id) != nil
+        else { return }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: .workspaceTemplateActivated,
+                object: id.uuidString
+            )
+        }
     }
 
     /// 启动 StoreManager · 失败保留 nil · UI 走 Mock fallback（不影响 App 启动）

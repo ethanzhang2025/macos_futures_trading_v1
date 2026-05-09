@@ -86,6 +86,8 @@ struct WorkspaceWindow: View {
             if selectedTemplateID == nil {
                 selectedTemplateID = book.activeTemplateID ?? book.templates.first?.id
             }
+            // v15.97 · 兜底同步 lastWorkspaceID UserDefaults（active 可能由数据层 setActive 直接改 · 此处补漏）
+            persistLastWorkspaceID(book.activeTemplateID)
         }
         .onChange(of: book) { newValue in
             // M5 自动持久化：每次 book 变化异步 save · isLoaded 守卫避免初始 Mock 误写覆盖真数据
@@ -750,13 +752,25 @@ struct WorkspaceWindow: View {
         pendingDeleteTemplate = nil
     }
 
-    /// 切换激活模板 · 同时通知主图（M5 多窗口实际渲染时接收 · v1 仅 stub）
+    /// 切换激活模板 · 同时通知主图（M5 多窗口实际渲染时接收 · v1 仅 stub）· v15.97 写 lastWorkspaceID
     private func activate(_ template: WorkspaceTemplate) {
         book.setActive(id: template.id)
+        persistLastWorkspaceID(template.id)
         NotificationCenter.default.post(
             name: .workspaceTemplateActivated,
             object: template.id.uuidString
         )
+    }
+
+    /// v15.97 · 工作区跨启动恢复 v2 · 把当前激活模板 ID 写 UserDefaults（FuturesTerminalApp 启动时读回 broadcast）
+    /// nil → 清除 key（用户删完所有模板时也保持一致）
+    private func persistLastWorkspaceID(_ id: UUID?) {
+        let defaults = UserDefaults.standard
+        if let id = id {
+            defaults.set(id.uuidString, forKey: WorkspaceRestoreDefaults.lastWorkspaceIDKey)
+        } else {
+            defaults.removeObject(forKey: WorkspaceRestoreDefaults.lastWorkspaceIDKey)
+        }
     }
 
     // MARK: - Mutations · 拖拽排序（v1.5 · 同 WP-43 模式）
@@ -1424,6 +1438,19 @@ extension Notification.Name {
     /// WP-55 commit 4 · WorkspaceWindow 切换激活 → 主图/多窗口接收切换布局（object: templateID String）
     /// M5 多窗口实际渲染时接收 + frame 桥接 CGRect · v1 仅 stub
     static let workspaceTemplateActivated = Notification.Name("workspaceTemplateActivated")
+}
+
+// MARK: - v15.97 跨启动恢复 · UserDefaults key 命名空间
+
+/// 工作区跨启动恢复用 UserDefaults key（WorkspaceWindow 写 / FuturesTerminalApp 启动读 + broadcast）
+/// 命名前缀 `settings.` 与 GeneralSettingsTab 的 @AppStorage 风格一致 · 不与其他模块冲突
+enum WorkspaceRestoreDefaults {
+    /// 上次激活的模板 UUID 字符串 · 切换 active 时写 · 无激活时清除
+    static let lastWorkspaceIDKey = "settings.lastWorkspaceID"
+    /// 启动时是否恢复上次工作区（@AppStorage toggle · GeneralSettingsTab）
+    static let restoreEnabledKey = "settings.restoreLastWorkspace"
+    /// toggle 默认值（v1 默认 true · 用户改 active 才会写 lastWorkspaceID · 老用户不打扰）
+    static let restoreEnabledDefault = true
 }
 
 // MARK: - Transferable 拖拽载荷（WP-55 v1.5）

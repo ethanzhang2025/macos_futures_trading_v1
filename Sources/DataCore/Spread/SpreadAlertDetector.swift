@@ -228,7 +228,8 @@ public enum SpreadAlertDetector {
 
     /// 跨品种 mock spread 时序（与 SpreadWindow.MockSpreadData 同算法 · 两腿不同 seed）
     /// v2 接 CTP 真历史 K 线后整段废弃
-    static func mockCrossInstrumentSeries(for pair: SpreadPair, count: Int) -> [SpreadValue] {
+    /// v15.60 改 public · SpreadAlertWindow timer 周期喂 AlertEvaluator.onSpreadValue 用
+    public static func mockCrossInstrumentSeries(for pair: SpreadPair, count: Int) -> [SpreadValue] {
         let basePrice1 = defaultBasePrice(pair.leg1.instrumentID)
         let basePrice2 = defaultBasePrice(pair.leg2.instrumentID)
         let leg1 = mockBars(instrumentID: pair.leg1.instrumentID, basePrice: basePrice1,
@@ -265,7 +266,8 @@ public enum SpreadAlertDetector {
 
     /// 默认基础价（按合约 ID · 与 SpreadWindow.defaultBasePrice 同步）
     /// v2 接 CTP 后从 instrument metadata 拿
-    static func defaultBasePrice(_ id: String) -> Double {
+    /// v15.60 改 public · SpreadAlertWindow timer 喂跨期 series 时反查近月底价用
+    public static func defaultBasePrice(_ id: String) -> Double {
         switch id {
         case "RB0", "RB":  return 3245
         case "HC0", "HC":  return 3450

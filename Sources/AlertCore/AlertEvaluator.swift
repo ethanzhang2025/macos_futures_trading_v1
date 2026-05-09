@@ -187,17 +187,16 @@ public actor AlertEvaluator {
     /// onSpreadValue · v15.60 价差时序驱动方法（spreadDeviation 真触发）
     /// 上层 caller（SpreadAlertWindow timer / v2 真行情 SpreadValue stream）每次新点到达调用
     /// - Parameters:
-    ///   - values: spread 时序（升序 · ≥ 30 点用作 baseline · evaluator 内部不缓存 · caller 维护）
+    ///   - series: spread 时序值（升序 · ≥ 30 点 · evaluator 内部不缓存 · caller 维护）
     ///   - spreadID: 价差对 ID（"rb-hc" / "rb-05-10"）· 与 alert.condition.spreadDeviation.spreadID 匹配
     ///   - isCalendar: 跨期 · 与 condition 字段匹配
     ///   - now: 当前时间（注入便于测试）
     ///
     /// 评估逻辑：取 last point z-score · |z| ≥ alert.zThreshold + alert.canTrigger → 触发
     /// 注意：spread alert 的 alert.instrumentID 字段保留近月 · 与 spreadID 解耦
-    public func onSpreadValue(values: [SpreadValueLike], spreadID: String, isCalendar: Bool, now: Date = Date()) async {
-        guard values.count >= 30 else { return }
-        // 计算 mean / stdDev / current → zScore（与 SpreadStatisticsCalculator 同公式 · 此处去 DataCore dep）
-        let series = values.map(\.value)
+    /// 入参直接 [Decimal]：caller 从 DataCore.SpreadValue 用 .map(\.value) 构造 · 避免 AlertCore→DataCore 反向 dep
+    public func onSpreadValue(series: [Decimal], spreadID: String, isCalendar: Bool, now: Date = Date()) async {
+        guard series.count >= 30 else { return }
         let n = series.count
         let mean = series.reduce(Decimal(0), +) / Decimal(n)
         let variance = series.reduce(Decimal(0)) { acc, v in

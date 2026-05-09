@@ -69,15 +69,6 @@ public enum AlertCondition: Sendable, Codable, Equatable, Hashable {
     case spreadDeviation(spreadID: String, isCalendar: Bool, zThreshold: Decimal)
 }
 
-/// 价差时序点抽象（v15.60 · onSpreadValue 入参 · 不引 DataCore dep）
-///
-/// DataCore.SpreadValue 实现此协议（仅暴露 value）· AlertCore 不依赖 DataCore 具体类型
-/// caller 转换：values.map { SpreadValueLikeImpl(value: $0.value) }
-/// （或直接 conform DataCore.SpreadValue 到此协议）
-public protocol SpreadValueLike: Sendable {
-    var value: Decimal { get }
-}
-
 /// 预警状态
 public enum AlertStatus: String, Sendable, Codable, CaseIterable {
     case active     // 活跃监控中

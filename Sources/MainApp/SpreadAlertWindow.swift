@@ -96,6 +96,37 @@ struct SpreadAlertWindow: View {
         .task {
             // 启动时同步已存在的 spreadDeviation alerts → 按钮显 ✓
             await refreshAddedSpreadIDs()
+            // v15.60 · 启动周期扫描 · 60s 间隔喂 evaluator → 真触发已加预警的 spread alerts
+            await runEvaluatorPushLoop()
+        }
+    }
+
+    // MARK: - v15.60 周期扫描 · 喂 evaluator 真触发
+
+    /// 60s 间隔扫描 26 对 spread series · 喂 evaluator.onSpreadValue
+    /// v2 接 CTP 真行情后切换：从 SpreadValue stream 收到点 → 直接 push（无需 timer）
+    private func runEvaluatorPushLoop() async {
+        // 启动后立刻跑一次 · 之后 60s 间隔
+        while !Task.isCancelled {
+            await pushAllSpreadSeriesToEvaluator()
+            try? await Task.sleep(nanoseconds: 60_000_000_000)
+        }
+    }
+
+    private func pushAllSpreadSeriesToEvaluator() async {
+        guard let evaluator = alertEvaluator else { return }
+        // 跨品种 12 对
+        for pair in SpreadPresets.all {
+            let values = SpreadAlertDetector.mockCrossInstrumentSeries(for: pair, count: 200)
+            let series = values.map(\.value)
+            await evaluator.onSpreadValue(series: series, spreadID: pair.id, isCalendar: false)
+        }
+        // 跨期 14 对
+        for pair in CalendarSpreadPresets.all {
+            let basePrice = SpreadAlertDetector.defaultBasePrice(pair.underlyingID)
+            let cal = CalendarSpreadCalculator.generateMockSeries(for: pair, basePrice: basePrice, count: 200)
+            let series = CalendarSpreadCalculator.toSpreadValues(cal).map(\.value)
+            await evaluator.onSpreadValue(series: series, spreadID: pair.id, isCalendar: true)
         }
     }
 
@@ -179,7 +210,7 @@ struct SpreadAlertWindow: View {
 
             Spacer()
 
-            Text("v1 mock · v2 接 CTP 真历史 K 线 + AlertCore 通知通道")
+            Text("v1 mock 行情 · 真触发已接通（60s 周期扫描 → AlertCore.onSpreadValue → ⌘B 通知）")
                 .font(.caption2).foregroundColor(.secondary)
                 .padding(.trailing, 14)
         }
@@ -409,7 +440,7 @@ struct SpreadAlertWindow: View {
             .buttonStyle(.borderless)
             .frame(width: 64, alignment: .center)
             .disabled(isAdded)
-            .help(isAdded ? "已加到 ⌘B 预警面板" : "加到 ⌘B 预警面板（v1 持久化展示 · v2 真行情接通后自动触发）")
+            .help(isAdded ? "已加到 ⌘B 预警面板（60s 周期真扫触发）" : "加到 ⌘B 预警面板（每 60s 自动扫描 · |z|≥阈值时触发系统通知）")
         }
         .padding(.horizontal, 14).padding(.vertical, 5)
     }

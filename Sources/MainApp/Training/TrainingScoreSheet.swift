@@ -1,9 +1,9 @@
-// MainApp · WP-54 模拟训练 · 评分 Sheet（v15.23 batch12）
+// MainApp · WP-54 模拟训练 · 评分 Sheet（v15.23 batch12 / v16.6 评分 v2）
 //
 // 职责：
 // - 训练结束 / 历史回看时弹此 sheet
 // - 上方：grade emoji 大字 + totalScore 百分制
-// - 中部：pnl/纪律子分条（ProgressView 0-50）
+// - 中部：v1 主分 2 子条（盈亏/纪律 0-50）· 4 metric · v2 五维子条（0-100）+ weakness 提示
 // - 下方：summary 中文文案 + 违规折叠列表
 // - 底部：关闭按钮（dismiss 触发 viewModel.dismissLastFinishedSheet 由 caller 处理）
 
@@ -35,6 +35,11 @@ struct TrainingScoreSheet: View {
             Divider()
 
             scoreCard
+
+            if let sub = score.subScores {
+                Divider()
+                subScoresSection(sub)
+            }
 
             Divider()
 
@@ -106,7 +111,15 @@ struct TrainingScoreSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 520, height: showViolations ? 660 : 480)
+        .frame(width: 540, height: sheetHeight)
+    }
+
+    /// v16.6 · subScores 注入 200pt 五维区域 · violations 折叠展开 180pt
+    private var sheetHeight: CGFloat {
+        var h: CGFloat = 480
+        if score.subScores != nil { h += 200 }
+        if showViolations { h += 180 }
+        return h
     }
 
     // MARK: - Header
@@ -230,6 +243,83 @@ struct TrainingScoreSheet: View {
             Text(value).font(.system(size: 12, design: .monospaced)).foregroundColor(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - v16.6 · 五维细分 + weakness 提示
+
+    private func subScoresSection(_ sub: TrainingSubScores) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 4) {
+                Text("🔬 五维细分")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("仅作分析视角 · 不计入总分")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .opacity(0.7)
+            }
+
+            VStack(spacing: 5) {
+                ForEach(sub.ordered, id: \.dimension) { entry in
+                    subScoreRow(dimension: entry.dimension,
+                                score: entry.score,
+                                isWeakest: entry.dimension == sub.weakest)
+                }
+            }
+
+            weaknessTip(sub)
+        }
+    }
+
+    private func subScoreRow(dimension: TrainingSubScores.Dimension,
+                             score: Int, isWeakest: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text("\(dimension.emoji) \(dimension.displayName)")
+                .font(.system(size: 11))
+                .frame(width: 70, alignment: .leading)
+                .foregroundColor(isWeakest ? .orange : .primary)
+            ProgressView(value: Double(score), total: 100)
+                .tint(subScoreColor(score))
+            Text("\(score)")
+                .font(.system(size: 11, design: .monospaced))
+                .frame(width: 28, alignment: .trailing)
+                .foregroundColor(subScoreColor(score))
+            if isWeakest {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+
+    private func weaknessTip(_ sub: TrainingSubScores) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("💡")
+                .font(.system(size: 14))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("改进建议（最弱：\(sub.weakest.emoji) \(sub.weakest.displayName)）")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.orange)
+                Text(sub.weakness)
+                    .font(.system(size: 11))
+                    .foregroundColor(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(8)
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func subScoreColor(_ s: Int) -> Color {
+        switch s {
+        case 80...100: return .green
+        case 60..<80:  return .blue
+        case 40..<60:  return .orange
+        default:       return .red
+        }
     }
 
     // MARK: - Summary
@@ -360,17 +450,21 @@ struct TrainingScoreSheet: View {
 
     // MARK: - v15.23 batch146 · 评分卡截图分享
 
-    /// 渲染 header + scoreCard + summaryBlock 为 PNG · 写入剪贴板
+    /// 渲染 header + scoreCard + (subScores) + summaryBlock 为 PNG · 写入剪贴板
     private func copyScreenshotToPasteboard() {
         let shareCard = VStack(alignment: .leading, spacing: 14) {
             header
             Divider()
             scoreCard
+            if let sub = score.subScores {
+                Divider()
+                subScoresSection(sub)
+            }
             Divider()
             summaryBlock
         }
         .padding(20)
-        .frame(width: 480)
+        .frame(width: 500)
         .background(Color(NSColor.windowBackgroundColor))
 
         let renderer = ImageRenderer(content: shareCard)

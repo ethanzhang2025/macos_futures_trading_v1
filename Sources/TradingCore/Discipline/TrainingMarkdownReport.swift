@@ -152,6 +152,18 @@ public enum TrainingMarkdownReport {
         md += "- 盈亏：\(pnlAbs) 元（\(pnlPct)%）\n\n"
         md += "**评语**：\(score.summary)\n\n"
 
+        // v16.6 评分 v2 · 五维细分 + weakness（subScores 非 nil 时输出）
+        if let sub = score.subScores {
+            md += "## 五维细分（仅作分析视角 · 不计入总分）\n\n"
+            md += "| 维度 | 得分 |\n"
+            md += "|------|------|\n"
+            for entry in sub.ordered {
+                let mark = (entry.dimension == sub.weakest) ? " ⚠️ 最弱" : ""
+                md += "| \(entry.dimension.emoji) \(entry.dimension.displayName) | \(entry.score) / 100\(mark) |\n"
+            }
+            md += "\n**💡 改进建议**（最弱：\(sub.weakest.emoji) \(sub.weakest.displayName)）：\(sub.weakness)\n\n"
+        }
+
         // 交易记录
         md += "## 交易记录\n\n"
         if session.trades.isEmpty {

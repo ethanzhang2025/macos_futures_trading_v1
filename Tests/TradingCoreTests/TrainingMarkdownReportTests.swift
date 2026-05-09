@@ -169,6 +169,26 @@ struct TrainingMarkdownReportTests {
         #expect(md.contains("# 求师傅点评"))
     }
 
+    @Test("v16.6 · generateSingleSession · subScores 非 nil 时含五维章节 + 改进建议")
+    func singleSessionSubScores() {
+        let session = makeSession(scenarioName: "v2 测试", pattern: .uptrend, pnl: 5000)
+        let scorer = TrainingScorer.score(session)
+        let md = TrainingMarkdownReport.generateSingleSession(session, score: scorer)
+        #expect(scorer.subScores != nil)
+        #expect(md.contains("## 五维细分"))
+        #expect(md.contains("最弱"))
+        #expect(md.contains("改进建议"))
+    }
+
+    @Test("v16.6 · generateSingleSession · subScores=nil 时不输出五维章节（兼容老 score）")
+    func singleSessionNoSubScores() {
+        let session = makeSession(scenarioName: "v1 老评分")
+        let oldScore = TrainingScore(totalScore: 60, pnlScore: 30, disciplineScore: 30,
+                                     grade: .C, summary: "old")
+        let md = TrainingMarkdownReport.generateSingleSession(session, score: oldScore)
+        #expect(!md.contains("## 五维细分"))
+    }
+
     // MARK: - v15.23 batch197 · 周报
 
     @Test("batch197 · 周报标题为「训练周报」")

@@ -105,7 +105,7 @@ struct InstrumentDashboardWindow: View {
         }
         .frame(minWidth: 1180, minHeight: 740)
         .onAppear { refreshCache() }
-        .onChange(of: selectedID) { _, _ in refreshCache() }
+        .onChange(of: selectedID) { _ in refreshCache() }
         .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
             // v15.53 · 联动：切合约时直接显示该合约（同步切板块过滤）
             if let id = note.object as? String, SectorPresets.byID[id] != nil {

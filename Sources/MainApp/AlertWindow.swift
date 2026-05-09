@@ -1829,6 +1829,9 @@ struct AddOrEditAlertSheet: View {
             }
         case .indicator:
             indicatorParams
+        case .spreadDeviation:
+            // v15.57 · spread 由 ⌘⌥W 一键加预警入口创建 · sheet 不展示参数表单
+            EmptyView()
         }
     }
 

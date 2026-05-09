@@ -76,7 +76,7 @@ struct SpreadWindow: View {
         }
         .frame(minWidth: 920, minHeight: 600)
         .task(id: selectedPairID) { reload() }
-        .onChange(of: rollingWindow) { _, _ in recomputeV2() }
+        .onChange(of: rollingWindow) { _ in recomputeV2() }
         .sheet(isPresented: $backtestSheetPresented) {
             SpreadBacktestSheet(
                 pair: selectedPair,

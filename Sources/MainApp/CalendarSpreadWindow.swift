@@ -89,7 +89,7 @@ struct CalendarSpreadWindow: View {
         }
         .frame(minWidth: 980, minHeight: 720)
         .task(id: selectedPairID) { reload() }
-        .onChange(of: rollingWindow) { _, _ in recomputeRollingZ() }
+        .onChange(of: rollingWindow) { _ in recomputeRollingZ() }
     }
 
     // MARK: - Toolbar

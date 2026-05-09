@@ -125,8 +125,8 @@ struct OptionWindow: View {
             }
         }
         .frame(minWidth: 1100, minHeight: 720)
-        .onChange(of: selectedUnderlyingID) { _, _ in resetForNewUnderlying() }
-        .onChange(of: selectedStrategyType) { _, newType in remapStrikesForStrategy(newType) }
+        .onChange(of: selectedUnderlyingID) { _ in resetForNewUnderlying() }
+        .onChange(of: selectedStrategyType) { newType in remapStrikesForStrategy(newType) }
         // v15.36 · Phase 6.4 · 回测 sheet
         .sheet(isPresented: $backtestSheetPresented) {
             if let s = currentStrategy {

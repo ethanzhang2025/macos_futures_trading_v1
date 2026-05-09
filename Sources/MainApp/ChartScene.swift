@@ -922,6 +922,16 @@ struct ChartScene: View {
                 .disabled(totalPoints < 3)
                 .tooltip("闭合多边形（至少 3 点）")
             }
+            // v15.93 · Esc 取消画线工具 · 隐藏按钮挂 .escape · 仅画线工具激活时启用（避免吞默认 Esc 行为）
+            Button("") {
+                activeDrawingTool = nil
+                pendingDrawingPoint = nil
+                pendingExtraPoints = []
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .disabled(activeDrawingTool == nil)
             // v13.8 颜色 / 线宽自定义（仅作用于新建 · 已有画线通过右键菜单"应用当前颜色/线宽"修改）
             Divider().frame(height: 16)
             // v15.85 · ColorPicker 缩到 18×18 + clipShape(Circle) · 视觉成圆点

@@ -92,6 +92,7 @@ public enum MonthlyReportGenerator {
         let session = ReviewAnalytics.sessionPnL(from: monthly)
         let dd = ReviewAnalytics.maxDrawdownCurve(from: monthly)
         let tagsByPos = EmotionAutoTagger.tagAll(monthly)
+        let setup = ReviewAnalytics.setupMatrix(from: monthly)   // v16.3 · 复盘 v2 · 策略矩阵入报告
 
         let nowFmt = DateFormatter()
         nowFmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
@@ -171,7 +172,26 @@ public enum MonthlyReportGenerator {
         }
         md += "\n"
 
-        md += "---\n_由 macOS 期货交易终端 v15.19 自动生成 · 数据基于本地 ClosedPosition_\n"
+        // v16.3 · 策略矩阵（复盘 v2 · trader 个性化 setup 标签盈亏归因 · 含 (未标) 桶）
+        md += "## 策略矩阵（setup 归因）\n\n"
+        if setup.cells.isEmpty {
+            md += "_本月无成交_\n\n"
+        } else {
+            md += "| 策略 | 笔数 | 总 PnL | 胜率 |\n|---|---|---|---|\n"
+            for cell in setup.cells {
+                md += "| \(cell.setup) | \(cell.tradeCount) | \(signedDecimal(cell.totalPnL)) | \(pct(cell.winRate)) |\n"
+            }
+            // unlabeled 占比 ≥ 30% 时附建议（驱动 trader 补标）
+            let unlabeled = setup.cells.first { $0.setup == ReviewAnalytics.unlabeledSetupKey }?.tradeCount ?? 0
+            let total = setup.cells.reduce(0) { $0 + $1.tradeCount }
+            if total > 0, Double(unlabeled) / Double(total) >= 0.3 {
+                let pct = Int((Double(unlabeled) / Double(total) * 100).rounded())
+                md += "\n_⚠️ \"(未标)\"占 \(pct)% · 建议在交易日志窗给开仓 trade 打 setup 标签 · 让聚合更精准_\n"
+            }
+            md += "\n"
+        }
+
+        md += "---\n_由 macOS 期货交易终端 v16.3 自动生成 · 数据基于本地 ClosedPosition_\n"
         return md
     }
 

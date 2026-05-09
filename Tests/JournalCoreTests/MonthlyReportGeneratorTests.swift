@@ -170,6 +170,70 @@ struct MonthlyReportGeneratorTests {
         )
         #expect(md.contains("生成时间："))
         #expect(md.contains("Asia/Shanghai"))
-        #expect(md.contains("v15.19"))
+        #expect(md.contains("v16.3"))   // v16.3 月报加策略矩阵章节同步 footer 版本号
+    }
+
+    // MARK: - v16.3 · 策略矩阵章节
+
+    private func positionWithSetup(_ pnl: Decimal, setup: String?, at: Date) -> ClosedPosition {
+        ClosedPosition(
+            instrumentID: "rb2501", side: .long,
+            openTradeID: UUID(), closeTradeID: UUID(),
+            openTime: at.addingTimeInterval(-600), closeTime: at,
+            openPrice: 3500, closePrice: 3500 + pnl,
+            volume: 1, realizedPnL: pnl, totalCommission: 0,
+            setup: setup
+        )
+    }
+
+    @Test("v16.3 · 策略矩阵章节存在 · 含 setup 标签和未标桶")
+    func setupMatrixSection() {
+        let positions = [
+            positionWithSetup(200, setup: "突破", at: mayMidday),
+            positionWithSetup(-100, setup: "回踩", at: mayMidday.addingTimeInterval(3600)),
+            positionWithSetup(50, setup: nil, at: mayMidday.addingTimeInterval(7200))
+        ]
+        let md = MonthlyReportGenerator.generate(
+            positions: positions, year: 2026, month: 5, now: mayMidday
+        )
+        #expect(md.contains("## 策略矩阵（setup 归因）"))
+        #expect(md.contains("| 突破 |"))
+        #expect(md.contains("| 回踩 |"))
+        #expect(md.contains("| (未标) |"))
+    }
+
+    @Test("v16.3 · 未标占比 ≥ 30% · 触发补标提示")
+    func setupMatrixUnlabeledWarning() {
+        // 5 笔全未标 · unlabeled 100% · 应触发提示
+        let positions = (0..<5).map { i in
+            positionWithSetup(100, setup: nil, at: mayMidday.addingTimeInterval(Double(i) * 3600))
+        }
+        let md = MonthlyReportGenerator.generate(
+            positions: positions, year: 2026, month: 5, now: mayMidday
+        )
+        #expect(md.contains("\"(未标)\"占 100%"))
+        #expect(md.contains("建议在交易日志窗给开仓 trade 打 setup 标签"))
+    }
+
+    @Test("v16.3 · 未标占比 < 30% · 不触发提示")
+    func setupMatrixNoWarningWhenLowUnlabeled() {
+        // 9 笔标 + 1 笔未标 · unlabeled 10% · 不触发
+        var positions = (0..<9).map { i in
+            positionWithSetup(100, setup: "突破", at: mayMidday.addingTimeInterval(Double(i) * 3600))
+        }
+        positions.append(positionWithSetup(50, setup: nil, at: mayMidday.addingTimeInterval(9 * 3600)))
+        let md = MonthlyReportGenerator.generate(
+            positions: positions, year: 2026, month: 5, now: mayMidday
+        )
+        #expect(!md.contains("建议在交易日志窗"))
+    }
+
+    @Test("v16.3 · 空仓位 · 策略矩阵显示无成交")
+    func setupMatrixEmpty() {
+        let md = MonthlyReportGenerator.generate(
+            positions: [], year: 2026, month: 5, now: mayMidday
+        )
+        #expect(md.contains("## 策略矩阵（setup 归因）"))
+        // 空集 setupMatrix.cells 为空 · 显示无成交（与品种 PnL 章节同模式）
     }
 }

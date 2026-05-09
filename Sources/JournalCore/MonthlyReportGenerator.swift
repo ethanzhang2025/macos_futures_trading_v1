@@ -181,12 +181,12 @@ public enum MonthlyReportGenerator {
             for cell in setup.cells {
                 md += "| \(cell.setup) | \(cell.tradeCount) | \(signedDecimal(cell.totalPnL)) | \(pct(cell.winRate)) |\n"
             }
-            // unlabeled 占比 ≥ 30% 时附建议（驱动 trader 补标）
+            // unlabeled 占比 ≥ 30% 时附建议（驱动 trader 补标）· 局部变量避开 Self.pct shadow
             let unlabeled = setup.cells.first { $0.setup == ReviewAnalytics.unlabeledSetupKey }?.tradeCount ?? 0
             let total = setup.cells.reduce(0) { $0 + $1.tradeCount }
             if total > 0, Double(unlabeled) / Double(total) >= 0.3 {
-                let pct = Int((Double(unlabeled) / Double(total) * 100).rounded())
-                md += "\n_⚠️ \"(未标)\"占 \(pct)% · 建议在交易日志窗给开仓 trade 打 setup 标签 · 让聚合更精准_\n"
+                let unlabeledPct = Int((Double(unlabeled) / Double(total) * 100).rounded())
+                md += "\n_⚠️ \"(未标)\"占 \(unlabeledPct)% · 建议在交易日志窗给开仓 trade 打 setup 标签 · 让聚合更精准_\n"
             }
             md += "\n"
         }

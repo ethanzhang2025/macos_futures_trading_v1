@@ -1579,8 +1579,8 @@ struct JournalWindow: View {
     }
 
     /// v16.4 · 批量给选中 trades 打 setup（onChange 单次触发批量持久化）· 仅对真变更的笔计数
-    private func applyBatchSetup(_ setup: String?, to ids: Set<UUID>) {
-        let cleanSetup = setup?.isEmpty == true ? nil : setup
+    private func applyBatchSetup(_ setup: String?, to ids: Set<Trade.ID>) {
+        let cleanSetup = (setup?.isEmpty ?? true) ? nil : setup
         var changed = 0
         for i in trades.indices where ids.contains(trades[i].id) {
             if trades[i].setup != cleanSetup {
@@ -2571,12 +2571,12 @@ private struct SetupEditorSheet: View {
 
                 if !knownSetups.isEmpty {
                     LabeledContent("已用标签") {
-                        chipFlow(knownSetups, color: .accentColor)
+                        SetupChipFlow(items: knownSetups, color: .accentColor, setupText: $setupText)
                     }
                 }
 
                 LabeledContent("常见预设") {
-                    chipFlow(Self.presetSetups, color: .secondary)
+                    SetupChipFlow(items: Self.presetSetups, color: .secondary, setupText: $setupText)
                 }
 
                 Text("提示：trader 个性化 · 同义合并保持一致命名（\"突破\" vs \"突破回测\" 算两类）· 复盘 v2 SetupMatrix group by setup 聚合 win-rate")
@@ -2614,11 +2614,6 @@ private struct SetupEditorSheet: View {
         let trimmed = setupText.trimmingCharacters(in: .whitespacesAndNewlines)
         let nextSetup: String? = trimmed.isEmpty ? nil : trimmed
         return nextSetup != trade.setup
-    }
-
-    /// 候选标签 chip 流（点击填入 TextField）· 与 SwiftUI HStack wrap 同模式
-    private func chipFlow(_ items: [String], color: Color) -> some View {
-        SetupChipFlow(items: items, color: color, setupText: $setupText)
     }
 }
 
@@ -2683,16 +2678,20 @@ private struct BatchSetupEditorSheet: View {
                 Button("取消") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("批量打标") {
-                    let trimmed = setupText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    onApply(trimmed.isEmpty ? nil : trimmed)
+                    onApply(trimmedSetup.isEmpty ? nil : trimmedSetup)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(setupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(trimmedSetup.isEmpty)
             }
         }
         .padding(20)
         .frame(width: 520, height: 380)
+    }
+
+    /// 输入 setup 去除首尾空白（与 SetupEditorSheet 同口径）· disabled / Apply 共享一份计算
+    private var trimmedSetup: String {
+        setupText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

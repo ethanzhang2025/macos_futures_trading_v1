@@ -205,8 +205,9 @@ public struct MaiLangCodeView: NSViewRepresentable {
             let ns = tv.string as NSString
             var wordStart = range.location
             while wordStart > 0 {
-                let c = ns.character(at: wordStart - 1)
-                let isLetter = (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A)
+                let codeUnit = ns.character(at: wordStart - 1)
+                // ASCII A-Z (0x41-0x5A) / a-z (0x61-0x7A) · 直接 UTF-16 比较避免 String 转换开销
+                let isLetter = (codeUnit >= 0x41 && codeUnit <= 0x5A) || (codeUnit >= 0x61 && codeUnit <= 0x7A)
                 if isLetter { wordStart -= 1 } else { break }
             }
             let wordLen = range.location - wordStart

@@ -180,9 +180,14 @@ done
     if [[ "${#DEMOS[@]}" -eq 0 ]]; then
         echo "无可用 demo target（已搁置 SinaTickDemo / SyncEngineDemo）"
     fi
+    # macOS 自带没有 GNU timeout · 用 perl alarm 包一层（兼容 Linux/Mac）
+    run_with_timeout() {
+        local secs=$1; shift
+        perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+    }
     for d in "${DEMOS[@]}"; do
         echo "──── $d ────"
-        timeout 30 swift run --build-path "$BUILD_PATH" "$d" 2>&1 | head -50
+        run_with_timeout 30 swift run --build-path "$BUILD_PATH" "$d" 2>&1 | head -50
         echo ""
     done
 } > "$OUT_DIR/03_demo.log"

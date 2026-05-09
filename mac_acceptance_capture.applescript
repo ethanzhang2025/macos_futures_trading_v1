@@ -17,7 +17,8 @@ on run argv
 
     -- 21 窗口列表：{seq, name, modifiers, key}
     -- modifiers：c=command, s=shift, o=option(alt)
-    set windows to {¬
+    -- 注意：变量名避开 AppleScript 保留字（windows / window 是 every window 的 selector）
+    set winList to {¬
         {"01", "chart_main", "c", "n"}, ¬
         {"02", "watchlist", "c", "l"}, ¬
         {"03", "review", "c", "r"}, ¬
@@ -56,7 +57,7 @@ on run argv
     end try
     delay 1.0
 
-    repeat with w in windows
+    repeat with w in winList
         set seq to item 1 of w
         set winName to item 2 of w
         set mods to item 3 of w
@@ -89,5 +90,5 @@ on run argv
         delay 0.2
     end repeat
 
-    log "✅ 全 " & (count of windows) & " 窗口截图完成"
+    log "✅ 全 " & (count of winList) & " 窗口截图完成"
 end run

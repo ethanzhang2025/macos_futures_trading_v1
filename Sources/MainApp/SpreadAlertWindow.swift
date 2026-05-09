@@ -357,7 +357,10 @@ struct SpreadAlertWindow: View {
             Text("当前").font(.caption.bold()).foregroundColor(.secondary).frame(width: 80, alignment: .trailing)
             Text("均值").font(.caption.bold()).foregroundColor(.secondary).frame(width: 80, alignment: .trailing)
             Text("±2σ 区间").font(.caption.bold()).foregroundColor(.secondary).frame(width: 130, alignment: .trailing)
-            Spacer().frame(width: 14)
+            Spacer().frame(width: 10)
+            // v15.68 · 30 点走势 sparkline 列
+            Text("30 走势").font(.caption.bold()).foregroundColor(.secondary).frame(width: 110, alignment: .leading)
+            Spacer().frame(width: 10)
             Text("策略建议").font(.caption.bold()).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
             // v15.57 · 行尾 + 按钮列
             Text("⌘B").font(.caption.bold()).foregroundColor(.secondary).frame(width: 64, alignment: .center)
@@ -453,7 +456,13 @@ struct SpreadAlertWindow: View {
                     .foregroundColor(.secondary)
                     .frame(width: 130, alignment: .trailing)
 
-                Spacer().frame(width: 14)
+                Spacer().frame(width: 10)
+
+                // v15.68 · 30 点走势 sparkline · 上下轨 dash + current 高亮
+                spreadSparkline(for: evt)
+                    .frame(width: 110, height: 28)
+
+                Spacer().frame(width: 10)
 
                 // 策略
                 Text(evt.strategy)
@@ -505,6 +514,88 @@ struct SpreadAlertWindow: View {
         else { s = String(format: "%.2f", v) }
         if let u = unit, !u.isEmpty { return "\(s) \(u)" }
         return s
+    }
+
+    // MARK: - v15.68 · spread 走势 sparkline
+
+    /// 30 点 spread 时序 mini chart · 上下轨 dash + current 点 highlight
+    private func spreadSparkline(for evt: SpreadAlertEvent) -> some View {
+        let series = lastNSpreadValues(for: evt, n: 30)
+        return Canvas { ctx, size in
+            guard series.count >= 2 else { return }
+            let w = size.width
+            let h = size.height
+            // 视觉范围：取 series min/max + 上下轨 · 留 6% padding
+            let dataMin = series.min() ?? 0
+            let dataMax = series.max() ?? 1
+            let lo = min(dataMin, evt.lowerBand)
+            let hi = max(dataMax, evt.upperBand)
+            let range = max(hi - lo, 1e-9)
+            let pad = range * 0.06
+            let viewLo = lo - pad
+            let viewHi = hi + pad
+            let viewRange = viewHi - viewLo
+
+            // y 转换 · 上是 max
+            func yFor(_ v: Double) -> CGFloat {
+                CGFloat(1 - (v - viewLo) / viewRange) * h
+            }
+
+            // 上下轨 dash 线（淡色）
+            var upperLine = Path()
+            upperLine.move(to: CGPoint(x: 0, y: yFor(evt.upperBand)))
+            upperLine.addLine(to: CGPoint(x: w, y: yFor(evt.upperBand)))
+            ctx.stroke(upperLine, with: .color(ChartTheme.chartLoss.opacity(0.4)),
+                       style: StrokeStyle(lineWidth: 0.6, dash: [2, 2]))
+
+            var lowerLine = Path()
+            lowerLine.move(to: CGPoint(x: 0, y: yFor(evt.lowerBand)))
+            lowerLine.addLine(to: CGPoint(x: w, y: yFor(evt.lowerBand)))
+            ctx.stroke(lowerLine, with: .color(ChartTheme.chartProfit.opacity(0.4)),
+                       style: StrokeStyle(lineWidth: 0.6, dash: [2, 2]))
+
+            // mean 中线（更淡）
+            var meanLine = Path()
+            meanLine.move(to: CGPoint(x: 0, y: yFor(evt.mean)))
+            meanLine.addLine(to: CGPoint(x: w, y: yFor(evt.mean)))
+            ctx.stroke(meanLine, with: .color(.secondary.opacity(0.3)),
+                       style: StrokeStyle(lineWidth: 0.5, dash: [1, 3]))
+
+            // spread 折线
+            var path = Path()
+            let stepX = w / CGFloat(series.count - 1)
+            for (i, v) in series.enumerated() {
+                let pt = CGPoint(x: CGFloat(i) * stepX, y: yFor(v))
+                if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+            }
+            ctx.stroke(path, with: .color(.accentColor),
+                       style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round))
+
+            // 末点 highlight（与 z 严重度色阶对齐）
+            if let last = series.last {
+                let cx = w
+                let cy = yFor(last)
+                let fillColor = zColor(evt.absZ)
+                ctx.fill(Path(ellipseIn: CGRect(x: cx - 2.5, y: cy - 2.5, width: 5, height: 5)),
+                         with: .color(fillColor))
+            }
+        }
+        .help("近 30 点 spread 走势 · 红虚线 = 上轨 +2σ · 绿虚线 = 下轨 -2σ · 末点高亮 = 当前位置")
+    }
+
+    /// 取 spread 的最近 N 点 series（mock · 与 SpreadAlertDetector 同算法）
+    private func lastNSpreadValues(for evt: SpreadAlertEvent, n: Int) -> [Double] {
+        switch evt.kind {
+        case .crossInstrument:
+            guard let pair = SpreadPresets.byID[evt.spreadID] else { return [] }
+            let values = SpreadAlertDetector.mockCrossInstrumentSeries(for: pair, count: 200)
+            return values.suffix(n).map { NSDecimalNumber(decimal: $0.value).doubleValue }
+        case .calendar:
+            guard let pair = CalendarSpreadPresets.byID[evt.spreadID] else { return [] }
+            let basePrice = SpreadAlertDetector.defaultBasePrice(pair.underlyingID)
+            let cal = CalendarSpreadCalculator.generateMockSeries(for: pair, basePrice: basePrice, count: 200)
+            return CalendarSpreadCalculator.toSpreadValues(cal).suffix(n).map { NSDecimalNumber(decimal: $0.value).doubleValue }
+        }
     }
 
     // MARK: - 图例栏

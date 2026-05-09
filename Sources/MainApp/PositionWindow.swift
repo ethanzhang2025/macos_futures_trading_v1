@@ -84,6 +84,13 @@ struct PositionWindow: View {
         return sorted(withMock)
     }
 
+    /// v15.82 · 全市场 combo 异常映射（与 ⌘⌥H/B/N/L 同跨窗口视觉）
+    private var comboMap: [String: ComboAnomaly] {
+        let result = AnomalyDetector.scan(instruments: SectorPresets.all)
+        let combos = ComboAnomalyAggregator.aggregate(events: result.events, minKinds: 3)
+        return Dictionary(uniqueKeysWithValues: combos.map { ($0.instrumentID, $0) })
+    }
+
     private func positionRow(for inst: SectorInstrument) -> PositionRow {
         // mock 公式：涨幅推多空 · clamp [0.30, 0.70]
         let raw = 0.5 + inst.changePct / 8.0
@@ -261,6 +268,9 @@ struct PositionWindow: View {
                     .font(.system(size: 11, design: .monospaced).bold())
                     .foregroundColor(netColor)
                     .frame(width: 80, alignment: .trailing)
+                // v15.82 · combo 徽章
+                comboBadge(for: inst)
+                    .frame(width: 56, alignment: .center)
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -268,7 +278,38 @@ struct PositionWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(inst.name)（\(inst.id)） · 多 \(String(format: "%.0fK", row.bullOI)) / 空 \(String(format: "%.0fK", row.bearOI)) · 净 \(String(format: "%+.0fK", row.netOI)) · 点击切主图")
+        .help(rowHelpText(inst, row: row))
+    }
+
+    @ViewBuilder
+    private func comboBadge(for inst: SectorInstrument) -> some View {
+        if let c = comboMap[inst.id] {
+            HStack(spacing: 2) {
+                Image(systemName: "sparkles").font(.system(size: 9))
+                Text("\(c.kindCount)/5").font(.system(size: 10, design: .monospaced).bold())
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(comboBadgeColor(c), in: RoundedRectangle(cornerRadius: 3))
+        } else {
+            Text("—").font(.caption2).foregroundColor(.secondary.opacity(0.4))
+        }
+    }
+
+    private func comboBadgeColor(_ c: ComboAnomaly) -> Color {
+        if c.kindCount >= 5 { return ChartTheme.chartLoss }
+        if c.kindCount == 4 { return .orange }
+        return .yellow
+    }
+
+    private func rowHelpText(_ inst: SectorInstrument, row: PositionRow) -> String {
+        let base = "\(inst.name)（\(inst.id)） · 多 \(String(format: "%.0fK", row.bullOI)) / 空 \(String(format: "%.0fK", row.bearOI)) · 净 \(String(format: "%+.0fK", row.netOI)) · 点击切主图"
+        guard let c = comboMap[inst.id] else { return base }
+        let kindLabel = AnomalyKind.allCases
+            .filter { c.kinds.contains($0) }
+            .map(\.displayName)
+            .joined(separator: " · ")
+        return base + " · ✨ Combo \(c.kindCount)/5（\(kindLabel)）"
     }
 
     /// 多空横条：左红多 / 右绿空 · 中点对齐

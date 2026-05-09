@@ -1008,6 +1008,11 @@ struct JournalWindow: View {
                     pendingNewJournalTradeIDs = ids
                     journalSheetState = .createJournal
                 }
+                // v16.9 · 复盘 v2 · 右键批量打标（toolbar 入口的右键快捷 · ids 同步进 selection 后弹 sheet）
+                Button("批量打 setup 标签（\(ids.count) 笔）") {
+                    selectedTradeIDs = ids
+                    showBatchSetupSheet = true
+                }
             }
         }
     }

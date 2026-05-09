@@ -110,4 +110,13 @@ public enum DrawingGeometry {
         let span = end.price - p0
         return levels.map { p0 + span * $0 }
     }
+
+    /// v15.88 价格区域 · 归一化上下价格（保证 upper ≥ lower · 顺序无关）
+    /// - Returns: (upper, lower) 仅 priceZone 且 endPoint 存在时有值
+    public static func priceZoneBounds(of drawing: Drawing) -> (upper: Decimal, lower: Decimal)? {
+        guard drawing.type == .priceZone, let end = drawing.endPoint else { return nil }
+        let p1 = drawing.startPoint.price
+        let p2 = end.price
+        return (upper: max(p1, p2), lower: min(p1, p2))
+    }
 }

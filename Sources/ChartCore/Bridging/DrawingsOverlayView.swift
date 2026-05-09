@@ -126,6 +126,7 @@ public struct DrawingsOverlayView: View {
         case .pitchfork:        drawPitchfork(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .polygon:          drawPolygon(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacciFan:     drawFibonacciFan(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .priceZone:        drawPriceZone(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         }
 
         if isSelected, !isPending {
@@ -195,6 +196,30 @@ public struct DrawingsOverlayView: View {
                 .foregroundColor(color)
             ctx.draw(text, at: CGPoint(x: 4, y: y - 8))
         }
+    }
+
+    /// v15.88 价格区域 · 上下两价格定带宽 · 全图横跨 · 半透明填充 + 上下边线 + 双价格标签
+    private func drawPriceZone(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let bounds = DrawingGeometry.priceZoneBounds(of: d) else { return }
+        let yUpper = yForPrice(bounds.upper, size: size)
+        let yLower = yForPrice(bounds.lower, size: size)
+        // 半透明填充
+        let rect = CGRect(x: 0, y: yUpper, width: size.width, height: yLower - yUpper)
+        ctx.fill(Path(rect), with: .color(color.opacity(0.12 * opacity)))
+        // 上下边线
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: yUpper)); path.addLine(to: CGPoint(x: size.width, y: yUpper))
+        path.move(to: CGPoint(x: 0, y: yLower)); path.addLine(to: CGPoint(x: size.width, y: yLower))
+        ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: dash))
+        // 双价格标签（左上 / 左下）
+        let upperText = Text(formatPrice(bounds.upper))
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundColor(color)
+        let lowerText = Text(formatPrice(bounds.lower))
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundColor(color)
+        ctx.draw(upperText, at: CGPoint(x: 4, y: yUpper - 8))
+        ctx.draw(lowerText, at: CGPoint(x: 4, y: yLower + 8))
     }
 
     /// v15.87 斐波那契扇形 · 从 startPoint 发射 3 条核心 fib 射线（38.2/50/61.8）
@@ -389,6 +414,7 @@ public struct DrawingsOverlayView: View {
         case .pitchfork:       return Color(red: 0.45, green: 0.78, blue: 0.42)  // 草绿（v13.17）
         case .polygon:         return Color(red: 0.85, green: 0.40, blue: 0.65)  // 玫红（v13.31）
         case .fibonacciFan:    return Color(red: 1.00, green: 0.42, blue: 0.42)  // 珊瑚红（v15.87 · 与 fibonacci 橙区分）
+        case .priceZone:       return Color(red: 0.55, green: 0.85, blue: 0.65)  // 薄荷绿（v15.88 · 关键支撑/阻力区域）
         }
     }
 

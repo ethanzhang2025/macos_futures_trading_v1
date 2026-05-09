@@ -25,6 +25,7 @@ struct DrawingFactoryTests {
         let pg = Drawing.polygon(points: [point(0, 100), point(5, 105), point(10, 100)])
         #expect(pg?.type == .polygon)
         #expect(Drawing.fibonacciFan(from: point(0, 100), to: point(10, 110)).type == .fibonacciFan)
+        #expect(Drawing.priceZone(from: point(0, 110), to: point(0, 100)).type == .priceZone)
     }
 
     @Test("v13.31 多边形 factory · 至少 3 点 / 少于 3 返回 nil / startPoint+extraPoints 映射")
@@ -493,6 +494,30 @@ struct DrawingGeometryTests {
         #expect(prices.count == 2)
         #expect(prices[0] == Decimal(string: "123.6"))
         #expect(prices[1] == Decimal(string: "178.6"))
+    }
+
+    @Test("v15.88 价格区域 · 上下归一化（顺序无关）")
+    func priceZoneBoundsNormalized() {
+        // 顺序 1：start=110 end=100 · upper 应为 110 / lower 应为 100
+        let d1 = Drawing.priceZone(from: point(0, 110), to: point(0, 100))
+        let b1 = DrawingGeometry.priceZoneBounds(of: d1)!
+        #expect(b1.upper == 110 && b1.lower == 100)
+        // 顺序 2：start=100 end=110 · 归一化后同
+        let d2 = Drawing.priceZone(from: point(0, 100), to: point(0, 110))
+        let b2 = DrawingGeometry.priceZoneBounds(of: d2)!
+        #expect(b2.upper == 110 && b2.lower == 100)
+    }
+
+    @Test("v15.88 价格区域 · 非匹配类型返回 nil")
+    func priceZoneTypeMismatch() {
+        let trend = Drawing.trendLine(from: point(0, 100), to: point(10, 110))
+        #expect(DrawingGeometry.priceZoneBounds(of: trend) == nil)
+    }
+
+    @Test("v15.88 价格区域 · pointsNeeded == 2")
+    func priceZonePointsContract() {
+        #expect(DrawingType.priceZone.pointsNeeded == 2)
+        #expect(DrawingType.priceZone.needsTwoPoints)
     }
 
     @Test("priceDistance 趋势线垂直差")

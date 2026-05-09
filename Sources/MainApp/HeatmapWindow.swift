@@ -74,7 +74,7 @@ struct HeatmapWindow: View {
             Divider()
             legendBar
         }
-        .frame(minWidth: 960, minHeight: 600)
+        .frame(minWidth: 1200, minHeight: 720)
         .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
             // v15.53 · 联动：切合约时高亮该 cell（保持原 sortMode · 不切板块）
             if let id = note.object as? String { highlightedID = id }

@@ -80,12 +80,20 @@ on run argv
             tell application "System Events" to keystroke keyStr using {command down, shift down, option down}
         end if
 
-        -- 等渲染（行情/board 类窗口需要更久）
-        delay 0.9
+        -- 等渲染（行情/board 类窗口需要更久 · 主图加载真行情 ~2s）
+        delay 2.0
 
-        -- screencapture 整屏（避免 -W 需用户点击）· -x 静音 · -o 不画影
+        -- screencapture -l <window-id>：只截当前 frontmost 窗口（不含 dock / 后台 app）
+        -- 拿 frontmost window id（System Events 的 window id 与 screencapture 不同 · 用 AppKit 路径）
         set outPath to shotsDir & "/" & seq & "_" & winName & ".png"
-        do shell script "screencapture -x -o " & quoted form of outPath
+        try
+            -- 获取 frontmost app 的 window id（screencapture -l 兼容格式）
+            set winID to do shell script "osascript -e 'tell application \"System Events\" to tell (first process whose frontmost is true) to id of front window'"
+            do shell script "screencapture -x -o -l " & winID & " " & quoted form of outPath
+        on error
+            -- fallback 整屏（极少数情况下找不到 window id · 比如 sheet 状态）
+            do shell script "screencapture -x -o " & quoted form of outPath
+        end try
 
         delay 0.2
     end repeat

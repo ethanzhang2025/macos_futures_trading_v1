@@ -1,0 +1,133 @@
+// SpreadDeviation alert 测试（v15.57 · ⌘⌥W 一键加预警）
+//
+// 覆盖：
+// - AlertCondition.spreadDeviation Codable round-trip（兼容 9 现有 case 一起）
+// - AlertEvaluator onTick 看到 spreadDeviation 不触发（v1 placeholder）
+// - AlertEvaluator onBar 看到 spreadDeviation 不触发
+// - AlertHistoryFilter ConditionKind.of 映射 .spread
+
+import Testing
+import Foundation
+import Shared
+@testable import AlertCore
+
+private func makeTick(_ instrumentID: String, price: Decimal, openInterest: Decimal = 0) -> Tick {
+    Tick(
+        instrumentID: instrumentID,
+        lastPrice: price, volume: 100, openInterest: openInterest, turnover: 0,
+        bidPrices: [], askPrices: [], bidVolumes: [], askVolumes: [],
+        highestPrice: 0, lowestPrice: 0, openPrice: 0,
+        preClosePrice: 0, preSettlementPrice: 0,
+        upperLimitPrice: 0, lowerLimitPrice: 0,
+        updateTime: "00:00:00", updateMillisec: 0,
+        tradingDay: "20260508", actionDay: "20260508"
+    )
+}
+
+@Suite("SpreadDeviation alert · v15.57 placeholder + 数据契约")
+struct SpreadDeviationAlertTests {
+
+    // MARK: - Codable
+
+    @Test("AlertCondition.spreadDeviation Codable round-trip")
+    func codableRoundTrip() throws {
+        let cond = AlertCondition.spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.5)
+        let data = try JSONEncoder().encode(cond)
+        let decoded = try JSONDecoder().decode(AlertCondition.self, from: data)
+        #expect(decoded == cond)
+    }
+
+    @Test("AlertCondition.spreadDeviation 跨期变体 round-trip")
+    func calendarRoundTrip() throws {
+        let cond = AlertCondition.spreadDeviation(spreadID: "rb-05-10", isCalendar: true, zThreshold: 3.0)
+        let data = try JSONEncoder().encode(cond)
+        let decoded = try JSONDecoder().decode(AlertCondition.self, from: data)
+        #expect(decoded == cond)
+    }
+
+    @Test("Alert struct 包含 spreadDeviation condition · 完整 Codable round-trip")
+    func alertWithSpreadConditionRoundTrip() throws {
+        let alert = Alert(
+            name: "[价差] 螺纹热卷 上轨突破",
+            instrumentID: "RB0",
+            condition: .spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.0),
+            cooldownSeconds: 600
+        )
+        let data = try JSONEncoder().encode(alert)
+        let decoded = try JSONDecoder().decode(Alert.self, from: data)
+        #expect(decoded.condition == alert.condition)
+        #expect(decoded.name == alert.name)
+        #expect(decoded.instrumentID == "RB0")
+    }
+
+    // MARK: - Evaluator placeholder（v1 不触发）
+
+    @Test("AlertEvaluator.onTick 收到 spreadDeviation alert · 不触发（lastTriggeredAt 保持 nil）")
+    func evaluatorOnTickDoesNotTrigger() async {
+        let evaluator = AlertEvaluator()
+        let alert = Alert(
+            name: "[价差] rb-hc",
+            instrumentID: "RB0",
+            condition: .spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.0)
+        )
+        await evaluator.addAlert(alert)
+
+        // 模拟 RB0 多个 tick · spread alert 不应触发（lastTriggeredAt 保持 nil）
+        for i in 0..<5 {
+            let tick = makeTick("RB0", price: Decimal(3245 + i * 10), openInterest: 1200)
+            await evaluator.onTick(tick)
+        }
+
+        let after = await evaluator.allAlerts()
+        #expect(after.count == 1)
+        #expect(after.first?.lastTriggeredAt == nil)
+    }
+
+    @Test("AlertEvaluator.onBar 收到 spreadDeviation alert · 不触发")
+    func evaluatorOnBarDoesNotTrigger() async {
+        let evaluator = AlertEvaluator()
+        let alert = Alert(
+            name: "[价差] rb-05-10",
+            instrumentID: "RB2505",
+            condition: .spreadDeviation(spreadID: "rb-05-10", isCalendar: true, zThreshold: 2.0)
+        )
+        await evaluator.addAlert(alert)
+
+        for i in 0..<3 {
+            let bar = KLine(
+                instrumentID: "RB2505", period: .daily,
+                openTime: Date().addingTimeInterval(TimeInterval(i) * 86400),
+                open: 3245, high: 3260, low: 3230, close: 3250,
+                volume: 1000, openInterest: 0, turnover: 0
+            )
+            await evaluator.onBar(bar, instrumentID: "RB2505", period: .daily)
+        }
+
+        let after = await evaluator.allAlerts()
+        #expect(after.count == 1)
+        #expect(after.first?.lastTriggeredAt == nil)
+    }
+
+    @Test("alert 被加入 evaluator 后 allAlerts 可查到（持久化语义）")
+    func alertPersistedInEvaluator() async {
+        let evaluator = AlertEvaluator()
+        let alert = Alert(
+            name: "[价差] au-80ag",
+            instrumentID: "AU0",
+            condition: .spreadDeviation(spreadID: "au-80ag", isCalendar: false, zThreshold: 2.0)
+        )
+        await evaluator.addAlert(alert)
+        let all = await evaluator.allAlerts()
+        #expect(all.count == 1)
+        #expect(all.first?.condition == alert.condition)
+        #expect(all.first?.id == alert.id)
+    }
+
+    // MARK: - AlertHistoryFilter 映射
+
+    @Test("AlertHistoryStatistics.ConditionKind.of(.spreadDeviation) → .spread")
+    func historyFilterMapping() {
+        let cond = AlertCondition.spreadDeviation(spreadID: "rb-hc", isCalendar: false, zThreshold: 2.0)
+        #expect(AlertHistoryStatistics.ConditionKind.of(cond) == .spread)
+    }
+}

@@ -928,6 +928,7 @@ struct AlertWindow: View {
         case .volumeSpike, .openInterestSpike, .priceMoveSpike:  return 0
         case .indicator:                        return 0
         case .priceBreakoutHigh, .priceBreakoutLow:  return 0   // v15.19+ batch16 · onBar 评估 · 测试触发价 0
+        case .spreadDeviation:                  return 0   // v15.57 · placeholder · 不参与测试触发
         }
     }
 
@@ -1412,6 +1413,7 @@ struct AlertWindow: View {
 
 /// 10 类可编辑 condition（horizontalLineTouched 需 drawingID 选择 · 留 v2）
 /// v15.19+ batch16 · 加 priceBreakoutHigh / priceBreakoutLow（Donchian 突破）
+/// v15.57 · 加 spreadDeviation · sheet 不开放手动创建（picker hide · 由 ⌘⌥W + 按钮入口）
 private enum ConditionKind: String, CaseIterable, Identifiable {
     case priceAbove          = "价格 >"
     case priceBelow          = "价格 <"
@@ -1423,7 +1425,13 @@ private enum ConditionKind: String, CaseIterable, Identifiable {
     case openInterestSpike   = "持仓量异常"
     case priceMoveSpike      = "价格急动"
     case indicator           = "指标条件"
+    case spreadDeviation     = "价差偏离"
     var id: String { rawValue }
+
+    /// sheet picker 仅露 9 类用户可编辑（spreadDeviation 由 ⌘⌥W 一键加预警入口创建）
+    static var sheetEditableCases: [ConditionKind] {
+        Self.allCases.filter { $0 != .spreadDeviation }
+    }
 
     static func of(_ c: AlertCondition) -> ConditionKind {
         switch c {
@@ -1438,6 +1446,7 @@ private enum ConditionKind: String, CaseIterable, Identifiable {
         case .openInterestSpike:     return .openInterestSpike
         case .priceMoveSpike:        return .priceMoveSpike
         case .indicator:             return .indicator
+        case .spreadDeviation:       return .spreadDeviation
         }
     }
 }
@@ -1507,6 +1516,10 @@ private struct AlertFormDraft {
         case .priceBreakoutHigh(let p, let n), .priceBreakoutLow(let p, let n):
             breakoutPeriod = p
             breakoutLookback = n
+        case .spreadDeviation:
+            // v15.57 · placeholder · sheet 不允许编辑 · 用户应从 ⌘⌥W 入口创建
+            // loadConditionParams 仅在 edit 既有 alert 时调 · 此处保持默认值不读 spread params
+            break
         case .indicator(let spec):
             indicatorKind = spec.indicator
             indicatorPeriod = spec.period
@@ -1545,6 +1558,9 @@ private struct AlertFormDraft {
             return .priceBreakoutHigh(period: breakoutPeriod, lookback: max(1, breakoutLookback))
         case .priceBreakoutLow:
             return .priceBreakoutLow(period: breakoutPeriod, lookback: max(1, breakoutLookback))
+        case .spreadDeviation:
+            // v15.57 · sheet 不开放手动创建 · 兜底返 priceAbove(0) 不会被实际使用
+            return .priceAbove(0)
         case .indicator:
             let params: [Decimal]
             switch indicatorKind {
@@ -1611,7 +1627,7 @@ struct AddOrEditAlertSheet: View {
 
                 Section("条件") {
                     Picker("类型", selection: $draft.conditionKind) {
-                        ForEach(ConditionKind.allCases) { k in
+                        ForEach(ConditionKind.sheetEditableCases) { k in
                             Text(k.rawValue).tag(k)
                         }
                     }

@@ -68,6 +68,7 @@ public enum AlertHistoryStatistics {
         case lineTouched  = "画线触及"
         case spike        = "异动"
         case indicator    = "指标"
+        case spread       = "价差偏离"  // v15.57 · 价差对 ±2σ 偏离
 
         public static func of(_ c: AlertCondition) -> ConditionKind {
             switch c {
@@ -77,6 +78,7 @@ public enum AlertHistoryStatistics {
             case .horizontalLineTouched:                   return .lineTouched
             case .volumeSpike, .openInterestSpike, .priceMoveSpike: return .spike
             case .indicator:                               return .indicator
+            case .spreadDeviation:                         return .spread
             }
         }
     }

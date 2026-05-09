@@ -56,6 +56,8 @@ public enum AlertHistoryCSVExporter {
         case .openInterestSpike(let m, let n):  return "持仓量 ≥ \(m)× / \(n)期"
         case .priceMoveSpike(let p, let s):     return "急动 ≥ \(p)% / \(s)秒"
         case .indicator:                        return "指标条件"
+        case .spreadDeviation(let id, let cal, let z):
+            return "价差偏离 \(cal ? "跨期" : "跨品种") \(id) |z|≥\(z)"
         }
     }
 

@@ -56,6 +56,18 @@ public enum AlertCondition: Sendable, Codable, Equatable, Hashable {
     /// 指标条件预警 · 走 K 线序列驱动 · 由 evaluator.onBar 评估（不在 onTick 路径）
     /// 详见 IndicatorAlertSpec
     case indicator(IndicatorAlertSpec)
+
+    // MARK: - 价差类（v15.57 · ⌘⌥W 一键加预警）
+
+    /// 价差偏离预警 · spreadID 引用 SpreadPresets / CalendarSpreadPresets 的对 ID
+    /// - spreadID："rb-hc"（跨品种）/ "rb-05-10"（跨期）
+    /// - isCalendar: true=跨期 · false=跨品种
+    /// - zThreshold: |Z-score| 触发阈值（典型 2.0 = ±2σ）
+    ///
+    /// v1 placeholder · evaluator.onTick / onBar 不评估（return false）·
+    /// 数据持久化 + UI 列表展示 ✓ · 真触发逻辑 v2 真行情接入时加 onSpreadValue() 路径。
+    /// instrumentID 字段保留近月合约 · UI 通过 spreadID 反查 SpreadPresets 显示价差名。
+    case spreadDeviation(spreadID: String, isCalendar: Bool, zThreshold: Decimal)
 }
 
 /// 预警状态

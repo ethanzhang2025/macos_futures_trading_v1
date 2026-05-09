@@ -290,6 +290,9 @@ public actor AlertEvaluator {
             case .priceBreakoutHigh, .priceBreakoutLow:
                 // v15.19+ batch16 · Donchian 突破走 onBar 路径 · onTick 不评估
                 return (false, "")
+            case .spreadDeviation:
+                // v15.57 placeholder · v1 不评估 · v2 真行情阶段加 onSpreadValue() 路径推 spread 序列
+                return (false, "")
             }
         }()
 

@@ -55,6 +55,11 @@ struct ReviewWindow: View {
         dateFilterRawTag = filter.rawTag
     }
 
+    /// v16.8 · 三 filter 任一非默认 → 显示 reset 按钮
+    private var hasActiveFilter: Bool {
+        dateFilter != .all || filterInstrument != nil || filterSetup != nil
+    }
+
     var body: some View {
         Group {
             if let summary {
@@ -430,6 +435,20 @@ struct ReviewWindow: View {
                 }
                 .frame(width: 130)
                 .tooltip("按策略 setup 标签筛选 · 与合约/区间互补 · 自动从持仓列举（v15.99）")
+
+                // v16.8 · 三 filter 统一 reset（任一 filter 非默认时显示 · trader 一键回归全部）
+                if hasActiveFilter {
+                    Button {
+                        setDateFilter(.all)
+                        filterInstrument = nil
+                        filterSetup = nil
+                        Toast.info("已清空筛选", "区间 / 合约 / 策略 全部回归")
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .tooltip("一键清空三个 filter（区间 / 合约 / 策略）· v16.8")
+                }
 
                 // v15.23 batch205 · 当前合约 filter 时 · 加跳主图 button（trader 看绩效后想去图上验证）
                 if let inst = filterInstrument {

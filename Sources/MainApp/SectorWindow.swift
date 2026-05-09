@@ -65,6 +65,12 @@ struct SectorWindow: View {
             sectorOverviewFooter
         }
         .frame(minWidth: 960, minHeight: 600)
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
+            // v15.53 · 联动：切合约时自动切到该合约的板块
+            if let id = note.object as? String, let sec = SectorPresets.byID[id]?.sector {
+                selectedSector = sec
+            }
+        }
     }
 
     // MARK: - 顶部板块 Tab + 排序

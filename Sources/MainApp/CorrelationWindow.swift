@@ -76,6 +76,12 @@ struct CorrelationWindow: View {
             legendBar
         }
         .frame(minWidth: 1100, minHeight: 720)
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
+            // v15.53 · 联动：切合约时自动切到该合约的板块（让矩阵显示该板块）
+            if let id = note.object as? String, let sec = SectorPresets.byID[id]?.sector {
+                sectorFilter = .sector(sec)
+            }
+        }
     }
 
     // MARK: - Toolbar

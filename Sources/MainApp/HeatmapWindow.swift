@@ -22,6 +22,8 @@ struct HeatmapWindow: View {
 
     @State private var sortMode: SortMode = .bySector
     @State private var hoveredID: String?
+    /// v15.53 · 接收 watchlistInstrumentSelected · 高亮该 cell
+    @State private var highlightedID: String?
     @Environment(\.openWindow) private var openWindow
 
     enum SortMode: String, CaseIterable, Identifiable {
@@ -63,6 +65,10 @@ struct HeatmapWindow: View {
             legendBar
         }
         .frame(minWidth: 960, minHeight: 600)
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
+            // v15.53 · 联动：切合约时高亮该 cell（保持原 sortMode · 不切板块）
+            if let id = note.object as? String { highlightedID = id }
+        }
     }
 
     // MARK: - Toolbar
@@ -167,6 +173,7 @@ struct HeatmapWindow: View {
             bgColor = Color.gray.opacity(0.15)
         }
         let isHovered = hoveredID == inst.id
+        let isHighlighted = highlightedID == inst.id
         return Button {
             // v15.44 v2：复用 watchlistInstrumentSelected 通道（与 ⌘L 自选 / ⌘B 预警同机制）
             // 主图 ChartScene 接收后切合约 · 默认在 chart 窗口前置
@@ -191,7 +198,8 @@ struct HeatmapWindow: View {
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
-                    .stroke(isHovered ? Color.white.opacity(0.7) : Color.clear, lineWidth: 1.2)
+                    .stroke(isHighlighted ? ChartTheme.chartLine : (isHovered ? Color.white.opacity(0.7) : Color.clear),
+                            lineWidth: isHighlighted ? 2 : 1.2)
             )
             .foregroundColor(.white)
             .scaleEffect(isHovered ? 1.05 : 1.0)

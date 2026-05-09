@@ -69,6 +69,9 @@ struct WatchlistWindow: View {
     @State private var quotes: [String: SinaQuote] = [:]
     @State private var quoteFetchTask: Task<Void, Never>?
 
+    /// v15.78 · combo 异常周期 fetch · 30s 间隔（detector 是纯函数 · 不发网络请求）
+    @State private var comboFetchTask: Task<Void, Never>?
+
     /// v12.17 文华自选导入预览（NSOpenPanel 选 .txt 解析后 · 用户确认前的 holding 状态）
     @State private var importPreview: ImportPreview?
 
@@ -115,6 +118,10 @@ struct WatchlistWindow: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.storeManager) private var storeManager
 
+    /// v15.78 · 全市场 combo 异常映射 by instrumentID（与 SectorPresets.id "RB0" 对齐）
+    /// @State 缓存避免每行重算（自选 50+ 合约时 SwiftUI 重渲性能保护）
+    @State private var comboMap: [String: ComboAnomaly] = [:]
+
     var body: some View {
         NavigationSplitView {
             sidebar
@@ -137,10 +144,15 @@ struct WatchlistWindow: View {
                 selectedGroupID = book.groups.first?.id
             }
             startQuoteFetch()
+            // v15.78 · 加载 combo 异常映射 + 30s 周期刷新（与 quote fetch 节奏对齐）
+            refreshComboMap()
+            startComboFetch()
         }
         .onDisappear {
             quoteFetchTask?.cancel()
             quoteFetchTask = nil
+            comboFetchTask?.cancel()
+            comboFetchTask = nil
         }
         .onChange(of: book) { newValue in
             // M5 自动持久化：每次 book 变化异步 save · isLoaded 守卫避免初始 Mock 误写覆盖真数据
@@ -680,6 +692,10 @@ struct WatchlistWindow: View {
                 .font(.system(.body, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .trailing)
+            Spacer().frame(width: 12)
+            // v15.78 · combo 徽章（聚合视图同款 · 跨视图统一）
+            comboWatchlistBadge(for: id)
+                .frame(width: 56, alignment: .center)
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -1049,6 +1065,10 @@ struct WatchlistWindow: View {
                 .font(.system(.body, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .trailing)
+            Spacer().frame(width: 12)
+            // v15.78 · combo 徽章（命中才显示 · 跨窗口视觉与 ⌘⌥H/B/N 一致）
+            comboWatchlistBadge(for: id)
+                .frame(width: 56, alignment: .center)
             Spacer()
         }
         .padding(.vertical, 4)
@@ -1472,6 +1492,68 @@ struct WatchlistWindow: View {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
+    }
+
+    // MARK: - v15.78 · combo 异常映射周期刷新
+
+    /// 启动 30s 周期刷 comboMap · detector 全是纯函数 · 60 品种 ~1ms · 不发网络
+    private func startComboFetch() {
+        comboFetchTask?.cancel()
+        comboFetchTask = Task { @MainActor in
+            while !Task.isCancelled {
+                refreshComboMap()
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+            }
+        }
+    }
+
+    @MainActor
+    private func refreshComboMap() {
+        let result = AnomalyDetector.scan(instruments: SectorPresets.all)
+        let combos = ComboAnomalyAggregator.aggregate(events: result.events, minKinds: 3)
+        comboMap = Dictionary(uniqueKeysWithValues: combos.map { ($0.instrumentID, $0) })
+    }
+
+    /// v15.78 · 用户合约名（"rb2509"）→ SectorPresets.id（"RB0"）映射兼容（与 SectorHUDInfo.matchInstrument 同模式）
+    private func comboFor(userID: String) -> ComboAnomaly? {
+        if let c = comboMap[userID] { return c }
+        let upper = userID.uppercased()
+        if let c = comboMap[upper] { return c }
+        let letters = String(upper.prefix(while: { $0.isLetter }))
+        guard !letters.isEmpty else { return nil }
+        if let c = comboMap["\(letters)0"] { return c }
+        return nil
+    }
+
+    /// v15.78 · 自选行 combo 徽章（命中才显示）
+    @ViewBuilder
+    private func comboWatchlistBadge(for id: String) -> some View {
+        if let c = comboFor(userID: id) {
+            HStack(spacing: 2) {
+                Image(systemName: "sparkles").font(.system(size: 9))
+                Text("\(c.kindCount)/5").font(.system(size: 10, design: .monospaced).bold())
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(comboBadgeColor(c), in: RoundedRectangle(cornerRadius: 3))
+            .help(comboHelpText(c))
+        } else {
+            Text("—").font(.caption2).foregroundColor(.secondary.opacity(0.4))
+        }
+    }
+
+    private func comboBadgeColor(_ c: ComboAnomaly) -> Color {
+        if c.kindCount >= 5 { return ChartTheme.chartLoss }
+        if c.kindCount == 4 { return .orange }
+        return .yellow
+    }
+
+    private func comboHelpText(_ c: ComboAnomaly) -> String {
+        let kindLabel = AnomalyKind.allCases
+            .filter { c.kinds.contains($0) }
+            .map(\.displayName)
+            .joined(separator: " · ")
+        return "✨ Combo \(c.kindCount)/5（\(kindLabel)）· severity \(Int(c.totalSeverity))"
     }
 
     /// v15.21 batch109 · 立即刷新报价（不影响 5s 周期 task · trader 重要数据/会议前后强刷）

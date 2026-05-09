@@ -312,6 +312,7 @@ struct FuturesTerminalApp: App {
                 OpenSectorButton()     // v15.43 · WP-行情 V3 板块联动 ⌘⌥B
                 OpenHeatmapButton()    // v15.44 · WP-行情 热力地图 ⌘⌥H
                 OpenPositionButton()   // v15.47 · WP-行情 多空持仓 ⌘⌥P
+                OpenCorrelationButton() // v15.48 · WP-行情 关联性矩阵 ⌘⌥C
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -442,6 +443,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1080, height: 700)
+
+        // v15.48 · WP-行情 关联性矩阵（⌘⌥C · N×N 品种相关性热力图 · 套利+对冲核心工具）
+        WindowGroup("关联性矩阵", id: "correlation") {
+            CorrelationWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1280, height: 800)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -598,6 +606,15 @@ private struct OpenPositionButton: View {
     var body: some View {
         Button("多空持仓（⌘⌥P）") { openWindow(id: "position") }
             .keyboardShortcut("p", modifiers: [.command, .option])
+    }
+}
+
+/// v15.48 · WP-行情 关联性矩阵入口（⌘⌥C · N×N 品种相关性 · 套利对+对冲品种核心工具）
+private struct OpenCorrelationButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("关联性矩阵（⌘⌥C）") { openWindow(id: "correlation") }
+            .keyboardShortcut("c", modifiers: [.command, .option])
     }
 }
 

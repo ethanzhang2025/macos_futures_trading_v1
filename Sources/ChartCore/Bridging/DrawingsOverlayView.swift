@@ -2,7 +2,10 @@
 //
 // 职责：
 //   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedIDs
-//   - 用 SwiftUI Canvas 绘制 6 种画线类型（trendLine / horizontalLine / rectangle / parallelChannel / fibonacci / text）
+//   - 用 SwiftUI Canvas 绘制 14 种画线类型（v15.90 后）：
+//     trendLine / horizontalLine / rectangle / parallelChannel / fibonacci / text /
+//     ellipse / ruler / pitchfork / polygon /
+//     fibonacciFan / priceZone / gannFan / fibonacciTimeZone
 //   - 选中态高亮（线宽 +1.0 · 色彩饱和度提高）· v13.9 升级支持多选
 //   - v13.8 渲染优先用 drawing.strokeColorHex / strokeWidth · 缺省回退到类型默认色 + 1.5
 //   - allowsHitTesting false（鼠标事件在 ChartScene 内的 onTapGesture / DragGesture 处理 · 这里只渲染）

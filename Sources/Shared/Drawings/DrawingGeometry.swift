@@ -22,6 +22,13 @@ public enum FibonacciLevels {
         Decimal(string: "1.618")!,
         Decimal(string: "2.618")!
     ]
+
+    /// 扇形核心 3 比例（v15.87 · 38.2 / 50 / 61.8 · 市面交易软件惯例）
+    public static let fanCore: [Decimal] = [
+        Decimal(string: "0.382")!,
+        Decimal(string: "0.5")!,
+        Decimal(string: "0.618")!
+    ]
 }
 
 public enum DrawingGeometry {
@@ -91,5 +98,16 @@ public enum DrawingGeometry {
     public static func priceDistance(from drawing: Drawing, atBar barIndex: Int, price: Decimal) -> Decimal? {
         guard let onLine = linePrice(of: drawing, atBar: barIndex) else { return nil }
         return abs(onLine - price)
+    }
+
+    /// v15.87 斐波那契扇形 · 各核心 level 在 endPoint barIndex 处的目标价格（射线终点价格）
+    /// - 射线起点固定为 drawing.startPoint
+    /// - 射线终点为 (end.barIndex, p0 + level × (p1 - p0))
+    /// - Returns: 与 levels 同长 · 非 fibonacciFan 或缺 endPoint 返回空
+    public static func fibonacciFanTargetPrices(for drawing: Drawing, levels: [Decimal] = FibonacciLevels.fanCore) -> [Decimal] {
+        guard drawing.type == .fibonacciFan, let end = drawing.endPoint else { return [] }
+        let p0 = drawing.startPoint.price
+        let span = end.price - p0
+        return levels.map { p0 + span * $0 }
     }
 }

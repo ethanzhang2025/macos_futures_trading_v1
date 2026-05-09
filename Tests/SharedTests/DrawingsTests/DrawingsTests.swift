@@ -24,6 +24,7 @@ struct DrawingFactoryTests {
         #expect(Drawing.pitchfork(handle: point(0, 100), upper: point(10, 110), lower: point(10, 90)).type == .pitchfork)
         let pg = Drawing.polygon(points: [point(0, 100), point(5, 105), point(10, 100)])
         #expect(pg?.type == .polygon)
+        #expect(Drawing.fibonacciFan(from: point(0, 100), to: point(10, 110)).type == .fibonacciFan)
     }
 
     @Test("v13.31 多边形 factory · 至少 3 点 / 少于 3 返回 nil / startPoint+extraPoints 映射")
@@ -458,6 +459,40 @@ struct DrawingGeometryTests {
         #expect(DrawingGeometry.linePrice(of: h, atBar: 5) == nil)
         #expect(DrawingGeometry.rectangleBounds(of: h) == nil)
         #expect(DrawingGeometry.fibonacciPrices(for: h).isEmpty)
+    }
+
+    @Test("v15.87 斐波那契扇形 · 3 条核心射线目标价（38.2/50/61.8）")
+    func fibonacciFanTargets() {
+        let d = Drawing.fibonacciFan(from: point(0, 100), to: point(10, 200))  // span 100
+        let prices = DrawingGeometry.fibonacciFanTargetPrices(for: d)
+        #expect(prices.count == 3)
+        #expect(prices[0] == Decimal(string: "138.2"))   // 38.2%
+        #expect(prices[1] == 150)                         // 50%
+        #expect(prices[2] == Decimal(string: "161.8"))   // 61.8%
+    }
+
+    @Test("v15.87 斐波那契扇形 · 非匹配类型返回空")
+    func fibonacciFanTypeMismatch() {
+        let trend = Drawing.trendLine(from: point(0, 100), to: point(10, 200))
+        #expect(DrawingGeometry.fibonacciFanTargetPrices(for: trend).isEmpty)
+        let fib = Drawing.fibonacci(from: point(0, 100), to: point(10, 200))
+        #expect(DrawingGeometry.fibonacciFanTargetPrices(for: fib).isEmpty)
+    }
+
+    @Test("v15.87 斐波那契扇形 · pointsNeeded == 2（双点画线）")
+    func fibonacciFanPointsContract() {
+        #expect(DrawingType.fibonacciFan.pointsNeeded == 2)
+        #expect(DrawingType.fibonacciFan.needsTwoPoints)
+    }
+
+    @Test("v15.87 斐波那契扇形 · 自定义 levels 计算正确")
+    func fibonacciFanCustomLevels() {
+        let d = Drawing.fibonacciFan(from: point(0, 100), to: point(10, 200))  // span 100
+        let custom: [Decimal] = [Decimal(string: "0.236")!, Decimal(string: "0.786")!]
+        let prices = DrawingGeometry.fibonacciFanTargetPrices(for: d, levels: custom)
+        #expect(prices.count == 2)
+        #expect(prices[0] == Decimal(string: "123.6"))
+        #expect(prices[1] == Decimal(string: "178.6"))
     }
 
     @Test("priceDistance 趋势线垂直差")

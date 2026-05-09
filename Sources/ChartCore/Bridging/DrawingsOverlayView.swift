@@ -125,6 +125,7 @@ public struct DrawingsOverlayView: View {
         case .ruler:            drawRuler(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .pitchfork:        drawPitchfork(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .polygon:          drawPolygon(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .fibonacciFan:     drawFibonacciFan(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         }
 
         if isSelected, !isPending {
@@ -193,6 +194,40 @@ public struct DrawingsOverlayView: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(color)
             ctx.draw(text, at: CGPoint(x: 4, y: y - 8))
+        }
+    }
+
+    /// v15.87 斐波那契扇形 · 从 startPoint 发射 3 条核心 fib 射线（38.2/50/61.8）
+    /// 每条射线终点 = (end.barIndex, p0 + level × span) · 复用 pitchforkExtensionScale 延伸到画布边界
+    private func drawFibonacciFan(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let a = CGPoint(x: xForBar(d.startPoint.barIndex, size: size), y: yForPrice(d.startPoint.price, size: size))
+        let endX = xForBar(end.barIndex, size: size)
+        let levels = FibonacciLevels.fanCore
+        let prices = DrawingGeometry.fibonacciFanTargetPrices(for: d, levels: levels)
+        // 0% / 100% 锚虚线（视觉提示双锚 · 不画 0 和 100 射线 · 因等同 trendLine）
+        var basePath = Path()
+        basePath.move(to: a)
+        basePath.addLine(to: CGPoint(x: endX, y: yForPrice(end.price, size: size)))
+        ctx.stroke(basePath, with: .color(color.opacity(0.35 * opacity)), style: StrokeStyle(lineWidth: width * 0.6, dash: [3, 2]))
+        // 3 条核心 fib 射线 · 起点 a · 经过 (endX, levelPrice) · 延伸到画布边界
+        for (i, price) in prices.enumerated() {
+            let target = CGPoint(x: endX, y: yForPrice(price, size: size))
+            let dx = target.x - a.x
+            let dy = target.y - a.y
+            guard abs(dx) > 0.0001 || abs(dy) > 0.0001 else { continue }
+            let t = Self.pitchforkExtensionScale(a: a, dx: dx, dy: dy, size: size)
+            var ray = Path()
+            ray.move(to: a)
+            ray.addLine(to: CGPoint(x: a.x + t * dx, y: a.y + t * dy))
+            ctx.stroke(ray, with: .color(color.opacity(0.75 * opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: dash))
+            // level 标签 · 紧挨射线 endX 处（target 点旁）
+            let pct = NSDecimalNumber(decimal: levels[i]).doubleValue * 100
+            let label = String(format: "%.1f%%", pct)
+            let text = Text(label)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(color)
+            ctx.draw(text, at: CGPoint(x: target.x + 18, y: target.y))
         }
     }
 
@@ -353,6 +388,7 @@ public struct DrawingsOverlayView: View {
         case .ruler:           return Color(red: 0.96, green: 0.69, blue: 0.18)  // 金（v13.14）
         case .pitchfork:       return Color(red: 0.45, green: 0.78, blue: 0.42)  // 草绿（v13.17）
         case .polygon:         return Color(red: 0.85, green: 0.40, blue: 0.65)  // 玫红（v13.31）
+        case .fibonacciFan:    return Color(red: 1.00, green: 0.42, blue: 0.42)  // 珊瑚红（v15.87 · 与 fibonacci 橙区分）
         }
     }
 

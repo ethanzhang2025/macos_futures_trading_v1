@@ -88,6 +88,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .ruler:           return "测量工具"
     case .pitchfork:       return "Pitchfork"
     case .polygon:         return "多边形"
+    case .fibonacciFan:    return "斐波那契扇形"
     }
 }
 
@@ -887,6 +888,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "rectangle", tool: .rectangle, help: "矩形（双点对角）")
             drawingToolButton(icon: "lines.measurement.horizontal", tool: .parallelChannel, help: "平行通道（双点 · 默认 +1.0 偏移）")
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
+            drawingToolButton(icon: "wand.and.rays", tool: .fibonacciFan, help: "斐波那契扇形（双点 · 38.2/50/61.8 三射线）")
             drawingToolButton(icon: "circle", tool: .ellipse, help: "椭圆（双点对角）")
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
             drawingToolButton(icon: "tuningfork", tool: .pitchfork, help: "Andrew's Pitchfork（3 点 · 中线 + 上下平行轨）")
@@ -1202,6 +1204,7 @@ struct ChartScene: View {
         case .horizontalLine:   return .keyLevel
         case .parallelChannel:  return .channel
         case .fibonacci:        return .channel
+        case .fibonacciFan:     return .channel
         case .text:             return .annotation
         case .rectangle:        return .keyLevel
         default:                return .custom
@@ -3973,6 +3976,25 @@ struct ChartContentView: View {
                 Self.pointToSegmentDistance(p, b, upperEnd),
                 Self.pointToSegmentDistance(p, c, lowerEnd)
             )
+
+        case .fibonacciFan:
+            // v15.87 斐波那契扇形 · 3 条核心射线（38.2/50/61.8）的最小线段距离 · 与渲染共用同一 t 延伸
+            guard let end = drawing.endPoint else { return .infinity }
+            let a = screenPoint(drawing.startPoint)
+            let endX = screenPoint(end).x
+            let prices = DrawingGeometry.fibonacciFanTargetPrices(for: drawing)
+            var minD: CGFloat = .infinity
+            for price in prices {
+                let target = screenPoint(DrawingPoint(barIndex: end.barIndex, price: price))
+                let targetAtEndX = CGPoint(x: endX, y: target.y)
+                let dx = targetAtEndX.x - a.x
+                let dy = targetAtEndX.y - a.y
+                guard abs(dx) > 0.0001 || abs(dy) > 0.0001 else { continue }
+                let t = DrawingsOverlayView.pitchforkExtensionScale(a: a, dx: dx, dy: dy, size: size)
+                let rayEnd = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
+                minD = min(minD, Self.pointToSegmentDistance(p, a, rayEnd))
+            }
+            return minD
         }
     }
 
@@ -4002,6 +4024,8 @@ struct ChartContentView: View {
             return Drawing.parallelChannel(from: firstPoint, to: hoverPoint, offset: offset)
         case .fibonacci:
             return Drawing.fibonacci(from: firstPoint, to: hoverPoint)
+        case .fibonacciFan:
+            return Drawing.fibonacciFan(from: firstPoint, to: hoverPoint)
         case .rectangle:
             return Drawing.rectangle(from: firstPoint, to: hoverPoint)
         case .trendLine:

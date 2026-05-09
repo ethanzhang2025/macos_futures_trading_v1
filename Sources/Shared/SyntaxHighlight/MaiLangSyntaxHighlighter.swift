@@ -95,6 +95,15 @@ public enum MaiLangSyntaxHighlighter {
         "CHANDELIERL", "CHANDELIERS",
         "BOLLU", "BOLLM", "BOLLL", "BOLLW", "BOLLPCT",
         "BASIS", "BETA", "CLAMPMAX", "CLAMPMIN",
+        // v16.1 · 第 2 批 30 个高频经典指标（trader 中文期货必用 · BuiltinFunction 已有）
+        "RSI", "WR", "ROC", "MOM", "OSC", "DPO",
+        "KDJK", "KDJD", "KDJJ",
+        "MACDDIF", "MACDDEA", "MACDBAR",
+        "OBV", "MFI", "VWAP", "EMV", "PVT",
+        "PSY", "VR", "CR",
+        "TEMA", "DEMA", "HMA",
+        "PSAR", "ULTOSC", "STOCHRSI", "STOCH",
+        "TRIX", "MASS", "CORREL",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

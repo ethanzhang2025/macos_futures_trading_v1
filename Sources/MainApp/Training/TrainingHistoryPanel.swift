@@ -252,6 +252,9 @@ struct TrainingHistoryPanel: View {
 
             distributionBar
 
+            // v16.16 · 评分趋势 sparkline（最近 30 次按时间序 · trader 看进步曲线）
+            scoreTrendSparkline
+
             // v15.23 batch125 · 形态分布 chip 行（点击 chip 等同选 filter · 视觉看练习偏向）
             patternDistributionRow
 
@@ -260,6 +263,99 @@ struct TrainingHistoryPanel: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+    }
+
+    /// v16.16 · 评分趋势 sparkline · 最近 30 次按时间升序 · 折线 + 70 分参考线
+    private var scoreTrendSparkline: some View {
+        let recent = viewModel.log.sessions
+            .sorted { $0.endedAt < $1.endedAt }   // 时间升序（左旧右新）
+            .suffix(30)
+        let scores = recent.compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+        return HStack(spacing: 8) {
+            Text("📈 趋势")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .frame(width: 38, alignment: .leading)
+            if scores.count < 2 {
+                Text("需 ≥ 2 次训练才显示趋势")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .opacity(0.6)
+                Spacer()
+            } else {
+                Canvas { ctx, size in
+                    drawSparkline(ctx: ctx, size: size, scores: scores)
+                }
+                .frame(height: 36)
+                Text("\(scores.last!)")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(scoreColor(scores.last!))
+                    .frame(width: 26, alignment: .trailing)
+                trendDeltaChip(scores: scores)
+            }
+        }
+    }
+
+    private func drawSparkline(ctx: GraphicsContext, size: CGSize, scores: [Int]) {
+        guard scores.count >= 2 else { return }
+        let xStep = size.width / CGFloat(scores.count - 1)
+        // y 映射：0-100 → bottom..top（留 2pt 边距）
+        func yFor(_ s: Int) -> CGFloat {
+            let clamped = max(0, min(100, s))
+            return size.height - 2 - (size.height - 4) * CGFloat(clamped) / 100.0
+        }
+        // 70 分参考线（B 级合格线）· 虚线
+        var ref = Path()
+        let refY = yFor(70)
+        ref.move(to: CGPoint(x: 0, y: refY))
+        ref.addLine(to: CGPoint(x: size.width, y: refY))
+        ctx.stroke(ref, with: .color(.secondary.opacity(0.25)),
+                   style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+        // 折线
+        var path = Path()
+        for (i, s) in scores.enumerated() {
+            let pt = CGPoint(x: CGFloat(i) * xStep, y: yFor(s))
+            i == 0 ? path.move(to: pt) : path.addLine(to: pt)
+        }
+        ctx.stroke(path, with: .color(.accentColor), lineWidth: 1.5)
+        // 端点圆点（最后一笔加大）
+        for (i, s) in scores.enumerated() {
+            let pt = CGPoint(x: CGFloat(i) * xStep, y: yFor(s))
+            let r: CGFloat = (i == scores.count - 1) ? 3 : 1.5
+            ctx.fill(
+                Path(ellipseIn: CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)),
+                with: .color(.accentColor)
+            )
+        }
+    }
+
+    /// 最近 5 次 vs 之前均值的 delta chip（提升/下降/持平）
+    private func trendDeltaChip(scores: [Int]) -> some View {
+        let n = scores.count
+        let recentN = min(5, max(1, n / 3))
+        let recent = scores.suffix(recentN)
+        let prior = scores.prefix(n - recentN)
+        let recentAvg = recent.isEmpty ? 0 : recent.reduce(0, +) / recent.count
+        let priorAvg = prior.isEmpty ? recentAvg : prior.reduce(0, +) / prior.count
+        let delta = recentAvg - priorAvg
+        let (emoji, color): (String, Color) = {
+            if abs(delta) < 3 { return ("→", .secondary) }
+            return delta > 0 ? ("↑", .green) : ("↓", .red)
+        }()
+        let label = delta > 0 ? "+\(delta)" : "\(delta)"
+        return HStack(spacing: 1) {
+            Text(emoji).font(.system(size: 11)).foregroundColor(color)
+            Text(label).font(.system(size: 10, design: .monospaced)).foregroundColor(color)
+        }
+    }
+
+    private func scoreColor(_ s: Int) -> Color {
+        switch s {
+        case 90...:   return .green
+        case 80..<90: return .blue
+        case 70..<80: return .orange
+        default:      return .red
+        }
     }
 
     /// v15.23 batch144 · 本周训练目标进度（达到目标 → 绿色 ✓ · 未达成 → 进度条）

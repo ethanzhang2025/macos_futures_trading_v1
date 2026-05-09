@@ -280,6 +280,43 @@ public enum MaiLangFunctionSignatures {
         sig("ZSCORE",         ["序列", "周期 N"], "Z 分数（标准化偏离 · 默认 20）",          .统计),
         sig("SKEW",           ["序列", "周期 N"], "偏度（默认 20 · 分布对称性）",            .统计),
         sig("KURT",           ["序列", "周期 N"], "峰度（默认 20 · 分布尖峭度）",            .统计),
+        // v16.18 · 第 5 批 30 个 trader 实战必用 · BuiltinFunction 注册表已实现
+        // 实战技术指标 9（高级量化系统 trader 用）
+        sig("KALMAN",         ["序列"],          "卡尔曼滤波（自适应平滑 · 实时跟踪趋势）",  .高级),
+        sig("KVO",            ["快", "慢"],      "克林格成交量振荡（默认 34/55）",          .高级),
+        sig("EFI",            ["周期 N"],        "Elder 弹性指数（默认 13 · 力量+方向）",   .高级),
+        sig("ELDERRAY",       ["周期 N"],        "Elder Ray（多空力量 · 默认 13）",         .高级),
+        sig("WAD",            [],                "威廉累积/派发（量价配合）",              .高级),
+        sig("NVI",            [],                "负向量指标 NVI（量缩时聪明钱）",          .高级),
+        sig("PVI",            [],                "正向量指标 PVI（量增时散户）",            .高级),
+        sig("RVI",            ["周期 N"],        "相对活力指数（默认 10 · 收 vs 范围）",    .高级),
+        sig("SCHAFFTC",       ["快", "慢"],      "沙夫趋势循环（默认 23/50 · 趋势循环）",   .高级),
+        // 突破 / 转折信号 6
+        sig("GOLDENCROSS",    ["快均线", "慢均线"], "金叉（快上穿慢 · 1=触发）",           .逻辑),
+        sig("DEADCROSS",      ["快均线", "慢均线"], "死叉（快下穿慢 · 1=触发）",           .逻辑),
+        sig("HHVCROSS",       ["序列", "周期 N"], "上穿前 N 周期最高（突破系统）",          .逻辑),
+        sig("DIVERGENCE",     ["价格序列", "指标序列"], "背离（价新高/低 vs 指标不跟）",    .高级),
+        sig("RSIDIV",         ["周期 N"],        "RSI 背离（专用 · 默认 14）",             .高级),
+        sig("NEWHIGH",        ["周期 N"],        "是否创 N 周期新高（1=创高）",            .逻辑),
+        // 通道 / 枢轴 6
+        sig("ENVUP",          ["周期 N", "幅度 %"], "包络上轨（MA × (1 + pct)）",          .高级),
+        sig("ENVDN",          ["周期 N", "幅度 %"], "包络下轨（MA × (1 - pct)）",          .高级),
+        sig("PIVOTHIGH",      ["左", "右"],      "枢轴高（左右 N 周期内最高 · 默认 3/3）", .高级),
+        sig("PIVOTLOW",       ["左", "右"],      "枢轴低（左右 N 周期内最低）",            .高级),
+        sig("SUPPORT",        ["周期 N"],        "支撑位（N 周期最低密集区）",            .高级),
+        sig("RESISTANCE",     ["周期 N"],        "阻力位（N 周期最高密集区）",            .高级),
+        // Heikin-Ashi 平滑 K 4（日韩 trader 趋势平滑常用）
+        sig("HAOPEN",         [],                "Heikin-Ashi 开盘价（前 HA 开+收 / 2）",  .价量),
+        sig("HACLOSE",        [],                "Heikin-Ashi 收盘价（O+H+L+C / 4）",     .价量),
+        sig("HAHIGH",         [],                "Heikin-Ashi 最高价（max(H, HAOpen, HAClose)）", .价量),
+        sig("HALOW",          [],                "Heikin-Ashi 最低价（min(L, HAOpen, HAClose)）", .价量),
+        // 线性回归 + 收益 4（量化研究 + 系统评估）
+        sig("LINREGSLOPE",    ["序列", "周期 N"], "线性回归斜率（趋势倾角）",                .统计),
+        sig("LINREGR",        ["序列", "周期 N"], "线性回归预测值（拟合直线末端）",          .统计),
+        sig("LOGRETURN",      ["序列"],          "对数收益 ln(P_t / P_{t-1})（量化标配）",  .统计),
+        sig("PCTRETURN",      ["序列"],          "百分比收益 (P_t - P_{t-1}) / P_{t-1}",   .统计),
+        // 数学辅助 1
+        sig("LERP",           ["A", "B", "t"],  "线性插值 A + (B - A) × t",                .数学),
     ]
 
     /// v15.22 batch35 · 模糊搜索（name + summary 均不区分大小写 · 中文 summary 不受影响 · 空 query → 返回全部）

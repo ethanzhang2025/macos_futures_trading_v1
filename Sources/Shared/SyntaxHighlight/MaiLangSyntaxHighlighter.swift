@@ -121,6 +121,12 @@ public enum MaiLangSyntaxHighlighter {
         "CALMAR", "EXPECTANCY", "OPTIMALF", "POSITIONSIZE", "RISKPCT",
         "TYP", "MEDPRICE", "AVGPRICE",
         "ZSCORE", "SKEW", "KURT",
+        // v16.18 · 第 5 批 30 个 trader 实战必用（高级指标 + 突破/转折 + 通道 + Heikin-Ashi + 线性回归）
+        "KALMAN", "KVO", "EFI", "ELDERRAY", "WAD", "NVI", "PVI", "RVI", "SCHAFFTC",
+        "GOLDENCROSS", "DEADCROSS", "HHVCROSS", "DIVERGENCE", "RSIDIV", "NEWHIGH",
+        "ENVUP", "ENVDN", "PIVOTHIGH", "PIVOTLOW", "SUPPORT", "RESISTANCE",
+        "HAOPEN", "HACLOSE", "HAHIGH", "HALOW",
+        "LINREGSLOPE", "LINREGR", "LOGRETURN", "PCTRETURN", "LERP",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

@@ -317,6 +317,45 @@ public enum MaiLangFunctionSignatures {
         sig("PCTRETURN",      ["序列"],          "百分比收益 (P_t - P_{t-1}) / P_{t-1}",   .统计),
         // 数学辅助 1
         sig("LERP",           ["A", "B", "t"],  "线性插值 A + (B - A) × t",                .数学),
+        // v16.22 · 第 6 批 30 个 trader 实战必用 · BuiltinFunction 注册表已实现
+        // 数学常量 / 三角 / 排名 5（量化研究 + 公式编辑）
+        sig("PI",             [],                "圆周率常量 π ≈ 3.14159",                  .数学),
+        sig("COS",            ["弧度"],          "余弦函数（弧度制）",                      .数学),
+        sig("ATAN",           ["X"],            "反正切（返回弧度）",                      .数学),
+        sig("CUBED",          ["X"],            "立方（X^3）",                            .数学),
+        sig("PERCENTRANK",    ["序列", "周期 N"], "百分位排名（默认 100 · 0-100）",          .统计),
+        // 烛台辅助 7（K 线 OHLC 派生 · trader 量化用）
+        sig("AVGBODY",        ["周期 N"],        "N 周期实体平均长度 |O-C|",                .价量),
+        sig("AVGRANGE",       ["周期 N"],        "N 周期 K 线范围平均（H-L）",              .价量),
+        sig("AVGUP",          ["周期 N"],        "N 周期阳线收盘平均",                      .价量),
+        sig("AVGDOWN",        ["周期 N"],        "N 周期阴线收盘平均",                      .价量),
+        sig("GREENRATIO",     ["周期 N"],        "N 周期阳线占比",                          .价量),
+        sig("POSCOUNT",       ["序列", "周期 N"], "N 周期内正数计数",                       .统计),
+        sig("NEGCOUNT",       ["序列", "周期 N"], "N 周期内负数计数",                       .统计),
+        // 价差类 4（OHLC 之间差值 · trader 速判）
+        sig("CLDIFF",         [],                "收盘 - 最低价（CLOSE - LOW）",            .价量),
+        sig("HCDIFF",         [],                "最高 - 收盘价（HIGH - CLOSE）",           .价量),
+        sig("HLDIFF",         [],                "最高 - 最低价（HIGH - LOW · 真实波幅基础）", .价量),
+        sig("OCDIFF",         [],                "开盘 - 收盘价（OPEN - CLOSE）",           .价量),
+        // 累积 / 计数 4
+        sig("CUMSUM",         ["序列"],          "累积和（每周期累加至当前）",              .统计),
+        sig("CUMPROD",        ["序列"],          "累积乘积（每周期累乘至当前）",            .统计),
+        sig("CHANGECOUNT",    ["序列", "周期 N"], "N 周期内方向变化次数",                   .统计),
+        sig("CROSSCOUNT",     ["A", "B", "周期 N"], "N 周期内 A 穿越 B 的次数",             .统计),
+        // 滤波 / 平滑 4（高级量化平滑）
+        sig("EMAFILTER",      ["序列", "周期 N"], "EMA 滤波（递归指数平滑）",                .高级),
+        sig("GAUSSFILTER",    ["序列", "周期 N"], "高斯滤波（钟形权重 · 减少滞后）",         .高级),
+        sig("MEDIANFILTER",   ["序列", "周期 N"], "中位数滤波（剔除异常值）",                .高级),
+        sig("SAVITZKYGOLAY",  ["序列", "周期 N", "阶 M"], "Savitzky-Golay 滤波（多项式平滑）", .高级),
+        // 跨期套利 / 期限结构 6（trader 套利者必用）
+        sig("CONTANGO",       [],                "升水（远月 > 近月 · 1=升水）",            .高级),
+        sig("BACKWARDATION",  [],                "贴水（远月 < 近月 · 1=贴水）",            .高级),
+        sig("CONTRACTSPREAD", ["合约 A", "合约 B"], "合约价差（A - B）",                    .高级),
+        sig("ROLLYIELD",      [],                "展期收益（年化）· 套利策略基础",          .高级),
+        sig("FRONTMONTH",     [],                "主力月合约编号",                          .高级),
+        sig("TERMSTRUCT",     [],                "期限结构（远月 vs 近月平均斜率）",        .高级),
+        // 实战 1
+        sig("NEWLOW",         ["周期 N"],        "是否创 N 周期新低（1=创低）· 与 NEWHIGH 对称", .逻辑),
     ]
 
     /// v15.22 batch35 · 模糊搜索（name + summary 均不区分大小写 · 中文 summary 不受影响 · 空 query → 返回全部）

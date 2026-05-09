@@ -127,6 +127,14 @@ public enum MaiLangSyntaxHighlighter {
         "ENVUP", "ENVDN", "PIVOTHIGH", "PIVOTLOW", "SUPPORT", "RESISTANCE",
         "HAOPEN", "HACLOSE", "HAHIGH", "HALOW",
         "LINREGSLOPE", "LINREGR", "LOGRETURN", "PCTRETURN", "LERP",
+        // v16.22 · 第 6 批 30 个（数学常量/三角 + 烛台辅助 + 价差 + 累积 + 滤波 + 跨期套利）
+        "PI", "COS", "ATAN", "CUBED", "PERCENTRANK",
+        "AVGBODY", "AVGRANGE", "AVGUP", "AVGDOWN", "GREENRATIO", "POSCOUNT", "NEGCOUNT",
+        "CLDIFF", "HCDIFF", "HLDIFF", "OCDIFF",
+        "CUMSUM", "CUMPROD", "CHANGECOUNT", "CROSSCOUNT",
+        "EMAFILTER", "GAUSSFILTER", "MEDIANFILTER", "SAVITZKYGOLAY",
+        "CONTANGO", "BACKWARDATION", "CONTRACTSPREAD", "ROLLYIELD", "FRONTMONTH", "TERMSTRUCT",
+        "NEWLOW",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

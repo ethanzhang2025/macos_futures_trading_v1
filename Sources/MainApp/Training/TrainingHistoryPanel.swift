@@ -258,6 +258,9 @@ struct TrainingHistoryPanel: View {
             // v15.23 batch125 · 形态分布 chip 行（点击 chip 等同选 filter · 视觉看练习偏向）
             patternDistributionRow
 
+            // v16.19 · 弱项加练推荐（≥ 3 次同形态训练 + 均分 < 70 → 一键启动加练）
+            weakPatternRecommendRow
+
             // v15.23 batch144 · 本周目标进度（鼓励 trader 维持训练频率）
             weeklyGoalRow
         }
@@ -423,6 +426,62 @@ struct TrainingHistoryPanel: View {
     }
 
     /// v15.23 batch125 · 形态分布 chip（9 形态 emoji + 计数 · 点击切 filter）
+    /// v16.19 · 弱项加练推荐
+    /// 触发条件：某 pattern 已练 ≥ 3 次 + 均分 < 70（待巩固/薄弱）
+    /// 排序：均分升序（最弱优先）
+    /// 显示：emoji + pattern + 均分 + 一键再练 button（→ pendingRetrainPattern · 与 score sheet 同机制）
+    private var weakPatternRecommendRow: some View {
+        struct WeakBucket { let pattern: TrainingScenarioPattern; let avg: Int; let count: Int }
+        var buckets: [WeakBucket] = []
+        let grouped = Dictionary(grouping: viewModel.log.sessions.filter { $0.scenarioPattern != nil },
+                                 by: { $0.scenarioPattern! })
+        for (pat, sessions) in grouped {
+            guard sessions.count >= 3 else { continue }
+            let scores = sessions.compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+            guard !scores.isEmpty else { continue }
+            let avg = scores.reduce(0, +) / scores.count
+            if avg < 70 {
+                buckets.append(WeakBucket(pattern: pat, avg: avg, count: sessions.count))
+            }
+        }
+        buckets.sort { $0.avg < $1.avg }
+        return Group {
+            if buckets.isEmpty {
+                EmptyView()
+            } else {
+                HStack(spacing: 6) {
+                    Text("⚠️ 加练")
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
+                        .frame(width: 38, alignment: .leading)
+                    ForEach(buckets.prefix(3), id: \.pattern) { b in
+                        Button {
+                            viewModel.pendingRetrainPattern = b.pattern
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(b.pattern.emoji)
+                                Text(b.pattern.displayName)
+                                    .font(.system(size: 10))
+                                Text("\(b.avg)")
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(b.avg < 60 ? .red : .orange)
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 10))
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.10))
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .tooltip("一键加练 \(b.pattern.displayName) · 当前均分 \(b.avg)（\(b.count) 次）")
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
     private var patternDistributionRow: some View {
         let counts = Dictionary(grouping: viewModel.log.sessions.compactMap { $0.scenarioPattern }, by: { $0 })
             .mapValues { $0.count }

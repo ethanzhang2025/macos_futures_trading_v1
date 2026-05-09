@@ -105,15 +105,24 @@ public struct SpreadAlertThresholds: Sendable, Equatable {
 
 public enum SpreadAlertDetector {
 
-    /// 全市场扫描 · 26 对（12 跨品种 + 14 跨期）
+    /// 全市场扫描 · 26 对（12 跨品种 + 14 跨期）+ 用户自定义对（可选 · v15.75）
+    /// - Parameter customPairs: 用户自建跨品种对（与 SpreadPresets.all 同模式扫描 · 受 includeCrossInstrument 控）
     public static func scanAll(
         thresholds: SpreadAlertThresholds = .default,
+        customPairs: [SpreadPair] = [],
         now: Date = Date()
     ) -> [SpreadAlertEvent] {
         var events: [SpreadAlertEvent] = []
 
         if thresholds.includeCrossInstrument {
             for pair in SpreadPresets.all {
+                let values = mockCrossInstrumentSeries(for: pair, count: 200)
+                if let evt = evaluate(values: values, pair: pair, thresholds: thresholds, now: now) {
+                    events.append(evt)
+                }
+            }
+            // v15.75 · 用户自定义对（与 preset 同 mock 算法 · trader 看到一致量纲）
+            for pair in customPairs {
                 let values = mockCrossInstrumentSeries(for: pair, count: 200)
                 if let evt = evaluate(values: values, pair: pair, thresholds: thresholds, now: now) {
                     events.append(evt)

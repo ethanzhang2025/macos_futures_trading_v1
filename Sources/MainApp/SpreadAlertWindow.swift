@@ -28,6 +28,9 @@ struct SpreadAlertWindow: View {
     @State private var toastDismissTask: Task<Void, Never>? = nil
     /// v15.57 · 已加进 evaluator 的 spreadID 集合 · 按钮显 ✓ 替代 +
     @State private var addedSpreadIDs: Set<String> = []
+    /// v15.75 · 用户自定义价差对（持久化 UserDefaults）
+    @State private var customPairs: [SpreadPair] = []
+    @State private var showAddCustomSheet: Bool = false
     @Environment(\.openWindow) private var openWindow
     @Environment(\.alertEvaluator) private var alertEvaluator
     @Environment(\.storeManager) private var storeManager
@@ -48,7 +51,7 @@ struct SpreadAlertWindow: View {
     }
 
     private var allEvents: [SpreadAlertEvent] {
-        SpreadAlertDetector.scanAll(thresholds: thresholds)
+        SpreadAlertDetector.scanAll(thresholds: thresholds, customPairs: customPairs)
     }
 
     private var filteredEvents: [SpreadAlertEvent] {
@@ -96,12 +99,24 @@ struct SpreadAlertWindow: View {
         .animation(.easeInOut(duration: 0.18), value: addedAlertToast)
         .frame(minWidth: 1180, minHeight: 720)
         .task {
+            // v15.75 · 启动加载用户自定义价差对（UserDefaults · 同步即可 · 数据量小）
+            customPairs = SpreadCustomPairStore.load()
             // v15.67 · 启动时把持久化 spread alerts 注入 evaluator（防 ⌘B 未打开时无 alerts 监听）
             await loadPersistedSpreadAlertsToEvaluator()
             // 启动时同步已存在的 spreadDeviation alerts → 按钮显 ✓
             await refreshAddedSpreadIDs()
             // v15.60 · 启动周期扫描 · 60s 间隔喂 evaluator → 真触发已加预警的 spread alerts
             await runEvaluatorPushLoop()
+        }
+        .sheet(isPresented: $showAddCustomSheet) {
+            AddCustomSpreadPairSheet { newPair in
+                if SpreadCustomPairStore.append(newPair) {
+                    customPairs = SpreadCustomPairStore.load()
+                    showToast("已添加自定义对：\(newPair.name)")
+                } else {
+                    showToast("⚠️ 同 ID 已存在 · 换个名字试试")
+                }
+            }
         }
     }
 
@@ -132,8 +147,8 @@ struct SpreadAlertWindow: View {
 
     private func pushAllSpreadSeriesToEvaluator() async {
         guard let evaluator = alertEvaluator else { return }
-        // 跨品种 12 对
-        for pair in SpreadPresets.all {
+        // 跨品种 12 + N 对（含 v15.75 用户自定义）
+        for pair in SpreadPresets.all + customPairs {
             let values = SpreadAlertDetector.mockCrossInstrumentSeries(for: pair, count: 200)
             let series = values.map(\.value)
             await evaluator.onSpreadValue(series: series, spreadID: pair.id, isCalendar: false)
@@ -253,6 +268,38 @@ struct SpreadAlertWindow: View {
                 .pickerStyle(.segmented)
                 .frame(width: 280)
                 .labelsHidden()
+            }
+
+            // v15.75 · 自定义对入口（已加 N 个 / 加号 → sheet）
+            Button {
+                showAddCustomSheet = true
+            } label: {
+                Label(customPairs.isEmpty ? "+ 自定义对" : "+ 自定义对（已加 \(customPairs.count)）",
+                      systemImage: "plus.rectangle.on.rectangle")
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .help("添加自定义价差对（任意两合约 + 比率）· 与 26 经典对一并扫描")
+
+            // v15.75 · 自定义对列表（已加 ≥1 时显删除菜单）
+            if !customPairs.isEmpty {
+                Menu {
+                    ForEach(customPairs) { pair in
+                        Button(role: .destructive) {
+                            SpreadCustomPairStore.remove(id: pair.id)
+                            customPairs = SpreadCustomPairStore.load()
+                            showToast("已移除：\(pair.name)")
+                        } label: {
+                            Label("移除 \(pair.name)", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(.caption)
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 24)
+                .help("管理自定义对（删除）")
             }
 
             Spacer()

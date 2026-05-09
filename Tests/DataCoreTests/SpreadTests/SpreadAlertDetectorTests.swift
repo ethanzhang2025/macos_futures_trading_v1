@@ -35,6 +35,15 @@ final class SpreadAlertDetectorTests: XCTestCase {
         description: "测试用"
     )
 
+    private func customPair(id: String) -> SpreadPair {
+        SpreadPair(
+            id: id, name: "用户自建-\(id)", category: .跨品种,
+            leg1: SpreadLeg(instrumentID: "CU0", ratio: 1),
+            leg2: SpreadLeg(instrumentID: "AL0", ratio: -3),
+            unitLabel: "元/吨", description: "test custom"
+        )
+    }
+
     private let dummyCalPair = CalendarSpreadPair(
         id: "test-cal", name: "测试跨期",
         underlyingID: "RB", underlyingName: "螺纹",
@@ -152,5 +161,39 @@ final class SpreadAlertDetectorTests: XCTestCase {
         let high = SpreadAlertDetector.scanAll(thresholds: th_high)
         let low = SpreadAlertDetector.scanAll(thresholds: th_low)
         XCTAssertGreaterThanOrEqual(low.count, high.count)
+    }
+
+    // MARK: - v15.75 · customPairs 注入
+
+    func testScanAll_customPairs_emptyDefaultEqualsLegacy() {
+        // customPairs=[] 与不传参的扫描结果一致（向后兼容）
+        let r1 = SpreadAlertDetector.scanAll()
+        let r2 = SpreadAlertDetector.scanAll(customPairs: [])
+        XCTAssertEqual(r1.map(\.spreadID).sorted(), r2.map(\.spreadID).sorted())
+    }
+
+    func testScanAll_customPairs_skippedWhenCrossDisabled() {
+        // includeCrossInstrument=false 时 custom pair 不扫（受同 flag 控）
+        var th = SpreadAlertThresholds.default
+        th.includeCrossInstrument = false
+        let withoutCustom = SpreadAlertDetector.scanAll(thresholds: th)
+        let withCustom = SpreadAlertDetector.scanAll(thresholds: th,
+                                                     customPairs: [customPair(id: "skipped")])
+        XCTAssertEqual(withoutCustom.map(\.spreadID).sorted(),
+                       withCustom.map(\.spreadID).sorted())
+    }
+
+    func testEvaluate_customPair_triggersAtZThreshold() {
+        // 数据契约：customPair 走 evaluate(values:pair:) 同 preset 路径 · 触发后 spreadID 保留
+        // 用 makeSeries 构造一段确定 z 偏离的序列（前 99 个 0 · 末尾 100 → z ≈ 9.95）
+        var raw: [Decimal] = Array(repeating: 0, count: 99)
+        raw.append(100)
+        let values = makeSeries(raw)
+        let custom = customPair(id: "custom-evaluate")
+        let evt = SpreadAlertDetector.evaluate(values: values, pair: custom, thresholds: .default)
+        XCTAssertNotNil(evt)
+        XCTAssertEqual(evt?.spreadID, "custom-evaluate")
+        XCTAssertEqual(evt?.kind, .crossInstrument)
+        XCTAssertEqual(evt?.unitLabel, "元/吨")
     }
 }

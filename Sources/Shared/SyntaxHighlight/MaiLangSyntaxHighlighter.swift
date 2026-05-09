@@ -104,6 +104,15 @@ public enum MaiLangSyntaxHighlighter {
         "TEMA", "DEMA", "HMA",
         "PSAR", "ULTOSC", "STOCHRSI", "STOCH",
         "TRIX", "MASS", "CORREL",
+        // v16.7 · 第 3 批 30 个 trader 中文期货实战必用
+        "PDI", "MDI", "HD", "LD", "SARDIR",
+        "DONCHIANU", "DONCHIANM", "DONCHIANL",
+        "KELCHU", "KELCHM", "KELCHL", "SUPERTREND",
+        "ICHITENKAN", "ICHIKIJUN", "ICHISPANA", "ICHISPANB",
+        "DRAWDOWN", "MAXDD", "MAXDDPCT", "WINRATE",
+        "SHARPE", "SORTINO", "KELLY",
+        "DKX", "WVAD", "KST",
+        "KAMA", "ZLEMA", "VWMA", "CONNORSRSI",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

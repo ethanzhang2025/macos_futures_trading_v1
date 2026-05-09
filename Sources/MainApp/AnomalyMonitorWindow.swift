@@ -102,11 +102,10 @@ struct AnomalyMonitorWindow: View {
         }
     }
 
-    // MARK: - v15.64 · 导出 CSV
+    // MARK: - v15.64 · 导出 CSV（v15.71 · 加 combo 支持）
 
-    private func exportCurrentEventsCSV() {
+    private func exportCurrentCSV() {
         let panel = NSSavePanel()
-        panel.title = "导出异常事件"
         panel.allowedContentTypes = [.commaSeparatedText]
         let dateStr: String = {
             let f = DateFormatter()
@@ -114,10 +113,65 @@ struct AnomalyMonitorWindow: View {
             f.locale = Locale(identifier: "en_US_POSIX")
             return f.string(from: Date())
         }()
-        panel.nameFieldStringValue = "异常事件_\(dateStr).csv"
+        let data: Data
+        switch viewMode {
+        case .combo:
+            panel.title = "导出组合异常"
+            panel.nameFieldStringValue = "组合异常_\(dateStr).csv"
+            let scopedEvents: [AnomalyEvent] = {
+                switch sectorFilter {
+                case .all: return detectionResult.events
+                case .sector(let s): return detectionResult.events.filter { $0.sector == s }
+                }
+            }()
+            let combos = ComboAnomalyAggregator.aggregate(events: scopedEvents, minKinds: comboMinKinds)
+            data = ComboAnomalyCSVExporter.exportData(combos)
+        default:
+            panel.title = "导出异常事件"
+            panel.nameFieldStringValue = "异常事件_\(dateStr).csv"
+            data = AnomalyEventCSVExporter.exportData(filteredEvents)
+        }
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let csv = AnomalyEventCSVExporter.exportData(filteredEvents)
-        try? csv.write(to: url)
+        try? data.write(to: url)
+    }
+
+    /// 工具栏导出按钮 help 文案
+    private var exportButtonHelp: String {
+        switch viewMode {
+        case .list:
+            return filteredEvents.isEmpty ? "当前过滤条件下无异常 · 调阈值或切板块"
+                                          : "导出当前 \(filteredEvents.count) 条异常事件为 CSV"
+        case .combo:
+            let scopedEvents: [AnomalyEvent] = {
+                switch sectorFilter {
+                case .all: return detectionResult.events
+                case .sector(let s): return detectionResult.events.filter { $0.sector == s }
+                }
+            }()
+            let n = ComboAnomalyAggregator.aggregate(events: scopedEvents, minKinds: comboMinKinds).count
+            return n == 0 ? "当前过滤下无组合异常 · 调低 minKinds 或类型阈值"
+                          : "导出当前 \(n) 条组合异常为 CSV"
+        default:
+            return "切到 \"异常列表\" 或 \"组合异常\" 视图后可导出"
+        }
+    }
+
+    /// 当前视图能否导出 + 是否有数据
+    private var canExportCurrentView: Bool {
+        switch viewMode {
+        case .list:
+            return !filteredEvents.isEmpty
+        case .combo:
+            let scopedEvents: [AnomalyEvent] = {
+                switch sectorFilter {
+                case .all: return detectionResult.events
+                case .sector(let s): return detectionResult.events.filter { $0.sector == s }
+                }
+            }()
+            return !ComboAnomalyAggregator.aggregate(events: scopedEvents, minKinds: comboMinKinds).isEmpty
+        default:
+            return false
+        }
     }
 
     // MARK: - Toolbar
@@ -148,16 +202,16 @@ struct AnomalyMonitorWindow: View {
 
             Spacer()
 
-            // v15.64 · 导出 CSV（仅 list 视图启用 · 其他视图导出意义不大）
+            // v15.64 · 导出 CSV（list / combo 视图启用 · v15.71 加 combo 支持）
             Button {
-                exportCurrentEventsCSV()
+                exportCurrentCSV()
             } label: {
                 Label("导出 CSV", systemImage: "square.and.arrow.up")
                     .font(.caption)
             }
             .buttonStyle(.borderless)
-            .disabled(viewMode != .list || filteredEvents.isEmpty)
-            .help(filteredEvents.isEmpty ? "当前过滤条件下无异常 · 调阈值或切板块" : "导出当前 \(filteredEvents.count) 条异常事件为 CSV")
+            .disabled(!canExportCurrentView)
+            .help(exportButtonHelp)
 
             Text("v1 mock · v2 接 CTP 真行情后 OI Δ + 资金流真值")
                 .font(.caption2).foregroundColor(.secondary)

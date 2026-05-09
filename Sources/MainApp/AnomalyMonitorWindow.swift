@@ -931,6 +931,11 @@ struct AnomalyMonitorWindow: View {
         let count5 = combos.filter { $0.kindCount == 5 }.count
         let count4 = combos.filter { $0.kindCount == 4 }.count
         let count3 = combos.filter { $0.kindCount == 3 }.count
+        // v15.72 · 30d 历史 by instrumentID（让 trader 看出 combo 是新出现还是常态）
+        let historyMap: [String: InstrumentAnomalyHistory] = Dictionary(
+            uniqueKeysWithValues: AnomalyHistoryGenerator.generate(days: 30).map { ($0.instrumentID, $0) }
+        )
+        let globalPeak = max(historyMap.values.map(\.peakDayCount).max() ?? 1, 1)
 
         return VStack(spacing: 0) {
             comboStatsBar(total: combos.count, c5: count5, c4: count4, c3: count3)
@@ -942,7 +947,9 @@ struct AnomalyMonitorWindow: View {
                 ScrollView {
                     LazyVStack(spacing: 1) {
                         ForEach(Array(combos.enumerated()), id: \.element.id) { (rank, combo) in
-                            comboRow(rank: rank + 1, combo: combo)
+                            comboRow(rank: rank + 1, combo: combo,
+                                     history: historyMap[combo.instrumentID],
+                                     globalPeak: globalPeak)
                         }
                     }
                 }
@@ -986,6 +993,8 @@ struct AnomalyMonitorWindow: View {
             Text("命中类型").font(.caption.bold()).foregroundColor(.secondary).frame(width: 280, alignment: .leading)
             Spacer().frame(width: 14)
             Text("avg").font(.caption.bold()).foregroundColor(.secondary).frame(width: 50, alignment: .trailing)
+            Spacer().frame(width: 14)
+            Text("30d 频次").font(.caption.bold()).foregroundColor(.secondary).frame(width: 180, alignment: .leading)
             Spacer()
         }
         .padding(.horizontal, 14).padding(.vertical, 6)
@@ -1007,7 +1016,8 @@ struct AnomalyMonitorWindow: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func comboRow(rank: Int, combo: ComboAnomaly) -> some View {
+    private func comboRow(rank: Int, combo: ComboAnomaly,
+                          history: InstrumentAnomalyHistory?, globalPeak: Int) -> some View {
         Button {
             openWindow(id: "chart")
             NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: combo.instrumentID)
@@ -1075,13 +1085,45 @@ struct AnomalyMonitorWindow: View {
                     .foregroundColor(.secondary)
                     .frame(width: 50, alignment: .trailing)
 
+                Spacer().frame(width: 14)
+
+                // v15.72 · 30d 频次 sparkline + 总数
+                if let h = history {
+                    HStack(spacing: 6) {
+                        sparkline(counts: h.dailyCounts, peak: globalPeak)
+                            .frame(width: 130, height: 20)
+                        Text("\(h.totalCount)")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .frame(width: 30, alignment: .trailing)
+                    }
+                    .frame(width: 180, alignment: .leading)
+                } else {
+                    Text("—")
+                        .font(.caption)
+                        .foregroundColor(.secondary.opacity(0.5))
+                        .frame(width: 180, alignment: .leading)
+                }
+
                 Spacer()
             }
             .padding(.horizontal, 14).padding(.vertical, 5)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(combo.instrumentName)（\(combo.instrumentID)）combo 严重度 \(Int(combo.totalSeverity)) · \(combo.kindCount) 类命中（\(combo.kinds.map(\.displayName).sorted().joined(separator: " · "))）· 点击切主图")
+        .help(comboHelpText(combo: combo, history: history))
+    }
+
+    private func comboHelpText(combo: ComboAnomaly, history: InstrumentAnomalyHistory?) -> String {
+        let kindLabel = AnomalyKind.allCases
+            .filter { combo.kinds.contains($0) }
+            .map(\.displayName)
+            .joined(separator: " · ")
+        let base = "\(combo.instrumentName)（\(combo.instrumentID)）· combo 严重度 \(Int(combo.totalSeverity)) · \(combo.kindCount) 类命中：\(kindLabel)"
+        if let h = history {
+            return base + " · 30d 共 \(h.totalCount) 次异常（avg \(String(format: "%.1f", h.avgPerDay))/天）· 点击切主图"
+        }
+        return base + " · 点击切主图"
     }
 
     private func comboKindTags(kinds: Set<AnomalyKind>) -> some View {

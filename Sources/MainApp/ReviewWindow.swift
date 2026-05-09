@@ -598,14 +598,30 @@ struct ReviewWindow: View {
         let now = Date()
         let weekStart = Calendar(identifier: .gregorian)
             .date(byAdding: .day, value: -7, to: now) ?? now
+        let log = TrainingLogPersistence.load()
         md += "\n" + TrainingMarkdownReport.generateMonthlyAnnex(
-            TrainingLogPersistence.load(), start: weekStart, end: now
+            log, start: weekStart, end: now
+        )
+        // v16.21 · setup ↔ pattern cross-reference（实盘 setup 与训练 pattern 关联建议）
+        md += "\n" + TrainingMarkdownReport.generateSetupPatternCrossReference(
+            log, setups: setupSlices(from: s.setupMatrix), start: weekStart, end: now
         )
         do {
             try md.data(using: .utf8)?.write(to: url, options: .atomic)
             Toast.info("导出成功", "已生成最近 7 天周报到 \(url.lastPathComponent)。")
         } catch {
             Toast.error("导出失败", error)
+        }
+    }
+
+    /// v16.21 · 把 SetupMatrix.cells 转成 TrainingMarkdownReport.SetupSlice（避免跨 module 类型依赖）
+    private func setupSlices(from matrix: SetupMatrix) -> [TrainingMarkdownReport.SetupSlice] {
+        matrix.cells.map {
+            TrainingMarkdownReport.SetupSlice(
+                setupName: $0.setup,
+                tradeCount: $0.tradeCount,
+                winRate: $0.winRate
+            )
         }
     }
 
@@ -632,8 +648,13 @@ struct ReviewWindow: View {
         monthStartComps.day = 1
         let monthStart = cal.date(from: monthStartComps) ?? Date()
         let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
+        let log = TrainingLogPersistence.load()
         md += "\n" + TrainingMarkdownReport.generateMonthlyAnnex(
-            TrainingLogPersistence.load(), start: monthStart, end: monthEnd
+            log, start: monthStart, end: monthEnd
+        )
+        // v16.21 · setup ↔ pattern cross-reference
+        md += "\n" + TrainingMarkdownReport.generateSetupPatternCrossReference(
+            log, setups: setupSlices(from: s.setupMatrix), start: monthStart, end: monthEnd
         )
         do {
             try md.data(using: .utf8)?.write(to: url, options: .atomic)

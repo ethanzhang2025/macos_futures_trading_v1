@@ -253,4 +253,83 @@ public enum TrainingMarkdownReport {
         }
         return md
     }
+
+    /// v16.21 · 实盘 setup ↔ 训练 pattern cross-reference
+    /// 用包含匹配（实盘 setup 名是否含 pattern displayName 子串 · 大小写不敏感）
+    /// 输出：实盘 setup 笔数/胜率 / 训练 pattern 次数/均分 / 双弱建议
+    /// - 不依赖 JournalCore · 调用方传 SetupSlice 简单元组数组
+    public struct SetupSlice: Sendable, Equatable {
+        public let setupName: String
+        public let tradeCount: Int
+        public let winRate: Double      // 0..1
+        public init(setupName: String, tradeCount: Int, winRate: Double) {
+            self.setupName = setupName
+            self.tradeCount = tradeCount
+            self.winRate = winRate
+        }
+    }
+
+    public static func generateSetupPatternCrossReference(_ log: TrainingSessionLog,
+                                                           setups: [SetupSlice],
+                                                           start: Date,
+                                                           end: Date) -> String {
+        var md = "## 实盘 setup ↔ 训练 pattern 交叉分析（v16.21）\n\n"
+        let labeled = setups.filter { !$0.setupName.isEmpty
+                                      && $0.setupName != "(未标)" }
+        guard !labeled.isEmpty else {
+            md += "_本区间无具名 setup 实盘记录 · 先在交易日志窗给开仓 trade 打 setup 标签_\n\n"
+            return md
+        }
+        let inRange = log.sessions.filter { $0.startedAt >= start && $0.startedAt < end }
+        // 训练 pattern 桶（区间内）
+        struct PatBucket { var count = 0; var totalScore = 0 }
+        var byPattern: [TrainingScenarioPattern: PatBucket] = [:]
+        for s in inRange {
+            guard let p = s.scenarioPattern,
+                  let total = log.score(for: s.id)?.totalScore else { continue }
+            var b = byPattern[p] ?? PatBucket()
+            b.count += 1; b.totalScore += total
+            byPattern[p] = b
+        }
+        md += "| 实盘 setup | 实盘笔数 | 实盘胜率 | 关联 pattern | 训练次数 | 训练均分 | 综合建议 |\n"
+        md += "|---|---|---|---|---|---|---|\n"
+        for slice in labeled {
+            let matched = matchPattern(setupName: slice.setupName)
+            let bucket = matched.flatMap { byPattern[$0] }
+            let patStr = matched.map { "\($0.emoji) \($0.displayName)" } ?? "—"
+            let trainCount = bucket?.count ?? 0
+            let trainAvg = (bucket?.count ?? 0) > 0 ? (bucket!.totalScore / bucket!.count) : 0
+            let trainStr = trainCount > 0 ? "\(trainCount)" : "—"
+            let trainAvgStr = trainCount > 0 ? "\(trainAvg)" : "—"
+            let advice = crossAdvice(realWinRate: slice.winRate, trainAvg: trainAvg, trainCount: trainCount)
+            md += "| \(slice.setupName) | \(slice.tradeCount) | \(Int((slice.winRate * 100).rounded()))% | "
+            md += "\(patStr) | \(trainStr) | \(trainAvgStr) | \(advice) |\n"
+        }
+        md += "\n"
+        return md
+    }
+
+    /// 包含匹配：setup 名是否含 pattern displayName 子串（大小写不敏感）
+    /// 多 pattern 命中时取最长 displayName（更精确）
+    static func matchPattern(setupName: String) -> TrainingScenarioPattern? {
+        let needle = setupName.lowercased()
+        let candidates = TrainingScenarioPattern.allCases.compactMap { pat -> (TrainingScenarioPattern, Int)? in
+            let name = pat.displayName.lowercased()
+            return needle.contains(name) ? (pat, pat.displayName.count) : nil
+        }
+        return candidates.max(by: { $0.1 < $1.1 })?.0
+    }
+
+    /// 综合建议：实盘胜率 vs 训练均分 4 象限
+    static func crossAdvice(realWinRate: Double, trainAvg: Int, trainCount: Int) -> String {
+        guard trainCount > 0 else { return "🟦 无训练记录 · 建议加练" }
+        let realStrong = realWinRate >= 0.55
+        let trainStrong = trainAvg >= 70
+        switch (realStrong, trainStrong) {
+        case (true, true):   return "✅ 双强 · 保持节奏"
+        case (true, false):  return "🟡 实盘强 / 训练弱 · 抽空补练"
+        case (false, true):  return "🟠 训练好但实盘差 · 复盘执行偏差"
+        case (false, false): return "🔴 双弱 · 优先加练 + 减仓"
+        }
+    }
 }

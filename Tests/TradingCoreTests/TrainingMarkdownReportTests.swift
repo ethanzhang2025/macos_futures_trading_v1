@@ -219,6 +219,97 @@ struct TrainingMarkdownReportTests {
         #expect(md.contains("本区间无训练记录"))
     }
 
+    // MARK: - v16.21 · setup ↔ pattern cross-reference
+
+    @Test("v16.21 · matchPattern · 包含匹配（setup 名含 displayName）")
+    func match_contains() {
+        // 中文 setup 名含 pattern.displayName 子串
+        #expect(TrainingMarkdownReport.matchPattern(setupName: "趋势顺势上升趋势") == .uptrend)
+        #expect(TrainingMarkdownReport.matchPattern(setupName: "震荡反转") == .oscillation)
+        #expect(TrainingMarkdownReport.matchPattern(setupName: "突破后回踩") == .breakout)
+        // 不匹配
+        #expect(TrainingMarkdownReport.matchPattern(setupName: "完全不相关") == nil)
+    }
+
+    @Test("v16.21 · matchPattern · 多 pattern 命中取最长 displayName")
+    func match_longest() {
+        // "假突破" 同时含 "突破" 和 "假突破" · 应取后者（更精确）
+        #expect(TrainingMarkdownReport.matchPattern(setupName: "假突破回踩") == .fakeBreakout)
+    }
+
+    @Test("v16.21 · crossAdvice · 4 象限")
+    func crossAdvice_quadrants() {
+        // (实盘强 0.6 / 训练强 80) → 双强
+        #expect(TrainingMarkdownReport.crossAdvice(realWinRate: 0.6, trainAvg: 80, trainCount: 5)
+                .contains("双强"))
+        // (实盘强 / 训练弱) → 抽空补练
+        #expect(TrainingMarkdownReport.crossAdvice(realWinRate: 0.6, trainAvg: 50, trainCount: 5)
+                .contains("抽空补练"))
+        // (实盘弱 / 训练强) → 执行偏差
+        #expect(TrainingMarkdownReport.crossAdvice(realWinRate: 0.4, trainAvg: 80, trainCount: 5)
+                .contains("执行偏差"))
+        // (实盘弱 / 训练弱) → 双弱
+        #expect(TrainingMarkdownReport.crossAdvice(realWinRate: 0.4, trainAvg: 50, trainCount: 5)
+                .contains("双弱"))
+        // 无训练
+        #expect(TrainingMarkdownReport.crossAdvice(realWinRate: 0.4, trainAvg: 0, trainCount: 0)
+                .contains("无训练记录"))
+    }
+
+    @Test("v16.21 · generateSetupPatternCrossReference · 空 setup → 提示文案")
+    func crossRef_emptySetups() {
+        let md = TrainingMarkdownReport.generateSetupPatternCrossReference(
+            TrainingSessionLog(),
+            setups: [],
+            start: Date().addingTimeInterval(-86400 * 30),
+            end: Date()
+        )
+        #expect(md.contains("交叉分析"))
+        #expect(md.contains("无具名 setup"))
+    }
+
+    @Test("v16.21 · generateSetupPatternCrossReference · 含表格 + 双弱建议")
+    func crossRef_table() {
+        var log = TrainingSessionLog()
+        let now = Date()
+        // 训练 uptrend × 1 低分（双弱触发）
+        log.addSession(TrainingSession(
+            startedAt: now.addingTimeInterval(-86400),
+            endedAt: now.addingTimeInterval(-86400 + 3600),
+            initialBalance: 100_000, finalBalance: 95_000,
+            violations: [
+                DisciplineViolation(ruleID: UUID(), ruleKind: .stopLossPercent,
+                                    occurredAt: now, severity: .error, message: "x"),
+                DisciplineViolation(ruleID: UUID(), ruleKind: .stopLossPercent,
+                                    occurredAt: now, severity: .error, message: "y"),
+            ],
+            scenarioPattern: .uptrend))
+        let md = TrainingMarkdownReport.generateSetupPatternCrossReference(
+            log,
+            setups: [
+                TrainingMarkdownReport.SetupSlice(setupName: "上升趋势", tradeCount: 10, winRate: 0.4),
+            ],
+            start: now.addingTimeInterval(-86400 * 7),
+            end: now
+        )
+        #expect(md.contains("上升趋势"))
+        #expect(md.contains("📈"))   // matched pattern emoji
+        #expect(md.contains("双弱"))  // 实盘 0.4 + 训练 < 70
+    }
+
+    @Test("v16.21 · generateSetupPatternCrossReference · 跳过 (未标) 桶")
+    func crossRef_skipUnlabeled() {
+        let md = TrainingMarkdownReport.generateSetupPatternCrossReference(
+            TrainingSessionLog(),
+            setups: [
+                TrainingMarkdownReport.SetupSlice(setupName: "(未标)", tradeCount: 5, winRate: 0.5),
+            ],
+            start: Date().addingTimeInterval(-86400 * 7),
+            end: Date()
+        )
+        #expect(md.contains("无具名 setup"))   // (未标) 被过滤
+    }
+
     @Test("v16.15 · generateMonthlyAnnex · 多 pattern 表格 + 弱项加练建议")
     func annex_patternTable() {
         var log = TrainingSessionLog()

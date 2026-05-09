@@ -146,10 +146,17 @@ struct TrainingHistoryPanel: View {
                             Label("保存周报为 .md 文件", systemImage: "square.and.arrow.down")
                         }
                     }
+                    Section("CSV 数据（v16.20 · 离线 Excel/Numbers 分析）") {
+                        Button {
+                            saveCSVToFile()
+                        } label: {
+                            Label("导出训练历史 CSV", systemImage: "tablecells")
+                        }
+                    }
                 } label: {
                     Label("导出报告", systemImage: "square.and.arrow.up")
                 }
-                .tooltip("生成 markdown 月报 / 周报（trader 月度 + 周度复盘双节奏）")
+                .tooltip("生成 markdown 月报 / 周报 / CSV 数据（trader 双节奏复盘 + 离线分析）")
             }
             // v15.23 batch130 · 时间段筛选 Menu（只在有 session 时显示）
             if !viewModel.log.sessions.isEmpty {
@@ -772,6 +779,20 @@ struct TrainingHistoryPanel: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let md = TrainingMarkdownReport.generateWeekly(viewModel.log)
         try? md.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    // MARK: - v16.20 · CSV 导出（离线 Excel/Numbers 分析）
+
+    private func saveCSVToFile() {
+        let panel = NSSavePanel()
+        panel.title = L("导出训练历史 CSV")
+        panel.allowedContentTypes = [.commaSeparatedText]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        panel.nameFieldStringValue = "训练历史_\(dateFmt.string(from: Date())).csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data = TrainingSessionCSVExporter.exportData(viewModel.log)
+        try? data.write(to: url, options: .atomic)
     }
 }
 

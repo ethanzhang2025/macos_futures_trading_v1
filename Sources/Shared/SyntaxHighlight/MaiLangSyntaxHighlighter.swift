@@ -135,6 +135,13 @@ public enum MaiLangSyntaxHighlighter {
         "EMAFILTER", "GAUSSFILTER", "MEDIANFILTER", "SAVITZKYGOLAY",
         "CONTANGO", "BACKWARDATION", "CONTRACTSPREAD", "ROLLYIELD", "FRONTMONTH", "TERMSTRUCT",
         "NEWLOW",
+        // v16.25 · 第 7 批 30 个（数学辅助 + 统计高级 + 实战指标 + 趋势打分 + 距离 + 风险评估）
+        "SIN", "SQUARED", "RMS", "SAFEDIV", "SCALE", "CLIP",
+        "NORM", "POWMEAN", "WEIGHTEDMEAN", "HARMONICMEAN", "GEOMEAN",
+        "TR", "TRIMA", "TPRMA", "WAVETREND", "SQUEEZEMOM",
+        "TRENDDIR", "TRENDSCORE", "TRENDSTRENGTH", "PRICEACTION", "PRICESCORE", "SIGNALSTRENGTH",
+        "HHVDIST", "LLVDIST", "PRICEDIST", "RANGEPCT",
+        "RECOVERY", "PROFITRATIO", "REWARDRATIO", "RUNUP",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

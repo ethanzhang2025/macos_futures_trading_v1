@@ -356,6 +356,43 @@ public enum MaiLangFunctionSignatures {
         sig("TERMSTRUCT",     [],                "期限结构（远月 vs 近月平均斜率）",        .高级),
         // 实战 1
         sig("NEWLOW",         ["周期 N"],        "是否创 N 周期新低（1=创低）· 与 NEWHIGH 对称", .逻辑),
+        // v16.25 · 第 7 批 30 个 trader 实战必用 · BuiltinFunction 注册表已实现
+        // 数学辅助 6
+        sig("SIN",            ["弧度"],          "正弦函数（弧度制）",                      .数学),
+        sig("SQUARED",        ["X"],            "平方（X^2）",                            .数学),
+        sig("RMS",            ["序列", "周期 N"], "均方根（quadratic mean · 默认 14）",      .数学),
+        sig("SAFEDIV",        ["分子", "分母"],   "安全除法（分母 0 → 0 · 防崩）",          .数学),
+        sig("SCALE",          ["X", "源最小", "源最大", "目标最小", "目标最大"], "线性缩放映射", .数学),
+        sig("CLIP",           ["X", "下限", "上限"], "区间钳位（同 CLAMPMAX/MIN 组合）",     .数学),
+        // 统计高级 5（量化研究用）
+        sig("NORM",           ["序列", "周期 N"], "标准化（减均值除 std · 默认 20）",        .统计),
+        sig("POWMEAN",        ["序列", "周期 N", "阶 P"], "P 次幂均值",                    .统计),
+        sig("WEIGHTEDMEAN",   ["序列", "权重序列", "周期 N"], "加权均值",                  .统计),
+        sig("HARMONICMEAN",   ["序列", "周期 N"], "调和均值（倒数均值的倒数）",              .统计),
+        sig("GEOMEAN",        ["序列", "周期 N"], "几何均值（连乘开 N 次方）",              .统计),
+        // 实战指标 5
+        sig("TR",             [],                "真实波幅（max(H-L, |H-prevC|, |L-prevC|)）", .高级),
+        sig("TRIMA",          ["周期 N"],        "三角加权移动均线（中间权重最大）",        .均线),
+        sig("TPRMA",          ["周期 N"],        "典型价 MA · MA(TYP, N)",                .均线),
+        sig("WAVETREND",      ["快", "慢"],      "波浪趋势（默认 10/21 · 双 EMA 振荡）",   .高级),
+        sig("SQUEEZEMOM",     ["周期 N"],        "挤压动量（默认 20 · BOLL/KELCH 重合时）", .高级),
+        // 趋势 6（量化打分系统）
+        sig("TRENDDIR",       ["周期 N"],        "趋势方向（1=多 / -1=空 / 0=横）",        .高级),
+        sig("TRENDSCORE",     ["周期 N"],        "趋势分（0-100 · 多指标合成）",           .高级),
+        sig("TRENDSTRENGTH",  ["周期 N"],        "趋势强度（ADX 派生）",                   .高级),
+        sig("PRICEACTION",    [],                "价格行为评分（K 线含义合成）",            .高级),
+        sig("PRICESCORE",     ["周期 N"],        "价格综合分（位置+动能+波动）",            .高级),
+        sig("SIGNALSTRENGTH", [],                "当前信号强度（多策略合成）",              .高级),
+        // 距离 / 位置 4
+        sig("HHVDIST",        ["周期 N"],        "距 N 周期最高的距离（百分比）",          .统计),
+        sig("LLVDIST",        ["周期 N"],        "距 N 周期最低的距离（百分比）",          .统计),
+        sig("PRICEDIST",      ["目标价"],        "当前价距目标价的距离",                    .价量),
+        sig("RANGEPCT",       ["周期 N"],        "当前价在 N 周期范围内位置（0-100%）",    .统计),
+        // 实战风险评估 4（系统性能指标）
+        sig("RECOVERY",       ["收益序列"],      "恢复因子（净利 / 最大回撤）",            .统计),
+        sig("PROFITRATIO",    ["盈亏序列"],      "盈亏比（平均盈 / |平均亏|）",            .统计),
+        sig("REWARDRATIO",    ["盈亏序列"],      "风险回报比（盈利期望 / 风险期望）",       .统计),
+        sig("RUNUP",          ["序列"],          "最大浮盈（peak vs entry）",              .统计),
     ]
 
     /// v15.22 batch35 · 模糊搜索（name + summary 均不区分大小写 · 中文 summary 不受影响 · 空 query → 返回全部）

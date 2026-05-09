@@ -41,6 +41,23 @@ struct HUDFieldsBookTests {
         #expect(Set(order) == Set(HUDFieldKind.allCases))  // 不漏 / 不重
     }
 
+    @Test("v15.62 · 每个 case 都有 icon SF Symbol 非空")
+    func icons() {
+        for k in HUDFieldKind.allCases {
+            #expect(!k.icon.isEmpty)
+        }
+    }
+
+    @Test("v15.62 · 每个 case 都有 sampleText（caption 提示）")
+    func samples() {
+        for k in HUDFieldKind.allCases {
+            #expect(!k.sampleText.isEmpty)
+        }
+        #expect(HUDFieldKind.ohlc.sampleText.contains("O"))
+        #expect(HUDFieldKind.change.sampleText.contains("涨跌"))
+        #expect(HUDFieldKind.sectorInfo.sampleText.contains("板块"))
+    }
+
     @Test("displayName 全 10 类中文化（v15.56 加 sectorInfo）")
     func displayNames() {
         #expect(HUDFieldKind.ohlc.displayName.contains("OHLC"))

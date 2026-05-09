@@ -1,9 +1,10 @@
-// MainApp · HUD 字段编辑 Sheet（v15.14 · 6 个 Toggle 列表）
+// MainApp · HUD 字段编辑 Sheet（v15.14 · v15.62 视觉 polish · 加图标 + 示例 preview）
 //
 // 设计要点：
 // - 草稿模式：取消放弃 · 保存写回 @Binding（与 IndicatorParamsSheet 同模式）
-// - 还原默认按钮（仅 .debug 开 · 与 v15.13 行为一致）
+// - 还原默认按钮（v15.58 起 default = .debug + .sectorInfo）
 // - 全选 / 全不选 快捷按钮（实战常用）
+// - v15.62 · 每行 SF Symbol 图标 + 简短示例 caption · 已选计数显示
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -23,9 +24,15 @@ struct HUDFieldsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("HUD 显示字段")
-                .font(.title2).bold()
-                .padding(.bottom, 4)
+            HStack(alignment: .firstTextBaseline) {
+                Text("HUD 显示字段")
+                    .font(.title2).bold()
+                Spacer()
+                Text("已选 \(draft.fields.count) / \(HUDFieldKind.allCases.count)")
+                    .font(.callout.monospaced())
+                    .foregroundColor(.secondary)
+            }
+            .padding(.bottom, 4)
             Text("勾选要在 K 线图角落 HUD 浮窗显示的字段（主标识与指标值始终显示 · 浮窗位置可在工具栏菜单切换 4 角）")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -33,9 +40,23 @@ struct HUDFieldsSheet: View {
 
             Form {
                 Section("可选字段") {
-                    // v15.16 hotfix #10：用 displayOrder 与 HUD 渲染顺序对齐（time/ohlc/change/vol/oi/debug）
                     ForEach(HUDFieldKind.displayOrder) { kind in
-                        Toggle(kind.displayName, isOn: bindingFor(kind))
+                        Toggle(isOn: bindingFor(kind)) {
+                            HStack(alignment: .center, spacing: 10) {
+                                Image(systemName: kind.icon)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.accentColor)
+                                    .frame(width: 22, alignment: .center)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(kind.displayName)
+                                        .font(.callout)
+                                    Text(kind.sampleText)
+                                        .font(.caption2.monospaced())
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -58,11 +79,12 @@ struct HUDFieldsSheet: View {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
+                .disabled(draft == book)
             }
             .padding(.top, 12)
         }
         .padding(20)
-        .frame(width: 460, height: 480)
+        .frame(width: 540, height: 620)
     }
 
     private func bindingFor(_ kind: HUDFieldKind) -> Binding<Bool> {

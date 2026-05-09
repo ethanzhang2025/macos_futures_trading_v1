@@ -40,6 +40,38 @@ public enum HUDFieldKind: String, CaseIterable, Sendable, Codable, Identifiable 
         }
     }
 
+    /// SF Symbol 图标（v15.62 · HUDFieldsSheet Label 渲染用）
+    public var icon: String {
+        switch self {
+        case .ohlc:         return "chart.bar.doc.horizontal"
+        case .change:       return "arrow.up.right.circle"
+        case .amplitude:    return "arrow.up.and.down"
+        case .volume:       return "speaker.wave.2"
+        case .volumeRatio:  return "scale.3d"
+        case .openInterest: return "chart.bar.fill"
+        case .atr:          return "waveform.path"
+        case .timestamp:    return "clock"
+        case .sectorInfo:   return "rectangle.3.group.fill"
+        case .debug:        return "ladybug.fill"
+        }
+    }
+
+    /// 简短示例文本（v15.62 · sheet 字段下方提示用 · 让 trader 一眼知道这字段长什么样）
+    public var sampleText: String {
+        switch self {
+        case .ohlc:         return "O 3245  H 3260  L 3230  C 3250"
+        case .change:       return "涨跌 +28 (+0.87%)"
+        case .amplitude:    return "振幅 1.85%"
+        case .volume:       return "量 12480"
+        case .volumeRatio:  return "量比 1.85"
+        case .openInterest: return "持仓 1200K"
+        case .atr:          return "ATR(14) 24.5"
+        case .timestamp:    return "时间 2026-05-08 14:30"
+        case .sectorInfo:   return "板块 黑色系 · 均 +0.45% · 偏多 36%"
+        case .debug:        return "可见 120 · 起点 45/300 · 帧 2.4ms"
+        }
+    }
+
     /// v15.16 hotfix #10：HUD 渲染顺序（与 ChartScene.hud 内 if 链顺序一致 · 用户视觉对齐）
     /// 时间戳放最上 · debug 放最下 · 中间是数据字段
     /// v15.20 batch54：amplitude 跟 change 后 · volumeRatio 跟 volume 后 · atr 跟 openInterest 后

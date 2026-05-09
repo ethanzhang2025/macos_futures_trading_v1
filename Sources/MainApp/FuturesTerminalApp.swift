@@ -313,6 +313,7 @@ struct FuturesTerminalApp: App {
                 OpenHeatmapButton()    // v15.44 · WP-行情 热力地图 ⌘⌥H
                 OpenPositionButton()   // v15.47 · WP-行情 多空持仓 ⌘⌥P
                 OpenCorrelationButton() // v15.48 · WP-行情 关联性矩阵 ⌘⌥C
+                OpenMoneyFlowButton()   // v15.49 · WP-行情 资金流向 ⌘⌥N
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -450,6 +451,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1280, height: 800)
+
+        // v15.49 · WP-行情 资金流向（⌘⌥N · 双向 TopN 榜 + 板块资金分布）
+        WindowGroup("资金流向", id: "moneyflow") {
+            MoneyFlowWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1100, height: 720)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -615,6 +623,15 @@ private struct OpenCorrelationButton: View {
     var body: some View {
         Button("关联性矩阵（⌘⌥C）") { openWindow(id: "correlation") }
             .keyboardShortcut("c", modifiers: [.command, .option])
+    }
+}
+
+/// v15.49 · WP-行情 资金流向入口（⌘⌥N · 双向 TopN 榜 + 板块分布 + 市场态势）
+private struct OpenMoneyFlowButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("资金流向（⌘⌥N）") { openWindow(id: "moneyflow") }
+            .keyboardShortcut("n", modifiers: [.command, .option])
     }
 }
 

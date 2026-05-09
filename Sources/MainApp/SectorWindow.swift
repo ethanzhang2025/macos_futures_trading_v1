@@ -54,6 +54,13 @@ struct SectorWindow: View {
         SectorStatisticsCalculator.computeAll(SectorPresets.all)
     }
 
+    /// v15.77 · 全市场 combo 异常映射 by instrumentID（统一跨窗口视觉语言）
+    private var comboMap: [String: ComboAnomaly] {
+        let result = AnomalyDetector.scan(instruments: SectorPresets.all)
+        let combos = ComboAnomalyAggregator.aggregate(events: result.events, minKinds: 3)
+        return Dictionary(uniqueKeysWithValues: combos.map { ($0.instrumentID, $0) })
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             sectorTabBar
@@ -220,6 +227,7 @@ struct SectorWindow: View {
                 cellHeader("最新价", w: 100, alignment: .trailing)
                 cellHeader("涨跌幅", w: 100, alignment: .trailing)
                 cellHeader("持仓量", w: 100, alignment: .trailing)
+                cellHeader("Combo", w: 80, alignment: .center)  // v15.77
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -266,6 +274,9 @@ struct SectorWindow: View {
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 100, alignment: .trailing)
+                // v15.77 · combo 徽章（命中才显示 · 不命中空白）
+                comboBadge(for: inst)
+                    .frame(width: 80, alignment: .center)
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -274,7 +285,39 @@ struct SectorWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("点击切主图 · \(inst.name)（\(inst.id)）")
+        .help(rowHelpText(inst))
+    }
+
+    /// v15.77 · 组合异常徽章（命中才显示）
+    @ViewBuilder
+    private func comboBadge(for inst: SectorInstrument) -> some View {
+        if let c = comboMap[inst.id] {
+            HStack(spacing: 2) {
+                Image(systemName: "sparkles").font(.system(size: 9))
+                Text("\(c.kindCount)/5").font(.system(size: 10, design: .monospaced).bold())
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(comboBadgeColor(c), in: RoundedRectangle(cornerRadius: 3))
+        } else {
+            Text("—").font(.caption2).foregroundColor(.secondary.opacity(0.4))
+        }
+    }
+
+    private func comboBadgeColor(_ c: ComboAnomaly) -> Color {
+        if c.kindCount >= 5 { return ChartTheme.chartLoss }
+        if c.kindCount == 4 { return .orange }
+        return .yellow
+    }
+
+    private func rowHelpText(_ inst: SectorInstrument) -> String {
+        let base = "点击切主图 · \(inst.name)（\(inst.id)）"
+        guard let c = comboMap[inst.id] else { return base }
+        let kindLabel = AnomalyKind.allCases
+            .filter { c.kinds.contains($0) }
+            .map(\.displayName)
+            .joined(separator: " · ")
+        return base + " · ✨ Combo \(c.kindCount)/5（\(kindLabel)）"
     }
 
     private func rowBackground(for inst: SectorInstrument) -> Color {

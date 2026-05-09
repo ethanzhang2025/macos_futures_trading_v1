@@ -133,15 +133,53 @@ public enum MaiLangFunctionSignatures {
         sig("VOLUME", [], "成交量",                                   .价量),
         sig("AMOUNT", [], "成交额",                                   .价量),
         sig("OPI",    [], "持仓量",                                   .价量),
+        // v15.96 补 30 个高频经典指标签名（trader 必用 · BuiltinFunction 注册表已有）
+        // 趋势/振荡/动量经典 9 个
+        sig("ADX",        ["周期 N"],            "平均趋向指标 ADX（趋势强度 · 默认 14）", .高级),
+        sig("BBI",        [],                   "多空指标 BBI（3/6/12/24 均线均值）",      .高级),
+        sig("BIAS",       ["周期 N"],            "乖离率（收盘价偏离均线百分比）",          .高级),
+        sig("CCI",        ["周期 N"],            "顺势指标 CCI（默认 14）",                .高级),
+        sig("CMO",        ["周期 N"],            "钱德动量振荡 CMO（默认 14）",            .高级),
+        sig("AR",         ["周期 N"],            "人气指标（默认 26）",                    .高级),
+        sig("BR",         ["周期 N"],            "意愿指标（默认 26）",                    .高级),
+        sig("AO",         [],                   "动量振荡 AO（5/34 SMA 差）",             .高级),
+        sig("COPPOCK",    ["N1", "N2", "N3"],    "库柏克曲线（默认 11/14/10）",            .高级),
+        // Aroon 体系 3
+        sig("AROONOSC",   ["周期 N"],            "Aroon 振荡器（默认 14）",                .高级),
+        sig("AROONL",     ["周期 N"],            "Aroon 多头线",                          .高级),
+        sig("AROONS",     ["周期 N"],            "Aroon 空头线",                          .高级),
+        // 资金流 / 成交量 3
+        sig("CMF",        ["周期 N"],            "蔡金资金流 CMF（默认 20）",              .高级),
+        sig("CHO",        ["快周期", "慢周期"],   "蔡金波动指数（默认 3/10）",              .高级),
+        sig("ADL",        [],                   "累积/派发线 ADL",                        .高级),
+        // 波动相关 5
+        sig("ATR",        ["周期 N"],            "真实波动幅度（默认 14）",                .高级),
+        sig("ATRPCT",     ["周期 N"],            "ATR 百分比（ATR/CLOSE × 100）",          .高级),
+        sig("CHOPPINESS", ["周期 N"],            "震荡指数（>61.8 震荡 / <38.2 趋势）",    .高级),
+        sig("ANNUALSTD",  ["周期 N"],            "年化标准差（√252 缩放）",                .高级),
+        sig("CHANDELIERL", ["周期 N"],           "吊灯止损多头",                           .高级),
+        sig("CHANDELIERS", ["周期 N"],           "吊灯止损空头",                           .高级),
+        // BOLL 派生 5
+        sig("BOLLU",      ["周期 N", "倍数 M"],  "布林上轨（MID + M × STD · 默认 20/2）",  .高级),
+        sig("BOLLM",      ["周期 N"],            "布林中轨（默认 20 周期均线）",            .高级),
+        sig("BOLLL",      ["周期 N", "倍数 M"],  "布林下轨（MID - M × STD）",              .高级),
+        sig("BOLLW",      ["周期 N", "倍数 M"],  "布林带宽（UPPER-LOWER）",                .高级),
+        sig("BOLLPCT",    ["周期 N", "倍数 M"],  "布林位置 %B（价格在带内位置）",          .高级),
+        // 跨期/跨品种 + 数学辅助 4
+        sig("BASIS",      [],                   "基差（现货 - 期货）",                     .高级),
+        sig("BETA",       ["周期 N"],            "Beta 系数（与基准波动相关性）",           .统计),
+        sig("CLAMPMAX",   ["X", "上限"],         "上限钳位（X > 上限 取上限）",            .数学),
+        sig("CLAMPMIN",   ["X", "下限"],         "下限钳位（X < 下限 取下限）",            .数学),
     ]
 
-    /// v15.22 batch35 · 模糊搜索（name 不区分大小写 + summary 中文匹配 · 空 query → 返回全部）
+    /// v15.22 batch35 · 模糊搜索（name + summary 均不区分大小写 · 中文 summary 不受影响 · 空 query → 返回全部）
+    /// v15.96 修：summary 改用 localizedCaseInsensitiveContains · 避免 summary 含英文缩写时大小写不一致
     public static func search(_ query: String) -> [MaiLangFunctionSignature] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return entries }
         let upper = trimmed.uppercased()
         return entries.filter { sig in
-            sig.name.uppercased().contains(upper) || sig.summary.contains(trimmed)
+            sig.name.uppercased().contains(upper) || sig.summary.localizedCaseInsensitiveContains(trimmed)
         }
     }
 

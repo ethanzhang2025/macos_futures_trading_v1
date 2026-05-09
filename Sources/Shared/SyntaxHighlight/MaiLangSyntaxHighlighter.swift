@@ -87,6 +87,14 @@ public enum MaiLangSyntaxHighlighter {
         "ISLASTBAR", "BARPOS",
         // 价量字段（视为内置函数 / 数据源）
         "OPEN", "HIGH", "LOW", "CLOSE", "VOLUME", "AMOUNT", "OPI",
+        // v15.96 · 30 个高频经典指标 · 与 MaiLangFunctionSignatures.entries 同步
+        "ADX", "BBI", "BIAS", "CCI", "CMO", "AR", "BR", "AO", "COPPOCK",
+        "AROONOSC", "AROONL", "AROONS",
+        "CMF", "CHO", "ADL",
+        "ATR", "ATRPCT", "CHOPPINESS", "ANNUALSTD",
+        "CHANDELIERL", "CHANDELIERS",
+        "BOLLU", "BOLLM", "BOLLL", "BOLLW", "BOLLPCT",
+        "BASIS", "BETA", "CLAMPMAX", "CLAMPMIN",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

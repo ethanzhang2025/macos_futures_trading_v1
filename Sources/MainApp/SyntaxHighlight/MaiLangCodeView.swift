@@ -407,12 +407,16 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 }
             }
         }
-        // v15.22 batch6 · 错误位置红色背景标注（编译失败后定位）
+        // v15.22 batch6 · 错误位置红色标注（编译失败后定位）· v15.95 升级波浪线下划（IDE 风格 · 视觉更专业）
+        // NSUnderlineStyle .single + .patternDot 组合接近 IDE 拼写错误波浪线 · macOS 13+ 原生支持
         if let marker = errorMarker,
            let errRange = lineColumnToRange(marker, in: source) {
             let safe = NSIntersectionRange(errRange, fullRange)
             if safe.length > 0 {
-                storage.addAttribute(.backgroundColor, value: NSColor.systemRed.withAlphaComponent(0.35), range: safe)
+                let underline = NSUnderlineStyle.thick.rawValue | NSUnderlineStyle.patternDot.rawValue
+                storage.addAttribute(.underlineStyle, value: underline, range: safe)
+                storage.addAttribute(.underlineColor, value: NSColor.systemRed, range: safe)
+                storage.addAttribute(.backgroundColor, value: NSColor.systemRed.withAlphaComponent(0.15), range: safe)
             }
         }
         storage.endEditing()

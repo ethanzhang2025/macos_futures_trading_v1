@@ -316,6 +316,7 @@ struct FuturesTerminalApp: App {
                 OpenMoneyFlowButton()   // v15.49 · WP-行情 资金流向 ⌘⌥N
                 OpenCalendarSpreadButton() // v15.50 · WP-套利 跨期 ⌘⌥X
                 OpenInstrumentDashboardButton() // v15.51 · WP-行情 品种深度分析 ⌘⌥I
+                OpenSessionCompareButton()      // v15.52 · WP-行情 时段对比 ⌘⌥T
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -474,6 +475,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1280, height: 780)
+
+        // v15.52 · WP-行情 时段对比（⌘⌥T · 夜盘vs日盘 / 上午vs下午 / 节后效应 3 模式）
+        WindowGroup("时段对比", id: "sessionCompare") {
+            SessionCompareWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1100, height: 760)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -666,6 +674,15 @@ private struct OpenInstrumentDashboardButton: View {
     var body: some View {
         Button("品种深度分析（⌘⌥I）") { openWindow(id: "instrumentDashboard") }
             .keyboardShortcut("i", modifiers: [.command, .option])
+    }
+}
+
+/// v15.52 · WP-行情 时段对比入口（⌘⌥T · 夜盘 vs 日盘 / 上午 vs 下午 / 节后效应）
+private struct OpenSessionCompareButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("时段对比（⌘⌥T）") { openWindow(id: "sessionCompare") }
+            .keyboardShortcut("t", modifiers: [.command, .option])
     }
 }
 

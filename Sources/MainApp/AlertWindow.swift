@@ -50,6 +50,43 @@ struct AlertWindow: View {
 
     @State private var alerts: [Alert] = []
     @State private var alertInstrumentFilter: String = ""   // "" = 全部 · 否则只显示指定合约
+    /// v15.69 · 条件类型过滤（segmented · 全部 / 价格类 / 价差类 / 指标类）
+    @State private var conditionTypeFilter: ConditionTypeFilter = .all
+
+    enum ConditionTypeFilter: String, CaseIterable, Identifiable {
+        case all       // 全部
+        case price     // 价格类（priceAbove/Below/Cross/MoveSpike/Breakout/horizontalLine）
+        case spread    // 价差偏离
+        case indicator // 指标条件
+        case extras    // 异动 · 成交量/持仓量
+
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .all:       return "全部"
+            case .price:     return "价格类"
+            case .spread:    return "价差类"
+            case .indicator: return "指标类"
+            case .extras:    return "异动"
+            }
+        }
+
+        func matches(_ c: AlertCondition) -> Bool {
+            switch (self, c) {
+            case (.all, _): return true
+            case (.price, .priceAbove), (.price, .priceBelow),
+                 (.price, .priceCrossAbove), (.price, .priceCrossBelow),
+                 (.price, .priceMoveSpike), (.price, .priceBreakoutHigh),
+                 (.price, .priceBreakoutLow), (.price, .horizontalLineTouched):
+                return true
+            case (.spread, .spreadDeviation): return true
+            case (.indicator, .indicator): return true
+            case (.extras, .volumeSpike), (.extras, .openInterestSpike):
+                return true
+            default: return false
+            }
+        }
+    }
     /// v15.20 batch57 · 多选批量操作 · alertRow checkbox 状态 · 走 AlertBatchOperator 纯函数
     @State private var selectedAlertIDs: Set<UUID> = []
     /// v15.20 batch69 · 列表排序（@AppStorage 持久化 · 重启保留 · 默认 .manual 创建顺序）
@@ -463,9 +500,13 @@ struct AlertWindow: View {
         Array(Set(alerts.map(\.instrumentID))).sorted()
     }
 
-    /// 应用合约筛选 + v15.20 batch69 排序 + v15.21 batch95 搜索
+    /// 应用合约筛选 + v15.20 batch69 排序 + v15.21 batch95 搜索 + v15.69 条件类型过滤
     private var filteredAlerts: [Alert] {
         var scoped = alertInstrumentFilter.isEmpty ? alerts : alerts.filter { $0.instrumentID == alertInstrumentFilter }
+        // v15.69 · 条件类型过滤
+        if conditionTypeFilter != .all {
+            scoped = scoped.filter { conditionTypeFilter.matches($0.condition) }
+        }
         // batch95 · 名/合约/条件描述 模糊匹配（不区分大小写 · 空字符串跳过过滤）
         let q = alertSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !q.isEmpty {
@@ -476,6 +517,12 @@ struct AlertWindow: View {
             }
         }
         return AlertSorter.sort(scoped, field: alertSortField, ascending: alertSortAscending)
+    }
+
+    /// v15.69 · 各条件类型当前 alerts 数量（segmented label 用 · 显 "(N)"）
+    private func conditionTypeCount(_ filter: ConditionTypeFilter) -> Int {
+        if filter == .all { return alerts.count }
+        return alerts.lazy.filter { filter.matches($0.condition) }.count
     }
 
     /// v15.20 batch79 · 触发活跃度统计（24h / 本周 · 走 historyEntries 触发时间过滤）
@@ -520,6 +567,16 @@ struct AlertWindow: View {
                     .opacity(0)
                     .frame(width: 0, height: 0)
                     .accessibilityHidden(true)
+                // v15.69 · 条件类型过滤（segmented）
+                Picker("", selection: $conditionTypeFilter) {
+                    ForEach(ConditionTypeFilter.allCases) { f in
+                        Text("\(f.displayName) (\(conditionTypeCount(f)))").tag(f)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 360)
+                .help("按条件类型过滤 · 价格类/价差类/指标类/异动")
                 Text("合约筛选").font(.caption).foregroundColor(.secondary)
                 Picker("", selection: $alertInstrumentFilter) {
                     Text("全部 (\(alerts.count))").tag("")

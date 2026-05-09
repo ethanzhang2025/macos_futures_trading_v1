@@ -23,6 +23,7 @@ struct AnomalyMonitorWindow: View {
     @State private var viewMode: ViewMode = .list
     @State private var comboMinKinds: Int = 3  // v15.70 · 组合异常 minKinds 阈值
     @State private var searchText: String = ""  // v15.79 · 列表/combo 视图搜索（按品种ID/名）
+    @State private var comboSortMode: ComboSortMode = .totalSeverity  // v15.80
     @Environment(\.openWindow) private var openWindow
 
     enum SectorFilter: Hashable, Identifiable {
@@ -38,6 +39,24 @@ struct AnomalyMonitorWindow: View {
             switch self {
             case .all: return "全市场"
             case .sector(let s): return s.displayName
+            }
+        }
+    }
+
+    /// v15.80 · combo 视图排序维度
+    enum ComboSortMode: String, CaseIterable, Identifiable {
+        case totalSeverity   // combo 严重度 desc（默认 · aggregator 已 desc）
+        case kindCount       // 类型数 desc · 同分按 totalSeverity desc
+        case sectorAlpha     // 板块字母（聚类查看）· 同板块按 totalSeverity
+        case instrumentID    // 品种 ID 字母
+
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .totalSeverity: return "严重度"
+            case .kindCount:     return "类型数"
+            case .sectorAlpha:   return "板块"
+            case .instrumentID:  return "代码"
             }
         }
     }
@@ -961,7 +980,9 @@ struct AnomalyMonitorWindow: View {
         }()
         let allCombos = ComboAnomalyAggregator.aggregate(events: scopedEvents, minKinds: comboMinKinds)
         // v15.79 · 搜索过滤（按品种 ID/名）· stats 仍基于全集合（让 trader 看到搜索前后对比）
-        let combos = applySearch(allCombos) { ($0.instrumentID, $0.instrumentName) }
+        let searched = applySearch(allCombos) { ($0.instrumentID, $0.instrumentName) }
+        // v15.80 · 排序应用（默认 .totalSeverity 等价 aggregator 输出）
+        let combos = sortCombos(searched, by: comboSortMode)
         let count5 = allCombos.filter { $0.kindCount == 5 }.count
         let count4 = allCombos.filter { $0.kindCount == 4 }.count
         let count3 = allCombos.filter { $0.kindCount == 3 }.count
@@ -992,29 +1013,64 @@ struct AnomalyMonitorWindow: View {
     }
 
     private func comboStatsBar(total: Int, c5: Int, c4: Int, c3: Int) -> some View {
-        HStack(spacing: 22) {
+        HStack(spacing: 18) {
             statBlock("Combo 总数", "\(total)",
                       color: total > 0 ? ChartTheme.chartLoss : .secondary)
             Divider().frame(height: 28)
-            statBlock("满命中 5 类", "\(c5)", color: c5 > 0 ? ChartTheme.chartLoss : .secondary)
-            statBlock("4 类命中", "\(c4)", color: c4 > 0 ? .orange : .secondary)
-            statBlock("3 类命中", "\(c3)", color: c3 > 0 ? .yellow : .secondary)
+            statBlock("5 类", "\(c5)", color: c5 > 0 ? ChartTheme.chartLoss : .secondary)
+            statBlock("4 类", "\(c4)", color: c4 > 0 ? .orange : .secondary)
+            statBlock("3 类", "\(c3)", color: c3 > 0 ? .yellow : .secondary)
             Divider().frame(height: 28)
             HStack(spacing: 4) {
-                Text("最少命中").font(.caption).foregroundColor(.secondary)
+                Text("≥").font(.caption).foregroundColor(.secondary)
                 Stepper(value: $comboMinKinds, in: 2...5, step: 1) {
-                    Text("≥ \(comboMinKinds) 类")
+                    Text("\(comboMinKinds) 类")
                         .font(.caption.monospaced())
-                        .frame(minWidth: 50, alignment: .leading)
+                        .frame(minWidth: 36, alignment: .leading)
                 }
-                .frame(width: 130)
+                .frame(width: 110)
+            }
+            Divider().frame(height: 28)
+            // v15.80 · 排序选择
+            HStack(spacing: 4) {
+                Text("排序").font(.caption).foregroundColor(.secondary)
+                Picker("", selection: $comboSortMode) {
+                    ForEach(ComboSortMode.allCases) { m in
+                        Text(m.displayName).tag(m)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 90)
+                .labelsHidden()
             }
             Spacer()
-            Text("同品种多类同时命中 = 真信号 · 单类触发可能是噪声")
+            Text("多类共振 = 真信号")
                 .font(.caption2).foregroundColor(.secondary)
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
         .background(Color.secondary.opacity(0.04))
+    }
+
+    /// v15.80 · combo 排序应用
+    private func sortCombos(_ combos: [ComboAnomaly], by mode: ComboSortMode) -> [ComboAnomaly] {
+        switch mode {
+        case .totalSeverity:
+            return combos  // aggregator 默认已 totalSeverity desc
+        case .kindCount:
+            return combos.sorted { lhs, rhs in
+                if lhs.kindCount != rhs.kindCount { return lhs.kindCount > rhs.kindCount }
+                return lhs.totalSeverity > rhs.totalSeverity
+            }
+        case .sectorAlpha:
+            return combos.sorted { lhs, rhs in
+                if lhs.sector.displayName != rhs.sector.displayName {
+                    return lhs.sector.displayName < rhs.sector.displayName
+                }
+                return lhs.totalSeverity > rhs.totalSeverity
+            }
+        case .instrumentID:
+            return combos.sorted { $0.instrumentID < $1.instrumentID }
+        }
     }
 
     private var comboHeader: some View {

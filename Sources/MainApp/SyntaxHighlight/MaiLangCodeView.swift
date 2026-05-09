@@ -185,7 +185,36 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 self.parent.applyHighlight(to: tv)
                 // batch106 · 文本变 → 行数变 → 可视行集合可能变（顶部 line 不变 · 底部可能 shift）
                 self.reportVisibleLines()
+                // v16.2 · 自动触发补全 · 光标前 ≥ 2 字母 word + 至少 1 个候选命中 → 弹 popup
+                self.maybeTriggerAutoCompletion(tv)
             }
+        }
+
+        /// v16.2 · 自动补全触发 · trader 输入"M" → 不需手动按 Esc · 直接弹 MA / MAX / MIN / MEDIAN 候选
+        ///
+        /// 触发条件：
+        /// 1. 光标无选区
+        /// 2. 光标前是连续 ≥ 2 个 ASCII 字母（避免单字母 / 数字 / 中文 / 标点触发）
+        /// 3. 该 prefix 至少有 1 个候选命中（避免空 popup 闪烁）
+        ///
+        /// 用 NSTextView.complete(_:) 调起内置补全 popup · 候选源由
+        /// `textView(_:completions:forPartialWordRange:indexOfSelectedItem:)` 提供
+        private func maybeTriggerAutoCompletion(_ tv: NSTextView) {
+            let range = tv.selectedRange()
+            guard range.length == 0, range.location > 0 else { return }
+            let ns = tv.string as NSString
+            var wordStart = range.location
+            while wordStart > 0 {
+                let c = ns.character(at: wordStart - 1)
+                let isLetter = (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A)
+                if isLetter { wordStart -= 1 } else { break }
+            }
+            let wordLen = range.location - wordStart
+            guard wordLen >= 2 else { return }
+            let prefix = ns.substring(with: NSRange(location: wordStart, length: wordLen)).uppercased()
+            let hasCandidate = MaiLangSyntaxHighlighter.allCompletionCandidates.contains { $0.hasPrefix(prefix) }
+            guard hasCandidate else { return }
+            tv.complete(nil)
         }
 
         /// v15.22 batch11 · 光标位置变化（含点击/方向键/选区调整）→ 报行/列给 status bar

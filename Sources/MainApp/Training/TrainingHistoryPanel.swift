@@ -146,11 +146,16 @@ struct TrainingHistoryPanel: View {
                             Label("保存周报为 .md 文件", systemImage: "square.and.arrow.down")
                         }
                     }
-                    Section("CSV 数据（v16.20 · 离线 Excel/Numbers 分析）") {
+                    Section("CSV 数据（v16.20/v16.24 · 离线分析 + 跨设备同步）") {
                         Button {
                             saveCSVToFile()
                         } label: {
                             Label("导出训练历史 CSV", systemImage: "tablecells")
+                        }
+                        Button {
+                            importCSVFromFile()
+                        } label: {
+                            Label("导入训练历史 CSV", systemImage: "square.and.arrow.down.on.square")
                         }
                     }
                 } label: {
@@ -793,6 +798,24 @@ struct TrainingHistoryPanel: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let data = TrainingSessionCSVExporter.exportData(viewModel.log)
         try? data.write(to: url, options: .atomic)
+    }
+
+    // MARK: - v16.24 · CSV 导入（跨设备同步 / 备份恢复）
+
+    private func importCSVFromFile() {
+        let panel = NSOpenPanel()
+        panel.title = L("导入训练历史 CSV")
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let data = try? Data(contentsOf: url),
+              let csv = String(data: data, encoding: .utf8) else { return }
+        let imported = TrainingSessionCSVImporter.parse(csv)
+        guard !imported.isEmpty else { return }
+        // 合并：addSession 已自带同 id 覆盖语义 · 但 CSV 重生成的 session 是新 id · 直接 append
+        for s in imported {
+            viewModel.log.addSession(s)
+        }
     }
 }
 

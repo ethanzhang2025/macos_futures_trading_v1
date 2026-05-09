@@ -202,6 +202,9 @@ struct JournalWindow: View {
     // v15.23 batch177 · trades 表搜索（合约 / 方向 / 开平 / 来源 · 多 query AND）
     @State private var tradeSearchText: String = ""
 
+    // v16.0 · 复盘 v2 · trade 行点击 setup chip 弹编辑（trader 给单笔打策略标签 · 让 SetupMatrix 真在工作流跑起来）
+    @State private var pendingSetupTrade: Trade?
+
     // v15.23 batch183 · 搜索框 focus（⌘F 聚焦）
     @FocusState private var focusedSearchField: SearchField?
 
@@ -288,6 +291,15 @@ struct JournalWindow: View {
                 JournalEditorSheet(editing: journal, trades: trades, existingTagsByFrequency: tagsByFrequency) { updateJournal($0) }
             case .generatorPreview(let drafts):
                 GeneratorPreviewSheet(drafts: drafts) { batchAddJournals($0) }
+            }
+        }
+        // v16.0 · setup 编辑 sheet（trader 点击 trade 行 setup chip 触发）
+        .sheet(item: $pendingSetupTrade) { trade in
+            SetupEditorSheet(
+                trade: trade,
+                knownSetups: knownSetups
+            ) { newSetup in
+                applySetup(newSetup, to: trade)
             }
         }
         .confirmationDialog(
@@ -1522,6 +1534,29 @@ struct JournalWindow: View {
         }
     }
 
+    // MARK: - v16.0 · setup 编辑 helpers（复盘 v2 工作流闭环）
+
+    /// trades 中所有已有的 setup 标签（去重 · 按出现频率降序 · 给 SetupEditorSheet 做 quick chip 候选）
+    private var knownSetups: [String] {
+        var counts: [String: Int] = [:]
+        for t in trades {
+            if let s = t.setup, !s.isEmpty {
+                counts[s, default: 0] += 1
+            }
+        }
+        return counts.sorted { ($0.value, $1.key) > ($1.value, $0.key) }.map(\.key)
+    }
+
+    /// 用户保存 setup 后回写 trades 数组（onChange 自动持久化）· nil 清除
+    private func applySetup(_ setup: String?, to trade: Trade) {
+        guard let idx = trades.firstIndex(where: { $0.id == trade.id }) else { return }
+        var updated = trades[idx]
+        updated.setup = setup?.isEmpty == true ? nil : setup
+        trades[idx] = updated
+        Toast.info("已更新策略标签",
+                   "\(trade.instrumentID) · \(updated.setup ?? "(已清除)")")
+    }
+
     // MARK: - 日志 Mutations（commit 3/4）
 
     private func saveJournal(_ journal: TradeJournal) {
@@ -2047,10 +2082,42 @@ private struct JournalEditorSheet: View {
                 .font(.system(.caption, design: .monospaced))
                 .foregroundColor(.secondary)
             Spacer()
+            // v16.0 · 复盘 v2 · setup chip（已标显示标签 · 未标显示"+ 标策略"灰显提示 · 仅开仓行支持 · 透传到 ClosedPosition）
+            if trade.offsetFlag == .open {
+                setupChip(for: trade)
+            }
             Text(JournalWindow.timestampFormatter.string(from: trade.timestamp))
                 .font(.caption2)
                 .foregroundColor(.secondary)
         }
+    }
+
+    /// v16.0 · setup chip 按钮 · 点击弹 SetupEditorSheet
+    private func setupChip(for trade: Trade) -> some View {
+        Button {
+            pendingSetupTrade = trade
+        } label: {
+            if let s = trade.setup, !s.isEmpty {
+                Text(s)
+                    .font(.system(size: 10, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor.opacity(0.15))
+                    .foregroundColor(.accentColor)
+                    .clipShape(Capsule())
+            } else {
+                Text("+ 标策略")
+                    .font(.system(size: 10))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .foregroundColor(.secondary.opacity(0.7))
+                    .overlay(
+                        Capsule().stroke(Color.secondary.opacity(0.3), lineWidth: 0.5)
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+        .tooltip("点击给此笔开仓打 setup 策略标签 · 复盘 v2 SetupMatrix 聚合维度（v16.0）")
     }
 }
 
@@ -2422,6 +2489,117 @@ private enum MockJournalData {
                 updatedAt: now.addingTimeInterval(-86400 / 2)
             )
         ]
+    }
+}
+
+// MARK: - v16.0 · SetupEditorSheet（trade 行 chip 触发 · 给开仓 trade 打 setup 策略标签）
+//
+// 设计：
+// - 已用 setup quick chip 列（trader 复用历史标签 · 一键填入 · 防新建一堆同义词）
+// - TextField 自由输入（trader 个性化 setup · 不强制枚举）
+// - 内置 5 类常见 setup chip（突破/回踩/背离/趋势顺势/区间反转 · 与 MockReviewTrades 一致）
+// - 清除按钮（一键 setup = nil · 用于"标错重来"）
+
+private struct SetupEditorSheet: View {
+
+    let trade: Trade
+    let knownSetups: [String]                  // trades 中已用过的 setup（按频率降序 · 上下文优先）
+    let onApply: (String?) -> Void             // nil = 清除 setup · 非空 = 设置 setup
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var setupText: String
+
+    /// 内置 5 类常见 setup（与 MockReviewTrades 同一组 · 让用户首次也有候选）
+    private static let presetSetups: [String] = ["突破", "回踩", "背离", "趋势顺势", "区间反转"]
+
+    init(trade: Trade, knownSetups: [String], onApply: @escaping (String?) -> Void) {
+        self.trade = trade
+        self.knownSetups = knownSetups
+        self.onApply = onApply
+        self._setupText = State(initialValue: trade.setup ?? "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("策略标签 setup").font(.title2).bold()
+                Spacer()
+                Text("\(trade.instrumentID) · \(trade.direction == .buy ? "买" : "卖")\(trade.offsetFlag.displayName)")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            Form {
+                TextField("自由输入 setup（如 突破 / 回踩 / 自定义）", text: $setupText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 360)
+
+                if !knownSetups.isEmpty {
+                    LabeledContent("已用标签") {
+                        chipFlow(knownSetups, color: .accentColor)
+                    }
+                }
+
+                LabeledContent("常见预设") {
+                    chipFlow(Self.presetSetups, color: .secondary)
+                }
+
+                Text("提示：trader 个性化 · 同义合并保持一致命名（\"突破\" vs \"突破回测\" 算两类）· 复盘 v2 SetupMatrix group by setup 聚合 win-rate")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .formStyle(.grouped)
+
+            HStack {
+                if trade.setup != nil {
+                    Button("清除标签", role: .destructive) {
+                        onApply(nil)
+                        dismiss()
+                    }
+                }
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") {
+                    let trimmed = setupText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    onApply(trimmed.isEmpty ? nil : trimmed)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSubmit)
+            }
+        }
+        .padding(20)
+        .frame(width: 520, height: 360)
+    }
+
+    /// 单字段是否可保存：与原 setup 不同（含从有 → 空清除 / 空 → 有新增 / 改名）
+    private var canSubmit: Bool {
+        let trimmed = setupText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nextSetup: String? = trimmed.isEmpty ? nil : trimmed
+        return nextSetup != trade.setup
+    }
+
+    /// 候选标签 chip 流（点击填入 TextField）· 与 SwiftUI HStack wrap 同模式
+    private func chipFlow(_ items: [String], color: Color) -> some View {
+        // SwiftUI 没原生 wrap layout · 用 LazyVGrid 模拟（adaptive minimum 60 · trader 标签短）
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 70, maximum: 140), spacing: 6)], alignment: .leading, spacing: 6) {
+            ForEach(items, id: \.self) { item in
+                Button {
+                    setupText = item
+                } label: {
+                    Text(item)
+                        .font(.system(size: 11, design: .monospaced))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(color.opacity(0.15))
+                        .foregroundColor(color)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 }
 

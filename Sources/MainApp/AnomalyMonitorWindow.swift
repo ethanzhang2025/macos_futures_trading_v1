@@ -21,6 +21,7 @@ struct AnomalyMonitorWindow: View {
     @State private var thresholds: AnomalyThresholds = .default
     @State private var sectorFilter: SectorFilter = .all
     @State private var viewMode: ViewMode = .list
+    @State private var comboMinKinds: Int = 3  // v15.70 · 组合异常 minKinds 阈值
     @Environment(\.openWindow) private var openWindow
 
     enum SectorFilter: Hashable, Identifiable {
@@ -46,6 +47,7 @@ struct AnomalyMonitorWindow: View {
         case sectorBreakdown // 板块异常分布
         case historyBacktest // v15.59 · 30d 异常频次回溯 + sparkline
         case weeklyTrend    // v15.61 · 本周 vs 上周对比（异动加剧/减弱）
+        case combo          // v15.70 · 组合异常发现（同品种 ≥ N 类同时命中）
 
         var id: String { rawValue }
         var displayName: String {
@@ -55,6 +57,7 @@ struct AnomalyMonitorWindow: View {
             case .sectorBreakdown: return "板块分布"
             case .historyBacktest: return "30d 频次回溯"
             case .weeklyTrend: return "周对比"
+            case .combo: return "组合异常"
             }
         }
     }
@@ -85,6 +88,7 @@ struct AnomalyMonitorWindow: View {
             case .sectorBreakdown: sectorBreakdownView
             case .historyBacktest: historyBacktestView
             case .weeklyTrend:    weeklyTrendView
+            case .combo:          comboView
             }
             Divider()
             legendBar
@@ -126,7 +130,7 @@ struct AnomalyMonitorWindow: View {
                     ForEach(ViewMode.allCases) { m in Text(m.displayName).tag(m) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 500)
+                .frame(width: 600)
                 .labelsHidden()
             }
 
@@ -856,6 +860,203 @@ struct AnomalyMonitorWindow: View {
         }
         .buttonStyle(.plain)
         .help("\(h.instrumentName)（\(h.instrumentID)）本周 \(h.thisWeekCount) vs 上周 \(h.lastWeekCount) · \(h.weekTrend.displayName) \(formatPct(h.weekDeltaPct)) · 点击切主图")
+    }
+
+    // MARK: - 组合异常视图（v15.70 · 同品种 ≥ minKinds 类命中）
+
+    private var comboView: some View {
+        let allEvents = detectionResult.events
+        // 板块过滤：先按板块筛事件，再聚合
+        let scopedEvents: [AnomalyEvent] = {
+            switch sectorFilter {
+            case .all: return allEvents
+            case .sector(let s): return allEvents.filter { $0.sector == s }
+            }
+        }()
+        let combos = ComboAnomalyAggregator.aggregate(events: scopedEvents, minKinds: comboMinKinds)
+        let count5 = combos.filter { $0.kindCount == 5 }.count
+        let count4 = combos.filter { $0.kindCount == 4 }.count
+        let count3 = combos.filter { $0.kindCount == 3 }.count
+
+        return VStack(spacing: 0) {
+            comboStatsBar(total: combos.count, c5: count5, c4: count4, c3: count3)
+            Divider()
+            comboHeader
+            if combos.isEmpty {
+                comboEmptyHint
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(Array(combos.enumerated()), id: \.element.id) { (rank, combo) in
+                            comboRow(rank: rank + 1, combo: combo)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func comboStatsBar(total: Int, c5: Int, c4: Int, c3: Int) -> some View {
+        HStack(spacing: 22) {
+            statBlock("Combo 总数", "\(total)",
+                      color: total > 0 ? ChartTheme.chartLoss : .secondary)
+            Divider().frame(height: 28)
+            statBlock("满命中 5 类", "\(c5)", color: c5 > 0 ? ChartTheme.chartLoss : .secondary)
+            statBlock("4 类命中", "\(c4)", color: c4 > 0 ? .orange : .secondary)
+            statBlock("3 类命中", "\(c3)", color: c3 > 0 ? .yellow : .secondary)
+            Divider().frame(height: 28)
+            HStack(spacing: 4) {
+                Text("最少命中").font(.caption).foregroundColor(.secondary)
+                Stepper(value: $comboMinKinds, in: 2...5, step: 1) {
+                    Text("≥ \(comboMinKinds) 类")
+                        .font(.caption.monospaced())
+                        .frame(minWidth: 50, alignment: .leading)
+                }
+                .frame(width: 130)
+            }
+            Spacer()
+            Text("同品种多类同时命中 = 真信号 · 单类触发可能是噪声")
+                .font(.caption2).foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+        .background(Color.secondary.opacity(0.04))
+    }
+
+    private var comboHeader: some View {
+        HStack(spacing: 0) {
+            Text("#").font(.caption.bold()).foregroundColor(.secondary).frame(width: 36, alignment: .trailing)
+            Text("Combo").font(.caption.bold()).foregroundColor(.secondary).frame(width: 80, alignment: .leading)
+            Text("品种").font(.caption.bold()).foregroundColor(.secondary).frame(width: 130, alignment: .leading)
+            Text("板块").font(.caption.bold()).foregroundColor(.secondary).frame(width: 80, alignment: .leading)
+            Text("类型数").font(.caption.bold()).foregroundColor(.secondary).frame(width: 56, alignment: .trailing)
+            Text("命中类型").font(.caption.bold()).foregroundColor(.secondary).frame(width: 280, alignment: .leading)
+            Spacer().frame(width: 14)
+            Text("avg").font(.caption.bold()).foregroundColor(.secondary).frame(width: 50, alignment: .trailing)
+            Spacer()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.06))
+    }
+
+    private var comboEmptyHint: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "sparkles")
+                .font(.system(size: 36))
+                .foregroundColor(.secondary)
+            Text("当前过滤下无组合异常")
+                .font(.callout).foregroundColor(.secondary)
+            Text("调低 \"最少命中\" 阈值 / 调低各类型阈值 / 切板块")
+                .font(.caption).foregroundColor(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func comboRow(rank: Int, combo: ComboAnomaly) -> some View {
+        Button {
+            openWindow(id: "chart")
+            NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: combo.instrumentID)
+        } label: {
+            HStack(spacing: 0) {
+                Text("\(rank)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+
+                // Combo severity 徽章（数字 + 进度条）
+                HStack(spacing: 4) {
+                    Text(String(format: "%.0f", combo.totalSeverity))
+                        .font(.system(size: 11, design: .monospaced).bold())
+                        .foregroundColor(comboSeverityColor(combo))
+                    GeometryReader { geom in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.secondary.opacity(0.08))
+                                .frame(height: 6)
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(comboSeverityColor(combo).opacity(0.85))
+                                .frame(width: max(2, geom.size.width * CGFloat(combo.totalSeverity / 100.0)),
+                                       height: 6)
+                        }
+                    }
+                    .frame(height: 6)
+                }
+                .frame(width: 80, alignment: .leading)
+
+                // 品种
+                HStack(spacing: 6) {
+                    Text(combo.instrumentID)
+                        .font(.system(size: 11, design: .monospaced).bold())
+                        .frame(width: 50, alignment: .leading)
+                    Text(combo.instrumentName)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(width: 130, alignment: .leading)
+
+                // 板块
+                Label(combo.sector.displayName, systemImage: combo.sector.icon)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(width: 80, alignment: .leading)
+                    .lineLimit(1)
+
+                // 类型数（5/5 染色）
+                Text("\(combo.kindCount) / 5")
+                    .font(.system(size: 11, design: .monospaced).bold())
+                    .foregroundColor(comboKindCountColor(combo.kindCount))
+                    .frame(width: 56, alignment: .trailing)
+
+                // 命中类型 tags（5 列固定布局 · 命中色块 / 未命中灰）
+                comboKindTags(kinds: combo.kinds)
+                    .frame(width: 280, alignment: .leading)
+
+                Spacer().frame(width: 14)
+
+                // avg severity
+                Text(String(format: "%.0f", combo.avgSeverity))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 50, alignment: .trailing)
+
+                Spacer()
+            }
+            .padding(.horizontal, 14).padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(combo.instrumentName)（\(combo.instrumentID)）combo 严重度 \(Int(combo.totalSeverity)) · \(combo.kindCount) 类命中（\(combo.kinds.map(\.displayName).sorted().joined(separator: " · "))）· 点击切主图")
+    }
+
+    private func comboKindTags(kinds: Set<AnomalyKind>) -> some View {
+        HStack(spacing: 4) {
+            ForEach(AnomalyKind.allCases) { k in
+                let hit = kinds.contains(k)
+                Label(k.displayName, systemImage: k.icon)
+                    .font(.system(size: 10))
+                    .foregroundColor(hit ? kindColor(k) : .secondary.opacity(0.4))
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(hit ? kindColor(k).opacity(0.14) : Color.clear,
+                               in: RoundedRectangle(cornerRadius: 3))
+                    .help(k.displayName + (hit ? " · 命中" : " · 未命中"))
+            }
+        }
+    }
+
+    private func comboSeverityColor(_ combo: ComboAnomaly) -> Color {
+        if combo.kindCount >= 5 { return ChartTheme.chartLoss }
+        if combo.kindCount == 4 { return .orange }
+        if combo.totalSeverity >= 80 { return ChartTheme.chartLoss }
+        if combo.totalSeverity >= 50 { return .orange }
+        return .yellow
+    }
+
+    private func comboKindCountColor(_ count: Int) -> Color {
+        if count >= 5 { return ChartTheme.chartLoss }
+        if count == 4 { return .orange }
+        return .yellow
     }
 
     private func weekCountColor(_ c: Int) -> Color {

@@ -123,3 +123,46 @@ public struct AnomalyDetectionResult: Sendable, Equatable {
 
     public var total: Int { events.count }
 }
+
+/// 组合异常（v15.70 · ⌘⌥A 第 6 视图 · 同品种 ≥ minKinds 类同时命中）
+///
+/// trader 重点跟踪信号：单一类型触发可能是噪声 · 多类同时命中 = 真信号
+/// 例：螺纹同时 priceSpike + oiSpike + fundSurge → 资金集中 + 价格 + 持仓三杀
+///
+/// severity 算法：
+/// - avgSeverity = 命中事件 severity 平均
+/// - totalSeverity = avg × (1 + 0.2 × max(0, kindCount - 3))，clamp [0, 100]
+///   3 类 → ×1.0 / 4 类 → ×1.2 / 5 类 → ×1.4
+public struct ComboAnomaly: Sendable, Equatable, Identifiable, Hashable {
+    public let instrumentID: String
+    public let instrumentName: String
+    public let sector: Sector
+    public let kinds: Set<AnomalyKind>
+    public let events: [AnomalyEvent]
+    public let avgSeverity: Double
+    public let totalSeverity: Double
+    public let detectedAt: Date
+
+    public var id: String { instrumentID }
+    public var kindCount: Int { kinds.count }
+
+    public init(
+        instrumentID: String,
+        instrumentName: String,
+        sector: Sector,
+        events: [AnomalyEvent],
+        detectedAt: Date = Date()
+    ) {
+        self.instrumentID = instrumentID
+        self.instrumentName = instrumentName
+        self.sector = sector
+        self.events = events
+        let kindSet = Set(events.map(\.kind))
+        self.kinds = kindSet
+        let avg = events.isEmpty ? 0 : events.map(\.severity).reduce(0, +) / Double(events.count)
+        self.avgSeverity = avg
+        let extraKinds = max(0, kindSet.count - 3)
+        self.totalSeverity = min(100.0, max(0.0, avg * (1.0 + 0.2 * Double(extraKinds))))
+        self.detectedAt = detectedAt
+    }
+}

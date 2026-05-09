@@ -199,13 +199,17 @@ public enum ReviewAnalytics {
     /// nil/空 setup 归到 "(未标)" 桶 · 让 trader 看到未标占比驱动补标行为
     public static let unlabeledSetupKey = "(未标)"
 
+    /// nil 或空字符串都归 unlabeled 桶 · 让"未标"占比可见以驱动补标行为
+    /// public · ReviewWindow filter Menu / recomputeSummary 共用同一规则（避免规则散落）
+    public static func setupKey(for position: ClosedPosition) -> String {
+        guard let s = position.setup, !s.isEmpty else { return unlabeledSetupKey }
+        return s
+    }
+
     public static func setupMatrix(from positions: [ClosedPosition]) -> SetupMatrix {
         var bySetup: [String: (count: Int, total: Decimal, wins: Int)] = [:]
         for position in positions {
-            let key: String = {
-                guard let s = position.setup, !s.isEmpty else { return unlabeledSetupKey }
-                return s
-            }()
+            let key = setupKey(for: position)
             var t = bySetup[key] ?? (0, Decimal(0), 0)
             t.count += 1
             t.total += position.realizedPnL

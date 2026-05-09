@@ -257,12 +257,8 @@ struct ReviewWindow: View {
             filtered = filtered.filter { $0.instrumentID == inst }
         }
         if let setup = filterSetup {
-            // unlabeledSetupKey 命中 nil/空 setup · 其它命中具名 setup（v15.99 · 复盘 v2）
-            if setup == ReviewAnalytics.unlabeledSetupKey {
-                filtered = filtered.filter { ($0.setup ?? "").isEmpty }
-            } else {
-                filtered = filtered.filter { $0.setup == setup }
-            }
+            // 与 ReviewAnalytics.setupMatrix 同口径（unlabeledSetupKey 命中 nil/空 · v15.99 · 复盘 v2）
+            filtered = filtered.filter { ReviewAnalytics.setupKey(for: $0) == setup }
         }
         summary = ReviewSummary(
             tradeCount: totalTradeCount,
@@ -414,14 +410,13 @@ struct ReviewWindow: View {
                 .tooltip("按合约筛选复盘 · 与区间 filter 互补 · 自动从 closed positions 列举")
 
                 // v15.99 · 复盘 v2 · 策略 setup Menu（自动从 allPositions.setup 列举 · 含未标桶）
+                // 列举与计数都走 ReviewAnalytics.setupKey（与 setupMatrix / recomputeSummary 同口径）
+                // 未标桶始终排尾（具名 setup 升序在前 · trader 习惯先看具名再看未标）
                 let allSetups: [String] = {
-                    var keys = Set<String>()
-                    var hasUnlabeled = false
-                    for p in allPositions {
-                        if let s = p.setup, !s.isEmpty { keys.insert(s) } else { hasUnlabeled = true }
-                    }
-                    var sorted = keys.sorted()
-                    if hasUnlabeled { sorted.append(ReviewAnalytics.unlabeledSetupKey) }
+                    let keys = Set(allPositions.map(ReviewAnalytics.setupKey(for:)))
+                    let unlabeled = ReviewAnalytics.unlabeledSetupKey
+                    var sorted = keys.subtracting([unlabeled]).sorted()
+                    if keys.contains(unlabeled) { sorted.append(unlabeled) }
                     return sorted
                 }()
                 Menu(filterSetup ?? "全部策略") {
@@ -429,11 +424,7 @@ struct ReviewWindow: View {
                     if !allSetups.isEmpty { Divider() }
                     ForEach(allSetups, id: \.self) { setup in
                         let isOn = filterSetup == setup
-                        let n = allPositions.filter {
-                            setup == ReviewAnalytics.unlabeledSetupKey
-                                ? ($0.setup ?? "").isEmpty
-                                : $0.setup == setup
-                        }.count
+                        let n = allPositions.filter { ReviewAnalytics.setupKey(for: $0) == setup }.count
                         Button("\(isOn ? "✓ " : "")\(setup) · \(n)") { filterSetup = setup }
                     }
                 }

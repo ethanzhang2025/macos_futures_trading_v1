@@ -432,59 +432,125 @@ struct AnomalyMonitorWindow: View {
         .background(Color.secondary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    // MARK: - 板块分布视图
+    // MARK: - 板块分布视图（v15.65 增强：异常密度排行 + 龙头/弱势）
 
     private var sectorBreakdownView: some View {
         let r = detectionResult
-        let total = max(r.total, 1)
-        let sorted = Sector.allCases.map { ($0, r.countBySector[$0] ?? 0) }
-            .sorted { $0.1 > $1.1 }
+        // v15.65 · 按"异常密度"排序（异常数 / 板块品种数 · 而非裸异常数）
+        // 避免大板块（化工 13）总数高但实际密度低 · 小板块（贵金属 2）易被淹没
+        let rows: [SectorRankingRow] = Sector.allCases.compactMap { sec -> SectorRankingRow? in
+            let universe = SectorPresets.instruments(in: sec).count
+            guard universe > 0 else { return nil }
+            let count = r.countBySector[sec] ?? 0
+            let density = Double(count) / Double(universe)
+            // 板块内龙头/弱势（严重度 max/min · 仅 list 同维度）
+            let secEvents = r.events.filter { $0.sector == sec }
+            let leader = secEvents.first  // events 已按 severity desc · 第一个就是龙头
+            let lagger = secEvents.last
+            return SectorRankingRow(
+                sector: sec, count: count, universe: universe, density: density,
+                leader: leader, lagger: lagger
+            )
+        }
+        .sorted { $0.density > $1.density }
+        let maxDensity = max(rows.first?.density ?? 0, 0.001)
+
         return ScrollView {
             VStack(spacing: 10) {
-                ForEach(sorted, id: \.0) { (sec, count) in
-                    sectorBreakdownRow(sector: sec, count: count, total: total)
+                ForEach(rows) { row in
+                    sectorBreakdownRowEnhanced(row, maxDensity: maxDensity)
                 }
             }
             .padding(14)
         }
     }
 
-    private func sectorBreakdownRow(sector: Sector, count: Int, total: Int) -> some View {
-        let pct = Double(count) / Double(total)
-        let universe = SectorPresets.instruments(in: sector).count
+    /// v15.65 · 板块排行行 fixture（不写 enum 把派生属性内联在闭包）
+    private struct SectorRankingRow: Identifiable {
+        let sector: Sector
+        let count: Int
+        let universe: Int
+        let density: Double  // 0..1+ · count / universe
+        let leader: AnomalyEvent?
+        let lagger: AnomalyEvent?
+        var id: String { sector.id }
+    }
+
+    private func sectorBreakdownRowEnhanced(_ row: SectorRankingRow, maxDensity: Double) -> some View {
+        let pct = row.density / maxDensity
         return Button {
-            sectorFilter = .sector(sector)
+            sectorFilter = .sector(row.sector)
             viewMode = .list
         } label: {
-            HStack(spacing: 12) {
-                Label(sector.displayName, systemImage: sector.icon)
-                    .font(.callout.bold())
-                    .foregroundColor(.secondary)
-                    .frame(width: 110, alignment: .leading)
-                GeometryReader { geom in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.secondary.opacity(0.08))
-                            .frame(height: 14)
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(count > 0 ? Color.orange.opacity(0.8) : Color.clear)
-                            .frame(width: max(2, geom.size.width * CGFloat(pct)), height: 14)
+            VStack(alignment: .leading, spacing: 6) {
+                // 主行：板块名 + 进度条 + 异常数 / 总数 + 密度
+                HStack(spacing: 12) {
+                    Label(row.sector.displayName, systemImage: row.sector.icon)
+                        .font(.callout.bold())
+                        .foregroundColor(.secondary)
+                        .frame(width: 110, alignment: .leading)
+                    GeometryReader { geom in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.secondary.opacity(0.08))
+                                .frame(height: 14)
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(densityColor(row.density))
+                                .frame(width: max(2, geom.size.width * CGFloat(pct)), height: 14)
+                        }
+                    }
+                    .frame(height: 14)
+                    Text("\(row.count) / \(row.universe)")
+                        .font(.callout.monospaced().bold())
+                        .frame(width: 70, alignment: .trailing)
+                    Text(String(format: "%.0f%%", row.density * 100))
+                        .font(.caption.monospaced())
+                        .foregroundColor(densityColor(row.density))
+                        .frame(width: 50, alignment: .trailing)
+                }
+                // 副行：龙头 + 弱势（板块内 severity 最高 / 最低）
+                if row.count > 0 {
+                    HStack(spacing: 12) {
+                        Spacer().frame(width: 110)
+                        if let l = row.leader {
+                            HStack(spacing: 4) {
+                                Image(systemName: "crown.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(ChartTheme.chartLoss)
+                                Text("龙头：\(l.instrumentName)（\(Int(l.severity))）")
+                                    .font(.caption.monospaced())
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        if row.count > 1, let lag = row.lagger, lag.id != row.leader?.id {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.caption2)
+                                    .foregroundColor(ChartTheme.chartProfit)
+                                Text("弱势：\(lag.instrumentName)（\(Int(lag.severity))）")
+                                    .font(.caption.monospaced())
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
                     }
                 }
-                .frame(height: 14)
-                Text("\(count)").font(.callout.monospaced().bold())
-                    .frame(width: 40, alignment: .trailing)
-                Text("/ \(universe)")
-                    .font(.caption.monospaced())
-                    .foregroundColor(.secondary)
-                    .frame(width: 50, alignment: .leading)
             }
             .padding(10)
             .background(Color.secondary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(sector.displayName) 板块 \(count) 异常 / \(universe) 品种 · 点击切到列表")
+        .help("\(row.sector.displayName) 板块异常密度 \(String(format: "%.0f%%", row.density * 100))（\(row.count) / \(row.universe)）· 点击切到列表")
+    }
+
+    private func densityColor(_ d: Double) -> Color {
+        if d >= 0.6 { return ChartTheme.chartLoss }
+        if d >= 0.3 { return .orange }
+        if d > 0    { return .yellow }
+        return .secondary.opacity(0.3)
     }
 
     // MARK: - 30d 频次回溯（v15.59）

@@ -405,7 +405,7 @@ struct OptionWindow: View {
                 Canvas { ctx, size in
                     drawPnLChart(ctx, size: size)
                 }
-                .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+                .background(ChartTheme.dark.background)
 
                 Color.clear
                     .contentShape(Rectangle())
@@ -464,14 +464,16 @@ struct OptionWindow: View {
             p.move(to: CGPoint(x: snapX, y: 0))
             p.addLine(to: CGPoint(x: snapX, y: size.height))
         }
-        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        .stroke(ChartTheme.crosshairLine,
+                style: StrokeStyle(lineWidth: ChartTheme.crosshairLineWidth, dash: ChartTheme.crosshairDash))
         .allowsHitTesting(false)
     }
 
     private func optionHoverTooltip(
         info: OptionPnLHoverInfo, strategy: OptionStrategy, analysis: PayoffAnalysis
     ) -> some View {
-        let pnlColor: Color = info.pnl > 0 ? .green : (info.pnl < 0 ? .red : .yellow)
+        let pnlColor: Color = info.pnl > 0 ? ChartTheme.chartProfit
+                            : (info.pnl < 0 ? ChartTheme.chartLoss : ChartTheme.chartTransition)
         let diffSpot = info.spotPrice - spotPrice
         // 最近 breakeven 距离（绝对值最小）
         let nearestBE = analysis.breakevens.min(by: { abs($0 - info.spotPrice) < abs($1 - info.spotPrice) })
@@ -500,54 +502,54 @@ struct OptionWindow: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(String(format: "spot %.2f", info.spotPrice))
-                    .font(.system(size: 11, design: .monospaced).bold())
-                    .foregroundColor(.cyan)
+                    .font(ChartTheme.fontValueBold)
+                    .foregroundColor(ChartTheme.chartLine)
                 if isAtSpot {
                     Text("≈现价")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.cyan.opacity(0.7))
+                        .font(ChartTheme.fontHint)
+                        .foregroundColor(ChartTheme.chartLine.opacity(0.7))
                 }
             }
             Text("点 #\(info.index + 1) / \(analysis.curve.count)")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.white.opacity(0.55))
-            Divider().background(Color.white.opacity(0.3))
+                .font(ChartTheme.fontSubvalue)
+                .foregroundColor(ChartTheme.tooltipMuted)
+            Divider().background(ChartTheme.tooltipDivider)
             optionTooltipRow("PnL", String(format: "%+.2f", info.pnl), color: pnlColor)
             optionTooltipRow("距现价", String(format: "%@%.2f", diffSpot >= 0 ? "+" : "", diffSpot),
-                             color: diffSpot >= 0 ? .green.opacity(0.85) : .red.opacity(0.85))
+                             color: diffSpot >= 0 ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized)
             optionTooltipRow("距盈亏点", beText,
-                             color: nearestBE.map { abs(info.spotPrice - $0) < 1 ? .yellow : .white.opacity(0.7) } ?? .secondary)
-            Divider().background(Color.white.opacity(0.3))
+                             color: nearestBE.map { abs(info.spotPrice - $0) < 1 ? ChartTheme.chartTransition : ChartTheme.tooltipSecondary } ?? .secondary)
+            Divider().background(ChartTheme.tooltipDivider)
             HStack {
                 Text("Leg")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.65))
+                    .font(ChartTheme.fontLabel)
+                    .foregroundColor(ChartTheme.tooltipLabel)
                     .frame(width: 32, alignment: .leading)
                 Text(legSummary)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.85))
+                    .font(ChartTheme.fontSubvalue)
+                    .foregroundColor(ChartTheme.tooltipSecondary)
                 Spacer()
             }
             Text("✓=ITM · ·=OTM · +=买 · -=卖")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.white.opacity(0.4))
+                .font(ChartTheme.fontHint)
+                .foregroundColor(ChartTheme.tooltipDimmed)
         }
-        .padding(8)
+        .padding(ChartTheme.tooltipPadding)
         .frame(width: 220, alignment: .leading)
-        .background(Color.black.opacity(0.85))
-        .cornerRadius(6)
-        .overlay(RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+        .background(ChartTheme.tooltipBackground)
+        .cornerRadius(ChartTheme.tooltipCornerRadius)
+        .overlay(RoundedRectangle(cornerRadius: ChartTheme.tooltipCornerRadius)
+                    .stroke(ChartTheme.tooltipBorder, lineWidth: ChartTheme.tooltipBorderWidth))
     }
 
     private func optionTooltipRow(_ label: String, _ value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.65))
+                .font(ChartTheme.fontLabel)
+                .foregroundColor(ChartTheme.tooltipLabel)
                 .frame(width: 50, alignment: .leading)
             Text(value)
-                .font(.system(size: 11, design: .monospaced))
+                .font(ChartTheme.fontValue)
                 .foregroundColor(color)
             Spacer()
         }
@@ -595,7 +597,7 @@ struct OptionWindow: View {
             var zeroPath = Path()
             zeroPath.move(to: CGPoint(x: 0, y: yFor(0)))
             zeroPath.addLine(to: CGPoint(x: size.width, y: yFor(0)))
-            ctx.stroke(zeroPath, with: .color(.white.opacity(0.30)),
+            ctx.stroke(zeroPath, with: .color(ChartTheme.chartLineSecondary),
                        style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
         }
 
@@ -604,7 +606,7 @@ struct OptionWindow: View {
             var spotLine = Path()
             spotLine.move(to: CGPoint(x: xFor(spotPrice), y: 0))
             spotLine.addLine(to: CGPoint(x: xFor(spotPrice), y: size.height))
-            ctx.stroke(spotLine, with: .color(.cyan.opacity(0.5)),
+            ctx.stroke(spotLine, with: .color(ChartTheme.chartSpotLine),
                        style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
         }
 
@@ -627,10 +629,10 @@ struct OptionWindow: View {
             var seg = Path()
             seg.move(to: CGPoint(x: x1, y: yFor(p1.pnl)))
             seg.addLine(to: CGPoint(x: x2, y: yFor(p2.pnl)))
-            let color: Color = (p1.pnl >= 0 && p2.pnl >= 0) ? .green
-                              : (p1.pnl < 0 && p2.pnl < 0) ? .red
-                              : .yellow
-            ctx.stroke(seg, with: .color(color.opacity(0.85)),
+            let color: Color = (p1.pnl >= 0 && p2.pnl >= 0) ? ChartTheme.chartProfitEmphasized
+                              : (p1.pnl < 0 && p2.pnl < 0) ? ChartTheme.chartLossEmphasized
+                              : ChartTheme.chartTransition.opacity(0.85)
+            ctx.stroke(seg, with: .color(color),
                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
         }
     }

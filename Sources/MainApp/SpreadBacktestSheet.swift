@@ -182,7 +182,7 @@ struct SpreadBacktestSheet: View {
                 Canvas { ctx, size in
                     drawCumulativePnL(ctx: ctx, size: size)
                 }
-                .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+                .background(ChartTheme.dark.background)
 
                 Color.clear
                     .contentShape(Rectangle())
@@ -233,50 +233,52 @@ struct SpreadBacktestSheet: View {
             p.move(to: CGPoint(x: snapX, y: 0))
             p.addLine(to: CGPoint(x: snapX, y: size.height))
         }
-        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        .stroke(ChartTheme.crosshairLine,
+                style: StrokeStyle(lineWidth: ChartTheme.crosshairLineWidth, dash: ChartTheme.crosshairDash))
         .allowsHitTesting(false)
     }
 
     private func cumPnLHoverTooltip(info: CumPnLHoverInfo) -> some View {
-        let cumColor: Color = info.cumPnL > 0 ? .green : (info.cumPnL < 0 ? .red : .yellow)
+        let cumColor: Color = info.cumPnL > 0 ? ChartTheme.chartProfit
+                            : (info.cumPnL < 0 ? ChartTheme.chartLoss : ChartTheme.chartTransition)
         return VStack(alignment: .leading, spacing: 4) {
             Text(info.index == 0 ? "起点" : "第 \(info.index) 笔后")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
-            Divider().background(Color.white.opacity(0.3))
+                .font(ChartTheme.fontValue)
+                .foregroundColor(ChartTheme.tooltipSecondary)
+            Divider().background(ChartTheme.tooltipDivider)
             cumPnLRow("累积 PnL", String(format: "%+.2f", info.cumPnL), color: cumColor)
             if let t = info.trade {
                 let pnl = NSDecimalNumber(decimal: t.pnl).doubleValue
-                let pnlColor: Color = t.isWin ? .green : .red
+                let pnlColor: Color = t.isWin ? ChartTheme.chartProfit : ChartTheme.chartLoss
                 let sideText = t.side == .long ? "做多" : "做空"
-                let sideColor: Color = t.side == .long ? .green : .red
-                Divider().background(Color.white.opacity(0.3))
+                let sideColor: Color = t.side == .long ? ChartTheme.chartProfit : ChartTheme.chartLoss
+                Divider().background(ChartTheme.tooltipDivider)
                 cumPnLRow("方向", sideText, color: sideColor)
                 cumPnLRow("单笔", String(format: "%+.2f", pnl), color: pnlColor)
-                cumPnLRow("持仓", "\(t.holdingBars) 根", color: .white.opacity(0.85))
+                cumPnLRow("持仓", "\(t.holdingBars) 根", color: ChartTheme.tooltipSecondary)
                 cumPnLRow("结果", t.isWin ? "盈" : "亏", color: pnlColor)
             } else {
                 Text("（起始位置 · 无单笔信息）")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
+                    .font(ChartTheme.fontSubvalue)
+                    .foregroundColor(ChartTheme.tooltipDimmed)
             }
         }
-        .padding(8)
+        .padding(ChartTheme.tooltipPadding)
         .frame(width: 200, alignment: .leading)
-        .background(Color.black.opacity(0.85))
-        .cornerRadius(6)
-        .overlay(RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+        .background(ChartTheme.tooltipBackground)
+        .cornerRadius(ChartTheme.tooltipCornerRadius)
+        .overlay(RoundedRectangle(cornerRadius: ChartTheme.tooltipCornerRadius)
+                    .stroke(ChartTheme.tooltipBorder, lineWidth: ChartTheme.tooltipBorderWidth))
     }
 
     private func cumPnLRow(_ label: String, _ value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.65))
+                .font(ChartTheme.fontLabel)
+                .foregroundColor(ChartTheme.tooltipLabel)
                 .frame(width: 56, alignment: .leading)
             Text(value)
-                .font(.system(size: 11, design: .monospaced))
+                .font(ChartTheme.fontValue)
                 .foregroundColor(color)
             Spacer()
         }
@@ -311,7 +313,7 @@ struct SpreadBacktestSheet: View {
             var z = Path()
             z.move(to: CGPoint(x: 0, y: yFor(0)))
             z.addLine(to: CGPoint(x: size.width, y: yFor(0)))
-            ctx.stroke(z, with: .color(.white.opacity(0.25)),
+            ctx.stroke(z, with: .color(ChartTheme.chartLineSecondary),
                        style: StrokeStyle(lineWidth: 0.8, dash: [4, 4]))
         }
 
@@ -323,7 +325,7 @@ struct SpreadBacktestSheet: View {
             seg.move(to: CGPoint(x: x1, y: yFor(cum[i])))
             seg.addLine(to: CGPoint(x: x2, y: yFor(cum[i + 1])))
             let isUp = cum[i + 1] >= cum[i]
-            ctx.stroke(seg, with: .color(isUp ? .green.opacity(0.85) : .red.opacity(0.85)),
+            ctx.stroke(seg, with: .color(isUp ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized),
                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
         }
 
@@ -332,17 +334,17 @@ struct SpreadBacktestSheet: View {
             let x = CGFloat(peakIdx) * xStep
             let y = yFor(cum[peakIdx])
             ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: y - 3, width: 6, height: 6)),
-                     with: .color(.green))
+                     with: .color(ChartTheme.chartProfit))
         }
         if let troughIdx = cum.firstIndex(of: cum.min()!) {
             let x = CGFloat(troughIdx) * xStep
             let y = yFor(cum[troughIdx])
             ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: y - 3, width: 6, height: 6)),
-                     with: .color(.red))
+                     with: .color(ChartTheme.chartLoss))
         }
 
         let title = Text("累积 PnL（绿涨段 · 红跌段 · ● peak/trough）")
-            .font(.system(size: 10)).foregroundColor(.secondary)
+            .font(ChartTheme.fontSubvalue).foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }
 

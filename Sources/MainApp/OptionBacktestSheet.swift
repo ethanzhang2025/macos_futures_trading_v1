@@ -251,7 +251,7 @@ struct OptionBacktestSheet: View {
                 Canvas { ctx, size in
                     drawBacktestChart(ctx: ctx, size: size, result: r)
                 }
-                .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+                .background(ChartTheme.dark.background)
 
                 Color.clear
                     .contentShape(Rectangle())
@@ -346,12 +346,14 @@ struct OptionBacktestSheet: View {
                 p.addLine(to: CGPoint(x: layout.spotRect.maxX, y: pt.y))
             }
         }
-        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        .stroke(ChartTheme.crosshairLine,
+                style: StrokeStyle(lineWidth: ChartTheme.crosshairLineWidth, dash: ChartTheme.crosshairDash))
         .allowsHitTesting(false)
     }
 
     private func backtestHoverTooltip(info: BacktestHoverInfo) -> some View {
-        let pnlColor: Color = info.totalPnL > 0 ? .green : (info.totalPnL < 0 ? .red : .yellow)
+        let pnlColor: Color = info.totalPnL > 0 ? ChartTheme.chartProfit
+                            : (info.totalPnL < 0 ? ChartTheme.chartLoss : ChartTheme.chartTransition)
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = "yyyy-MM-dd"
@@ -360,42 +362,42 @@ struct OptionBacktestSheet: View {
         let spotDiff = info.spotPrice - entry
         return VStack(alignment: .leading, spacing: 4) {
             Text(dateText)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
+                .font(ChartTheme.fontValue)
+                .foregroundColor(ChartTheme.tooltipSecondary)
             Text("第 \(info.index + 1) / \(holdingDays) 天")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.white.opacity(0.55))
-            Divider().background(Color.white.opacity(0.3))
+                .font(ChartTheme.fontSubvalue)
+                .foregroundColor(ChartTheme.tooltipMuted)
+            Divider().background(ChartTheme.tooltipDivider)
             backtestRow("总 PnL", String(format: "%+.2f", info.totalPnL), color: pnlColor)
             backtestRow("期权", String(format: "%+.2f", info.optionMTM),
-                        color: info.optionMTM >= 0 ? .green.opacity(0.85) : .red.opacity(0.85))
+                        color: info.optionMTM >= 0 ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized)
             if strategy.underlyingPositionSize > 0 {
                 backtestRow("标的", String(format: "%+.2f", info.underlyingMTM),
-                            color: info.underlyingMTM >= 0 ? .green.opacity(0.85) : .red.opacity(0.85))
+                            color: info.underlyingMTM >= 0 ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized)
             }
-            Divider().background(Color.white.opacity(0.3))
-            backtestRow("Spot", String(format: "%.2f", info.spotPrice), color: .cyan)
+            Divider().background(ChartTheme.tooltipDivider)
+            backtestRow("Spot", String(format: "%.2f", info.spotPrice), color: ChartTheme.chartLine)
             if strategy.underlyingPositionSize > 0 {
                 backtestRow("距入场", String(format: "%@%.2f", spotDiff >= 0 ? "+" : "", spotDiff),
-                            color: spotDiff >= 0 ? .green.opacity(0.85) : .red.opacity(0.85))
+                            color: spotDiff >= 0 ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized)
             }
         }
-        .padding(8)
+        .padding(ChartTheme.tooltipPadding)
         .frame(width: 200, alignment: .leading)
-        .background(Color.black.opacity(0.85))
-        .cornerRadius(6)
-        .overlay(RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+        .background(ChartTheme.tooltipBackground)
+        .cornerRadius(ChartTheme.tooltipCornerRadius)
+        .overlay(RoundedRectangle(cornerRadius: ChartTheme.tooltipCornerRadius)
+                    .stroke(ChartTheme.tooltipBorder, lineWidth: ChartTheme.tooltipBorderWidth))
     }
 
     private func backtestRow(_ label: String, _ value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.65))
+                .font(ChartTheme.fontLabel)
+                .foregroundColor(ChartTheme.tooltipLabel)
                 .frame(width: 50, alignment: .leading)
             Text(value)
-                .font(.system(size: 11, design: .monospaced))
+                .font(ChartTheme.fontValue)
                 .foregroundColor(color)
             Spacer()
         }
@@ -445,7 +447,7 @@ struct OptionBacktestSheet: View {
             var zero = Path()
             zero.move(to: CGPoint(x: rect.minX, y: yFor(0)))
             zero.addLine(to: CGPoint(x: rect.maxX, y: yFor(0)))
-            ctx.stroke(zero, with: .color(.white.opacity(0.30)),
+            ctx.stroke(zero, with: .color(ChartTheme.chartLineSecondary),
                        style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
         }
 
@@ -458,10 +460,10 @@ struct OptionBacktestSheet: View {
             var seg = Path()
             seg.move(to: CGPoint(x: x1, y: yFor(p1)))
             seg.addLine(to: CGPoint(x: x2, y: yFor(p2)))
-            let color: Color = (p1 >= 0 && p2 >= 0) ? .green
-                              : (p1 < 0 && p2 < 0) ? .red
-                              : .yellow
-            ctx.stroke(seg, with: .color(color.opacity(0.85)),
+            let color: Color = (p1 >= 0 && p2 >= 0) ? ChartTheme.chartProfitEmphasized
+                              : (p1 < 0 && p2 < 0) ? ChartTheme.chartLossEmphasized
+                              : ChartTheme.chartTransition.opacity(0.85)
+            ctx.stroke(seg, with: .color(color),
                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
         }
 
@@ -470,13 +472,13 @@ struct OptionBacktestSheet: View {
             let x = rect.minX + CGFloat(peakIdx) * xStep
             let y = yFor(pnls[peakIdx])
             ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: y - 3, width: 6, height: 6)),
-                     with: .color(.green))
+                     with: .color(ChartTheme.chartProfit))
         }
         if let troughIdx = pnls.firstIndex(of: pnls.min()!) {
             let x = rect.minX + CGFloat(troughIdx) * xStep
             let y = yFor(pnls[troughIdx])
             ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: y - 3, width: 6, height: 6)),
-                     with: .color(.red))
+                     with: .color(ChartTheme.chartLoss))
         }
 
         // y 轴标签（4 等分）
@@ -484,14 +486,14 @@ struct OptionBacktestSheet: View {
             let v = viewMin + Double(i) * (viewMax - viewMin) / 4.0
             let y = yFor(v)
             let label = Text(String(format: "%+.1f", v))
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.white.opacity(0.55))
+                .font(ChartTheme.fontHint)
+                .foregroundColor(ChartTheme.tooltipMuted)
             ctx.draw(label, at: CGPoint(x: rect.maxX - 6, y: y), anchor: .trailing)
         }
 
         // 顶部标题
         let title = Text("PnL 曲线（绿盈 · 红亏 · 0 线虚 · ● 极值点）")
-            .font(.system(size: 10))
+            .font(ChartTheme.fontSubvalue)
             .foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: rect.minX + 8, y: rect.minY + 8), anchor: .topLeading)
     }
@@ -516,7 +518,7 @@ struct OptionBacktestSheet: View {
                 var line = Path()
                 line.move(to: CGPoint(x: rect.minX, y: yFor(entry)))
                 line.addLine(to: CGPoint(x: rect.maxX, y: yFor(entry)))
-                ctx.stroke(line, with: .color(.cyan.opacity(0.5)),
+                ctx.stroke(line, with: .color(ChartTheme.chartSpotLine),
                            style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
             }
         }
@@ -527,7 +529,7 @@ struct OptionBacktestSheet: View {
             var line = Path()
             line.move(to: CGPoint(x: rect.minX, y: yFor(s)))
             line.addLine(to: CGPoint(x: rect.maxX, y: yFor(s)))
-            ctx.stroke(line, with: .color(.orange.opacity(0.35)),
+            ctx.stroke(line, with: .color(ChartTheme.chartBandLine),
                        style: StrokeStyle(lineWidth: 0.6, dash: [2, 3]))
         }
 
@@ -537,12 +539,12 @@ struct OptionBacktestSheet: View {
             let pt = CGPoint(x: rect.minX + CGFloat(i) * xStep, y: yFor(s))
             if i == 0 { spotPath.move(to: pt) } else { spotPath.addLine(to: pt) }
         }
-        ctx.stroke(spotPath, with: .color(.white.opacity(0.85)),
+        ctx.stroke(spotPath, with: .color(ChartTheme.tooltipSecondary),
                    style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
 
         // 标题
         let title = Text("标的价（cyan: 入场 · 橙: strikes）")
-            .font(.system(size: 10))
+            .font(ChartTheme.fontSubvalue)
             .foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: rect.minX + 8, y: rect.minY + 6), anchor: .topLeading)
     }

@@ -110,6 +110,90 @@ enum ChartTheme: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// MARK: - 通用 chart 视觉常量（v15.41 · 套利/期权/多图等子窗口共享 · 视觉一致性收敛）
+//
+// 目标：消除 4 大窗口（SpreadWindow / SpreadBacktestSheet / OptionWindow / OptionBacktestSheet）
+//       的散落 hardcoded 颜色 / 字号 / tooltip 风格 · 让 trader 体感一致
+//
+// 现状收敛：
+// - white.opacity 9 级 → 4 级（0.85/0.70/0.55/0.30）
+// - 字号 11/10/9 三级（特殊大字 emptyResult 单独保留）
+// - tooltip 黑底 0.85 / 白边 0.30 / 6pt 圆角 / 8pt padding · 主图 + 4 子窗口同款
+//
+// v1 仅深色场景（套利/期权图都是深色 Canvas）· v2 扩浅色（待主题切换扩到子窗口）
+extension ChartTheme {
+
+    // MARK: 折线 / 信号色（语义化 · 全 chart 共用）
+
+    /// 主线（套利价差 / Z 线 / 累积 PnL · cyan）
+    static let chartLine = Color.cyan
+    /// 次线（mean 中线 · 白虚 30%）
+    static let chartLineSecondary = Color.white.opacity(0.30)
+    /// band 信号线（±2σ 通道 / breakeven · 橙虚）
+    static let chartBandLine = Color.orange.opacity(0.40)
+    /// 突出 band（hover 时强调用 · 橙 85%）
+    static let chartBandLineEmphasized = Color.orange.opacity(0.85)
+    /// 现价标识（垂直虚线 · cyan 50%）
+    static let chartSpotLine = Color.cyan.opacity(0.50)
+
+    // MARK: 涨跌 / 盈亏色（语义复用 candle）
+
+    /// 盈利（与中国习惯涨红一致 · 用 .green 是因为 PnL 上下文是国际惯例）
+    static let chartProfit = Color.green
+    /// 亏损
+    static let chartLoss = Color.red
+    /// 盈亏分段过渡（PnL 跨 0 段 · 黄）
+    static let chartTransition = Color.yellow
+    /// 突出盈利（信号 entry/exit 等高亮）
+    static let chartProfitEmphasized = Color.green.opacity(0.85)
+    static let chartLossEmphasized = Color.red.opacity(0.85)
+
+    // MARK: tooltip 风格（hover 4 图 · 主图 KLineCrosshairView 同款）
+
+    /// tooltip 背景（黑 0.85 · 与主图 KLineCrosshairView default 一致）
+    static let tooltipBackground = Color.black.opacity(0.85)
+    /// tooltip 描边
+    static let tooltipBorder = Color.white.opacity(0.30)
+    /// tooltip 主文字（高亮值 / 标题）
+    static let tooltipPrimary = Color.white
+    /// tooltip 次文字（普通值 / 副标题）
+    static let tooltipSecondary = Color.white.opacity(0.85)
+    /// tooltip 标签文字（行首 label · "价差" / "Z" 等）
+    static let tooltipLabel = Color.white.opacity(0.65)
+    /// tooltip 弱化文字（时间 / 单位 / 注释）
+    static let tooltipMuted = Color.white.opacity(0.55)
+    /// tooltip 提示文字（最弱 · 边角说明 · "✓=ITM" 等）
+    static let tooltipDimmed = Color.white.opacity(0.40)
+    /// tooltip 内分隔线
+    static let tooltipDivider = Color.white.opacity(0.30)
+
+    // MARK: 十字光标
+
+    /// 十字虚线
+    static let crosshairLine = Color.white.opacity(0.50)
+
+    // MARK: 字号系统（trader 一眼看清的紧凑等距）
+
+    /// 主值（hover tooltip 数值 / HUD 数字 · 11pt monospaced）
+    static let fontValue = Font.system(size: 11, design: .monospaced)
+    /// 主值粗体（标题 / 高亮）
+    static let fontValueBold = Font.system(size: 11, design: .monospaced).weight(.bold)
+    /// 标签（行首 label · 与值同字号 · 颜色弱化区分）
+    static let fontLabel = Font.system(size: 11, design: .monospaced)
+    /// 副值（点位编号 / 范围说明 · 10pt）
+    static let fontSubvalue = Font.system(size: 10, design: .monospaced)
+    /// 提示（最小 · 单位 / 备注 · 9pt）
+    static let fontHint = Font.system(size: 9, design: .monospaced)
+
+    // MARK: tooltip 容器尺寸约定（避免 4 窗口写不同的圆角 / padding）
+
+    static let tooltipPadding: CGFloat = 8
+    static let tooltipCornerRadius: CGFloat = 6
+    static let tooltipBorderWidth: CGFloat = 0.5
+    static let crosshairLineWidth: CGFloat = 0.5
+    static let crosshairDash: [CGFloat] = [4, 4]
+}
+
 // MARK: - 跨 Window 主题同步（v15.17 · 让次级窗口 sheet/popup 也跟主图 chartTheme.v1）
 
 /// v15.17 · ViewModifier · 监听 chartTheme.v1 UserDefaults 变化 · 动态 .preferredColorScheme

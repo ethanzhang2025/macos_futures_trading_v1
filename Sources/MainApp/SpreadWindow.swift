@@ -211,7 +211,7 @@ struct SpreadWindow: View {
                 Canvas { ctx, size in
                     drawSpread(ctx, size: size)
                 }
-                .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+                .background(ChartTheme.dark.background)
 
                 Color.clear
                     .contentShape(Rectangle())
@@ -266,7 +266,8 @@ struct SpreadWindow: View {
             p.move(to: CGPoint(x: snapX, y: 0))
             p.addLine(to: CGPoint(x: snapX, y: size.height))
         }
-        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        .stroke(ChartTheme.crosshairLine,
+                style: StrokeStyle(lineWidth: ChartTheme.crosshairLineWidth, dash: ChartTheme.crosshairDash))
         .allowsHitTesting(false)
     }
 
@@ -275,14 +276,14 @@ struct SpreadWindow: View {
         let lower = NSDecimalNumber(decimal: statistics.lowerBand2σ).doubleValue
         let mean = NSDecimalNumber(decimal: statistics.mean).doubleValue
         let zText: String = info.zScore.map { String(format: "%.2f", $0) } ?? "—"
-        let zColor: Color = info.zScore.map { abs($0) >= 2 ? .orange : .white.opacity(0.85) } ?? .secondary
+        let zColor: Color = info.zScore.map { abs($0) >= 2 ? .orange : ChartTheme.tooltipSecondary } ?? .secondary
         let sigText: String?
         let sigColor: Color
         if let s = info.signal {
             let action = s.action == .entry ? "进场" : "出场"
             let side = s.side == .long ? "做多" : "做空"
             sigText = "\(side) · \(action)"
-            sigColor = s.side == .long ? .green : .red
+            sigColor = s.side == .long ? ChartTheme.chartProfit : ChartTheme.chartLoss
         } else {
             sigText = nil
             sigColor = .secondary
@@ -293,32 +294,32 @@ struct SpreadWindow: View {
         let timeText = spreadHoverTimeFormatter.string(from: sv.openTime)
         return VStack(alignment: .leading, spacing: 4) {
             Text(timeText)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
+                .font(ChartTheme.fontValue)
+                .foregroundColor(ChartTheme.tooltipSecondary)
             Text("点 #\(info.index + 1) / \(spreadValues.count)")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.white.opacity(0.55))
-            Divider().background(Color.white.opacity(0.3))
-            tooltipRow("价差", String(format: "%.2f", info.value), color: .cyan)
-            tooltipRow(selectedPair.leg1.instrumentID, String(format: "%.2f", leg1), color: .white.opacity(0.85))
-            tooltipRow(selectedPair.leg2.instrumentID, String(format: "%.2f", leg2), color: .white.opacity(0.85))
-            tooltipRow("均值", fmt(statistics.mean), color: .white.opacity(0.7))
+                .font(ChartTheme.fontSubvalue)
+                .foregroundColor(ChartTheme.tooltipMuted)
+            Divider().background(ChartTheme.tooltipDivider)
+            tooltipRow("价差", String(format: "%.2f", info.value), color: ChartTheme.chartLine)
+            tooltipRow(selectedPair.leg1.instrumentID, String(format: "%.2f", leg1), color: ChartTheme.tooltipSecondary)
+            tooltipRow(selectedPair.leg2.instrumentID, String(format: "%.2f", leg2), color: ChartTheme.tooltipSecondary)
+            tooltipRow("均值", fmt(statistics.mean), color: ChartTheme.tooltipSecondary)
             tooltipRow("Z", zText, color: zColor)
-            tooltipRow("+2σ", String(format: "%.2f", upper), color: .orange.opacity(0.85))
-            tooltipRow("-2σ", String(format: "%.2f", lower), color: .orange.opacity(0.85))
+            tooltipRow("+2σ", String(format: "%.2f", upper), color: ChartTheme.chartBandLineEmphasized)
+            tooltipRow("-2σ", String(format: "%.2f", lower), color: ChartTheme.chartBandLineEmphasized)
             tooltipRow("距均", String(format: "%+.2f", info.value - mean),
-                       color: info.value >= mean ? .green : .red)
+                       color: info.value >= mean ? ChartTheme.chartProfit : ChartTheme.chartLoss)
             if let s = sigText {
-                Divider().background(Color.white.opacity(0.3))
+                Divider().background(ChartTheme.tooltipDivider)
                 tooltipRow("信号", s, color: sigColor)
             }
         }
-        .padding(8)
+        .padding(ChartTheme.tooltipPadding)
         .frame(width: 220, alignment: .leading)
-        .background(Color.black.opacity(0.85))
-        .cornerRadius(6)
-        .overlay(RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+        .background(ChartTheme.tooltipBackground)
+        .cornerRadius(ChartTheme.tooltipCornerRadius)
+        .overlay(RoundedRectangle(cornerRadius: ChartTheme.tooltipCornerRadius)
+                    .stroke(ChartTheme.tooltipBorder, lineWidth: ChartTheme.tooltipBorderWidth))
     }
 
     private var spreadHoverTimeFormatter: DateFormatter {
@@ -336,11 +337,11 @@ struct SpreadWindow: View {
     private func tooltipRow(_ label: String, _ value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.white.opacity(0.65))
+                .font(ChartTheme.fontLabel)
+                .foregroundColor(ChartTheme.tooltipLabel)
                 .frame(width: 32, alignment: .leading)
             Text(value)
-                .font(.system(size: 11, design: .monospaced))
+                .font(ChartTheme.fontValue)
                 .foregroundColor(color)
             Spacer()
         }
@@ -390,19 +391,19 @@ struct SpreadWindow: View {
         var upperLine = Path()
         upperLine.move(to: CGPoint(x: 0, y: yFor(upper)))
         upperLine.addLine(to: CGPoint(x: size.width, y: yFor(upper)))
-        ctx.stroke(upperLine, with: .color(.orange.opacity(0.4)),
+        ctx.stroke(upperLine, with: .color(ChartTheme.chartBandLine),
                    style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
         var lowerLine = Path()
         lowerLine.move(to: CGPoint(x: 0, y: yFor(lower)))
         lowerLine.addLine(to: CGPoint(x: size.width, y: yFor(lower)))
-        ctx.stroke(lowerLine, with: .color(.orange.opacity(0.4)),
+        ctx.stroke(lowerLine, with: .color(ChartTheme.chartBandLine),
                    style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
 
         // 均值中线（白色虚线）
         var meanLine = Path()
         meanLine.move(to: CGPoint(x: 0, y: yFor(mean)))
         meanLine.addLine(to: CGPoint(x: size.width, y: yFor(mean)))
-        ctx.stroke(meanLine, with: .color(.white.opacity(0.30)),
+        ctx.stroke(meanLine, with: .color(ChartTheme.chartLineSecondary),
                    style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
 
         // 价差折线（cyan）
@@ -411,14 +412,14 @@ struct SpreadWindow: View {
             let pt = CGPoint(x: CGFloat(i) * step, y: yFor(v))
             if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
         }
-        ctx.stroke(path, with: .color(.cyan),
+        ctx.stroke(path, with: .color(ChartTheme.chartLine),
                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
 
         // 终点圆点
         let lastIdx = values.count - 1
         let lastPt = CGPoint(x: CGFloat(lastIdx) * step, y: yFor(values[lastIdx]))
         let dot = Path(ellipseIn: CGRect(x: lastPt.x - 3.5, y: lastPt.y - 3.5, width: 7, height: 7))
-        ctx.fill(dot, with: .color(.cyan))
+        ctx.fill(dot, with: .color(ChartTheme.chartLine))
 
         // v15.37 V2 · 信号点（▲ entry / ▼ exit · 红做空 / 绿做多）
         for sig in signals where sig.index < values.count {
@@ -432,8 +433,8 @@ struct SpreadWindow: View {
     private func drawSignalMarker(ctx: GraphicsContext, at point: CGPoint, signal: SpreadSignal) {
         let color: Color
         switch signal.side {
-        case .long:  color = .green
-        case .short: color = .red
+        case .long:  color = ChartTheme.chartProfit
+        case .short: color = ChartTheme.chartLoss
         }
         var path = Path()
         let size: CGFloat = 6
@@ -473,7 +474,7 @@ struct SpreadWindow: View {
             case .rollingZ:  drawRollingZ(ctx: ctx, size: size)
             }
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+        .background(ChartTheme.dark.background)
     }
 
     private func drawHistogram(ctx: GraphicsContext, size: CGSize) {
@@ -498,14 +499,14 @@ struct SpreadWindow: View {
             let isCurrent = i == h.currentBinIndex
             let isMode = i == h.modeBinIndex
             let color: Color
-            if isCurrent { color = .cyan }
+            if isCurrent { color = ChartTheme.chartLine }
             else if isMode { color = .yellow.opacity(0.7) }
             else { color = .gray.opacity(0.55) }
             ctx.fill(Path(rect), with: .color(color))
         }
         // 顶部标题
         let title = Text("📊 价差分布（\(h.bins.count) bins · cyan=当前 · yellow=众数 · 共 \(h.totalCount) 样本）")
-            .font(.system(size: 10))
+            .font(ChartTheme.fontSubvalue)
             .foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }
@@ -513,7 +514,7 @@ struct SpreadWindow: View {
     private func drawRollingZ(ctx: GraphicsContext, size: CGSize) {
         guard rollingZScores.count >= 2 else {
             let text = Text("滚动 Z 不足（窗口 \(rollingWindow)）")
-                .font(.system(size: 11)).foregroundColor(.secondary)
+                .font(ChartTheme.fontValue).foregroundColor(.secondary)
             ctx.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2), anchor: .center)
             return
         }
@@ -530,14 +531,14 @@ struct SpreadWindow: View {
             var line = Path()
             line.move(to: CGPoint(x: 0, y: yFor(level)))
             line.addLine(to: CGPoint(x: size.width, y: yFor(level)))
-            ctx.stroke(line, with: .color(.orange.opacity(0.4)),
+            ctx.stroke(line, with: .color(ChartTheme.chartBandLine),
                        style: StrokeStyle(lineWidth: 0.8, dash: [3, 3]))
         }
         // 0 线（白虚）
         var zeroLine = Path()
         zeroLine.move(to: CGPoint(x: 0, y: yFor(0)))
         zeroLine.addLine(to: CGPoint(x: size.width, y: yFor(0)))
-        ctx.stroke(zeroLine, with: .color(.white.opacity(0.30)),
+        ctx.stroke(zeroLine, with: .color(ChartTheme.chartLineSecondary),
                    style: StrokeStyle(lineWidth: 0.8, dash: [4, 4]))
         // Z 折线（cyan）
         var path = Path()
@@ -545,11 +546,11 @@ struct SpreadWindow: View {
             let pt = CGPoint(x: CGFloat(i) * step, y: yFor(z))
             if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
         }
-        ctx.stroke(path, with: .color(.cyan.opacity(0.85)),
+        ctx.stroke(path, with: .color(ChartTheme.chartLine.opacity(0.85)),
                    style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
         // 标题
         let title = Text("📈 滚动 Z-score（窗口 \(rollingWindow) · 橙线 ±2σ 阈值）")
-            .font(.system(size: 10))
+            .font(ChartTheme.fontSubvalue)
             .foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }

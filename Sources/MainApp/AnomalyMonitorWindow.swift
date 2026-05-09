@@ -44,6 +44,7 @@ struct AnomalyMonitorWindow: View {
         case list           // 异常事件列表（按 severity 降序）
         case kindBreakdown  // 5 类型分布
         case sectorBreakdown // 板块异常分布
+        case historyBacktest // v15.59 · 30d 异常频次回溯 + sparkline
 
         var id: String { rawValue }
         var displayName: String {
@@ -51,6 +52,7 @@ struct AnomalyMonitorWindow: View {
             case .list: return "异常列表"
             case .kindBreakdown: return "类型分布"
             case .sectorBreakdown: return "板块分布"
+            case .historyBacktest: return "30d 频次回溯"
             }
         }
     }
@@ -79,11 +81,12 @@ struct AnomalyMonitorWindow: View {
             case .list:           listView
             case .kindBreakdown:  kindBreakdownView
             case .sectorBreakdown: sectorBreakdownView
+            case .historyBacktest: historyBacktestView
             }
             Divider()
             legendBar
         }
-        .frame(minWidth: 1080, minHeight: 720)
+        .frame(minWidth: 1280, minHeight: 720)
         .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
             // v15.54 · 联动：切合约时自动切到该合约的板块
             if let id = note.object as? String, let sec = SectorPresets.byID[id]?.sector {
@@ -102,7 +105,7 @@ struct AnomalyMonitorWindow: View {
                     ForEach(ViewMode.allCases) { m in Text(m.displayName).tag(m) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 280)
+                .frame(width: 420)
                 .labelsHidden()
             }
 
@@ -450,6 +453,165 @@ struct AnomalyMonitorWindow: View {
         }
         .buttonStyle(.plain)
         .help("\(sector.displayName) 板块 \(count) 异常 / \(universe) 品种 · 点击切到列表")
+    }
+
+    // MARK: - 30d 频次回溯（v15.59）
+
+    private var historyBacktestView: some View {
+        let history = AnomalyHistoryGenerator.generate(days: 30)
+        // 按板块过滤 · 与其他视图一致
+        let filtered: [InstrumentAnomalyHistory] = {
+            switch sectorFilter {
+            case .all: return history
+            case .sector(let s): return history.filter { $0.sector == s }
+            }
+        }()
+        // sparkline 全市场 peak（视觉对齐 · 不同行 sparkline 高度可比）
+        let globalPeak = max(filtered.map(\.peakDayCount).max() ?? 1, 1)
+
+        return VStack(spacing: 0) {
+            historyHeader
+            if filtered.isEmpty {
+                Text("当前过滤无数据").font(.callout).foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(Array(filtered.enumerated()), id: \.element.id) { (rank, h) in
+                            historyRow(rank: rank + 1, history: h, globalPeak: globalPeak)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var historyHeader: some View {
+        HStack(spacing: 0) {
+            Text("#").font(.caption.bold()).foregroundColor(.secondary).frame(width: 36, alignment: .trailing)
+            Text("品种").font(.caption.bold()).foregroundColor(.secondary).frame(width: 130, alignment: .leading)
+            Text("板块").font(.caption.bold()).foregroundColor(.secondary).frame(width: 80, alignment: .leading)
+            Text("30d 总").font(.caption.bold()).foregroundColor(.secondary).frame(width: 60, alignment: .trailing)
+            Text("avg/天").font(.caption.bold()).foregroundColor(.secondary).frame(width: 60, alignment: .trailing)
+            Text("峰值").font(.caption.bold()).foregroundColor(.secondary).frame(width: 50, alignment: .trailing)
+            Spacer().frame(width: 14)
+            Text("30d sparkline").font(.caption.bold()).foregroundColor(.secondary).frame(width: 220, alignment: .leading)
+            Spacer().frame(width: 14)
+            Text("类型分布（价/持/资/背/离）").font(.caption.bold()).foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.06))
+    }
+
+    private func historyRow(rank: Int, history h: InstrumentAnomalyHistory, globalPeak: Int) -> some View {
+        Button {
+            openWindow(id: "chart")
+            NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: h.instrumentID)
+        } label: {
+            HStack(spacing: 0) {
+                Text("\(rank)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+
+                HStack(spacing: 6) {
+                    Text(h.instrumentID)
+                        .font(.system(size: 11, design: .monospaced).bold())
+                        .frame(width: 50, alignment: .leading)
+                    Text(h.instrumentName)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(width: 130, alignment: .leading)
+
+                Label(h.sector.displayName, systemImage: h.sector.icon)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(width: 80, alignment: .leading)
+                    .lineLimit(1)
+
+                Text("\(h.totalCount)")
+                    .font(.system(size: 11, design: .monospaced).bold())
+                    .foregroundColor(totalCountColor(h.totalCount))
+                    .frame(width: 60, alignment: .trailing)
+
+                Text(String(format: "%.1f", h.avgPerDay))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 60, alignment: .trailing)
+
+                Text("\(h.peakDayCount)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 50, alignment: .trailing)
+
+                Spacer().frame(width: 14)
+
+                sparkline(counts: h.dailyCounts, peak: globalPeak)
+                    .frame(width: 220, height: 22)
+
+                Spacer().frame(width: 14)
+
+                kindCountTags(h.countByKind)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(h.instrumentName)（\(h.instrumentID)）30d 共 \(h.totalCount) 次异常 · 峰值 \(h.peakDayCount) · 点击切主图")
+    }
+
+    /// sparkline 30 个 cell mini bar chart · 全局 peak 归一化高度
+    private func sparkline(counts: [Int], peak: Int) -> some View {
+        GeometryReader { geom in
+            let w = geom.size.width
+            let h = geom.size.height
+            let n = max(counts.count, 1)
+            let cellW = w / CGFloat(n)
+            let barW = max(1.5, cellW - 1.0)
+            HStack(alignment: .bottom, spacing: 1) {
+                ForEach(Array(counts.enumerated()), id: \.offset) { (i, c) in
+                    let ratio = peak > 0 ? CGFloat(c) / CGFloat(peak) : 0
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(sparklineColor(c, peak: peak))
+                        .frame(width: barW, height: max(1.5, h * ratio))
+                        .opacity(c == 0 ? 0.18 : 1.0)
+                }
+            }
+        }
+    }
+
+    private func sparklineColor(_ count: Int, peak: Int) -> Color {
+        guard peak > 0 else { return .secondary }
+        let ratio = Double(count) / Double(peak)
+        if ratio >= 0.75 { return ChartTheme.chartLoss }
+        if ratio >= 0.4  { return .orange }
+        return .yellow
+    }
+
+    private func totalCountColor(_ count: Int) -> Color {
+        if count >= 80 { return ChartTheme.chartLoss }
+        if count >= 40 { return .orange }
+        return .primary
+    }
+
+    private func kindCountTags(_ counts: [AnomalyKind: Int]) -> some View {
+        HStack(spacing: 4) {
+            ForEach(AnomalyKind.allCases) { k in
+                let c = counts[k] ?? 0
+                Text("\(c)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(c > 0 ? kindColor(k) : .secondary.opacity(0.5))
+                    .frame(width: 24, alignment: .center)
+                    .padding(.vertical, 2)
+                    .background(c > 0 ? kindColor(k).opacity(0.12) : Color.clear,
+                               in: RoundedRectangle(cornerRadius: 3))
+                    .help("\(k.displayName) · 30d \(c) 次")
+            }
+        }
     }
 
     // MARK: - 图例栏

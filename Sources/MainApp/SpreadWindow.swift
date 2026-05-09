@@ -159,7 +159,7 @@ struct SpreadWindow: View {
             } label: {
                 Label("刷新", systemImage: "arrow.clockwise")
             }
-            .keyboardShortcut("r", modifiers: [.command])
+            .keyboardShortcut("r", modifiers: [.command, .shift])
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

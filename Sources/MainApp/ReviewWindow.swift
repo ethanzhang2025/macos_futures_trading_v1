@@ -450,8 +450,8 @@ struct ReviewWindow: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
-                .keyboardShortcut("r", modifiers: [.command])
-                .help("重新加载复盘数据（⌘R）· 重算所有指标")
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .help("重新加载复盘数据（⌘⇧R）· 重算所有指标")
             }
             .padding(.bottom, 4)
         }

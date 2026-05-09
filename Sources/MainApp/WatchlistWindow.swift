@@ -348,8 +348,8 @@ struct WatchlistWindow: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
-                .help("立即刷新报价（⌘R · 不等 5s 周期）")
-                .keyboardShortcut("r", modifiers: [.command])
+                .help("立即刷新报价（⌘⇧R · 不等 5s 周期）")
+                .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button {
                     importWatchlistFromFile()
                 } label: {

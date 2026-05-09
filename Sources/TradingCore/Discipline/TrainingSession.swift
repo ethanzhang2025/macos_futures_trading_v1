@@ -231,22 +231,14 @@ public enum TrainingScorer {
         )
     }
 
-    /// 盈亏维度 0-100（老阶梯 ×2）
+    /// 盈亏维度 0-100 · 老阶梯 ×2（保证两套阶梯始终同步 · 改 v1 自动反映到 v2）
     static func pnlScore100(_ session: TrainingSession) -> Int {
-        let pct = (session.pnlPercent as NSDecimalNumber).doubleValue
-        if pct > 5 { return 100 }
-        if pct > 2 { return 80 }
-        if pct > 0 { return 60 }
-        if pct == 0 { return 40 }
-        if pct > -2 { return 20 }
-        return 0
+        pnlSubScore(session) * 2
     }
 
-    /// 纪律维度 0-100（老公式 ×2）
+    /// 纪律维度 0-100 · 老公式 ×2（系数与 clamp 上限同步翻倍 · 数学等价）
     static func disciplineScore100(_ session: TrainingSession) -> Int {
-        let errors = session.violations.filter { $0.severity == .error }.count
-        let warnings = session.violations.filter { $0.severity == .warning }.count
-        return max(0, min(100, 100 - errors * 20 - warnings * 6))
+        disciplineSubScore(session) * 2
     }
 
     /// 胜率维度 0-100：closed pairs 中 pnl > 0 的比例 ×100 · 无 pair → 50（中性）

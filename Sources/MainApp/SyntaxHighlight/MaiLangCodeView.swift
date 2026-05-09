@@ -383,6 +383,9 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
         // MARK: - v16.10 · hover popover（替代 .toolTip 系统 1s 延迟 · 200ms 防抖立即显示）
 
+        /// 防抖时长 · 200ms 接近 IDE 通用 hover 延迟 · 比 macOS 默认 .toolTip ~1s 快 5 倍
+        private static let hoverDebounceSeconds: TimeInterval = 0.20
+
         private var hoverPopover: NSPopover?
         private var hoverDebounce: DispatchWorkItem?
         private var lastHoveredTokenStart: Int = -1
@@ -469,7 +472,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 self.hoverDebounce = nil
             }
             hoverDebounce = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.20, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.hoverDebounceSeconds, execute: work)
         }
 
         func hideHoverPopover() {

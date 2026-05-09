@@ -57,7 +57,9 @@ public struct HUDFieldsBook: Sendable, Codable, Equatable {
         self.fields = fields
     }
 
-    public static let `default` = HUDFieldsBook(fields: [.debug])
+    /// v15.58 · 默认开 .sectorInfo · 让 trader 首次打开主图就能看到板块横向对比
+    /// .debug 保留（v13.x 之前默认行为）· 用户主动关后 UserDefaults 写盘后续不再回滚
+    public static let `default` = HUDFieldsBook(fields: [.debug, .sectorInfo])
 }
 
 // MARK: - UserDefaults 加载/保存

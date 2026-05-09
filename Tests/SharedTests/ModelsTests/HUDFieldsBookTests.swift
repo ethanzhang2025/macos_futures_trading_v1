@@ -8,11 +8,11 @@ import Foundation
 @Suite("HUDFieldsBook · 数据契约 + Codable")
 struct HUDFieldsBookTests {
 
-    @Test("default 仅 .debug 开（保 v15.13 之前行为）")
+    @Test("default · v15.58 起 .debug + .sectorInfo（trader 首次看主图直接有板块对比）")
     func defaults() {
         let d = HUDFieldsBook.default
-        #expect(d.fields == [.debug])
-        #expect(d.fields.count == 1)
+        #expect(d.fields == [.debug, .sectorInfo])
+        #expect(d.fields.count == 2)
     }
 
     @Test("HUDFieldKind allCases 10 类完整（v15.56 加 sectorInfo）")
@@ -90,12 +90,12 @@ struct HUDFieldsBookTests {
         #expect(decoded.fields == [])
     }
 
-    @Test("Codable 往返 · 默认 [.debug]")
+    @Test("Codable 往返 · 默认 [.debug, .sectorInfo]（v15.58）")
     func codableRoundTripDefault() throws {
         let book = HUDFieldsBook.default
         let data = try JSONEncoder().encode(book)
         let decoded = try JSONDecoder().decode(HUDFieldsBook.self, from: data)
-        #expect(decoded.fields == [.debug])
+        #expect(decoded.fields == [.debug, .sectorInfo])
     }
 
     @Test("HUDFieldsStore load/save · 隔离 UserDefaults")

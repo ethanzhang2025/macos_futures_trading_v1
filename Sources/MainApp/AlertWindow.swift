@@ -12,6 +12,7 @@ import SwiftUI
 import Foundation
 import UniformTypeIdentifiers
 import Shared
+import DataCore
 import AlertCore
 import StoreCore
 
@@ -618,8 +619,8 @@ struct AlertWindow: View {
                 // v15.20 batch57 · 多选 checkbox 列
                 Text("☑").frame(width: 18, alignment: .center)
                 Text("名称").frame(maxWidth: .infinity, alignment: .leading)
-                Text("合约").frame(width: 60, alignment: .leading)
-                Text("条件").frame(width: 200, alignment: .leading)
+                Text("合约 / 价差").frame(width: 100, alignment: .leading)  // v15.63 · 60 → 100 容纳 spread name
+                Text("条件").frame(width: 220, alignment: .leading)         // v15.63 · 200 → 220 容纳 spread |z| 描述
                 Text("状态").frame(width: 70, alignment: .center)
                 Text("通道").frame(width: 80, alignment: .leading)
                 Text("冷却").frame(width: 50, alignment: .trailing)
@@ -642,6 +643,24 @@ struct AlertWindow: View {
         }
     }
 
+    /// v15.63 · spread alert 显价差对名 + 图标 · 普通 alert 显裸 instrumentID
+    @ViewBuilder
+    private func instrumentColumn(for a: Alert) -> some View {
+        if case let .spreadDeviation(id, cal, _) = a.condition {
+            HStack(spacing: 4) {
+                Image(systemName: cal ? "calendar" : "arrow.left.and.right")
+                    .font(.system(size: 10))
+                    .foregroundColor(cal ? .cyan : .orange)
+                Text(AlertCondition.spreadDisplayName(id: id, isCalendar: cal))
+                    .font(.system(size: 11, design: .monospaced))
+                    .lineLimit(1)
+            }
+            .help(cal ? "跨期价差对 · 关联近月 \(a.instrumentID)" : "跨品种价差对 · 关联 \(a.instrumentID)")
+        } else {
+            Text(a.instrumentID)
+        }
+    }
+
     private func alertRow(_ a: Alert) -> some View {
         HStack(spacing: 8) {
             // v15.20 batch57 · 多选 checkbox（点击切换 selectedAlertIDs）
@@ -659,8 +678,10 @@ struct AlertWindow: View {
             // v15.21 batch125 · row 字段 .help() tooltip · trader 列宽 truncate 时鼠标悬停看完整
             Text(a.name).frame(maxWidth: .infinity, alignment: .leading)
                 .help(a.name.count > 30 ? a.name : "")   // 长名才提示 · 短名不打扰
-            Text(a.instrumentID).frame(width: 60, alignment: .leading)
-            Text(a.condition.displayDescription).frame(width: 200, alignment: .leading)
+            // v15.63 · spread alert 显 价差对名 + 图标 · 普通 alert 显 instrumentID
+            instrumentColumn(for: a)
+                .frame(width: 100, alignment: .leading)
+            Text(a.condition.displayDescription).frame(width: 220, alignment: .leading)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -1899,7 +1920,20 @@ extension AlertCondition {
         case .priceBreakoutHigh(let p, let n):  return "突破 \(p.displayName) 前 \(n) 根高"
         case .priceBreakoutLow(let p, let n):   return "跌破 \(p.displayName) 前 \(n) 根低"
         case .indicator(let spec):              return spec.displayDescription
+        case .spreadDeviation(let id, let cal, let z):
+            // v15.63 · 价差对名（反查 SpreadPresets / CalendarSpreadPresets 拿真名）
+            let displayName = AlertCondition.spreadDisplayName(id: id, isCalendar: cal)
+            let kindLabel = cal ? "跨期" : "跨品种"
+            return "[\(kindLabel)] \(displayName) · |z| ≥ \(fmtDecimal(z))"
         }
+    }
+
+    /// v15.63 · spreadID 反查显示名（"rb-hc" → "螺纹热卷"）· 不命中 fallback ID
+    static func spreadDisplayName(id: String, isCalendar: Bool) -> String {
+        if isCalendar {
+            return CalendarSpreadPresets.byID[id]?.name ?? id
+        }
+        return SpreadPresets.byID[id]?.name ?? id
     }
 }
 

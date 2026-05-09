@@ -98,6 +98,24 @@ struct AnomalyMonitorWindow: View {
         }
     }
 
+    // MARK: - v15.64 · 导出 CSV
+
+    private func exportCurrentEventsCSV() {
+        let panel = NSSavePanel()
+        panel.title = "导出异常事件"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        let dateStr: String = {
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd"
+            f.locale = Locale(identifier: "en_US_POSIX")
+            return f.string(from: Date())
+        }()
+        panel.nameFieldStringValue = "异常事件_\(dateStr).csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let csv = AnomalyEventCSVExporter.exportData(filteredEvents)
+        try? csv.write(to: url)
+    }
+
     // MARK: - Toolbar
 
     private var toolbar: some View {
@@ -125,6 +143,17 @@ struct AnomalyMonitorWindow: View {
             }
 
             Spacer()
+
+            // v15.64 · 导出 CSV（仅 list 视图启用 · 其他视图导出意义不大）
+            Button {
+                exportCurrentEventsCSV()
+            } label: {
+                Label("导出 CSV", systemImage: "square.and.arrow.up")
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .disabled(viewMode != .list || filteredEvents.isEmpty)
+            .help(filteredEvents.isEmpty ? "当前过滤条件下无异常 · 调阈值或切板块" : "导出当前 \(filteredEvents.count) 条异常事件为 CSV")
 
             Text("v1 mock · v2 接 CTP 真行情后 OI Δ + 资金流真值")
                 .font(.caption2).foregroundColor(.secondary)

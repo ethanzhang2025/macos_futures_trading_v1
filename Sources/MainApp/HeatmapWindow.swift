@@ -24,7 +24,17 @@ struct HeatmapWindow: View {
     @State private var hoveredID: String?
     /// v15.53 · 接收 watchlistInstrumentSelected · 高亮该 cell
     @State private var highlightedID: String?
+    /// v15.76 · 显示组合异常标记（角标 + 边框）· 默认开
+    @State private var showComboMarkers: Bool = true
     @Environment(\.openWindow) private var openWindow
+
+    /// v15.76 · 全市场 combo 异常映射 by instrumentID（每帧重新计算 · ~1ms）
+    /// 兼容 SectorPresets ID 格式（"RB0" 直接命中 · 与 SectorInstrument.id 一致）
+    private var comboMap: [String: ComboAnomaly] {
+        let result = AnomalyDetector.scan(instruments: SectorPresets.all)
+        let combos = ComboAnomalyAggregator.aggregate(events: result.events, minKinds: 3)
+        return Dictionary(uniqueKeysWithValues: combos.map { ($0.instrumentID, $0) })
+    }
 
     enum SortMode: String, CaseIterable, Identifiable {
         case bySector       // 按板块归属
@@ -89,11 +99,20 @@ struct HeatmapWindow: View {
 
             Spacer()
 
-            // 全市场总览：涨家数 / 跌家数 / 平均涨幅
+            // v15.76 · combo 标记开关
+            Toggle(isOn: $showComboMarkers) {
+                Label("Combo 标记", systemImage: "sparkles")
+                    .font(.caption)
+            }
+            .toggleStyle(.checkbox)
+            .help("显示组合异常品种（≥3 类同时命中 = 真信号）的角标 + 边框")
+
+            // 全市场总览：涨家数 / 跌家数 / 平均涨幅 · v15.76 加 combo 计数
             let total = SectorPresets.all
             let gainers = total.filter { $0.changePct > 0 }.count
             let losers = total.filter { $0.changePct < 0 }.count
             let avg = total.reduce(0.0) { $0 + $1.changePct } / Double(max(total.count, 1))
+            let comboCount = comboMap.count
             HStack(spacing: 18) {
                 Text("\(total.count) 品种").font(.caption.monospaced()).foregroundColor(.secondary)
                 Text("\(gainers) 涨").font(.caption.monospaced()).foregroundColor(ChartTheme.chartLoss)
@@ -101,6 +120,12 @@ struct HeatmapWindow: View {
                 Text(String(format: "均 %+.2f%%", avg))
                     .font(.caption.monospaced())
                     .foregroundColor(avg >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                if comboCount > 0 {
+                    Label("\(comboCount) Combo", systemImage: "sparkles")
+                        .font(.caption.monospaced())
+                        .foregroundColor(.orange)
+                        .help("\(comboCount) 个品种命中组合异常（≥3 类）· ⌘⌥A 第 6 视图查详情")
+                }
             }
             .padding(.trailing, 14)
         }
@@ -174,42 +199,91 @@ struct HeatmapWindow: View {
         }
         let isHovered = hoveredID == inst.id
         let isHighlighted = highlightedID == inst.id
+        // v15.76 · combo 异常标记
+        let combo = showComboMarkers ? comboMap[inst.id] : nil
+        let comboColor: Color? = combo.map { c in
+            if c.kindCount >= 5 { return ChartTheme.chartLoss }
+            if c.kindCount == 4 { return .orange }
+            return .yellow
+        }
         return Button {
             // v15.44 v2：复用 watchlistInstrumentSelected 通道（与 ⌘L 自选 / ⌘B 预警同机制）
             // 主图 ChartScene 接收后切合约 · 默认在 chart 窗口前置
             openWindow(id: "chart")
             NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: inst.id)
         } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(inst.id).font(.system(size: 11, design: .monospaced).bold())
-                    Spacer()
-                    Text(String(format: "%+.1f%%", inst.changePct))
-                        .font(.system(size: 10, design: .monospaced).bold())
+            ZStack(alignment: .topTrailing) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(inst.id).font(.system(size: 11, design: .monospaced).bold())
+                        Spacer()
+                        Text(String(format: "%+.1f%%", inst.changePct))
+                            .font(.system(size: 10, design: .monospaced).bold())
+                    }
+                    Text(inst.name)
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.85))
+                        .lineLimit(1)
                 }
-                Text(inst.name)
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.85))
-                    .lineLimit(1)
+                .padding(.horizontal, 6).padding(.vertical, 5)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                // v15.76 · combo 角标（右上角小徽章 · 显类型数）
+                if let c = combo, let col = comboColor {
+                    HStack(spacing: 1) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 8))
+                        Text("\(c.kindCount)")
+                            .font(.system(size: 9, design: .monospaced).bold())
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(col, in: RoundedRectangle(cornerRadius: 3))
+                    .padding(3)
+                }
             }
-            .padding(.horizontal, 6).padding(.vertical, 5)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .background(bgColor)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
-                    .stroke(isHighlighted ? ChartTheme.chartLine : (isHovered ? Color.white.opacity(0.7) : Color.clear),
-                            lineWidth: isHighlighted ? 2 : 1.2)
+                    .stroke(comboBorderColor(combo: combo, isHighlighted: isHighlighted, isHovered: isHovered),
+                            lineWidth: comboBorderWidth(combo: combo, isHighlighted: isHighlighted))
             )
             .foregroundColor(.white)
             .scaleEffect(isHovered ? 1.05 : 1.0)
             .animation(.easeOut(duration: 0.10), value: isHovered)
         }
         .buttonStyle(.plain)
-        .help("\(inst.name)（\(inst.id)） · \(formatPrice(inst.lastPrice)) · \(String(format: "%+.2f%%", inst.changePct)) · 持仓 \(String(format: "%.0fK", inst.openInterestK))")
+        .help(cellHelpText(inst, combo: combo))
         .onHover { isOver in
             hoveredID = isOver ? inst.id : nil
         }
+    }
+
+    /// v15.76 · combo 边框颜色（combo > highlighted > hovered > 透明）
+    private func comboBorderColor(combo: ComboAnomaly?, isHighlighted: Bool, isHovered: Bool) -> Color {
+        if let c = combo {
+            if c.kindCount >= 5 { return ChartTheme.chartLoss }
+            if c.kindCount == 4 { return .orange }
+            return .yellow
+        }
+        if isHighlighted { return ChartTheme.chartLine }
+        if isHovered     { return Color.white.opacity(0.7) }
+        return .clear
+    }
+
+    private func comboBorderWidth(combo: ComboAnomaly?, isHighlighted: Bool) -> CGFloat {
+        if combo != nil { return 2.0 }
+        return isHighlighted ? 2.0 : 1.2
+    }
+
+    private func cellHelpText(_ inst: SectorInstrument, combo: ComboAnomaly?) -> String {
+        let base = "\(inst.name)（\(inst.id)） · \(formatPrice(inst.lastPrice)) · \(String(format: "%+.2f%%", inst.changePct)) · 持仓 \(String(format: "%.0fK", inst.openInterestK))"
+        guard let c = combo else { return base }
+        let kindLabel = AnomalyKind.allCases
+            .filter { c.kinds.contains($0) }
+            .map(\.displayName)
+            .joined(separator: " · ")
+        return base + " · ✨ Combo \(c.kindCount)/5（\(kindLabel)）· severity \(Int(c.totalSeverity))"
     }
 
     // MARK: - Legend

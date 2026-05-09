@@ -891,7 +891,17 @@ struct ChartScene: View {
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
             drawingToolButton(icon: "tuningfork", tool: .pitchfork, help: "Andrew's Pitchfork（3 点 · 中线 + 上下平行轨）")
             drawingToolButton(icon: "hexagon", tool: .polygon, help: "多边形（任意 N≥3 点 · 工具栏'完成'触发闭合）")
-            drawingToolButton(icon: "textformat", tool: .text, help: "文字标注（一点）")
+            // v15.85 · 文字工具用 "Aa" 替代 textformat SF Symbol · 更直观
+            drawingTextToolButton(help: "文字标注（一点）")
+            // v15.85 · 字号 Stepper 紧跟"Aa"按钮（视觉关联 · 仅 .text 激活时显示）
+            if activeDrawingTool == .text {
+                Stepper(value: $currentFontSize, in: 8...32, step: 1) {
+                    Text("\(Int(currentFontSize))pt")
+                        .font(.system(size: 10, design: .monospaced))
+                        .frame(width: 32)
+                }
+                .tooltip("文字字号 8~32 pt（新建文字应用 · 老文字右键修改字号）")
+            }
             // v13.31 多边形完成按钮 · 仅 polygon 工具激活 + 已点 ≥ 2 点（含起点 ≥ 3 点）时显示
             if activeDrawingTool == .polygon, pendingDrawingPoint != nil {
                 let totalPoints = 1 + pendingExtraPoints.count
@@ -902,29 +912,22 @@ struct ChartScene: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(totalPoints < 3)
-                .help("闭合多边形（至少 3 点）")
+                .tooltip("闭合多边形（至少 3 点）")
             }
             // v13.8 颜色 / 线宽自定义（仅作用于新建 · 已有画线通过右键菜单"应用当前颜色/线宽"修改）
             Divider().frame(height: 16)
+            // v15.85 · ColorPicker 缩到 18×18 + clipShape(Circle) · 视觉成圆点
             ColorPicker("", selection: $currentStrokeColor, supportsOpacity: true)
                 .labelsHidden()
-                .frame(width: 28)
-                .help("画线颜色 + 透明度（v13.15 alpha 通道 · 新建生效 · 老画线右键应用）")
+                .frame(width: 18, height: 18)
+                .clipShape(Circle())
+                .tooltip("画线颜色 + 透明度（v13.15 alpha 通道 · 新建生效 · 老画线右键应用）")
             Stepper(value: $currentStrokeWidth, in: 0.5...5.0, step: 0.5) {
                 Text(String(format: "%.1f", currentStrokeWidth))
                     .font(.system(size: 10, design: .monospaced))
                     .frame(width: 24)
             }
-            .help("画线线宽 0.5~5.0 pt（新建生效 · 老画线右键应用）")
-            // v13.12 字号 Stepper 仅 .text 工具激活时显示（节省工具栏空间）
-            if activeDrawingTool == .text {
-                Stepper(value: $currentFontSize, in: 8...32, step: 1) {
-                    Text("\(Int(currentFontSize))pt")
-                        .font(.system(size: 10, design: .monospaced))
-                        .frame(width: 32)
-                }
-                .help("文字字号 8~32 pt（新建文字应用 · 老文字右键修改字号）")
-            }
+            .tooltip("画线线宽 0.5~5.0 pt（新建生效 · 老画线右键应用）")
             Divider().frame(height: 16)
             // v13.16 画线模板 Menu（保存常用 · 跨合约复用）
             templatesMenu
@@ -933,12 +936,12 @@ struct ChartScene: View {
                 Image(systemName: "square.and.arrow.up")
             }
             .buttonStyle(.borderless)
-            .help("导出当前合约+周期画线为 JSON")
+            .tooltip("导出当前合约+周期画线为 JSON")
             Button { importDrawings() } label: {
                 Image(systemName: "square.and.arrow.down")
             }
             .buttonStyle(.borderless)
-            .help("从 JSON 导入画线")
+            .tooltip("从 JSON 导入画线")
             Button {
                 drawings.removeAll()
                 pendingDrawingPoint = nil
@@ -948,7 +951,7 @@ struct ChartScene: View {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
-            .help("清空所有画线")
+            .tooltip("清空所有画线")
         }
     }
 
@@ -1332,7 +1335,25 @@ struct ChartScene: View {
         .padding(2)
         .background(activeDrawingTool == tool ? Color.accentColor.opacity(0.3) : Color.clear)
         .cornerRadius(4)
-        .help(help)
+        .tooltip(help)
+    }
+
+    /// v15.85 · 文字标注工具按钮 · 用 "Aa" 字符替代 textformat SF Symbol（更直观）
+    private func drawingTextToolButton(help: String) -> some View {
+        Button {
+            activeDrawingTool = .text
+            pendingDrawingPoint = nil
+            pendingExtraPoints = []
+        } label: {
+            Text("Aa")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 20, height: 20)
+        }
+        .buttonStyle(.borderless)
+        .padding(2)
+        .background(activeDrawingTool == .text ? Color.accentColor.opacity(0.3) : Color.clear)
+        .cornerRadius(4)
+        .tooltip(help)
     }
 
     /// v13.31 工具栏"完成（n 点）"按钮 · 闭合多边形 · 至少 3 点（startPoint + ≥2 extra）

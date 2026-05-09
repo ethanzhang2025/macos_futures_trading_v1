@@ -10,10 +10,15 @@
 
 on run argv
     if (count of argv) < 1 then
-        log "用法：osascript mac_acceptance_capture.applescript <shots_dir>"
+        log "用法：osascript mac_acceptance_capture.applescript <shots_dir> [filter]"
+        log "  filter 例：'all'（默认）/ '03' / '03,07,21'"
         return
     end if
     set shotsDir to item 1 of argv
+    set filterArg to "all"
+    if (count of argv) >= 2 then set filterArg to item 2 of argv
+    -- filter 包装成 ",NN," 格式便于 contains 查询
+    set filterPadded to "," & filterArg & ","
 
     -- 21 窗口列表：{seq, name, modifiers, key}
     -- modifiers：c=command, s=shift, o=option(alt)
@@ -57,46 +62,50 @@ on run argv
     end try
     delay 1.0
 
+    set capturedCount to 0
     repeat with w in winList
         set seq to item 1 of w
         set winName to item 2 of w
         set mods to item 3 of w
         set keyStr to item 4 of w
 
-        log "▶ [" & seq & "] " & winName & " · " & mods & "+" & keyStr
-
-        -- 先关闭可能挡视野的辅助 sheet（按 esc）
-        tell application "System Events" to key code 53 -- esc
-        delay 0.2
-
-        -- 模拟快捷键
-        if mods is "c" then
-            tell application "System Events" to keystroke keyStr using {command down}
-        else if mods is "cs" then
-            tell application "System Events" to keystroke keyStr using {command down, shift down}
-        else if mods is "co" then
-            tell application "System Events" to keystroke keyStr using {command down, option down}
-        else if mods is "cso" then
-            tell application "System Events" to keystroke keyStr using {command down, shift down, option down}
+        -- filter 判断：all 全跑 · 否则匹配 ",NN," 才跑（AppleScript 无 continue · 用 shouldRun 包裹）
+        set shouldRun to true
+        if filterArg is not "all" then
+            if filterPadded does not contain ("," & seq & ",") then set shouldRun to false
         end if
 
-        -- 等渲染（行情/board 类窗口需要更久 · 主图加载真行情 ~2s）
-        delay 2.0
+        if shouldRun then
+            log "▶ [" & seq & "] " & winName & " · " & mods & "+" & keyStr
+            set capturedCount to capturedCount + 1
 
-        -- screencapture -l <window-id>：只截当前 frontmost 窗口（不含 dock / 后台 app）
-        -- 拿 frontmost window id（System Events 的 window id 与 screencapture 不同 · 用 AppKit 路径）
-        set outPath to shotsDir & "/" & seq & "_" & winName & ".png"
-        try
-            -- 获取 frontmost app 的 window id（screencapture -l 兼容格式）
-            set winID to do shell script "osascript -e 'tell application \"System Events\" to tell (first process whose frontmost is true) to id of front window'"
-            do shell script "screencapture -x -o -l " & winID & " " & quoted form of outPath
-        on error
-            -- fallback 整屏（极少数情况下找不到 window id · 比如 sheet 状态）
+            -- 先关闭可能挡视野的辅助 sheet（按 esc）
+            tell application "System Events" to key code 53
+            delay 0.2
+
+            -- 模拟快捷键
+            if mods is "c" then
+                tell application "System Events" to keystroke keyStr using {command down}
+            else if mods is "cs" then
+                tell application "System Events" to keystroke keyStr using {command down, shift down}
+            else if mods is "co" then
+                tell application "System Events" to keystroke keyStr using {command down, option down}
+            else if mods is "cso" then
+                tell application "System Events" to keystroke keyStr using {command down, shift down, option down}
+            end if
+
+            -- 等渲染（主图加载真行情 ~2s）
+            delay 2.0
+
+            -- 截图（fallback 整屏 · -l <window-id> 实测 osascript window id ≠ CGWindowID 不可用）
+            set outPath to shotsDir & "/" & seq & "_" & winName & ".png"
             do shell script "screencapture -x -o " & quoted form of outPath
-        end try
 
-        delay 0.2
+            delay 0.2
+        else
+            log "⏭️  [" & seq & "] " & winName & " 跳过（filter）"
+        end if
     end repeat
 
-    log "✅ 全 " & (count of winList) & " 窗口截图完成"
+    log "✅ 截图完成 · 实跑 " & capturedCount & " / " & (count of winList) & " 窗口"
 end run

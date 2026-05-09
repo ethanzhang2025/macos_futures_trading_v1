@@ -1,27 +1,64 @@
 #!/usr/bin/env bash
-# Mac 端集中验收自动化脚本（v15.82 累积 · v12.14 → v15.82 共 130+ batch）
+# Mac 端集中验收自动化脚本（v15.82+ 累积 · v12.14 → 当前 130+ batch）
 #
 # 用法（在 Mac 上）：
 #   cd /Users/admin/Documents/MAC版本_期货交易终端/macos_futures_trading_v1
 #   git pull
 #   chmod +x mac_acceptance.sh
-#   ./mac_acceptance.sh
 #
-# 流程：
-#   Phase 1 (~30s)  · build + 全量 swift test
-#   Phase 2 (~3min) · 启动 app · AppleScript 自动遍历 21 窗口快捷键 + 截图
-#   Phase 3 (~30s)  · 数据契约 demo（自动）
-#   Phase 4 (~10s)  · 打包 + scp 回 Linux beelink@vvsvr
-#   Phase 5         · 输出用户辅助清单（手动验项）
+# 模式：
+#   ./mac_acceptance.sh                  # 全自动（build + test + 23 截图 + demo + scp）
+#   ./mac_acceptance.sh --shots 03       # 仅重跑 03 截图（隐含跳过 build/test）
+#   ./mac_acceptance.sh --shots 03,07,21 # 多个
+#   ./mac_acceptance.sh --shots 03-08    # 范围
+#   ./mac_acceptance.sh --skip-build     # 跳过 build/test · 走完截图流程
+#   ./mac_acceptance.sh --skip-test      # 仅跳过 test（build 仍跑）
+#   ./mac_acceptance.sh --help           # 显示帮助
 #
 # 输出：~/Desktop/mac_acceptance_v15.82/
-#   ├─ 01_build.log
-#   ├─ 02_test.log
-#   ├─ 03_demo.log
-#   ├─ shots/  (21+ PNG)
-#   └─ summary.txt
 
 set -uo pipefail
+
+# ─── 参数解析 ───
+SHOTS_FILTER="all"
+SKIP_BUILD=false
+SKIP_TEST=false
+SKIP_DEMO=false
+
+show_help() {
+    sed -n '2,17p' "$0" | sed 's/^# \?//'
+    exit 0
+}
+
+# 把 "03,07-09,12" 展开为 "03,07,08,09,12"
+expand_filter() {
+    local input="$1"
+    [[ "$input" == "all" ]] && { echo "all"; return; }
+    local out=""
+    IFS=',' read -ra parts <<< "$input"
+    for p in "${parts[@]}"; do
+        if [[ "$p" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+            local s=${BASH_REMATCH[1]}; local e=${BASH_REMATCH[2]}
+            for i in $(seq "$s" "$e"); do
+                out+="$(printf '%02d' $((10#$i))),"
+            done
+        else
+            out+="$(printf '%02d' $((10#$p))),"
+        fi
+    done
+    echo "${out%,}"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --shots)      SHOTS_FILTER=$(expand_filter "$2"); SKIP_BUILD=true; SKIP_TEST=true; SKIP_DEMO=true; shift 2 ;;
+        --skip-build) SKIP_BUILD=true; SKIP_TEST=true; shift ;;  # 跳 build 必跳 test
+        --skip-test)  SKIP_TEST=true; shift ;;
+        --skip-demo)  SKIP_DEMO=true; shift ;;
+        --help|-h)    show_help ;;
+        *) echo "❌ 未知参数: $1"; echo "  用 --help 看帮助"; exit 1 ;;
+    esac
+done
 
 OUT_DIR="$HOME/Desktop/mac_acceptance_v15.82"
 SHOTS_DIR="$OUT_DIR/shots"
@@ -141,40 +178,53 @@ trap upload_results EXIT
 COMPLETED_PHASES="开始"
 
 echo "════════════════════════════════════════════════════"
-echo " Mac 切机自动化验收 · v15.82 累积"
+echo " Mac 切机自动化验收 · v15.82+"
+echo " 模式：$([ "$SHOTS_FILTER" != "all" ] && echo "仅截图 [$SHOTS_FILTER]" || echo "全自动")"
+echo " 跳过：$([ "$SKIP_BUILD" = true ] && echo "build " || echo "")$([ "$SKIP_TEST" = true ] && echo "test " || echo "")$([ "$SKIP_DEMO" = true ] && echo "demo" || echo "")"
 echo " 输出 → $OUT_DIR"
 echo "════════════════════════════════════════════════════"
 date
 
-# ─── Phase 1: build + test ───
-echo ""
-echo "▶ Phase 1/5 · swift build + 全量 test（~30s）"
-echo "────────────────────────────────────────────────────"
-swift build --build-path "$BUILD_PATH" 2>&1 | tee "$OUT_DIR/01_build.log"
-BUILD_RC=${PIPESTATUS[0]}
+# ─── Phase 1: build + test（可跳过）───
+TEST_SUMMARY=""
+if [[ "$SKIP_BUILD" = true ]]; then
+    echo ""
+    echo "⏭️  Phase 1/5 跳过（--skip-build · 默认走 incremental build path = $BUILD_PATH）"
+    BUILD_RC=0
+    TEST_RC=0
+    COMPLETED_PHASES="P1 跳过"
+else
+    echo ""
+    echo "▶ Phase 1/5 · swift build + 全量 test（~30s）"
+    echo "────────────────────────────────────────────────────"
+    swift build --build-path "$BUILD_PATH" 2>&1 | tee "$OUT_DIR/01_build.log"
+    BUILD_RC=${PIPESTATUS[0]}
 
-if [[ "$BUILD_RC" -ne 0 ]]; then
-    echo "❌ Build 失败 · 中止后续 · trap 会自动上传 01_build.log + exit_summary.txt"
-    # 提取关键错误行写到顶层（让远端 Claude 一眼看到）
-    {
-        echo "# BUILD 失败摘要"
-        echo "## 错误行（grep error/warning · tail 50）"
-        grep -nE "error:|warning:" "$OUT_DIR/01_build.log" 2>/dev/null | tail -50 || echo "未匹配到 error/warning 行"
-        echo ""
-        echo "## 末 80 行"
-        tail -80 "$OUT_DIR/01_build.log"
-    } > "$OUT_DIR/01_build_error_extract.txt"
-    COMPLETED_PHASES="P1 build 失败"
-    exit 1
+    if [[ "$BUILD_RC" -ne 0 ]]; then
+        echo "❌ Build 失败 · 中止后续 · trap 会自动上传 01_build.log + exit_summary.txt"
+        {
+            echo "# BUILD 失败摘要"
+            echo "## 错误行（grep error/warning · tail 50）"
+            grep -nE "error:|warning:" "$OUT_DIR/01_build.log" 2>/dev/null | tail -50 || echo "未匹配到 error/warning 行"
+            echo ""
+            echo "## 末 80 行"
+            tail -80 "$OUT_DIR/01_build.log"
+        } > "$OUT_DIR/01_build_error_extract.txt"
+        COMPLETED_PHASES="P1 build 失败"
+        exit 1
+    fi
+    COMPLETED_PHASES="P1 build OK"
+
+    if [[ "$SKIP_TEST" = true ]]; then
+        echo "⏭️  swift test 跳过（--skip-test）"
+        TEST_RC=0
+    else
+        swift test --build-path "$BUILD_PATH" 2>&1 | tee "$OUT_DIR/02_test.log"
+        TEST_RC=${PIPESTATUS[0]}
+        TEST_SUMMARY=$(grep -E "Test run with|Executed [0-9]+ tests" "$OUT_DIR/02_test.log" | tail -3)
+    fi
+    COMPLETED_PHASES="P1 build+test 完成"
 fi
-COMPLETED_PHASES="P1 build OK"
-
-swift test --build-path "$BUILD_PATH" 2>&1 | tee "$OUT_DIR/02_test.log"
-TEST_RC=${PIPESTATUS[0]}
-COMPLETED_PHASES="P1 build+test 完成"
-
-# 提取关键统计
-TEST_SUMMARY=$(grep -E "Test run with|Executed [0-9]+ tests" "$OUT_DIR/02_test.log" | tail -3)
 
 # 测试失败也继续跑（截图 / scp 都仍有价值）
 if [[ "$TEST_RC" -ne 0 ]]; then
@@ -182,23 +232,32 @@ if [[ "$TEST_RC" -ne 0 ]]; then
     grep -nE "FAILED|❌|error:" "$OUT_DIR/02_test.log" 2>/dev/null | tail -30 > "$OUT_DIR/02_test_failures.txt"
 fi
 
-# ─── Phase 2: 启动 app + 自动截图 21 窗口 ───
+# ─── Phase 2: 启动 app + 自动截图 ───
 echo ""
-echo "▶ Phase 2/5 · 启动 app + 自动截图 21 窗口（~3min）"
+if [[ "$SHOTS_FILTER" == "all" ]]; then
+    echo "▶ Phase 2/5 · 启动 app + 自动截图 23 窗口（~3min）"
+else
+    echo "▶ Phase 2/5 · 启动 app + 仅截图 [$SHOTS_FILTER]（~$(echo "$SHOTS_FILTER" | tr ',' '\n' | wc -l | tr -d ' ')×8s）"
+    # filter 模式只清掉指定的 shots（保留其他历史）· 而非整个 SHOTS_DIR
+    IFS=',' read -ra FILT_SEQS <<< "$SHOTS_FILTER"
+    for s in "${FILT_SEQS[@]}"; do
+        rm -f "$SHOTS_DIR"/${s}_*.png 2>/dev/null || true
+    done
+fi
 echo "────────────────────────────────────────────────────"
 
-# 后台启动 app
+# 后台启动 app（必须 · 截图依赖运行中的 app）
 echo "启动 swift run MainApp ..."
 nohup swift run MainApp --build-path "$BUILD_PATH" > "$OUT_DIR/02b_app_stdout.log" 2>&1 &
 APP_PID=$!
 echo "app pid = $APP_PID · 等待 8s 让 app 完全启动"
 sleep 8
 
-# 调用 AppleScript 遍历 21 窗口
+# 调用 AppleScript（filter 第二参数）
 if [[ ! -f "$SCRIPT_DIR/mac_acceptance_capture.applescript" ]]; then
     echo "⚠️ 未找到 mac_acceptance_capture.applescript（在 $SCRIPT_DIR）"
 else
-    osascript "$SCRIPT_DIR/mac_acceptance_capture.applescript" "$SHOTS_DIR" 2>&1 | tee "$OUT_DIR/02c_capture.log"
+    osascript "$SCRIPT_DIR/mac_acceptance_capture.applescript" "$SHOTS_DIR" "$SHOTS_FILTER" 2>&1 | tee "$OUT_DIR/02c_capture.log"
 fi
 
 # 关 app
@@ -209,40 +268,39 @@ kill "$APP_PID" 2>/dev/null || true
 wait "$APP_PID" 2>/dev/null || true
 
 SHOT_COUNT=$(ls "$SHOTS_DIR" 2>/dev/null | wc -l | tr -d ' ')
-echo "截图完成 · $SHOT_COUNT 张"
+echo "截图完成 · 当前 $SHOT_COUNT 张"
 COMPLETED_PHASES="P2 截图 $SHOT_COUNT 张"
 
-# ─── Phase 3: 数据契约 demo ───
+# ─── Phase 3: 数据契约 demo（可跳过）───
 echo ""
-echo "▶ Phase 3/5 · 数据契约 demo（无 UI · 命令行）"
-echo "────────────────────────────────────────────────────"
-
-# 找命令行 demo target（如果有）
-DEMOS=()
-for tool in SinaTickDemo SyncEngineDemo; do
-    if swift build --build-path "$BUILD_PATH" --target "$tool" 2>/dev/null; then
-        DEMOS+=("$tool")
-    fi
-done
-
-{
-    echo "# Phase 3 数据契约 demo"
-    echo "# 时间：$(date)"
-    echo ""
-    if [[ "${#DEMOS[@]}" -eq 0 ]]; then
-        echo "无可用 demo target（已搁置 SinaTickDemo / SyncEngineDemo）"
-    fi
-    # macOS 自带没有 GNU timeout · 用 perl alarm 包一层（兼容 Linux/Mac）
-    run_with_timeout() {
-        local secs=$1; shift
-        perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
-    }
-    for d in "${DEMOS[@]}"; do
-        echo "──── $d ────"
-        run_with_timeout 30 swift run --build-path "$BUILD_PATH" "$d" 2>&1 | head -50
-        echo ""
+if [[ "$SKIP_DEMO" = true ]]; then
+    echo "⏭️  Phase 3/5 跳过（--skip-demo / 仅截图模式）"
+else
+    echo "▶ Phase 3/5 · 数据契约 demo（无 UI · 命令行）"
+    echo "────────────────────────────────────────────────────"
+    DEMOS=()
+    for tool in SinaTickDemo SyncEngineDemo; do
+        if swift build --build-path "$BUILD_PATH" --target "$tool" 2>/dev/null; then
+            DEMOS+=("$tool")
+        fi
     done
-} > "$OUT_DIR/03_demo.log"
+    {
+        echo "# Phase 3 数据契约 demo · 时间：$(date)"
+        echo ""
+        if [[ "${#DEMOS[@]}" -eq 0 ]]; then
+            echo "无可用 demo target"
+        fi
+        run_with_timeout() {
+            local secs=$1; shift
+            perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+        }
+        for d in "${DEMOS[@]}"; do
+            echo "──── $d ────"
+            run_with_timeout 30 swift run --build-path "$BUILD_PATH" "$d" 2>&1 | head -50
+            echo ""
+        done
+    } > "$OUT_DIR/03_demo.log"
+fi
 COMPLETED_PHASES="P3 demo 完成"
 
 # ─── Phase 4: 写 summary（scp 由 trap 兜底执行）───

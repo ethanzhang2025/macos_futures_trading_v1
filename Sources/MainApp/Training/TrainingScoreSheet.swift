@@ -85,6 +85,7 @@ struct TrainingScoreSheet: View {
                     .tooltip("随机选一种形态（⌘⇧R · 避开当前形态）· 探索弱项")
                 }
                 // v16.27 · 加练全局最弱形态（与 v16.19 history panel weakPatternRecommendRow 同算法）
+                // v16.31 · 快捷键改 ⌘⌥K（K=KO 弱项 · ⌘⌥W 已被全局价差套利占 · v16.30 切机暴露）
                 if let cb = onRetrain, let weakest = weakestPattern {
                     Button {
                         onDismiss()
@@ -92,8 +93,8 @@ struct TrainingScoreSheet: View {
                     } label: {
                         Label("练最弱", systemImage: "exclamationmark.triangle.fill")
                     }
-                    .keyboardShortcut("w", modifiers: [.command, .option])
-                    .tooltip("加练历史最弱形态（⌘⌥W · \(weakest.emoji) \(weakest.displayName)）· 均分 < 70 + 训练 ≥ 3 次")
+                    .keyboardShortcut("k", modifiers: [.command, .option])
+                    .tooltip("加练历史最弱形态（⌘⌥K · \(weakest.emoji) \(weakest.displayName)）· 均分 < 70 + 训练 ≥ 3 次")
                 }
                 // v15.23 batch133 · 复制本次分析为 markdown（trader 求点评 / 笔记）
                 Button {

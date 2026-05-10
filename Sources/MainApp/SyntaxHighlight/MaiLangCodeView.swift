@@ -431,24 +431,27 @@ public struct MaiLangCodeView: NSViewRepresentable {
         // v16.32 · @objc nonisolated + MainActor.assumeIsolated
         // swift 6.3 严格 actor 隔离下 @MainActor class 的 @objc 方法被 NSTrackingArea
         // 从 nonisolated AppKit 上下文调用时静默 drop · 必须 nonisolated 桥接
+        // NSEvent 非 Sendable · 在 nonisolated 抽 locationInWindow（NSPoint Sendable）后 hop
         @objc nonisolated public func mouseEntered(with event: NSEvent) {
+            let loc = event.locationInWindow
             MainActor.assumeIsolated {
                 self.textView?.window?.acceptsMouseMovedEvents = true
-                self.handleHover(event)
+                self.handleHover(at: loc)
             }
         }
         @objc nonisolated public func mouseMoved(with event: NSEvent) {
-            MainActor.assumeIsolated { self.handleHover(event) }
+            let loc = event.locationInWindow
+            MainActor.assumeIsolated { self.handleHover(at: loc) }
         }
         @objc nonisolated public func mouseExited(with event: NSEvent) {
             MainActor.assumeIsolated { self.hideHoverPopover() }
         }
 
-        private func handleHover(_ event: NSEvent) {
+        private func handleHover(at locationInWindow: NSPoint) {
             guard let tv = textView,
                   let lm = tv.layoutManager,
                   let tc = tv.textContainer else { return }
-            let p = tv.convert(event.locationInWindow, from: nil)
+            let p = tv.convert(locationInWindow, from: nil)
             let pInContainer = NSPoint(x: p.x - tv.textContainerOrigin.x,
                                        y: p.y - tv.textContainerOrigin.y)
             let glyphIndex = lm.glyphIndex(for: pInContainer, in: tc)

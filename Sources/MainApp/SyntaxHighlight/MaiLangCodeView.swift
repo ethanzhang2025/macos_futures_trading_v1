@@ -389,7 +389,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
         private var hoverPopover: NSPopover?
         private var hoverDebounce: DispatchWorkItem?
         private var lastHoveredTokenStart: Int = -1
-        private var hoverScrollObserver: NSObjectProtocol?
+        /// nonisolated(unsafe) 同 visibleObserver line 149 · deinit 在 nonisolated 上下文要访问
+        nonisolated(unsafe) var hoverScrollObserver: NSObjectProtocol?
 
         /// makeNSView 末尾调用 · 注册 NSTrackingArea + scroll 隐藏观察
         func attachHoverTracking(textView: NSTextView) {

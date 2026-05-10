@@ -2122,22 +2122,8 @@ private struct JournalEditorSheet: View {
                 .font(.system(.caption, design: .monospaced))
                 .foregroundColor(.secondary)
             Spacer()
-            // v16.0 · 复盘 v2 · setup chip（已标显示标签 · 未标显示"+ 标策略"灰显提示 · 仅开仓行支持 · 透传到 ClosedPosition）
-            if trade.offsetFlag == .open {
-                setupChip(for: trade)
-            }
-            Text(JournalWindow.timestampFormatter.string(from: trade.timestamp))
-                .font(.caption2)
-                .foregroundColor(.secondary)
-        }
-    }
-
-    /// v16.0 · setup chip 按钮 · 点击弹 SetupEditorSheet
-    private func setupChip(for trade: Trade) -> some View {
-        Button {
-            pendingSetupTrade = trade
-        } label: {
-            if let s = trade.setup, !s.isEmpty {
+            // v16.0 · 复盘 v2 · setup chip（仅显示已标 · 编辑入口在 JournalWindow 主表 trade 表 · v16.30 修 Mac scope 错）
+            if trade.offsetFlag == .open, let s = trade.setup, !s.isEmpty {
                 Text(s)
                     .font(.system(size: 10, design: .monospaced))
                     .padding(.horizontal, 6)
@@ -2145,19 +2131,12 @@ private struct JournalEditorSheet: View {
                     .background(Color.accentColor.opacity(0.15))
                     .foregroundColor(.accentColor)
                     .clipShape(Capsule())
-            } else {
-                Text("+ 标策略")
-                    .font(.system(size: 10))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .foregroundColor(.secondary.opacity(0.7))
-                    .overlay(
-                        Capsule().stroke(Color.secondary.opacity(0.3), lineWidth: 0.5)
-                    )
+                    .tooltip("策略标签 · 编辑请回 JournalWindow 主表 trades 行点击 chip")
             }
+            Text(JournalWindow.timestampFormatter.string(from: trade.timestamp))
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
-        .buttonStyle(.plain)
-        .tooltip("点击给此笔开仓打 setup 策略标签 · 复盘 v2 SetupMatrix 聚合维度（v16.0）")
     }
 }
 

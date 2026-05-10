@@ -10,6 +10,7 @@ import AppKit
 import UniformTypeIdentifiers
 import Shared
 import JournalCore
+import TradingCore
 
 struct ReviewWindow: View {
 

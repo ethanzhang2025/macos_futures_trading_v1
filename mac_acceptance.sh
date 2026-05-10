@@ -13,6 +13,7 @@
 #   ./mac_acceptance.sh --shots 03-08    # 范围
 #   ./mac_acceptance.sh --skip-build     # 跳过 build/test · 走完截图流程
 #   ./mac_acceptance.sh --skip-test      # 仅跳过 test（build 仍跑）
+#   ./mac_acceptance.sh --skip-shots     # 跳过 Phase 2 截图（23 窗口已验过 · 仅验编译/测试）
 #   ./mac_acceptance.sh --help           # 显示帮助
 #
 # 输出：~/Desktop/mac_acceptance_v15.82/
@@ -24,9 +25,10 @@ SHOTS_FILTER="all"
 SKIP_BUILD=false
 SKIP_TEST=false
 SKIP_DEMO=false
+SKIP_SHOTS=false
 
 show_help() {
-    sed -n '2,17p' "$0" | sed 's/^# \?//'
+    sed -n '2,18p' "$0" | sed 's/^# \?//'
     exit 0
 }
 
@@ -55,6 +57,7 @@ while [[ $# -gt 0 ]]; do
         --skip-build) SKIP_BUILD=true; SKIP_TEST=true; shift ;;  # 跳 build 必跳 test
         --skip-test)  SKIP_TEST=true; shift ;;
         --skip-demo)  SKIP_DEMO=true; shift ;;
+        --skip-shots) SKIP_SHOTS=true; shift ;;
         --help|-h)    show_help ;;
         *) echo "❌ 未知参数: $1"; echo "  用 --help 看帮助"; exit 1 ;;
     esac
@@ -199,7 +202,7 @@ COMPLETED_PHASES="开始"
 echo "════════════════════════════════════════════════════"
 echo " Mac 切机自动化验收 · v15.82+"
 echo " 模式：$([ "${SHOTS_FILTER}" != "all" ] && echo "仅截图 [${SHOTS_FILTER}]" || echo "全自动")"
-echo " 跳过：$([ "$SKIP_BUILD" = true ] && echo "build " || echo "")$([ "$SKIP_TEST" = true ] && echo "test " || echo "")$([ "$SKIP_DEMO" = true ] && echo "demo" || echo "")"
+echo " 跳过：$([ "$SKIP_BUILD" = true ] && echo "build " || echo "")$([ "$SKIP_TEST" = true ] && echo "test " || echo "")$([ "$SKIP_SHOTS" = true ] && echo "shots " || echo "")$([ "$SKIP_DEMO" = true ] && echo "demo" || echo "")"
 echo " 输出 → $OUT_DIR"
 echo "════════════════════════════════════════════════════"
 date
@@ -253,43 +256,49 @@ fi
 
 # ─── Phase 2: 启动 app + 自动截图 ───
 echo ""
-if [[ "$SHOTS_FILTER" == "all" ]]; then
-    echo "▶ Phase 2/5 · 启动 app + 自动截图 23 窗口（~3min）"
+if [[ "$SKIP_SHOTS" = true ]]; then
+    echo "⏭️  Phase 2/5 跳过截图（--skip-shots · 23 窗口框架已在前次切机验过）"
+    SHOT_COUNT=$(ls "$SHOTS_DIR" 2>/dev/null | wc -l | tr -d ' ')
+    COMPLETED_PHASES="P2 截图跳过（保留历史 $SHOT_COUNT 张）"
 else
-    echo "▶ Phase 2/5 · 启动 app + 仅截图 [${SHOTS_FILTER}]（~$(echo "${SHOTS_FILTER}" | tr ',' '\n' | wc -l | tr -d ' ')×8s）"
-    # filter 模式只清掉指定的 shots（保留其他历史）· 而非整个 SHOTS_DIR
-    IFS=',' read -ra FILT_SEQS <<< "$SHOTS_FILTER"
-    for s in "${FILT_SEQS[@]}"; do
-        rm -f "$SHOTS_DIR"/${s}_*.png 2>/dev/null || true
-    done
+    if [[ "$SHOTS_FILTER" == "all" ]]; then
+        echo "▶ Phase 2/5 · 启动 app + 自动截图 23 窗口（~3min）"
+    else
+        echo "▶ Phase 2/5 · 启动 app + 仅截图 [${SHOTS_FILTER}]（~$(echo "${SHOTS_FILTER}" | tr ',' '\n' | wc -l | tr -d ' ')×8s）"
+        # filter 模式只清掉指定的 shots（保留其他历史）· 而非整个 SHOTS_DIR
+        IFS=',' read -ra FILT_SEQS <<< "$SHOTS_FILTER"
+        for s in "${FILT_SEQS[@]}"; do
+            rm -f "$SHOTS_DIR"/${s}_*.png 2>/dev/null || true
+        done
+    fi
+    echo "────────────────────────────────────────────────────"
+
+    # 后台启动 app（必须 · 截图依赖运行中的 app）
+    echo "启动 swift run MainApp ..."
+    nohup swift run MainApp --build-path "$BUILD_PATH" > "$OUT_DIR/02b_app_stdout.log" 2>&1 &
+    APP_PID=$!
+    # app 冷启动 ~6s · Sina 真行情首次拉取 ~3s · 留 12s 让首图 K 线就位（macOS 26 + Xcode 26 增量编译开销）
+    echo "app pid = $APP_PID · 等待 12s 让 app 完全启动 + Sina 首次拉取就位"
+    sleep 12
+
+    # 调用 AppleScript（filter 第二参数）
+    if [[ ! -f "$SCRIPT_DIR/mac_acceptance_capture.applescript" ]]; then
+        echo "⚠️ 未找到 mac_acceptance_capture.applescript（在 ${SCRIPT_DIR}）"
+    else
+        osascript "$SCRIPT_DIR/mac_acceptance_capture.applescript" "$SHOTS_DIR" "$SHOTS_FILTER" 2>&1 | tee "$OUT_DIR/02c_capture.log"
+    fi
+
+    # 关 app
+    echo "关闭 app ..."
+    osascript -e 'tell application "MainApp" to quit' 2>/dev/null || true
+    sleep 1
+    kill "$APP_PID" 2>/dev/null || true
+    wait "$APP_PID" 2>/dev/null || true
+
+    SHOT_COUNT=$(ls "$SHOTS_DIR" 2>/dev/null | wc -l | tr -d ' ')
+    echo "截图完成 · 当前 $SHOT_COUNT 张"
+    COMPLETED_PHASES="P2 截图 $SHOT_COUNT 张"
 fi
-echo "────────────────────────────────────────────────────"
-
-# 后台启动 app（必须 · 截图依赖运行中的 app）
-echo "启动 swift run MainApp ..."
-nohup swift run MainApp --build-path "$BUILD_PATH" > "$OUT_DIR/02b_app_stdout.log" 2>&1 &
-APP_PID=$!
-# app 冷启动 ~6s · Sina 真行情首次拉取 ~3s · 留 12s 让首图 K 线就位（macOS 26 + Xcode 26 增量编译开销）
-echo "app pid = $APP_PID · 等待 12s 让 app 完全启动 + Sina 首次拉取就位"
-sleep 12
-
-# 调用 AppleScript（filter 第二参数）
-if [[ ! -f "$SCRIPT_DIR/mac_acceptance_capture.applescript" ]]; then
-    echo "⚠️ 未找到 mac_acceptance_capture.applescript（在 ${SCRIPT_DIR}）"
-else
-    osascript "$SCRIPT_DIR/mac_acceptance_capture.applescript" "$SHOTS_DIR" "$SHOTS_FILTER" 2>&1 | tee "$OUT_DIR/02c_capture.log"
-fi
-
-# 关 app
-echo "关闭 app ..."
-osascript -e 'tell application "MainApp" to quit' 2>/dev/null || true
-sleep 1
-kill "$APP_PID" 2>/dev/null || true
-wait "$APP_PID" 2>/dev/null || true
-
-SHOT_COUNT=$(ls "$SHOTS_DIR" 2>/dev/null | wc -l | tr -d ' ')
-echo "截图完成 · 当前 $SHOT_COUNT 张"
-COMPLETED_PHASES="P2 截图 $SHOT_COUNT 张"
 
 # ─── Phase 3: 数据契约 demo（可跳过）───
 echo ""

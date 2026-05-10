@@ -393,6 +393,45 @@ public enum MaiLangFunctionSignatures {
         sig("PROFITRATIO",    ["盈亏序列"],      "盈亏比（平均盈 / |平均亏|）",            .统计),
         sig("REWARDRATIO",    ["盈亏序列"],      "风险回报比（盈利期望 / 风险期望）",       .统计),
         sig("RUNUP",          ["序列"],          "最大浮盈（peak vs entry）",              .统计),
+        // v16.27 · 第 8 批 30 个 trader 高频补齐 · BuiltinFunction 注册表已实现
+        // 逻辑 / 比较 5
+        sig("NOT",            ["条件"],          "逻辑非（0→1 / 非 0→0）",                 .逻辑),
+        sig("HEAVISIDE",      ["X"],            "阶跃函数（X ≥ 0 → 1 / X < 0 → 0）",      .逻辑),
+        sig("NEGATIVE",       ["X"],            "取负（-X · nil 透传）",                   .数学),
+        sig("POSITIVE",       ["X"],            "取正绝对值（|X|）",                       .数学),
+        sig("SAMECOUNT",      ["序列", "周期 N"], "N 周期内相邻同号次数",                  .统计),
+        // 累积统计 5（量化研究 expanding window）
+        sig("EXPANDINGMAX",   ["序列"],          "累积最高（自起始至今）",                 .统计),
+        sig("EXPANDINGMIN",   ["序列"],          "累积最低（自起始至今）",                 .统计),
+        sig("EXPANDINGMEAN",  ["序列"],          "累积均值（自起始至今）",                 .统计),
+        sig("EXPANDINGSTD",   ["序列"],          "累积标准差（自起始至今）",               .统计),
+        sig("EXPANDINGSUM",   ["序列"],          "累积和（自起始至今）",                   .统计),
+        // 统计辅助 3
+        sig("MAD",            ["序列", "周期 N"], "中位数绝对偏差（median absolute deviation）", .统计),
+        sig("TRIMMEAN",       ["序列", "周期 N", "截尾百分比"], "截尾均值（去除两端 pct% 后均值）", .统计),
+        sig("MEDIANSLOPE",    ["序列", "周期 N"], "中位斜率（抗噪线性趋势估计）",          .统计),
+        // 线性回归 3
+        sig("LINREGINT",      ["序列", "周期 N"], "线性回归截距（与 SLOPE/FORCAST 配套）", .高级),
+        sig("LINREGR2",       ["序列", "周期 N"], "线性回归 R²（拟合优度 0-1）",          .高级),
+        sig("MAANGLE",        ["序列", "周期 N"], "MA 角度（atan(slope) · 度）",          .高级),
+        // 数据填充 / 引用 4
+        sig("NAFILL",         ["序列", "默认值"], "nil 填充为默认值",                     .引用),
+        sig("FIRSTVALID",     ["序列"],          "首个非 nil 值（自起始向后扫描）",        .引用),
+        sig("LASTVALID",      ["序列"],          "末个非 nil 值（自起始向前扫描）",        .引用),
+        sig("NEAREST",        ["序列", "目标值"], "距目标值最近的元素（绝对差最小）",      .引用),
+        // 价量派生 4
+        sig("OC",             [],                "开收均价（O+C）/2",                      .价量),
+        sig("WC",             [],                "加权均价（H+L+2C）/4 · 收盘加权",        .价量),
+        sig("HLAVGMA",        ["周期 N"],        "HL 均价的 N 期均线 · MA((H+L)/2, N)",   .均线),
+        sig("OCAVGMA",        ["周期 N"],        "OC 均价的 N 期均线 · MA((O+C)/2, N)",   .均线),
+        // 形态信号 4
+        sig("CONSECUP",       ["N"],            "连续 N 根阳线（1=触发）",                .逻辑),
+        sig("CONSECDOWN",     ["N"],            "连续 N 根阴线（1=触发）",                .逻辑),
+        sig("MACROSS",        ["短周期 N1", "长周期 N2"], "短均线上穿长均线（1=金叉 / -1=死叉 / 0=无）", .逻辑),
+        sig("GAPSIZE",        [],                "跳空缺口大小（今开 - 昨收）",             .价量),
+        // 波动评估 2
+        sig("VOLATILITYRANK", ["周期 N"],        "波动率分位排名（0-100% · IV/HV rank）",  .高级),
+        sig("VOLATILITYRATIO", ["短周期 N1", "长周期 N2"], "短长波动率比（短 std / 长 std）", .高级),
     ]
 
     /// v15.22 batch35 · 模糊搜索（name + summary 均不区分大小写 · 中文 summary 不受影响 · 空 query → 返回全部）

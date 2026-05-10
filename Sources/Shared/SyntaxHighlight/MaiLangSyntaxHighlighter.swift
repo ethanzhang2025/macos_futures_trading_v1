@@ -142,6 +142,15 @@ public enum MaiLangSyntaxHighlighter {
         "TRENDDIR", "TRENDSCORE", "TRENDSTRENGTH", "PRICEACTION", "PRICESCORE", "SIGNALSTRENGTH",
         "HHVDIST", "LLVDIST", "PRICEDIST", "RANGEPCT",
         "RECOVERY", "PROFITRATIO", "REWARDRATIO", "RUNUP",
+        // v16.27 · 第 8 批 30 个（逻辑/比较 + 累积统计 + 统计辅助 + 线性回归 + 数据填充 + 价量派生 + 形态信号 + 波动评估）
+        "NOT", "HEAVISIDE", "NEGATIVE", "POSITIVE", "SAMECOUNT",
+        "EXPANDINGMAX", "EXPANDINGMIN", "EXPANDINGMEAN", "EXPANDINGSTD", "EXPANDINGSUM",
+        "MAD", "TRIMMEAN", "MEDIANSLOPE",
+        "LINREGINT", "LINREGR2", "MAANGLE",
+        "NAFILL", "FIRSTVALID", "LASTVALID", "NEAREST",
+        "OC", "WC", "HLAVGMA", "OCAVGMA",
+        "CONSECUP", "CONSECDOWN", "MACROSS", "GAPSIZE",
+        "VOLATILITYRANK", "VOLATILITYRATIO",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

@@ -403,6 +403,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 userInfo: nil
             )
             textView.addTrackingArea(area)
+            FileHandle.standardError.write("[HOVER] attachHoverTracking · trackingAreas=\(textView.trackingAreas.count) bounds=\(textView.bounds)\n".data(using: .utf8) ?? Data())
             // window 必须接受 mouseMoved 事件 · 同步先试 + async 兜底（v16.10 仅 async 在 SwiftUI WindowGroup 偶尔失效）
             textView.window?.acceptsMouseMovedEvents = true
             DispatchQueue.main.async { [weak textView] in
@@ -434,6 +435,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
         // NSEvent 非 Sendable · 在 nonisolated 抽 locationInWindow（NSPoint Sendable）后 hop
         @objc nonisolated public func mouseEntered(with event: NSEvent) {
             let loc = event.locationInWindow
+            FileHandle.standardError.write("[HOVER] mouseEntered loc=\(loc)\n".data(using: .utf8) ?? Data())
             MainActor.assumeIsolated {
                 self.textView?.window?.acceptsMouseMovedEvents = true
                 self.handleHover(at: loc)
@@ -450,7 +452,10 @@ public struct MaiLangCodeView: NSViewRepresentable {
         private func handleHover(at locationInWindow: NSPoint) {
             guard let tv = textView,
                   let lm = tv.layoutManager,
-                  let tc = tv.textContainer else { return }
+                  let tc = tv.textContainer else {
+                FileHandle.standardError.write("[HOVER] handleHover: textView/layoutManager/textContainer nil\n".data(using: .utf8) ?? Data())
+                return
+            }
             let p = tv.convert(locationInWindow, from: nil)
             let pInContainer = NSPoint(x: p.x - tv.textContainerOrigin.x,
                                        y: p.y - tv.textContainerOrigin.y)
@@ -466,9 +471,11 @@ public struct MaiLangCodeView: NSViewRepresentable {
                   token.kind == .builtinFunc,
                   let sig = MaiLangFunctionSignatures.all[token.text.uppercased()]
             else {
+                FileHandle.standardError.write("[HOVER] no token match · charIndex=\(charIndex) p=\(p)\n".data(using: .utf8) ?? Data())
                 hideHoverPopover()
                 return
             }
+            FileHandle.standardError.write("[HOVER] match token=\(token.text) → schedule popover\n".data(using: .utf8) ?? Data())
             // 同 token 已弹 / 已排队 → 不动作（避免每次 mouseMoved 都重排）
             if token.range.location == lastHoveredTokenStart,
                (hoverPopover != nil || hoverDebounce != nil) {
@@ -495,6 +502,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
                     rootView: MaiLangSignaturePopoverContent(signature: signature)
                 )
                 popover.show(relativeTo: anchorRect, of: tv, preferredEdge: .maxY)
+                FileHandle.standardError.write("[HOVER] popover.show called · anchorRect=\(anchorRect)\n".data(using: .utf8) ?? Data())
                 self.hoverPopover = popover
                 self.hoverDebounce = nil
             }

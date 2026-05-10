@@ -393,18 +393,29 @@ public struct MaiLangCodeView: NSViewRepresentable {
         nonisolated(unsafe) var hoverScrollObserver: NSObjectProtocol?
 
         /// makeNSView 末尾调用 · 注册 NSTrackingArea + scroll 隐藏观察
+        /// v16.32 修：.activeAlways 不限 keyWindow / didBecomeKey 兜底设 acceptsMouseMovedEvents
         func attachHoverTracking(textView: NSTextView) {
             self.textView = textView
             let area = NSTrackingArea(
                 rect: textView.bounds,
-                options: [.mouseMoved, .mouseEnteredAndExited, .inVisibleRect, .activeInKeyWindow],
+                options: [.mouseMoved, .mouseEnteredAndExited, .inVisibleRect, .activeAlways],
                 owner: self,
                 userInfo: nil
             )
             textView.addTrackingArea(area)
-            // window 必须接受 mouseMoved 事件 · 异步等 textView 进入 window
+            // window 必须接受 mouseMoved 事件 · 同步先试 + async 兜底（v16.10 仅 async 在 SwiftUI WindowGroup 偶尔失效）
+            textView.window?.acceptsMouseMovedEvents = true
             DispatchQueue.main.async { [weak textView] in
                 textView?.window?.acceptsMouseMovedEvents = true
+            }
+            // 监听 window 成 key 时再设一次（最 robust · 避免初次 makeNSView 时 window 未挂）
+            NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: nil, queue: .main
+            ) { [weak textView] note in
+                if let win = note.object as? NSWindow, win === textView?.window {
+                    win.acceptsMouseMovedEvents = true
+                }
             }
             // 滚动时立即隐藏 popover（位置已偏）
             if let scroll = textView.enclosingScrollView {
@@ -417,9 +428,21 @@ public struct MaiLangCodeView: NSViewRepresentable {
             }
         }
 
-        @objc public func mouseEntered(with event: NSEvent) { handleHover(event) }
-        @objc public func mouseMoved(with event: NSEvent)   { handleHover(event) }
-        @objc public func mouseExited(with event: NSEvent)  { hideHoverPopover() }
+        // v16.32 · @objc nonisolated + MainActor.assumeIsolated
+        // swift 6.3 严格 actor 隔离下 @MainActor class 的 @objc 方法被 NSTrackingArea
+        // 从 nonisolated AppKit 上下文调用时静默 drop · 必须 nonisolated 桥接
+        @objc nonisolated public func mouseEntered(with event: NSEvent) {
+            MainActor.assumeIsolated {
+                self.textView?.window?.acceptsMouseMovedEvents = true
+                self.handleHover(event)
+            }
+        }
+        @objc nonisolated public func mouseMoved(with event: NSEvent) {
+            MainActor.assumeIsolated { self.handleHover(event) }
+        }
+        @objc nonisolated public func mouseExited(with event: NSEvent) {
+            MainActor.assumeIsolated { self.hideHoverPopover() }
+        }
 
         private func handleHover(_ event: NSEvent) {
             guard let tv = textView,

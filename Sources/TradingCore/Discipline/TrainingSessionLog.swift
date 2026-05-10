@@ -98,6 +98,29 @@ public struct TrainingSessionLog: Sendable, Equatable, Codable {
         return (count, firstIsWin)
     }
 
+    // MARK: - v16.27 · 弱项加练推荐（score sheet ⌘⌥W + history panel 加练 row 共用）
+
+    /// 找出全局最弱 pattern · 与 v16.19 history panel weakPatternRecommendRow 同算法
+    /// - Parameters:
+    ///   - minSessions: 最少训练次数门槛（默认 3 · 样本不足不推荐）
+    ///   - threshold: 均分门槛（默认 70 · ≥ 此分认为已掌握不推荐）
+    /// - Returns: 满足"次数 ≥ minSessions 且均分 < threshold"中均分最低的 pattern · 无满足 → nil
+    public func weakestPattern(minSessions: Int = 3, threshold: Int = 70) -> TrainingScenarioPattern? {
+        let grouped = Dictionary(grouping: sessions.filter { $0.scenarioPattern != nil },
+                                 by: { $0.scenarioPattern! })
+        var weakest: (pattern: TrainingScenarioPattern, avg: Int)?
+        for (pat, list) in grouped where list.count >= minSessions {
+            let scores = list.compactMap { score(for: $0.id)?.totalScore }
+            guard !scores.isEmpty else { continue }
+            let avg = scores.reduce(0, +) / scores.count
+            guard avg < threshold else { continue }
+            if weakest == nil || avg < weakest!.avg {
+                weakest = (pat, avg)
+            }
+        }
+        return weakest?.pattern
+    }
+
     // MARK: - v16.13 · 同形态历史对比（score sheet 显示提升趋势）
 
     /// 计算 sessionID 对应同形态的历史对比（不含 sessionID 自己）

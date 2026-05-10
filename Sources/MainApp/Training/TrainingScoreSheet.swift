@@ -23,6 +23,8 @@ struct TrainingScoreSheet: View {
     var onRetrain: ((TrainingScenarioPattern) -> Void)? = nil
     /// v16.13 · 同形态历史对比（caller 传 viewModel.log.patternComparison(for:) · 无历史时为 nil 不显示）
     var comparison: PatternComparison? = nil
+    /// v16.27 · 全局最弱 pattern（caller 传 viewModel.log.weakestPattern() · 无满足时 nil 不显示按钮）
+    var weakestPattern: TrainingScenarioPattern? = nil
 
     @State private var showViolations: Bool = false
     /// v15.23 batch150 · 复制/截图反馈提示（3 秒自动清空）
@@ -81,6 +83,17 @@ struct TrainingScoreSheet: View {
                     }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .tooltip("随机选一种形态（⌘⇧R · 避开当前形态）· 探索弱项")
+                }
+                // v16.27 · 加练全局最弱形态（与 v16.19 history panel weakPatternRecommendRow 同算法）
+                if let cb = onRetrain, let weakest = weakestPattern {
+                    Button {
+                        onDismiss()
+                        cb(weakest)
+                    } label: {
+                        Label("练最弱", systemImage: "exclamationmark.triangle.fill")
+                    }
+                    .keyboardShortcut("w", modifiers: [.command, .option])
+                    .tooltip("加练历史最弱形态（⌘⌥W · \(weakest.emoji) \(weakest.displayName)）· 均分 < 70 + 训练 ≥ 3 次")
                 }
                 // v15.23 batch133 · 复制本次分析为 markdown（trader 求点评 / 笔记）
                 Button {

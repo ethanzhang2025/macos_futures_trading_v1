@@ -64,7 +64,8 @@ struct TrainingWindow: View {
                                onRetrain: { pattern in
                                    viewModel.pendingRetrainPattern = pattern
                                },
-                               comparison: viewModel.log.patternComparison(for: wrapper.session.id))
+                               comparison: viewModel.log.patternComparison(for: wrapper.session.id),
+                               weakestPattern: viewModel.log.weakestPattern())
         }
         .sheet(isPresented: $showHelpSheet) {
             helpSheet

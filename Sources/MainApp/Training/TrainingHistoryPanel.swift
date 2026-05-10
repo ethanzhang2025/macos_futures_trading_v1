@@ -99,7 +99,8 @@ struct TrainingHistoryPanel: View {
                                    onRetrain: { pattern in
                                        viewModel.pendingRetrainPattern = pattern
                                    },
-                                   comparison: viewModel.log.patternComparison(for: session.id))
+                                   comparison: viewModel.log.patternComparison(for: session.id),
+                                   weakestPattern: viewModel.log.weakestPattern())
             }
         }
         .alert("清空全部历史？", isPresented: $showClearConfirm) {

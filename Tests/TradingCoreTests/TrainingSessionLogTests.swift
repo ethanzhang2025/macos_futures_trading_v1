@@ -336,4 +336,54 @@ struct TrainingSessionLogTests {
         #expect(PatternComparison.Trend.flat.emoji == "→")
         #expect(PatternComparison.Trend.firstTime.emoji == "✨")
     }
+
+    // MARK: - v16.27 · weakestPattern（score sheet ⌘⌥W 加练最弱形态）
+
+    @Test("v16.27 · weakestPattern · 空 log → nil")
+    func weakestPattern_empty() {
+        let log = TrainingSessionLog()
+        #expect(log.weakestPattern() == nil)
+    }
+
+    @Test("v16.27 · weakestPattern · 单 pattern 但 < 3 次 → nil（样本不足）")
+    func weakestPattern_belowMinSessions() {
+        var log = TrainingSessionLog()
+        log.addSession(sessionWithPattern(.oscillation, final: 100_000))  // 70
+        log.addSession(sessionWithPattern(.oscillation, final: 100_000))  // 70
+        #expect(log.weakestPattern() == nil)
+    }
+
+    @Test("v16.27 · weakestPattern · 单 pattern 均分 ≥ 70 → nil（已掌握）")
+    func weakestPattern_aboveThreshold() {
+        var log = TrainingSessionLog()
+        log.addSession(sessionWithPattern(.uptrend, final: 110_000))  // 100
+        log.addSession(sessionWithPattern(.uptrend, final: 110_000))  // 100
+        log.addSession(sessionWithPattern(.uptrend, final: 110_000))  // 100
+        #expect(log.weakestPattern() == nil)
+    }
+
+    @Test("v16.27 · weakestPattern · 多 pattern 选均分最低（同时 ≥ 3 次 + < 70）")
+    func weakestPattern_picksLowestAvg() {
+        var log = TrainingSessionLog()
+        // .oscillation：3 次均分 60（弱 · 应选）
+        for _ in 0..<3 {
+            log.addSession(sessionWithPattern(.oscillation, final: 100_000, errors: 1))  // 70 - 10 = 60
+        }
+        // .breakout：3 次均分 65（更强 · 不选）
+        for _ in 0..<3 {
+            log.addSession(sessionWithPattern(.breakout, final: 100_500, errors: 1))    // 0.5% → 25 + 40 = 65
+        }
+        #expect(log.weakestPattern() == .oscillation)
+    }
+
+    @Test("v16.27 · weakestPattern · 自定义门槛（minSessions=2 · threshold=80）")
+    func weakestPattern_customThresholds() {
+        var log = TrainingSessionLog()
+        log.addSession(sessionWithPattern(.fakeBreakout, final: 100_000))  // 70（0% → 20 + 纪律 50）
+        log.addSession(sessionWithPattern(.fakeBreakout, final: 100_000))  // 70
+        // 默认门槛（≥ 3 次）→ nil
+        #expect(log.weakestPattern() == nil)
+        // 放宽到 ≥ 2 次 + < 80 → 应选 fakeBreakout（均分 70 < 80）
+        #expect(log.weakestPattern(minSessions: 2, threshold: 80) == .fakeBreakout)
+    }
 }

@@ -508,10 +508,20 @@ struct TrainingScoreSheet: View {
 
             HStack(alignment: .top, spacing: 14) {
                 VStack(spacing: 5) {
-                    ForEach(sub.ordered, id: \.dimension) { entry in
-                        subScoreRow(dimension: entry.dimension,
-                                    score: entry.score,
-                                    isWeakest: entry.dimension == sub.weakest)
+                    ForEach(Array(sub.ordered.enumerated()), id: \.element.dimension) { idx, entry in
+                        // v16.197 · 行号 chip 在 row 左侧（与 v16.168 数字键 1-5 配套 · trader 一眼看可按数字键）
+                        HStack(spacing: 4) {
+                            Text("\(idx + 1)")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.secondary.opacity(0.6))
+                                .frame(width: 12, alignment: .center)
+                                .padding(.vertical, 1)
+                                .background(RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.secondary.opacity(0.08)))
+                            subScoreRow(dimension: entry.dimension,
+                                        score: entry.score,
+                                        isWeakest: entry.dimension == sub.weakest)
+                        }
                     }
                 }
                 // v16.14 · 五边形雷达图（与 5 子条同步 · trader 一眼看出形状偏弱方向）

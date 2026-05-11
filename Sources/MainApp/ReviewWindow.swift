@@ -122,7 +122,7 @@ struct ReviewWindow: View {
             ("跳主图 button (batch205)", "选中合约后 → 在主图查看（chart.line 图标 · 仅 filter 时显示）"),
             ("Toast 反馈", "切换后顶部提示新区间数据量"),
         ]),
-        ("📊 13 张图（v15.99 闭环）", [
+        ("📊 14 张图（v16.38 含心理风险洞察）", [
             ("月度盈亏", "按月聚合 · 总 PnL 趋势"),
             ("分布直方", "PnL 桶 · 盈/亏笔数对比"),
             ("胜率曲线", "累积胜率 · 终值"),
@@ -136,6 +136,7 @@ struct ReviewWindow: View {
             ("日历热力图（v15.23 第 11）", "每日盈亏 · 周历网格"),
             ("时长×盈亏（v15.23 第 12）", "散点图 · 多绿空蓝"),
             ("策略矩阵（v15.99 第 13）", "setup 标签 group by · 个性化策略盈亏归因 · 含 (未标) 桶"),
+            ("心理风险洞察（v16.38 第 14）", "最弱心理 emoji + 出现次数 + 中文改进建议（与第 10 张分布图互补）"),
         ]),
         ("🔍 全屏放大", [
             ("点击 chartCard", "全屏放大查看（trader 专注分析）"),
@@ -146,7 +147,7 @@ struct ReviewWindow: View {
         ("📝 报告导出（v15.23 batch196）", [
             ("⌘E", "导出本月 markdown 月报"),
             ("⌘⌥E", "导出最近 7 天周报（与月报互补 · trader 周复盘节奏）"),
-            ("⌘⇧E", "导出全部 13 张 chartCard PNG 到目录"),
+            ("⌘⇧E", "导出全部 14 张 chartCard PNG 到目录"),
         ]),
     ]
 
@@ -367,7 +368,85 @@ struct ReviewWindow: View {
             .init(title: L("策略矩阵"),
                   subtitle: "SetupMatrix · \(s.setupMatrix.cells.count) 类 · 含 \"(未标)\" 桶",
                   content: AnyView(setupMatrixView(s.setupMatrix))),
+            // v16.38 · 第 14 图 · 心理风险洞察（最弱心理 + 改进建议 · 月底 trader 改进焦点）
+            .init(title: L("心理风险洞察"),
+                  subtitle: weakestPsychSubtitle(s.psychTagCounts),
+                  content: AnyView(psychInsightView(s.psychTagCounts))),
         ]
+    }
+
+    // MARK: - v16.38 · 心理风险洞察（第 14 张卡 · 最弱心理 + 中文 advice）
+
+    private func weakestPsychSubtitle(_ counts: [(tag: EmotionAutoTagger.Tag, count: Int)]) -> String {
+        guard let w = counts.filter({ $0.count > 0 }).max(by: { $0.count < $1.count }) else {
+            return "无负面标签 · 心态稳定 ✓"
+        }
+        return "最弱：\(w.tag.displayName) × \(w.count)"
+    }
+
+    @ViewBuilder
+    private func psychInsightView(_ counts: [(tag: EmotionAutoTagger.Tag, count: Int)]) -> some View {
+        let weakest = counts.filter { $0.count > 0 }.max(by: { $0.count < $1.count })
+        if let w = weakest {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Text(psychEmoji(w.tag)).font(.system(size: 36))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(w.tag.displayName)
+                            .font(.title3).fontWeight(.semibold)
+                            .foregroundColor(.orange)
+                        Text("出现 \(w.count) 次 · 月度最高频负面心理")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                }
+                Divider()
+                HStack(alignment: .top, spacing: 6) {
+                    Text("💡").font(.system(size: 16))
+                    Text(psychAdvice(w.tag))
+                        .font(.system(size: 12))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .background(Color.orange.opacity(0.10))
+                .cornerRadius(6)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(.green)
+                Text("无负面心理标签")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.green)
+                Text("保持纪律 · 心态稳定 ✓")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func psychEmoji(_ t: EmotionAutoTagger.Tag) -> String {
+        switch t {
+        case .revengeAfterLosses: return "💢"
+        case .overconfident:      return "🚀"
+        case .oversize:           return "💥"
+        case .lossOfControl:      return "😱"
+        case .scalp:              return "⚡"
+        case .heldTooLong:        return "🐢"
+        }
+    }
+
+    private func psychAdvice(_ t: EmotionAutoTagger.Tag) -> String {
+        switch t {
+        case .revengeAfterLosses: return "连败后冷静 30 分钟再下单 · 设当日亏损上限 · 不报复加仓"
+        case .overconfident:      return "连胜后减 50% 仓位 · 警惕过度自信导致大亏 · 守纪律"
+        case .oversize:           return "单笔止损 ≤ 2% · 控制最大风险敞口 · 避免豪赌仓位"
+        case .lossOfControl:      return "止损纪律执行 · 单笔亏损达预设值即平仓 · 不抱侥幸"
+        case .scalp:              return "评估短炒胜率 · 长期看交易成本可能侵蚀利润 · 提高单笔目标"
+        case .heldTooLong:        return "评估长持是否符合策略 · 警惕逻辑变化未及时止损 · 设最大持仓时长"
+        }
     }
 
     private func header(_ s: ReviewSummary) -> some View {
@@ -505,7 +584,7 @@ struct ReviewWindow: View {
                     .tooltip("生成最近 7 天 Markdown 周报告（⌘⌥E · trader 周复盘节奏）")
                     .keyboardShortcut("e", modifiers: [.command, .option])
                 Button("导出全部图…") { exportAllChartCards(s) }
-                    .tooltip("一键导出全部 13 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v15.99 加策略矩阵）")
+                    .tooltip("一键导出全部 14 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v16.38 加心理风险洞察）")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 // v15.21 batch114 · ⌘R 重新加载复盘数据（trader 实时数据更新或纠错重算）
                 Button {
@@ -539,7 +618,7 @@ struct ReviewWindow: View {
         dateFmt.dateFormat = "yyyyMMdd_HHmm"
         let timestamp = dateFmt.string(from: Date())
 
-        // 13 张图 · 与 content() 内 chartCard 顺序一致（v15.99 加策略矩阵）
+        // 14 张图 · 与 content() 内 chartCard 顺序一致（v15.99 + v16.38）
         let cards: [(title: String, view: AnyView)] = [
             ("月度盈亏", AnyView(monthlyPnLChart(s.monthlyPnL))),
             ("分布直方", AnyView(pnlDistributionChart(s.pnlDistribution))),
@@ -554,6 +633,7 @@ struct ReviewWindow: View {
             ("日历热力图", AnyView(dailyPnLHeatmap(s.dailyPnL))),
             ("时长×盈亏", AnyView(holdingPnLScatter(s.closedPositions))),
             ("策略矩阵", AnyView(setupMatrixView(s.setupMatrix))),   // v15.99
+            ("心理风险洞察", AnyView(psychInsightView(s.psychTagCounts))),  // v16.38
         ]
 
         var failedCount = 0

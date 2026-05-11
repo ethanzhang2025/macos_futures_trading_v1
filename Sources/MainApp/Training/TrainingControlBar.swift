@@ -430,7 +430,21 @@ struct TrainingControlBar: View {
         if viewModel.book.enabledRules.isEmpty {
             return "先启用至少 1 条纪律规则才能开始训练"
         }
-        return "已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
+        var hint = "已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
+        // v16.132 · 上次训练距今（trader 看间隔 · 避免长时间不练）
+        if let last = viewModel.log.sessions.map(\.endedAt).max() {
+            hint += " · 上次 \(timeSinceText(last))"
+        }
+        return hint
+    }
+
+    /// v16.132 · 友好时间差（"刚刚" / "N 分钟前" / "N 小时前" / "N 天前"）
+    private func timeSinceText(_ date: Date) -> String {
+        let secs = Date().timeIntervalSince(date)
+        if secs < 60 { return "刚刚" }
+        if secs < 3600 { return "\(Int(secs / 60)) 分钟前" }
+        if secs < 86400 { return "\(Int(secs / 3600)) 小时前" }
+        return "\(Int(secs / 86400)) 天前"
     }
 
     /// v16.104 · 今日 vs 昨日次数对比 chip（与 weekly/monthly 同模式 · ControlBar 短时反馈）

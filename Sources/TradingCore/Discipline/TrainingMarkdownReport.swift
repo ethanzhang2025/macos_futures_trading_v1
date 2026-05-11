@@ -118,6 +118,9 @@ public enum TrainingMarkdownReport {
         // v16.161 · 月报最强 session 引用（trader 月度回顾本月 best · 强化正向反馈）
         md += monthlyBestSessionMarkdown(sessions: sessions, log: log)
 
+        // v16.165 · 月报最弱 session 引用（trader 月度看 worst 对照学习）
+        md += monthlyWorstSessionMarkdown(sessions: sessions, log: log)
+
         // v16.118 · 训练时长分布（短/中/长 · trader 看专注时长习惯）
         md += durationDistributionMarkdown(sessions: sessions)
 
@@ -202,6 +205,42 @@ public enum TrainingMarkdownReport {
             let marker = dim == worst ? " ⚠ 最弱" : ""
             md += "| \(dim.emoji) \(dim.displayName) | \(avg)\(marker) |\n"
         }
+        md += "\n"
+        return md
+    }
+
+    /// v16.165 · 月报最弱 session 引用 · trader 月度看 worst 对照学习（与 best 对比）
+    /// 找 totalScore 最低的 session（同分取最近）· best/worst 同分时跳过（避免重复）
+    private static func monthlyWorstSessionMarkdown(sessions: [TrainingSession],
+                                                     log: TrainingSessionLog) -> String {
+        let scored = sessions.compactMap { s -> (TrainingSession, TrainingScore)? in
+            guard let sc = log.score(for: s.id) else { return nil }
+            return (s, sc)
+        }
+        guard scored.count >= 2 else { return "" }   // 至少 2 个才有 worst 概念
+        let sortedDesc = scored.sorted {
+            if $0.1.totalScore != $1.1.totalScore { return $0.1.totalScore > $1.1.totalScore }
+            return $0.0.endedAt > $1.0.endedAt
+        }
+        // best 与 worst 同分则跳过（数据一致 · 不重复）
+        guard sortedDesc.first!.1.totalScore != sortedDesc.last!.1.totalScore else { return "" }
+        let worst = sortedDesc.last!
+        let s = worst.0
+        let sc = worst.1
+        var md = "## 本月最弱 session · \(sc.grade.emoji) \(sc.totalScore) 分\n\n"
+        md += "- 场景：**\(s.scenarioName.isEmpty ? "未命名" : s.scenarioName)**"
+        if let pat = s.scenarioPattern {
+            md += " · \(pat.emoji) \(pat.displayName)"
+        }
+        md += "\n"
+        let pnlPct = (s.pnlPercent as NSDecimalNumber).doubleValue
+        md += String(format: "- 盈亏：%+.2f%% · 总分 %d · %@ 级\n", pnlPct, sc.totalScore, sc.grade.displayName)
+        if let sub = sc.subScores {
+            md += "- 5 维："
+            md += sub.ordered.map { "\($0.dimension.emoji) \($0.score)" }.joined(separator: " / ")
+            md += "\n"
+        }
+        md += "- 💡 复盘建议：对照本月最强 session 找差异 · 找出可复制的成功模式\n"
         md += "\n"
         return md
     }

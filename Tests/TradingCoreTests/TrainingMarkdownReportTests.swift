@@ -451,6 +451,27 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("emoji 日历"))
     }
 
+    // MARK: - v16.165 · 月报最弱 session 引用
+
+    @Test("v16.165 · ≥ 2 session 且分数有差异 → 输出本月最弱 session 章节")
+    func monthlyWorstSessionSection() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "强单", pnl: 8000))
+        log.addSession(makeSession(scenarioName: "弱单", pnl: -8000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("本月最弱 session"))
+        #expect(md.contains("弱单"))
+        #expect(md.contains("复盘建议"))
+    }
+
+    @Test("v16.165 · 仅 1 session 时不输出最弱章节（best 即 worst 无意义）")
+    func monthlyWorstSessionOnlyOne() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "唯一", pnl: 5000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(!md.contains("本月最弱"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

@@ -409,9 +409,18 @@ struct TrainingHistoryPanel: View {
                              color: .accentColor)
                 }
                 // v16.80 · 连训天数（与 ControlBar 🔥 chip 同算法 · ≥ 2 才显示）
+                // v16.84 · 同步 milestone emoji 升级（与 ControlBar v16.83 一致）
                 let dayStreak = viewModel.log.consecutiveTrainingDays()
                 if dayStreak >= 2 {
-                    statLine("🔥 连训",
+                    let emoji: String = {
+                        switch dayStreak {
+                        case 30...:  return "🏆"
+                        case 14...:  return "🚀"
+                        case 7...:   return "🔥🔥"
+                        default:     return "🔥"
+                        }
+                    }()
+                    statLine("\(emoji) 连训",
                              value: "\(dayStreak) 天",
                              color: .red)
                 }

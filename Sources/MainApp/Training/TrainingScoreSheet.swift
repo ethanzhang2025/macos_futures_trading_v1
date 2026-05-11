@@ -31,6 +31,8 @@ struct TrainingScoreSheet: View {
     @State private var actionFeedback: String? = nil
     /// v15.23 batch152 · grade emoji 放大动画起始 scale（0.5 → 1.0 弹簧）
     @State private var emojiScale: CGFloat = 0.5
+    /// v16.56 · 5 维主分点击展开 drilldown · nil = 全部折叠 · 单选模式
+    @State private var expandedDim: TrainingSubScores.Dimension? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -147,9 +149,11 @@ struct TrainingScoreSheet: View {
     }
 
     /// v16.6 · subScores 注入 200pt 五维区域 · violations 折叠展开 180pt · v16.13 · comparison 加 50pt
+    /// v16.56 · 5 维 drilldown 展开 +50pt（最长 efficiency/risk 公式两行）
     private var sheetHeight: CGFloat {
         var h: CGFloat = 480
         if score.subScores != nil { h += 200 }
+        if expandedDim != nil { h += 50 }
         if showViolations { h += 180 }
         if let c = comparison, c.priorCount > 0 { h += 50 }
         return h
@@ -433,25 +437,96 @@ struct TrainingScoreSheet: View {
 
     private func subScoreRow(dimension: TrainingSubScores.Dimension,
                              score: Int, isWeakest: Bool) -> some View {
-        HStack(spacing: 8) {
-            Text("\(dimension.emoji) \(dimension.displayName)")
-                .font(.system(size: 11))
-                .frame(width: 70, alignment: .leading)
-                .foregroundColor(isWeakest ? .orange : .primary)
-            ProgressView(value: Double(score), total: 100)
-                .tint(subScoreColor(score))
-            Text("\(score)")
-                .font(.system(size: 11, design: .monospaced))
-                .frame(width: 28, alignment: .trailing)
-                .foregroundColor(subScoreColor(score))
-            if isWeakest {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(.orange)
+        let isExpanded = expandedDim == dimension
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Text("\(dimension.emoji) \(dimension.displayName)")
+                    .font(.system(size: 11))
+                    .frame(width: 70, alignment: .leading)
+                    .foregroundColor(isWeakest ? .orange : .primary)
+                ProgressView(value: Double(score), total: 100)
+                    .tint(subScoreColor(score))
+                Text("\(score)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .frame(width: 28, alignment: .trailing)
+                    .foregroundColor(subScoreColor(score))
+                if isWeakest {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
+                }
+                // v16.56 · drilldown chevron · 展开本次具体计算
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 10)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    expandedDim = isExpanded ? nil : dimension
+                }
+            }
+            // v16.51 · hover 显示该维度计算公式（trader 学习评分逻辑透明度）
+            .tooltip(dimensionFormulaHint(dimension))
+
+            // v16.56 · 展开行：本次具体数据计算（与公式 hint 配套 · hover 学公式 / 点击看本次数据）
+            if isExpanded {
+                Text(dimensionBreakdownText(dimension))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 78)
+                    .padding(.trailing, 4)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.secondary.opacity(0.07))
+                    .cornerRadius(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        // v16.51 · hover 显示该维度计算公式（trader 学习评分逻辑透明度）
-        .tooltip(dimensionFormulaHint(dimension))
+    }
+
+    /// v16.56 · 本次该维度具体数据计算字符串（基于 TrainingScorer.subScoreBreakdown · 防漂移）
+    private func dimensionBreakdownText(_ d: TrainingSubScores.Dimension) -> String {
+        let b = TrainingScorer.subScoreBreakdown(session)
+        switch d {
+        case .pnl:
+            return String(format: "本次盈亏率 %+.2f%% → v1 阶梯 = %d/50 → ×2 = %d/100\n(>5%%=50 / >2%%=40 / >0=30 / 0=20 / >-2%%=10 / ≤-2%%=0)",
+                          b.pnlPct, b.pnlV1, b.pnlV1 * 2)
+        case .discipline:
+            return String(format: "本次 %d 违规 + %d 警告 → 50 - %d×10 - %d×3 = %d/50 → ×2 = %d/100",
+                          b.errorCount, b.warningCount,
+                          b.errorCount, b.warningCount,
+                          b.disciplineV1, b.disciplineV1 * 2)
+        case .winRate:
+            if b.pairCount == 0 {
+                return "本次 \(b.tradeCount) 笔交易 · 0 完整配对 → 中性 50"
+            }
+            let pct = Double(b.winCount) / Double(b.pairCount) * 100
+            return String(format: "本次 %d 笔交易 → %d 配对 · %d 盈利 → %d/%d × 100 = %.0f",
+                          b.tradeCount, b.pairCount, b.winCount,
+                          b.winCount, b.pairCount, pct)
+        case .risk:
+            if b.pairCount == 0 || b.initialBalance == 0 {
+                return "本次无完整配对 / 无初始资金 → 中性 50"
+            }
+            if b.worstLossPct >= 5 {
+                return String(format: "本次最大单笔亏损 ¥%.0f / 初始 ¥%.0f = %.2f%% ≥ 5%% → 0",
+                              b.worstLoss, b.initialBalance, b.worstLossPct)
+            }
+            let s = Int(round((1.0 - b.worstLossPct / 5.0) * 100))
+            return String(format: "本次最大单笔亏损 ¥%.0f / 初始 ¥%.0f = %.2f%% → (1 - %.2f/5) × 100 = %d",
+                          b.worstLoss, b.initialBalance, b.worstLossPct, b.worstLossPct, s)
+        case .efficiency:
+            if b.pairCount == 0 || b.initialBalance == 0 {
+                return "本次无完整配对 / 无初始资金 → 中性 50"
+            }
+            let clamped = max(-0.5, min(0.5, b.avgPairPnLPct))
+            let s = Int(round((clamped + 0.5) * 100))
+            return String(format: "本次配对总盈亏 ¥%+.0f / %d 配对 / 初始 ¥%.0f = %+.3f%% → (clamp±0.5%% + 0.5) × 100 = %d",
+                          b.totalPairPnL, b.pairCount, b.initialBalance, b.avgPairPnLPct, s)
+        }
     }
 
     /// v16.51 · 5 维主分计算公式中文说明（trader hover 即学）

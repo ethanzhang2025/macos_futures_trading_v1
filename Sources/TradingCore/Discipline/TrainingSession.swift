@@ -268,6 +268,56 @@ public enum TrainingScorer {
         return Int(round((clamped + 0.5) * 100))
     }
 
+    // MARK: - v16.56 · 5 维主分 drilldown 原始数据（trader 点击主分行展开看本次具体计算）
+
+    /// 5 维评分本次计算原始数据（view 层展开行渲染）· 不含格式化，纯数字。
+    public struct SubScoreBreakdown: Sendable, Equatable {
+        public let pnlPct: Double           // session.pnlPercent
+        public let pnlV1: Int               // pnlSubScore 0-50
+        public let errorCount: Int
+        public let warningCount: Int
+        public let disciplineV1: Int        // disciplineSubScore 0-50
+        public let tradeCount: Int          // session.trades.count
+        public let pairCount: Int
+        public let winCount: Int
+        public let worstLoss: Double        // 单笔最大亏损（正数 · 无亏损 = 0）
+        public let worstLossPct: Double     // 占初始资金 %
+        public let totalPairPnL: Double     // 配对总盈亏
+        public let avgPairPnLPct: Double    // 平均每笔 pnl% （未 clamp）
+        public let initialBalance: Double
+    }
+
+    /// 计算 drilldown 数据（与 computeSubScores 同源 · 防漂移）
+    public static func subScoreBreakdown(_ session: TrainingSession) -> SubScoreBreakdown {
+        let pairs = closedPairs(from: session.trades)
+        let errors = session.violations.filter { $0.severity == .error }.count
+        let warnings = session.violations.filter { $0.severity == .warning }.count
+        let principal = (session.initialBalance as NSDecimalNumber).doubleValue
+        let pairPnLs = pairs.map { ($0.pnl as NSDecimalNumber).doubleValue }
+        let worstLoss = max(0, -(pairPnLs.min() ?? 0))
+        let worstLossPct = principal > 0 ? worstLoss / principal * 100 : 0
+        let total = pairPnLs.reduce(0, +)
+        let avgPct: Double = {
+            guard !pairs.isEmpty, principal > 0 else { return 0 }
+            return total / Double(pairs.count) / principal * 100
+        }()
+        return SubScoreBreakdown(
+            pnlPct: (session.pnlPercent as NSDecimalNumber).doubleValue,
+            pnlV1: pnlSubScore(session),
+            errorCount: errors,
+            warningCount: warnings,
+            disciplineV1: disciplineSubScore(session),
+            tradeCount: session.trades.count,
+            pairCount: pairs.count,
+            winCount: pairs.filter { $0.pnl > 0 }.count,
+            worstLoss: worstLoss,
+            worstLossPct: worstLossPct,
+            totalPairPnL: total,
+            avgPairPnLPct: avgPct,
+            initialBalance: principal
+        )
+    }
+
     static func weaknessAdvice(for dim: TrainingSubScores.Dimension, score: Int) -> String {
         switch dim {
         case .pnl:

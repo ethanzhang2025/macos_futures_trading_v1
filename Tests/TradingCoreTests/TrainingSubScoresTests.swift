@@ -329,4 +329,66 @@ struct TrainingSubScoresTests {
         let str = String(data: data, encoding: .utf8) ?? ""
         #expect(!str.contains("subScores"))
     }
+
+    // MARK: - v16.56 · subScoreBreakdown drilldown 数据
+
+    @Test("subScoreBreakdown · 空 session · 全部 0/中性")
+    func test_breakdown_emptySession() {
+        let s = session(initial: 100_000, final: 100_000)
+        let b = TrainingScorer.subScoreBreakdown(s)
+        #expect(b.pnlPct == 0)
+        #expect(b.pnlV1 == 20)            // 0 → 20 阶梯
+        #expect(b.errorCount == 0)
+        #expect(b.warningCount == 0)
+        #expect(b.disciplineV1 == 50)
+        #expect(b.tradeCount == 0)
+        #expect(b.pairCount == 0)
+        #expect(b.winCount == 0)
+        #expect(b.worstLoss == 0)
+        #expect(b.totalPairPnL == 0)
+        #expect(b.initialBalance == 100_000)
+    }
+
+    @Test("subScoreBreakdown · 1 盈利 + 1 亏损 · 配对/胜率/最大亏损 计算正确")
+    func test_breakdown_mixedPairs() {
+        let trades: [TradeRecord] = [
+            openTrade("a", price: 100, volume: 1),
+            closeTrade("b", price: 110, volume: 1),  // +10
+            openTrade("c", price: 100, volume: 1),
+            closeTrade("d", price: 95, volume: 1),   // -5
+        ]
+        let s = session(initial: 1000, final: 1005, trades: trades)
+        let b = TrainingScorer.subScoreBreakdown(s)
+        #expect(b.pairCount == 2)
+        #expect(b.winCount == 1)
+        #expect(b.worstLoss == 5)
+        #expect(b.worstLossPct == 0.5)    // 5/1000*100
+        #expect(b.totalPairPnL == 5)
+        #expect(b.tradeCount == 4)
+    }
+
+    @Test("subScoreBreakdown · 违规计数与 v1 sub score 一致")
+    func test_breakdown_violationCount() {
+        let s = session(errors: 2, warnings: 3)
+        let b = TrainingScorer.subScoreBreakdown(s)
+        #expect(b.errorCount == 2)
+        #expect(b.warningCount == 3)
+        // 50 - 2×10 - 3×3 = 21
+        #expect(b.disciplineV1 == 21)
+    }
+
+    @Test("subScoreBreakdown · 与 computeSubScores 同源（防漂移）")
+    func test_breakdown_consistentWithSubScores() {
+        let trades: [TradeRecord] = [
+            openTrade("a", price: 100, volume: 1),
+            closeTrade("b", price: 102, volume: 1),
+        ]
+        let s = session(initial: 1000, final: 1002, trades: trades, errors: 1)
+        let b = TrainingScorer.subScoreBreakdown(s)
+        let sub = TrainingScorer.computeSubScores(s)
+        // discipline v1 ×2 必须等于 sub.discipline
+        #expect(b.disciplineV1 * 2 == sub.discipline)
+        // pnl v1 ×2 必须等于 sub.pnl
+        #expect(b.pnlV1 * 2 == sub.pnl)
+    }
 }

@@ -209,17 +209,21 @@ struct OptionWindow: View {
 
     private var optionChainTable: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 表头
+            // 表头（v17.35 C2 加 Vega / Rho 两列 · 5 Greeks 完整）
             HStack(spacing: 0) {
                 cellHeader("CALL Δ", w: 60)
                 cellHeader("CALL Γ", w: 60)
+                cellHeader("CALL ν", w: 60)
                 cellHeader("CALL Θ/天", w: 70)
+                cellHeader("CALL ρ", w: 60)
                 cellHeader("CALL 理论", w: 70)
                 cellHeader("STRIKE", w: 70).background(Color.secondary.opacity(0.12))
                 cellHeader("PUT 理论", w: 70)
                 cellHeader("PUT Δ", w: 60)
                 cellHeader("PUT Γ", w: 60)
+                cellHeader("PUT ν", w: 60)
                 cellHeader("PUT Θ/天", w: 70)
+                cellHeader("PUT ρ", w: 60)
                 Spacer()
             }
             .background(Color.secondary.opacity(0.06))
@@ -257,7 +261,10 @@ struct OptionWindow: View {
         return HStack(spacing: 0) {
             cellNumeric(cGreeks.delta, fmt: "%.3f", w: 60, color: cellColor(forStrike: strikeD, isCall: true, atSpot: spotPrice))
             cellNumeric(cGreeks.gamma, fmt: "%.4f", w: 60)
+            // v17.35 C2 · Vega 每 1% 波动 · Rho 每 1% 利率（compute 输出按 100% · 这里 / 100 转 per-1%）
+            cellNumeric(cGreeks.vega / 100, fmt: "%.3f", w: 60, color: .purple.opacity(0.8))
             cellNumeric(cGreeks.theta / 365, fmt: "%.2f", w: 70, color: .red.opacity(0.8))
+            cellNumeric(cGreeks.rho / 100, fmt: "%.4f", w: 60, color: .blue.opacity(0.7))
             cellNumeric(cPrice, fmt: "%.2f", w: 70, color: .primary)
             cellNumeric(strikeD, fmt: "%.0f", w: 70,
                         color: .primary, bold: true)
@@ -265,7 +272,9 @@ struct OptionWindow: View {
             cellNumeric(pPrice, fmt: "%.2f", w: 70, color: .primary)
             cellNumeric(pGreeks.delta, fmt: "%.3f", w: 60, color: cellColor(forStrike: strikeD, isCall: false, atSpot: spotPrice))
             cellNumeric(pGreeks.gamma, fmt: "%.4f", w: 60)
+            cellNumeric(pGreeks.vega / 100, fmt: "%.3f", w: 60, color: .purple.opacity(0.8))
             cellNumeric(pGreeks.theta / 365, fmt: "%.2f", w: 70, color: .red.opacity(0.8))
+            cellNumeric(pGreeks.rho / 100, fmt: "%.4f", w: 60, color: .blue.opacity(0.7))
             Spacer()
         }
         .frame(height: 24)

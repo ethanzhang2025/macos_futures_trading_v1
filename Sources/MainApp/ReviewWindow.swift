@@ -337,7 +337,8 @@ struct ReviewWindow: View {
         }
     }
 
-    /// v16.69 · 15 张图分类 chip bar · 4 分类（盈亏/胜率/时段/策略）· 点击跳到首张
+    /// v16.69 · 15 张图分类 chip bar · 5 分类（盈亏/胜率/时段/策略/心理）· 点击跳到首张
+    /// v16.71 · 加 ⌘⇧1-5 键盘快捷键（trader 键盘流 · 不离手）
     @ViewBuilder
     private func chartNavigationBar(_ s: ReviewSummary) -> some View {
         let total = reviewCardSpecs(s).count
@@ -367,6 +368,30 @@ struct ReviewWindow: View {
             .padding(.vertical, 6)
         }
         .frame(height: 32)
+        // v16.71 · 隐形 button 持 ⌘⇧1-5 快捷键 · trader 键盘流跳分类
+        .background(navKeyboardShortcuts)
+    }
+
+    /// v16.71 · 5 分类 ⌘⇧1-5 键盘快捷键（与 chartNavigationBar chip 同 5 类）
+    @ViewBuilder
+    private var navKeyboardShortcuts: some View {
+        Group {
+            Button("") { pendingScrollChartIdx = 0 }
+                .keyboardShortcut("1", modifiers: [.command, .shift])
+                .opacity(0)
+            Button("") { pendingScrollChartIdx = 2 }
+                .keyboardShortcut("2", modifiers: [.command, .shift])
+                .opacity(0)
+            Button("") { pendingScrollChartIdx = 4 }
+                .keyboardShortcut("3", modifiers: [.command, .shift])
+                .opacity(0)
+            Button("") { pendingScrollChartIdx = 3 }
+                .keyboardShortcut("4", modifiers: [.command, .shift])
+                .opacity(0)
+            Button("") { pendingScrollChartIdx = 9 }
+                .keyboardShortcut("5", modifiers: [.command, .shift])
+                .opacity(0)
+        }
     }
 
     /// v16.69 · 单个分类 chip · 点击跳到该类首张图

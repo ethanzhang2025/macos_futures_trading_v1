@@ -543,20 +543,26 @@ struct TrainingHistoryPanel: View {
                         .frame(width: 38, alignment: .leading)
                     ForEach(Array(grouped.prefix(3).enumerated()), id: \.offset) { idx, item in
                         let isWorst = (idx == 0)
-                        HStack(spacing: 3) {
-                            Text(item.kind.displayName)
-                                .font(.system(size: 10))
-                            Text("×\(item.count)")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        // v16.46 · 点击 chip → 跳 rules panel 调该规则阈值（与 viewModel 闭环）
+                        Button {
+                            viewModel.pendingJumpToRulesTab = true
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(item.kind.displayName)
+                                    .font(.system(size: 10))
+                                Text("×\(item.count)")
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            }
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background((isWorst ? Color.red : Color.secondary).opacity(0.12))
+                            .foregroundColor(isWorst ? .red : .primary)
+                            .cornerRadius(4)
                         }
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background((isWorst ? Color.red : Color.secondary).opacity(0.12))
-                        .foregroundColor(isWorst ? .red : .primary)
-                        .cornerRadius(4)
+                        .buttonStyle(.plain)
                         .tooltip(isWorst
-                                 ? "累积最常违反 · \(item.kind.displayName) 共 \(item.count) 次（全部历史）· 改进焦点"
-                                 : "\(item.kind.displayName) 累积违反 \(item.count) 次")
+                                 ? "累积最常违反 · \(item.kind.displayName) 共 \(item.count) 次 · 点击跳规则面板调阈值"
+                                 : "\(item.kind.displayName) 累积违反 \(item.count) 次 · 点击跳规则面板")
                     }
                     Spacer()
                 }

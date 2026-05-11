@@ -70,6 +70,13 @@ struct TrainingWindow: View {
         .sheet(isPresented: $showHelpSheet) {
             helpSheet
         }
+        // v16.46 · history panel mostViolatedRules chip 点击 → 切到 rules tab
+        .onChange(of: viewModel.pendingJumpToRulesTab) { newVal in
+            if newVal {
+                tab = .rules
+                DispatchQueue.main.async { viewModel.pendingJumpToRulesTab = false }
+            }
+        }
         .background(
             Group {
                 Button("") { showHelpSheet = true }

@@ -41,6 +41,9 @@ final class TrainingViewModel: ObservableObject {
     /// v15.23 batch132 · 「再练同形态」请求（score sheet → controlBar 监听 · 触发后清回 nil）
     @Published var pendingRetrainPattern: TrainingScenarioPattern? = nil
 
+    /// v16.46 · history panel mostViolatedRules chip 点击 → 跳 rules panel · TrainingWindow 监听清 nil
+    @Published var pendingJumpToRulesTab: Bool = false
+
     /// 训练结束后弹 sheet 用 · endSession 写入 · 关闭 sheet 清空
     @Published var lastFinishedSession: TrainingSession? = nil
     @Published var lastFinishedScore: TrainingScore? = nil

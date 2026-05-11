@@ -224,6 +224,14 @@ struct ReviewWindow: View {
                 }
                 .keyboardShortcut("s", modifiers: [.command])
                 .tooltip("导出全屏视图为 PNG（⌘S）")
+                // v16.149 · ⌘⇧C 复制单图 markdown（base64 PNG embed · trader IM 一键贴）
+                Button {
+                    copyZoomedCardMarkdown(card)
+                } label: {
+                    Label("复制 markdown", systemImage: "doc.on.clipboard")
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .tooltip("复制本图 markdown（含 base64 PNG · ⌘⇧C · 邮件/IM 可见图）")
                 Button("关闭") { zoomedCard = nil }
                     .keyboardShortcut(.cancelAction)
             }
@@ -235,6 +243,20 @@ struct ReviewWindow: View {
         }
         .padding(24)
         .frame(minWidth: 900, idealWidth: 1100, minHeight: 600, idealHeight: 720)
+    }
+
+    /// v16.149 · 复制单图 markdown 到剪贴板（含 base64 PNG · 复用 v16.39 renderChartToBase64Markdown）
+    @MainActor
+    private func copyZoomedCardMarkdown(_ card: ZoomedCard) {
+        guard let seg = renderChartToBase64Markdown(title: card.title, content: card.content) else {
+            Toast.errorBody("复制失败", "ImageRenderer 渲染失败")
+            return
+        }
+        let header = "## \(card.title)\n\n> \(card.subtitle)\n\n"
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(header + seg, forType: .string)
+        Toast.info("已复制 markdown", "\(card.title) · 含 base64 PNG · 邮件/IM 可见图")
     }
 
     /// v15.21 batch123 · 全屏 ←/→ 切前后图（循环边界 · 当前 summary 不变 · 只换 zoomedCard 内容）

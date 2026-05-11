@@ -470,6 +470,20 @@ public struct FormulaEditorWindow: View {
                                     .buttonStyle(.borderless)
                                     .tooltip("一键隐藏全部 warning 类（\(warningKinds.count) 类）· 仅保留 error · 与 v16.158 单类 hide 共享 sessionHiddenLintKinds")
                                 }
+                                // v16.192 · 一键全部 hide（专注代码不看 lint · 阶段性需求）
+                                let allKinds: Set<MaiLangLintWarning.Kind> = Set(allLintWarns.map(\.kind))
+                                let allNotHidden = allKinds.subtracting(sessionHiddenLintKinds)
+                                if allNotHidden.count >= 2 && warningKindsNotYetHidden.count < allNotHidden.count {
+                                    Button {
+                                        sessionHiddenLintKinds.formUnion(allKinds)
+                                        statusMessage = "已隐藏全部 \(allKinds.count) 类 lint · 专注代码模式"
+                                    } label: {
+                                        Label("全部隐藏", systemImage: "eye.slash")
+                                            .font(.system(size: 11))
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .tooltip("一键隐藏全部 \(allKinds.count) 类 lint · 进入专注代码模式 · 「全部恢复」恢复")
+                                }
                             }) {
                                 // v16.154 · 全 filter 隐藏后 · 提示用户点 chip 重开
                                 if sortedLints.isEmpty {

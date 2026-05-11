@@ -84,6 +84,7 @@ struct TrainingControlBar: View {
             } else {
                 // v15.23 batch147 · idle 时显示今日已练（次数 + 总时长）替代单一 idleHint
                 // v16.76 · 加最近 7 天活动 mini bar（trader 看连续训练习惯 · 类 GitHub contributions）
+                // v16.79 · 加连训天数 streak chip（鼓励保持习惯）
                 let today = todayTally
                 if today.count > 0 {
                     HStack(spacing: 6) {
@@ -93,6 +94,7 @@ struct TrainingControlBar: View {
                         Text("今日已练 \(today.count) 次 · \(today.minutes) 分")
                             .font(.caption.monospacedDigit())
                             .foregroundColor(.secondary)
+                        consecutiveDaysChip
                         sevenDayMiniBar
                     }
                 } else {
@@ -100,6 +102,7 @@ struct TrainingControlBar: View {
                         Text(idleHint)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        consecutiveDaysChip
                         sevenDayMiniBar
                     }
                 }
@@ -426,6 +429,37 @@ struct TrainingControlBar: View {
             return "先启用至少 1 条纪律规则才能开始训练"
         }
         return "已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
+    }
+
+    /// v16.79 · 连续训练天数 streak chip（today 必须 ≥ 1 才连 · 中断回到 0 · 鼓励保持习惯）
+    /// 从今天往前数 · 每天 ≥ 1 次训练才算 · 第一次中断停止 · ≥ 2 才显示（1 天不算 streak）
+    @ViewBuilder
+    private var consecutiveDaysChip: some View {
+        let cal = Calendar(identifier: .gregorian)
+        let today = cal.startOfDay(for: Date())
+        var streak = 0
+        for offset in 0..<365 {   // cap 365 防极端
+            guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { break }
+            let nextDay = cal.date(byAdding: .day, value: 1, to: day) ?? day
+            let count = viewModel.log.sessions.filter {
+                $0.startedAt >= day && $0.startedAt < nextDay
+            }.count
+            if count > 0 { streak += 1 } else { break }
+        }
+        if streak >= 2 {
+            HStack(spacing: 2) {
+                Text("🔥")
+                    .font(.system(size: 11))
+                Text("连训 \(streak) 天")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.red)
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color.red.opacity(0.10))
+            .cornerRadius(3)
+            .tooltip("连续 \(streak) 天每天 ≥ 1 次训练 · 保持习惯！")
+        }
     }
 
     /// v16.76 · 最近 7 天活动 mini bar（类 GitHub contributions · trader 看连训习惯）

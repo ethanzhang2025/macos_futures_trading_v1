@@ -1357,3 +1357,81 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 ## 待补（后续 commit 累积）
 
 后续每个 commit 完成功能后追加到对应章节 · 切机前在此清单逐项验收。
+
+---
+
+## v17.10-22 累积验收（2026-05-11 一气呵成 13 commit · TradingView 对齐 A 段 + Shell 完善）
+
+### 画线工具新增 9 种（A 段 71% 完成）
+
+#### v17.10 A3.2 射线（ray）+ 补 v17.8 verticalLine toolbar 按钮
+- [ ] 工具栏看到 ↗ 图标（射线）· hover tooltip "射线（双点定方向...）"
+- [ ] 点 ↗ → 主图点 2 次 → 第 2 点击落后看到嫩绿色线从第 1 点延伸到画布边界
+- [ ] 工具栏看到 ↕ 图标（垂直线 · v17.8 补漏）· 点 → 主图单击 → 蓝色垂直线横跨整价格
+- [ ] 选中射线/垂直线 → Delete 删除 · ⌘D 复制 OK
+
+#### v17.11 A3.1 通道线（regression channel · 线性回归 + ±1σ）
+- [ ] 工具栏看到 📈 图标（通道线）· hover "通道线（双点定 bar 范围...）"
+- [ ] 点 → 主图点 2 次（间隔至少 10 bar）→ 看到粉紫色主线（回归）+ 上下虚线（±1σ）+ 8% 填充
+- [ ] 主线斜率匹配 selected 区间 close 价格趋势 · ±1σ 包围大部分 K 线
+
+#### v17.14 A5.2 箭头标注（arrow）
+- [ ] 工具栏看到实心箭头图标（与射线区分）· hover "箭头（双点定方向 + 三角头...）"
+- [ ] 点 → 主图点 2 次 → 看到橙红色线段 · 末端实心三角箭头
+- [ ] 信号标记复盘可读
+
+#### v17.15 A5.3 价格标签（priceLabel · 单击立即完成）
+- [ ] 工具栏看到 🏷 tag 图标 · hover "价格标签（一点 · 水平虚线 + 醒目价格 chip...）"
+- [ ] 点 → 主图**单击**一次 → 立即出现深蓝色水平虚线 + 右侧深蓝实心 chip 显示价格
+- [ ] 右键 selected priceLabel → 看到"添加标签…" · 输入"关键支撑" → chip 显示"关键支撑 3540.0"
+- [ ] 右键 selected priceLabel → "为此画线创建预警…" 可触发（同 horizontalLine · v17.22）
+
+#### v17.16 A4.1 斐波扩展（fibonacciExtension · 6 ratios > 1.0）
+- [ ] 工具栏看到斜方框图标 · hover "斐波扩展（双点 · 突破后目标位...）"
+- [ ] 点 → 2 点击（如 100 → 200）→ 看到金黄色水平线在 1.0/1.272/1.414/1.618/2/2.618 比例
+- [ ] 1.0 实线 · 其余虚线 · 各线左侧有 "ratio% price" 标签
+
+#### v17.17 A4.3 斐波弧（fibonacciArc）
+- [ ] 工具栏看到 arc 图标 · hover "斐波弧（双点定圆心+半径...）"
+- [ ] 点 → 2 点击 → 看到杏橙色 3 个半圆弧（38.2/50/61.8%）· 朝 B 方向展开 180°
+- [ ] AB 连线显示为细虚线作为半径参考
+
+#### v17.18 A4.5 斐波通道（fibonacciChannel · 7 fib 比例平行线）
+- [ ] 工具栏看到 split 矩形图标 · hover "斐波通道（双点主轴 + 默认 offset...）"
+- [ ] 点 → 2 点击 → 看到桃红色 7 条平行斜线 · 0%/100% 实线 · 中间 5 条 fib 虚线
+- [ ] 右端每条线带 % 标签（0.0% / 23.6% / 38.2% / 50.0% / 61.8% / 78.6% / 100.0%）
+
+### 图表类型 + 主题（A1.1 + A2.1）
+
+#### v17.13 A1.1 Heikin Ashi 平均 K 线
+- [ ] 工具栏看到图表类型 Picker（"K 线" / "Heikin Ashi"）· 默认 "K 线"
+- [ ] 切到 Heikin Ashi → candle 形态明显变化（趋势更连续 · 同色 candle 串）
+- [ ] HUD / hover 仍显示原始 OHLC（不是 HA 值 · 这是设计）
+- [ ] 切回 K 线 → 恢复原始 OHLC 渲染
+- [ ] 重启 App → 持久化生效（UserDefaults chartType.v1）
+
+#### v17.12 A2.1 浅色主题接入 Shell
+- [ ] Shell 状态栏底部右侧看到 ☀️/🌙 主题 chip · 显示"深色"/"浅色"
+- [ ] 点 chip → Shell 主区 + Sidebar + 底栏全部立刻切色
+- [ ] ⌘K 命令面板搜"主题" → 看到"切换到浅色主题/切换到深色主题"候选
+- [ ] 主图 ChartScene 也跟随同步切换（v15.8 + v15.17 既有 ChartTheme）
+
+### Shell 完善（v17.20/21/22）
+
+#### v17.20 Pane 右键 contextMenu
+- [ ] Shell 主区 PaneHeader 右键 → 看到 4 项菜单：
+  - [ ] "更换 Pane 类型" sub-menu（9 个 popular kinds · ✓ 标当前 · 当前 disabled）
+  - [ ] "清除 group 联动"（仅 groupColor != nil 时启用）
+  - [ ] "重置 Pane 配置（symbol / period / group）"
+  - [ ] "最大化此 Pane / 退出最大化"
+- [ ] 点"更换为 ⌘ 训练" → 当前 Pane 立即变成 Training view（kind 变 · symbol 保留）
+
+#### v17.21 Sidebar 持仓 section 接真数据
+- [ ] Sidebar 左侧"持仓"section 显示 SimulatedTradingStore 真实持仓（不是 mock rb2510/IF2509）
+- [ ] 显示：instrumentID / 多/空 chip / volume / floatingPnL（涨红跌绿）
+- [ ] 在 TradingWindow 开新仓 → Sidebar 持仓即刻刷新（UserDefaults didChange）
+- [ ] 平仓 → Sidebar 持仓减少 / 显示"无持仓"
+
+### 测试基线
+- [ ] Linux: swift test 2526/390 全绿（基线 2516/388 + 10 new tests · 3 new suites: HeikinAshi/Channel/Fibonacci）
+- [ ] Mac: ./mac_acceptance.sh --skip-shots 通过

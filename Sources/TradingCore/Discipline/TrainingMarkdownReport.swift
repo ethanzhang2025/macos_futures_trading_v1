@@ -171,6 +171,11 @@ public enum TrainingMarkdownReport {
             md += monthOverMonthComparisonMarkdown(log: log, generatedAt: generatedAt)
         }
 
+        // v16.195 · 本月 vs 全期对比（trader 看本月相对自己历史水平）
+        if filterCutoff == nil {
+            md += monthVsAllTimeComparisonMarkdown(log: log, generatedAt: generatedAt)
+        }
+
         // 最近训练（filtered sessions desc by endedAt · 取前 recentLimit）
         md += "## 最近训练\n\n"
         let recent = sessions
@@ -454,6 +459,35 @@ public enum TrainingMarkdownReport {
             md += "| \(label) | \(cnt)\(marker) |\n"
         }
         md += "\n"
+        return md
+    }
+
+    /// v16.195 · 本月平均 vs 全期平均对比 · trader 看本月相对自己历史水平
+    /// 仅本月有训练 + 全期 ≥ 5 次时输出（少量数据无对比意义）
+    private static func monthVsAllTimeComparisonMarkdown(log: TrainingSessionLog,
+                                                          generatedAt: Date) -> String {
+        let cal = Calendar(identifier: .gregorian)
+        let monthStart = cal.dateInterval(of: .month, for: generatedAt)?.start ?? generatedAt
+        let thisMonth = log.sessions.filter { $0.startedAt >= monthStart }
+        let allTime = log.sessions
+        guard !thisMonth.isEmpty, allTime.count >= 5 else { return "" }
+        let thisAvg: ([TrainingSession]) -> Int = { ss in
+            let s = ss.compactMap { log.score(for: $0.id)?.totalScore }
+            return s.isEmpty ? 0 : s.reduce(0, +) / s.count
+        }
+        let monthAvg = thisAvg(thisMonth)
+        let allAvg = thisAvg(allTime)
+        let delta = monthAvg - allAvg
+        let trend: String = {
+            if delta >= 5 { return "🚀 显著超越" }
+            if delta >= 0 { return "📈 略胜" }
+            if delta >= -5 { return "📉 略低" }
+            return "⚠️ 显著低于"
+        }()
+        var md = "## 本月 vs 全期\n\n"
+        md += "- 本月平均：**\(monthAvg)** 分（\(thisMonth.count) 次）\n"
+        md += "- 全期平均：\(allAvg) 分（\(allTime.count) 次）\n"
+        md += "- 趋势：\(trend) · \(delta >= 0 ? "+" : "")\(delta) 分\n\n"
         return md
     }
 

@@ -687,6 +687,36 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("## 近 14 天每日"))
     }
 
+    // MARK: - v16.195 · 本月 vs 全期对比
+
+    @Test("v16.195 · 本月有数据 + 全期 ≥ 5 次 → 输出对比章节")
+    func monthVsAllTimeComparison() {
+        var log = TrainingSessionLog()
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        // 全期 5+ session（含本月 1 个）
+        for i in 0..<5 {
+            if let d = cal.date(byAdding: .day, value: -i * 10, to: now) {
+                log.addSession(TrainingSession(
+                    startedAt: d, endedAt: d.addingTimeInterval(60),
+                    initialBalance: 100_000, finalBalance: 102_000))
+            }
+        }
+        let md = TrainingMarkdownReport.generate(log, generatedAt: now)
+        #expect(md.contains("## 本月 vs 全期"))
+        #expect(md.contains("本月平均"))
+        #expect(md.contains("全期平均"))
+        #expect(md.contains("趋势"))
+    }
+
+    @Test("v16.195 · 全期 < 5 次 不输出 vs 全期章节")
+    func monthVsAllTimeInsufficient() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "x", pnl: 1000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(!md.contains("## 本月 vs 全期"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

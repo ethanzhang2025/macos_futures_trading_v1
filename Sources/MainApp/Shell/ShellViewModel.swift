@@ -42,6 +42,9 @@ public final class ShellViewModel: ObservableObject {
 
     @Published public var showCommandPalette: Bool = false
 
+    /// v17.29 · ⌘K 最近用过的命令 title 列表（LRU · 最多 5 个 · UserDefaults 持久化）
+    @Published public var recentPaletteCommands: [String] = []
+
     // MARK: - v17.5 · Pane 最大化（文华 Enter/Esc 二态切换 · 单 Pane 占满主区）
 
     @Published public var maximizedPaneID: UUID? = nil
@@ -180,6 +183,15 @@ public final class ShellViewModel: ObservableObject {
 
     // MARK: - v17.20 Pane 右键 actions
 
+    /// v17.29 · 记录 palette 命令使用（LRU · 最近 5 个 · 用于 ⌘K 默认 "最近" section）
+    public func recordPaletteCommandUsage(_ title: String) {
+        var list = recentPaletteCommands.filter { $0 != title }
+        list.insert(title, at: 0)
+        if list.count > 5 { list = Array(list.prefix(5)) }
+        recentPaletteCommands = list
+        UserDefaults.standard.set(list, forKey: "shell.v1.recentPaletteCommands")
+    }
+
     /// 复制 Workspace（panes + layout 全复制 · name = "原名 副本"·新 UUID · 紧跟原 ws 之后插入并激活）
     public func duplicateWorkspace(_ id: UUID) {
         guard let idx = workspaces.firstIndex(where: { $0.id == id }) else { return }
@@ -255,6 +267,10 @@ public final class ShellViewModel: ObservableObject {
         if let data = ud.data(forKey: Self.kLayout),
            let l = try? JSONDecoder().decode(ShellLayout.self, from: data) {
             layout = l
+        }
+        // v17.29 · 最近用过的 ⌘K 命令（[String]）· 兼容 nil
+        if let arr = ud.stringArray(forKey: "shell.v1.recentPaletteCommands") {
+            recentPaletteCommands = arr
         }
     }
 

@@ -56,6 +56,7 @@ struct ShellCommandPalette: View {
 
     private func commandRow(_ cmd: PaletteCommand) -> some View {
         Button {
+            shellVM.recordPaletteCommandUsage(cmd.title)  // v17.29 · LRU 记录
             cmd.action()
             isPresented = false
         } label: {
@@ -101,6 +102,7 @@ struct ShellCommandPalette: View {
 
     private func executeFirst() {
         if let first = filteredCommands.first {
+            shellVM.recordPaletteCommandUsage(first.title)  // v17.29 · LRU 记录
             first.action()
             isPresented = false
         }
@@ -185,7 +187,15 @@ struct ShellCommandPalette: View {
 
     private var filteredCommands: [PaletteCommand] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if q.isEmpty { return Array(allCommands.prefix(20)) }
+        if q.isEmpty {
+            // v17.29 · query 为空时：最近用过的 + 其他常用 · 拼到前 20 个
+            let recents = shellVM.recentPaletteCommands.compactMap { title in
+                allCommands.first { $0.title == title }
+            }
+            let recentTitles = Set(recents.map(\.title))
+            let others = allCommands.filter { !recentTitles.contains($0.title) }
+            return Array((recents + others).prefix(20))
+        }
         return allCommands.filter {
             $0.title.lowercased().contains(q)
                 || ($0.subtitle?.lowercased().contains(q) ?? false)

@@ -629,14 +629,14 @@ struct TrainingScoreSheet: View {
                 .tooltip(showPlan ? "收起 5 步行动建议" : "展开 5 步具体行动建议")
             }
             // v16.147 · 5 步行动 plan numbered list（默认折叠 · 展开后 trader 可右键复制全部）
+            // v16.162 · 步骤数字改 1️⃣2️⃣3️⃣4️⃣5️⃣ emoji（视觉强化 · 一眼数清楚 5 步）
             if showPlan {
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(Array(plan.enumerated()), id: \.offset) { idx, step in
                         HStack(alignment: .top, spacing: 6) {
-                            Text("\(idx + 1).")
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.orange)
-                                .frame(width: 16, alignment: .trailing)
+                            Text(stepNumberEmoji(idx + 1))
+                                .font(.system(size: 13))
+                                .frame(width: 18, alignment: .center)
                             Text(step)
                                 .font(.system(size: 11))
                                 .foregroundColor(.primary)
@@ -649,7 +649,8 @@ struct TrainingScoreSheet: View {
                 .contextMenu {
                     Button {
                         let header = "【💡 改进 plan · \(sub.weakest.emoji) \(sub.weakest.displayName) \(weakScore) 分】"
-                        let body = plan.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+                        // v16.162 · 复制时也用 emoji 序号（IM 一致 trader 一眼数清楚）
+                        let body = plan.enumerated().map { "\(stepNumberEmoji($0.offset + 1)) \($0.element)" }.joined(separator: "\n")
                         let pb = NSPasteboard.general
                         pb.clearContents()
                         pb.setString("\(header)\n\(body)", forType: .string)
@@ -663,6 +664,18 @@ struct TrainingScoreSheet: View {
         .padding(8)
         .background(Color.orange.opacity(0.08))
         .cornerRadius(6)
+    }
+
+    /// v16.162 · 1-5 步骤数字 emoji（trader 视觉一眼数清楚 5 步）
+    private func stepNumberEmoji(_ n: Int) -> String {
+        switch n {
+        case 1: return "1️⃣"
+        case 2: return "2️⃣"
+        case 3: return "3️⃣"
+        case 4: return "4️⃣"
+        case 5: return "5️⃣"
+        default: return "\(n)."
+        }
     }
 
     private func subScoreColor(_ s: Int) -> Color {

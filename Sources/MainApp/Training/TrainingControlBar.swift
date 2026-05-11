@@ -104,14 +104,17 @@ struct TrainingControlBar: View {
                             .font(.caption)
                             .foregroundColor(idleHintColor)
                         // v16.194 · 启用率 mini progress（仅 X < Y 时显示 · 全启用不显示 vs v16.166 文本）
+                        // v16.204 · tooltip 加详细 X 启用 / Y 禁用 + 跳 RulesPanel hint
                         if viewModel.book.rules.count > viewModel.book.enabledRules.count
                            && viewModel.book.rules.count >= 3 {
-                            let ratio = Double(viewModel.book.enabledRules.count)
-                                / Double(viewModel.book.rules.count)
+                            let total = viewModel.book.rules.count
+                            let enabled = viewModel.book.enabledRules.count
+                            let disabled = total - enabled
+                            let ratio = Double(enabled) / Double(total)
                             ProgressView(value: ratio, total: 1.0)
                                 .frame(width: 36, height: 4)
                                 .tint(.accentColor)
-                                .tooltip("启用率 \(Int(ratio * 100))%")
+                                .tooltip("启用率 \(Int(ratio * 100))%\n\(enabled) 启用 / \(disabled) 禁用 · 共 \(total) 条\n点击右侧 ⚙️ 打开 RulesPanel 编辑")
                         }
                         // v16.177 · ⚙️ 规则 chip 点击 → 跳 RulesPanel tab（与 v16.46 mostViolated 同模式）
                         Button {

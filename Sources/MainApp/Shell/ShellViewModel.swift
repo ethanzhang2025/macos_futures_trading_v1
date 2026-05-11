@@ -84,6 +84,27 @@ public final class ShellViewModel: ObservableObject {
         persistWorkspaces()
     }
 
+    /// 修改当前 active workspace 的 PaneLayout · 自动调整 panes 数组
+    public func setPaneLayout(_ layout: PaneLayout) {
+        guard let id = activeWorkspaceID,
+              let idx = workspaces.firstIndex(where: { $0.id == id }) else { return }
+        workspaces[idx].paneLayout = layout
+        let target = layout.paneCount
+        if target > 0 {
+            let current = workspaces[idx].panes.count
+            if target > current {
+                // 补默认 Pane
+                let defaultKind = workspaces[idx].primaryTab.defaultPaneKind
+                for _ in 0..<(target - current) {
+                    workspaces[idx].panes.append(PaneConfig(kind: defaultKind))
+                }
+            } else if target < current {
+                workspaces[idx].panes = Array(workspaces[idx].panes.prefix(target))
+            }
+        }
+        persistWorkspaces()
+    }
+
     // MARK: - 持久化
 
     private static let kWorkspaces = "shell.v1.workspaces"

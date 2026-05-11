@@ -15,18 +15,48 @@ struct WorkspaceTabBar: View {
     }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                ForEach(visibleWorkspaces) { ws in
-                    workspaceTab(ws)
+        HStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(visibleWorkspaces) { ws in
+                        workspaceTab(ws)
+                    }
+                    newTabButton
                 }
-                newTabButton
-                Spacer()
+                .padding(.horizontal, 8)
             }
-            .padding(.horizontal, 8)
+            Spacer()
+            paneLayoutMenu
+                .padding(.trailing, 8)
         }
         .frame(height: ShellMetrics.workspaceTabBarHeight)
         .background(Color.secondary.opacity(0.05))
+    }
+
+    /// v17.0 Step 4 · 当前 workspace 的 PaneLayout 切换 Menu（1/2/4/6/9）
+    @ViewBuilder
+    private var paneLayoutMenu: some View {
+        if let ws = shellVM.activeWorkspace {
+            Menu {
+                ForEach(PaneLayout.allCases.filter { $0 != .custom }) { layout in
+                    Button {
+                        shellVM.setPaneLayout(layout)
+                    } label: {
+                        Text("\(ws.paneLayout == layout ? "✓ " : "  ")\(layout.emoji) \(layout.displayName)")
+                    }
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Text(ws.paneLayout.emoji)
+                    Text(ws.paneLayout.displayName)
+                        .font(.system(size: 11))
+                }
+                .foregroundColor(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 100)
+            .help("切换 Pane 布局")
+        }
     }
 
     @ViewBuilder

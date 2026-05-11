@@ -85,11 +85,17 @@ struct TrainingRulesPanel: View {
                 }
                 Divider()
                 // v16.99 · trader 分享规则集（导出 JSON · 与团队共享自定义纪律）
-                Section("📤 导入/导出（v16.99 · JSON）") {
+                Section("📤 导入/导出（v16.99/106 · JSON）") {
+                    Button {
+                        copyRulesJSONToPasteboard()
+                    } label: {
+                        Label("复制规则集 JSON 到剪贴板", systemImage: "doc.on.doc")
+                    }
+                    .tooltip("v16.106 · 直接发 IM/微信分享 · 不必存文件")
                     Button {
                         exportRulesJSON()
                     } label: {
-                        Label("导出当前规则集为 JSON", systemImage: "square.and.arrow.up")
+                        Label("导出 JSON 为文件…", systemImage: "square.and.arrow.up")
                     }
                     .tooltip("trader 分享自定义规则集给团队 / 备份")
                     Button {
@@ -98,6 +104,12 @@ struct TrainingRulesPanel: View {
                         Label("导入规则集 JSON", systemImage: "square.and.arrow.down")
                     }
                     .tooltip("从 JSON 文件加载规则集 · 覆盖当前")
+                    Button {
+                        importRulesJSONFromPasteboard()
+                    } label: {
+                        Label("从剪贴板粘贴导入", systemImage: "doc.on.clipboard")
+                    }
+                    .tooltip("v16.106 · IM 收到 JSON 文本直接粘贴 · 不必存文件")
                 }
                 Divider()
                 Button("清空所有规则", role: .destructive) { viewModel.clearRules() }
@@ -147,6 +159,36 @@ struct TrainingRulesPanel: View {
         }
         guard let book = try? JSONDecoder().decode(DisciplineBook.self, from: data) else {
             Toast.errorBody("导入失败", "JSON 格式无效（需含 DisciplineBook 结构）")
+            return
+        }
+        viewModel.applyRuleTemplate(book)
+        Toast.info("导入成功", "\(book.rules.count) 条规则 · 启用 \(book.enabledRules.count)")
+    }
+
+    // MARK: - v16.106 · 剪贴板版（不存文件直接 IM 分享）
+
+    private func copyRulesJSONToPasteboard() {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(viewModel.book),
+              let str = String(data: data, encoding: .utf8) else {
+            Toast.errorBody("复制失败", "JSON 编码失败")
+            return
+        }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(str, forType: .string)
+        Toast.info("复制成功", "\(viewModel.book.rules.count) 条规则 · \(str.count) 字符 · 已粘到剪贴板")
+    }
+
+    private func importRulesJSONFromPasteboard() {
+        guard let str = NSPasteboard.general.string(forType: .string),
+              let data = str.data(using: .utf8) else {
+            Toast.errorBody("导入失败", "剪贴板无文本")
+            return
+        }
+        guard let book = try? JSONDecoder().decode(DisciplineBook.self, from: data) else {
+            Toast.errorBody("导入失败", "剪贴板内容非有效 DisciplineBook JSON")
             return
         }
         viewModel.applyRuleTemplate(book)

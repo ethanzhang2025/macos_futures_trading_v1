@@ -427,4 +427,33 @@ struct TrainingMarkdownReportTests {
         #expect(md.contains("历史最长连训"))
         #expect(md.contains("重新开始"))
     }
+
+    // MARK: - v16.118 · 时长分布章节
+
+    @Test("v16.118 · 含 session → 输出时长分布 3 段")
+    func durationDistributionSection() {
+        var log = TrainingSessionLog()
+        // 3 个不同时长 session
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        log.addSession(TrainingSession(   // 10 分（短）
+            startedAt: t0, endedAt: t0.addingTimeInterval(600),
+            initialBalance: 100_000, finalBalance: 100_000))
+        log.addSession(TrainingSession(   // 20 分（中）
+            startedAt: t0, endedAt: t0.addingTimeInterval(1200),
+            initialBalance: 100_000, finalBalance: 100_000))
+        log.addSession(TrainingSession(   // 60 分（长）
+            startedAt: t0, endedAt: t0.addingTimeInterval(3600),
+            initialBalance: 100_000, finalBalance: 100_000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("训练时长分布"))
+        #expect(md.contains("🏃 短"))
+        #expect(md.contains("🎯 中"))
+        #expect(md.contains("🧘 长"))
+    }
+
+    @Test("v16.118 · 空 log 不输出时长分布章节")
+    func durationDistributionEmptyLog() {
+        let md = TrainingMarkdownReport.generate(TrainingSessionLog())
+        #expect(!md.contains("训练时长分布"))
+    }
 }

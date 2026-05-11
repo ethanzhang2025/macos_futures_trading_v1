@@ -50,6 +50,19 @@ public enum TrainingMarkdownReport {
         } else {
             md += "- 最佳：—\n"
         }
+        // v16.86 · 连训天数（与 ControlBar/HistoryPanel 同算法 · 月报展示 trader 习惯）
+        let streak = log.consecutiveTrainingDays(asOf: generatedAt)
+        if streak >= 2 {
+            let emoji: String = {
+                switch streak {
+                case 30...:  return "🏆"
+                case 14...:  return "🚀"
+                case 7...:   return "🔥🔥"
+                default:     return "🔥"
+                }
+            }()
+            md += "- 当前连训：\(emoji) **\(streak)** 天\n"
+        }
         md += "\n"
 
         // 等级分布（基于 filtered scores）

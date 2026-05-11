@@ -229,6 +229,19 @@ struct TrainingScoreSheet: View {
                 Button("") { copyImprovementPlan(sub: sub) }
                     .keyboardShortcut("p", modifiers: [.command, .option])
                     .opacity(0)
+                // v16.207 · ⌘C 复制当前展开维度详情（与 v16.131 contextMenu 互补 · 快捷键）
+                if let cur = expandedDim {
+                    Button("") {
+                        let curScore = sub.ordered.first { $0.dimension == cur }?.score ?? 0
+                        let text = "【\(cur.emoji) \(cur.displayName) · 本次 \(curScore) 分】\n\(dimensionBreakdownText(cur))"
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(text, forType: .string)
+                        flashFeedback("✓ 已复制 \(cur.displayName) drilldown（⌘C）")
+                    }
+                    .keyboardShortcut("c", modifiers: [.command])
+                    .opacity(0)
+                }
             }
         }
     }

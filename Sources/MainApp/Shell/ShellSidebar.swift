@@ -84,6 +84,13 @@ struct ShellSidebar: View {
         return pos.floatingPnL(currentPrice: lastPrice)
     }
 
+    /// v17.23 · 总浮盈（所有持仓求和 · header chip 显示）
+    private var totalFloatingPnL: Double {
+        realPositions.reduce(0.0) { acc, pos in
+            acc + NSDecimalNumber(decimal: positionPnL(pos)).doubleValue
+        }
+    }
+
     private var positionSection: some View {
         Section {
             ForEach(realPositions, id: \.instrumentID) { pos in
@@ -111,8 +118,17 @@ struct ShellSidebar: View {
                 Text("无持仓").font(.caption).foregroundColor(.secondary)
             }
         } header: {
-            Label("持仓 (\(realPositions.count))", systemImage: "briefcase.fill")
-                .foregroundColor(.purple)
+            HStack(spacing: 4) {
+                Label("持仓 (\(realPositions.count))", systemImage: "briefcase.fill")
+                    .foregroundColor(.purple)
+                Spacer()
+                if !realPositions.isEmpty {
+                    // v17.23 · 总浮盈 chip（涨红跌绿）
+                    Text(String(format: "%@¥%.0f", totalFloatingPnL >= 0 ? "+" : "", totalFloatingPnL))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(totalFloatingPnL >= 0 ? .red : .green)
+                }
+            }
         }
     }
 

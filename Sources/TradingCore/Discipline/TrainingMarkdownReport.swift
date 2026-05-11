@@ -51,9 +51,13 @@ public enum TrainingMarkdownReport {
             md += "- 最佳：—\n"
         }
         // v16.86 · 连训天数（与 ControlBar/HistoryPanel 同算法 · 月报展示 trader 习惯）
+        // v16.91 · 加 personal best 对比（v16.89）· 当前 ≥ 历史 → 🎉 新纪录
         let streak = log.consecutiveTrainingDays(asOf: generatedAt)
+        let bestStreak = log.longestStreakEver()
         if streak >= 2 {
+            let isNewRecord = streak >= bestStreak
             let emoji: String = {
+                if isNewRecord { return "🎉" }
                 switch streak {
                 case 30...:  return "🏆"
                 case 14...:  return "🚀"
@@ -61,7 +65,14 @@ public enum TrainingMarkdownReport {
                 default:     return "🔥"
                 }
             }()
-            md += "- 当前连训：\(emoji) **\(streak)** 天\n"
+            md += "- 当前连训：\(emoji) **\(streak)** 天"
+            if isNewRecord {
+                md += "（**新纪录**！超越历史最长）\n"
+            } else {
+                md += "（历史最长 \(bestStreak) 天）\n"
+            }
+        } else if bestStreak >= 3 {
+            md += "- 历史最长连训：🏅 \(bestStreak) 天（当前已中断 · 重新开始即可！）\n"
         }
         md += "\n"
 

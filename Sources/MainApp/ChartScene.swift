@@ -915,26 +915,35 @@ struct ChartScene: View {
     /// 工具条画线工具按钮组：选择 / 6 种画线 / 颜色 / 线宽 / 导出导入 / 清空
     /// v13.7 加导出/导入 · v13.8 加 ColorPicker + Stepper（颜色/线宽自定义）
     private var drawingTools: some View {
+        // v17.25 · 视觉分组 · 4 组 Divider 分割（线 / 形 / fib / 测量+标注）
         HStack(spacing: 4) {
             drawingToolButton(icon: "cursorarrow", tool: nil, help: "浏览（取消画线工具）")
+            toolGroupDivider
+            // 第 1 组：线类
             drawingToolButton(icon: "line.diagonal", tool: .trendLine, help: "趋势线（双点）")
             drawingToolButton(icon: "arrow.up.right", tool: .ray, help: "射线（双点定方向 · 从 start 延伸到画布边界）")
             drawingToolButton(icon: "arrow.up.forward", tool: .arrow, help: "箭头（双点定方向 · 末端三角头 · 信号标记 / 复盘标注）")
             drawingToolButton(icon: "minus", tool: .horizontalLine, help: "水平线（一点）")
             drawingToolButton(icon: "arrow.up.and.down", tool: .verticalLine, help: "垂直线（一点 · 时间锚点 · 横跨全价格）")
             drawingToolButton(icon: "tag", tool: .priceLabel, help: "价格标签（一点 · 水平虚线 + 醒目价格 chip · 关键支撑/阻力快速标）")
+            toolGroupDivider
+            // 第 2 组：形类（矩形 / 椭圆 / 平行通道 / 通道）
             drawingToolButton(icon: "rectangle", tool: .rectangle, help: "矩形（双点对角）")
+            drawingToolButton(icon: "circle", tool: .ellipse, help: "椭圆（双点对角）")
+            drawingToolButton(icon: "rectangle.split.1x2", tool: .priceZone, help: "价格区域（双点 · 上下价格全图横跨 · 关键支撑/阻力带）")
             drawingToolButton(icon: "lines.measurement.horizontal", tool: .parallelChannel, help: "平行通道（双点 · 默认 +1.0 偏移）")
             drawingToolButton(icon: "chart.line.uptrend.xyaxis", tool: .channel, help: "通道线（双点定 bar 范围 · 内部线性回归 + ±1σ 平行 · 自动等距）")
+            toolGroupDivider
+            // 第 3 组：斐波系列 6 + 江恩
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
             drawingToolButton(icon: "arrow.up.right.and.arrow.down.left.rectangle", tool: .fibonacciExtension, help: "斐波扩展（双点 · 突破后目标位 1.272/1.414/1.618/2/2.618）")
             drawingToolButton(icon: "arc", tool: .fibonacciArc, help: "斐波弧（双点定圆心+半径 · 38.2/50/61.8 半圆弧 · 时间+价格 fib）")
             drawingToolButton(icon: "rectangle.split.3x1", tool: .fibonacciChannel, help: "斐波通道（双点主轴 + 默认 offset · 内部 7 fib 比例平行线分层）")
             drawingToolButton(icon: "wand.and.rays", tool: .fibonacciFan, help: "斐波那契扇形（双点 · 38.2/50/61.8 三射线）")
-            drawingToolButton(icon: "rectangle.split.1x2", tool: .priceZone, help: "价格区域（双点 · 上下价格全图横跨 · 关键支撑/阻力带）")
-            drawingToolButton(icon: "fanblades", tool: .gannFan, help: "江恩扇形（双点定 1×1 · 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）")
             drawingToolButton(icon: "calendar.badge.clock", tool: .fibonacciTimeZone, help: "斐波那契时间区（双点定 1 fib 间隔 · 8 条垂直线 F1/F2/F3/F5/F8/F13/F21/F34）")
-            drawingToolButton(icon: "circle", tool: .ellipse, help: "椭圆（双点对角）")
+            drawingToolButton(icon: "fanblades", tool: .gannFan, help: "江恩扇形（双点定 1×1 · 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）")
+            toolGroupDivider
+            // 第 4 组：测量 / Pitchfork / 多边形
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
             drawingToolButton(icon: "tuningfork", tool: .pitchfork, help: "Andrew's Pitchfork（3 点 · 中线 + 上下平行轨）")
             drawingToolButton(icon: "hexagon", tool: .polygon, help: "多边形（任意 N≥3 点 · 工具栏'完成'触发闭合）")
@@ -1381,6 +1390,14 @@ struct ChartScene: View {
         } catch {
             Toast.error("导入失败", error)
         }
+    }
+
+    /// v17.25 · 画线工具栏分组细分割线（视觉收敛 · 区分 线 / 形 / fib / 测量类）
+    private var toolGroupDivider: some View {
+        Rectangle()
+            .fill(Color.secondary.opacity(0.25))
+            .frame(width: 1, height: 14)
+            .padding(.horizontal, 2)
     }
 
     private func drawingToolButton(icon: String, tool: DrawingType?, help: String) -> some View {

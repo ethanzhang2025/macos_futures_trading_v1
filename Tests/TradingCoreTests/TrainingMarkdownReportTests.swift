@@ -580,6 +580,36 @@ struct TrainingMarkdownReportTests {
         #expect(md.contains("不上云"))
     }
 
+    // MARK: - v16.183 · 本月 vs 上月对比
+
+    @Test("v16.183 · 上月有数据时输出 vs 上月对比章节")
+    func monthOverMonthComparison() {
+        var log = TrainingSessionLog()
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        // 本月 1 个 + 上月 1 个
+        if let lastMonth = cal.date(byAdding: .day, value: -40, to: now) {
+            log.addSession(TrainingSession(
+                startedAt: lastMonth, endedAt: lastMonth.addingTimeInterval(60),
+                initialBalance: 100_000, finalBalance: 102_000))
+        }
+        log.addSession(TrainingSession(
+            startedAt: now, endedAt: now.addingTimeInterval(60),
+            initialBalance: 100_000, finalBalance: 105_000))
+        let md = TrainingMarkdownReport.generate(log, generatedAt: now)
+        #expect(md.contains("## 本月 vs 上月"))
+        #expect(md.contains("训练次数"))
+        #expect(md.contains("平均总分"))
+    }
+
+    @Test("v16.183 · 上月无数据 不输出 vs 上月对比章节")
+    func monthOverMonthEmpty() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "本月唯一", pnl: 1000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(!md.contains("本月 vs 上月"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

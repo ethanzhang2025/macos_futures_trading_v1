@@ -149,6 +149,11 @@ public enum TrainingMarkdownReport {
         // v16.176 · 最近 N 次总分 sparkline（emoji bar 横排 · 分数走势可视化）
         md += scoreTrendSparklineMarkdown(sessions: sessions, log: log)
 
+        // v16.183 · 本月 vs 上月对比（5 维 + 总分趋势）· 仅全量月报输出（filterCutoff 不为 nil 跳过）
+        if filterCutoff == nil {
+            md += monthOverMonthComparisonMarkdown(log: log, generatedAt: generatedAt)
+        }
+
         // 最近训练（filtered sessions desc by endedAt · 取前 recentLimit）
         md += "## 最近训练\n\n"
         let recent = sessions
@@ -294,6 +299,65 @@ public enum TrainingMarkdownReport {
             md += "\n"
         }
         md += "- 💡 复盘建议：对照本月最强 session 找差异 · 找出可复制的成功模式\n"
+        md += "\n"
+        return md
+    }
+
+    /// v16.183 · 本月 vs 上月对比 · 总分平均 + 次数 + 5 维平均 delta
+    /// 仅在全量月报输出（generate 不传 filterCutoff 时） · 防与 filtered 月份月报冲突
+    private static func monthOverMonthComparisonMarkdown(log: TrainingSessionLog,
+                                                          generatedAt: Date) -> String {
+        let cal = Calendar(identifier: .gregorian)
+        let thisMonthStart = cal.dateInterval(of: .month, for: generatedAt)?.start ?? generatedAt
+        guard let lastMonthStart = cal.date(byAdding: .month, value: -1, to: thisMonthStart) else { return "" }
+
+        let thisMonth = log.sessions.filter { $0.startedAt >= thisMonthStart }
+        let lastMonth = log.sessions.filter {
+            $0.startedAt >= lastMonthStart && $0.startedAt < thisMonthStart
+        }
+        guard !thisMonth.isEmpty || !lastMonth.isEmpty else { return "" }
+        guard !lastMonth.isEmpty else { return "" }   // 上月无数据无法对比
+
+        // 总分平均
+        let avgScore: ([TrainingSession]) -> Int = { sessions in
+            let scores = sessions.compactMap { log.score(for: $0.id)?.totalScore }
+            guard !scores.isEmpty else { return 0 }
+            return scores.reduce(0, +) / scores.count
+        }
+        let thisAvg = avgScore(thisMonth)
+        let lastAvg = avgScore(lastMonth)
+        let delta = thisAvg - lastAvg
+        let trend = delta > 0 ? "↑" : (delta < 0 ? "↓" : "=")
+        let trendEmoji = delta > 0 ? "📈" : (delta < 0 ? "📉" : "➡️")
+
+        var md = "## 本月 vs 上月\n\n"
+        md += "| 指标 | 上月 | 本月 | 变化 |\n|------|------|------|------|\n"
+        md += "| 训练次数 | \(lastMonth.count) | \(thisMonth.count) | \(thisMonth.count - lastMonth.count >= 0 ? "+" : "")\(thisMonth.count - lastMonth.count) |\n"
+        md += "| 平均总分 | \(lastAvg) | \(thisAvg) | \(trend) \(delta >= 0 ? "+" : "")\(delta) \(trendEmoji) |\n"
+        // 5 维平均对比（仅当两月都有 v2 subScores）
+        let thisSubs = thisMonth.compactMap { log.score(for: $0.id)?.subScores }
+        let lastSubs = lastMonth.compactMap { log.score(for: $0.id)?.subScores }
+        if !thisSubs.isEmpty && !lastSubs.isEmpty {
+            let avg5: ([TrainingSubScores]) -> [(TrainingSubScores.Dimension, Int)] = { subs in
+                let n = subs.count
+                return [
+                    (.pnl, subs.map(\.pnl).reduce(0, +) / n),
+                    (.discipline, subs.map(\.discipline).reduce(0, +) / n),
+                    (.winRate, subs.map(\.winRate).reduce(0, +) / n),
+                    (.risk, subs.map(\.risk).reduce(0, +) / n),
+                    (.efficiency, subs.map(\.efficiency).reduce(0, +) / n),
+                ]
+            }
+            let thisAvgs = avg5(thisSubs)
+            let lastAvgs = avg5(lastSubs)
+            for i in 0..<thisAvgs.count {
+                let dim = thisAvgs[i].0
+                let t = thisAvgs[i].1
+                let l = lastAvgs[i].1
+                let d = t - l
+                md += "| \(dim.emoji) \(dim.displayName) | \(l) | \(t) | \(d >= 0 ? "+" : "")\(d) |\n"
+            }
+        }
         md += "\n"
         return md
     }

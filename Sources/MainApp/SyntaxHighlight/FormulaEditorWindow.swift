@@ -401,6 +401,8 @@ public struct FormulaEditorWindow: View {
                                         Text(warn.message)
                                             .font(.system(size: 12))
                                         Spacer()
+                                        // v16.60 · quick fix Menu（按 kind 提供针对性修复）
+                                        quickFixMenu(for: warn)
                                         Button("跳转") {
                                             pendingGotoLine = warn.line
                                             showOutlineSheet = false
@@ -1488,6 +1490,89 @@ public struct FormulaEditorWindow: View {
             ("智能大写", "完整保留字 + 空格/逗号/括号 → 自动转大写"),
         ]),
     ]
+
+    // MARK: - v16.60 · Lint quick fix Menu（按 warning kind 提供针对性修复）
+
+    @ViewBuilder
+    private func quickFixMenu(for warn: MaiLangLintWarning) -> some View {
+        Menu {
+            switch warn.kind {
+            case .unusedVariable:
+                Button {
+                    quickFixDeleteLine(warn.line)
+                    statusMessage = "已删除第 \(warn.line) 行"
+                } label: {
+                    Label("删除该行", systemImage: "trash")
+                }
+            case .duplicateDefinition:
+                if let firstLine = parseFirstDefinedLine(from: warn.message) {
+                    Button {
+                        pendingGotoLine = firstLine
+                        showOutlineSheet = false
+                        statusMessage = "跳到首次定义（第 \(firstLine) 行）"
+                    } label: {
+                        Label("跳到首次定义（第 \(firstLine) 行）", systemImage: "arrow.up.right.circle")
+                    }
+                }
+                Button(role: .destructive) {
+                    quickFixDeleteLine(warn.line)
+                    statusMessage = "已删除重复定义（第 \(warn.line) 行）"
+                } label: {
+                    Label("删除该重复定义行", systemImage: "trash")
+                }
+            case .missingColorAttribute:
+                Menu {
+                    ForEach(["COLORRED", "COLORGREEN", "COLORBLUE",
+                             "COLORYELLOW", "COLORMAGENTA", "COLORWHITE"], id: \.self) { color in
+                        Button(color) {
+                            quickFixInsertColor(warn.line, color: color)
+                            statusMessage = "已插入 \(color)"
+                        }
+                    }
+                } label: {
+                    Label("插入颜色属性", systemImage: "paintpalette")
+                }
+            }
+        } label: {
+            Label("修复", systemImage: "wand.and.stars")
+                .font(.system(size: 11))
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: 60)
+        .tooltip("快速修复该 lint 警告")
+    }
+
+    /// 从 "重复定义：X（首次定义在第 N 行）" 提取 N
+    private func parseFirstDefinedLine(from message: String) -> Int? {
+        guard let regex = try? NSRegularExpression(pattern: #"第\s*(\d+)\s*行"#) else { return nil }
+        let ns = message as NSString
+        guard let match = regex.firstMatch(in: message, range: NSRange(location: 0, length: ns.length)),
+              match.numberOfRanges >= 2 else { return nil }
+        return Int(ns.substring(with: match.range(at: 1)))
+    }
+
+    /// 删除 sourceText 第 N 行（1-based · 越界保护）
+    private func quickFixDeleteLine(_ lineNumber: Int) {
+        var lines = sourceText.components(separatedBy: "\n")
+        guard lineNumber >= 1, lineNumber <= lines.count else { return }
+        lines.remove(at: lineNumber - 1)
+        sourceText = lines.joined(separator: "\n")
+    }
+
+    /// 在 sourceText 第 N 行末追加 ,COLORxxx · 自动判断 ; 前还是行末
+    private func quickFixInsertColor(_ lineNumber: Int, color: String) {
+        var lines = sourceText.components(separatedBy: "\n")
+        guard lineNumber >= 1, lineNumber <= lines.count else { return }
+        var content = lines[lineNumber - 1]
+        if let semiRange = content.range(of: ";", options: .backwards) {
+            content.insert(contentsOf: ",\(color)", at: semiRange.lowerBound)
+        } else {
+            // 无分号 · 行末追加
+            content += ",\(color)"
+        }
+        lines[lineNumber - 1] = content
+        sourceText = lines.joined(separator: "\n")
+    }
 
     /// v15.23 batch153 · 复制大纲为 markdown（变量列表 + 警告 + 依赖）
     private func copyOutlineMarkdown(outline: [MaiLangOutlineEntry],

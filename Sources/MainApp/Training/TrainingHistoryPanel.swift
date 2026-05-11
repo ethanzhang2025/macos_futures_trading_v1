@@ -803,6 +803,7 @@ struct TrainingHistoryPanel: View {
     }
 
     /// v16.135 · 累积违规 chip tooltip · 加最近 5 次违反 session 名
+    /// v16.214 · 加 vs 上月对比（本月 vs 上月该 kind 违规次数 · 仅本月 ≥1 且上月 ≥1 显示）
     private func buildViolationChipTooltip(kind: DisciplineRuleKind, count: Int, isWorst: Bool) -> String {
         let recentSessions = viewModel.log.sessions
             .filter { $0.violations.contains { $0.ruleKind == kind } }
@@ -814,6 +815,28 @@ struct TrainingHistoryPanel: View {
         if !recentSessions.isEmpty {
             let names = recentSessions.map { $0.scenarioName.isEmpty ? "(未命名)" : $0.scenarioName }
             base += "\n最近 \(recentSessions.count) 次：\n" + names.map { "· \($0)" }.joined(separator: "\n")
+        }
+        // v16.214 · 本月 vs 上月对比
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        guard let thisMonthStart = cal.dateInterval(of: .month, for: now)?.start,
+              let lastMonthStart = cal.date(byAdding: .month, value: -1, to: thisMonthStart) else {
+            return base
+        }
+        func countViolations(in range: Range<Date>) -> Int {
+            viewModel.log.sessions
+                .filter { range.contains($0.endedAt) }
+                .flatMap { $0.violations }
+                .filter { $0.ruleKind == kind }
+                .count
+        }
+        let thisMonth = countViolations(in: thisMonthStart..<now)
+        let lastMonth = countViolations(in: lastMonthStart..<thisMonthStart)
+        if thisMonth >= 1 && lastMonth >= 1 {
+            let delta = thisMonth - lastMonth
+            let arrow = delta > 0 ? "↑" : (delta < 0 ? "↓" : "−")
+            let sign = delta > 0 ? "+" : ""
+            base += "\n本月 \(thisMonth) 次 vs 上月 \(lastMonth) 次：\(arrow) \(sign)\(delta)"
         }
         return base
     }

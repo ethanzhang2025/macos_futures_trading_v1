@@ -731,7 +731,7 @@ struct TrainingHistoryPanel: View {
                         .padding(.vertical, 2)
                         .background((isWeakest ? Color.orange : Color.secondary).opacity(0.10))
                         .cornerRadius(3)
-                        .tooltip("\(d.dim.displayName)：\(n) 次 v2 评分 · 平均 \(d.avg) · 最低 \(d.min) · 最高 \(d.max) · spread \(d.max - d.min)")
+                        .tooltip("\(d.dim.displayName)：\(n) 次 v2 评分 · 平均 \(d.avg) · 最低 \(d.min) · 最高 \(d.max) · spread \(d.max - d.min)\((d.max - d.min) > 30 ? " ⚠️ 起伏大" : "")")
                     }
                     Spacer()
                 }

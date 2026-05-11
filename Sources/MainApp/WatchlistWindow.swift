@@ -117,6 +117,8 @@ struct WatchlistWindow: View {
 
     @Environment(\.openWindow) private var openWindow
     @Environment(\.storeManager) private var storeManager
+    /// v17.6 · Shell 嵌入模式（接入协议 · WatchlistWindow 用 NavigationSplitView · 嵌入时按 Pane 尺寸自适应）
+    @Environment(\.isHostedInShell) private var isHostedInShell
 
     /// v15.78 · 全市场 combo 异常映射 by instrumentID（与 SectorPresets.id "RB0" 对齐）
     /// @State 缓存避免每行重算（自选 50+ 合约时 SwiftUI 重渲性能保护）

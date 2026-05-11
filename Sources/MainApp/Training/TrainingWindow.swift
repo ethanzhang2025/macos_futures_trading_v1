@@ -40,6 +40,8 @@ struct TrainingWindow: View {
     @State private var showHelpSheet: Bool = false
 
     @Environment(\.simulatedTradingEngine) private var engine: SimulatedTradingEngine?
+    /// v17.6 · Shell 嵌入模式（TrainingWindow 已是 panel 风 · 无冗余 toolbar 需隐藏）
+    @Environment(\.isHostedInShell) private var isHostedInShell
 
     var body: some View {
         VStack(spacing: 0) {

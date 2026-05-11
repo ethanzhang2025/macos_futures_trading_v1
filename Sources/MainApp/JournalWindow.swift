@@ -219,11 +219,15 @@ struct JournalWindow: View {
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
     @Environment(\.openWindow) private var openWindow
+    /// v17.6 · Shell 嵌入模式（隐藏顶部 header · 由 Shell PrimaryTabBar 统一管理）
+    @Environment(\.isHostedInShell) private var isHostedInShell
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
+            if !isHostedInShell {
+                header
+                Divider()
+            }
             tabBar
             Divider()
             content

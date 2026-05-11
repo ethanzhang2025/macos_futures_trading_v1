@@ -1142,7 +1142,21 @@ struct TrainingHistoryPanel: View {
                     }
                     .padding()
                 }
-                ForEach(visible) { session in
+                // v16.148 · 按月分组 separator（仅 sortKey 按时间时显示 · 其他排序无月份逻辑意义）
+                let showMonthDividers = (sortKey == .dateDesc)
+                let monthCounts: [String: Int] = showMonthDividers
+                    ? Dictionary(grouping: visible, by: monthKey).mapValues { $0.count }
+                    : [:]
+                ForEach(Array(visible.enumerated()), id: \.element.id) { idx, session in
+                    if showMonthDividers {
+                        let curKey = monthKey(session)
+                        let prevKey = idx > 0 ? monthKey(visible[idx - 1]) : nil
+                        if curKey != prevKey {
+                            monthDivider(key: curKey, count: monthCounts[curKey] ?? 0)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+                    }
                     sessionRow(session)
                         .id(session.id)   // v16.58 · ScrollViewReader anchor
                         .listRowBackground(
@@ -1238,6 +1252,33 @@ struct TrainingHistoryPanel: View {
             }
             viewModel.recentlyAddedSessionID = nil
         }
+    }
+
+    /// v16.148 · session 月份 key（"yyyy-MM" 形式 · 用于分组 separator）
+    private func monthKey(_ s: TrainingSession) -> String {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.year, .month], from: s.endedAt)
+        return String(format: "%04d-%02d", comps.year ?? 0, comps.month ?? 0)
+    }
+
+    /// v16.148 · 月份分隔条（"📅 2026 年 5 月 · N 次"）· List row 形态
+    private func monthDivider(key: String, count: Int) -> some View {
+        let parts = key.split(separator: "-")
+        let year = parts.count >= 1 ? String(parts[0]) : ""
+        let month = parts.count >= 2 ? String(Int(parts[1]) ?? 0) : ""
+        return HStack(spacing: 6) {
+            Text("📅 \(year) 年 \(month) 月")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+            Text("· \(count) 次")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.7))
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Color.secondary.opacity(0.06))
+        .cornerRadius(4)
     }
 
     /// v16.58 · 检查 session 是否被当前 filter/search 覆盖

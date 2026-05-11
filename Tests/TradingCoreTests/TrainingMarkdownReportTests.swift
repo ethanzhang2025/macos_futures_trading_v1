@@ -413,6 +413,24 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("改进 plan"))
     }
 
+    // MARK: - v16.161 · 月报最强 session 引用
+
+    @Test("v16.161 · 含评分 session 输出本月最强章节（场景 + 总分 + 5 维）")
+    func monthlyBestSessionSection() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "突破回调", pnl: 8000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("本月最强 session"))
+        #expect(md.contains("突破回调"))
+        #expect(md.contains("总分"))
+    }
+
+    @Test("v16.161 · 空 log 不输出本月最强章节")
+    func monthlyBestSessionEmptyLog() {
+        let md = TrainingMarkdownReport.generate(TrainingSessionLog())
+        #expect(!md.contains("本月最强"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

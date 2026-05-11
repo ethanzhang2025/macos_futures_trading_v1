@@ -115,6 +115,9 @@ public enum TrainingMarkdownReport {
         // v16.153 · 月报最弱维度 5 步行动 plan（trader 月度回顾自带行动建议）
         md += monthlyImprovementPlanMarkdown(sessions: sessions, log: log)
 
+        // v16.161 · 月报最强 session 引用（trader 月度回顾本月 best · 强化正向反馈）
+        md += monthlyBestSessionMarkdown(sessions: sessions, log: log)
+
         // v16.118 · 训练时长分布（短/中/长 · trader 看专注时长习惯）
         md += durationDistributionMarkdown(sessions: sessions)
 
@@ -195,6 +198,40 @@ public enum TrainingMarkdownReport {
         for (dim, avg) in items {
             let marker = dim == worst ? " ⚠ 最弱" : ""
             md += "| \(dim.emoji) \(dim.displayName) | \(avg)\(marker) |\n"
+        }
+        md += "\n"
+        return md
+    }
+
+    /// v16.161 · 月报最强 session 引用 · trader 月度回顾正向反馈
+    /// 找 totalScore 最高的 session（同分取最近）· 输出场景 + 形态 + 5 维 + pnl%
+    /// 老 log 无 score 的 session 跳过 · 全空返回 ""
+    private static func monthlyBestSessionMarkdown(sessions: [TrainingSession],
+                                                    log: TrainingSessionLog) -> String {
+        let scored = sessions.compactMap { s -> (TrainingSession, TrainingScore)? in
+            guard let sc = log.score(for: s.id) else { return nil }
+            return (s, sc)
+        }
+        guard !scored.isEmpty else { return "" }
+        // 同分取最近的（endedAt 大）· 用 sort 简化
+        let best = scored.sorted {
+            if $0.1.totalScore != $1.1.totalScore { return $0.1.totalScore > $1.1.totalScore }
+            return $0.0.endedAt > $1.0.endedAt
+        }.first!
+        let s = best.0
+        let sc = best.1
+        var md = "## 本月最强 session · \(sc.grade.emoji) \(sc.totalScore) 分\n\n"
+        md += "- 场景：**\(s.scenarioName.isEmpty ? "未命名" : s.scenarioName)**"
+        if let pat = s.scenarioPattern {
+            md += " · \(pat.emoji) \(pat.displayName)"
+        }
+        md += "\n"
+        let pnlPct = (s.pnlPercent as NSDecimalNumber).doubleValue
+        md += String(format: "- 盈亏：%+.2f%% · 总分 %d · %@ 级\n", pnlPct, sc.totalScore, sc.grade.displayName)
+        if let sub = sc.subScores {
+            md += "- 5 维："
+            md += sub.ordered.map { "\($0.dimension.emoji) \($0.score)" }.joined(separator: " / ")
+            md += "\n"
         }
         md += "\n"
         return md

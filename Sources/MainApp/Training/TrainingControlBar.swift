@@ -428,9 +428,9 @@ struct TrainingControlBar: View {
 
     private var idleHint: String {
         if viewModel.book.enabledRules.isEmpty {
-            return "先启用至少 1 条纪律规则才能开始训练"
+            return "⚠️ 先启用至少 1 条纪律规则才能开始训练"
         }
-        var hint = "已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
+        var hint = "✅ 已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
         // v16.132 · 上次训练距今（trader 看间隔 · 避免长时间不练）
         if let last = viewModel.log.sessions.map(\.endedAt).max() {
             hint += " · 上次 \(timeSinceText(last))"

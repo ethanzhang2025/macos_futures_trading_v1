@@ -146,6 +146,40 @@ struct TrainingScoreSheet: View {
         }
         .padding(24)
         .frame(width: 540, height: sheetHeight)
+        // v16.65 · ↑↓ 键盘切换 drilldown 维度（仅 subScores 存在时生效）
+        .background(drilldownKeyboardShortcuts)
+    }
+
+    /// v16.65 · 隐形 button 持 ↑↓ keyboardShortcut · 切换 5 维 drilldown 展开
+    /// trader 看完一维公式按 ↓ 自动展开下一维 · 完整学习 5 维不用鼠标
+    @ViewBuilder
+    private var drilldownKeyboardShortcuts: some View {
+        if score.subScores != nil {
+            Group {
+                Button("") { stepDrilldown(by: -1) }
+                    .keyboardShortcut(.upArrow, modifiers: [])
+                    .opacity(0)
+                Button("") { stepDrilldown(by: 1) }
+                    .keyboardShortcut(.downArrow, modifiers: [])
+                    .opacity(0)
+            }
+        }
+    }
+
+    /// 按方向切换当前展开的维度 · nil → 第一/最后 · 越界 → 关闭（nil）
+    private func stepDrilldown(by delta: Int) {
+        guard let sub = score.subScores else { return }
+        let dims = sub.ordered.map(\.dimension)
+        if let cur = expandedDim, let idx = dims.firstIndex(of: cur) {
+            let next = idx + delta
+            withAnimation(.easeInOut(duration: 0.15)) {
+                expandedDim = (next < 0 || next >= dims.count) ? nil : dims[next]
+            }
+        } else {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                expandedDim = delta > 0 ? dims.first : dims.last
+            }
+        }
     }
 
     /// v16.6 · subScores 注入 200pt 五维区域 · violations 折叠展开 180pt · v16.13 · comparison 加 50pt

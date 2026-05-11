@@ -20,6 +20,8 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
     public var version: Int
     /// WP-60 · 软删除时间戳（tombstone）· 非 nil 即已删
     public var deletedAt: Date?
+    /// v17.36 C1 · 分组颜色索引（0~7 · nil = 默认 accent）· 向后兼容旧 JSON decodeIfPresent
+    public var colorIndex: Int?
 
     public init(
         id: UUID = UUID(),
@@ -29,7 +31,8 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         version: Int = 1,
-        deletedAt: Date? = nil
+        deletedAt: Date? = nil,
+        colorIndex: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -39,6 +42,7 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         self.updatedAt = updatedAt
         self.version = version
         self.deletedAt = deletedAt
+        self.colorIndex = colorIndex
     }
 
     /// 空分组工厂
@@ -50,6 +54,7 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, sortIndex, instrumentIDs, createdAt, updatedAt, version, deletedAt
+        case colorIndex
     }
 
     public init(from decoder: Decoder) throws {
@@ -62,6 +67,7 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         self.updatedAt = try c.decode(Date.self, forKey: .updatedAt)
         self.version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
         self.deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+        self.colorIndex = try c.decodeIfPresent(Int.self, forKey: .colorIndex)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -74,6 +80,7 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         try c.encode(updatedAt, forKey: .updatedAt)
         try c.encode(version, forKey: .version)
         try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(colorIndex, forKey: .colorIndex)
     }
 }
 
@@ -113,6 +120,18 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
         guard let index = groups.firstIndex(where: { $0.id == id }) else { return false }
         guard groups[index].name != newName else { return true }
         groups[index].name = newName
+        groups[index].updatedAt = now
+        groups[index].version += 1
+        return true
+    }
+
+    /// v17.36 C1 · 设置分组颜色索引（0~7 · nil 恢复默认 accent）
+    /// - Returns: 是否成功（false 表示分组不存在）
+    @discardableResult
+    public mutating func setGroupColor(id: UUID, colorIndex: Int?, now: Date = Date()) -> Bool {
+        guard let index = groups.firstIndex(where: { $0.id == id }) else { return false }
+        guard groups[index].colorIndex != colorIndex else { return true }
+        groups[index].colorIndex = colorIndex
         groups[index].updatedAt = now
         groups[index].version += 1
         return true

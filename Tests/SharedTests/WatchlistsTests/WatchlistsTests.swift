@@ -48,6 +48,51 @@ struct WatchlistGroupCRUDTests {
         #expect(!miss)
     }
 
+    // v17.36 C1 · 分组颜色
+    @Test("setGroupColor 命中 · version 自增 · 不命中返回 false")
+    func setGroupColor() {
+        var book = makeBook(groupNames: ["主力"])
+        let id = book.groups[0].id
+        let v0 = book.groups[0].version
+
+        // 设置颜色 0
+        let r1 = book.setGroupColor(id: id, colorIndex: 0)
+        #expect(r1)
+        #expect(book.groups[0].colorIndex == 0)
+        #expect(book.groups[0].version == v0 + 1)
+
+        // 同色不变 · version 不动
+        let r2 = book.setGroupColor(id: id, colorIndex: 0)
+        #expect(r2)
+        #expect(book.groups[0].version == v0 + 1)
+
+        // 恢复 nil 默认
+        let r3 = book.setGroupColor(id: id, colorIndex: nil)
+        #expect(r3)
+        #expect(book.groups[0].colorIndex == nil)
+        #expect(book.groups[0].version == v0 + 2)
+
+        // 不存在 id
+        let r4 = book.setGroupColor(id: UUID(), colorIndex: 3)
+        #expect(!r4)
+    }
+
+    @Test("Watchlist Codable · colorIndex 往返（兼容旧 JSON 无字段）")
+    func colorIndexCodable() throws {
+        var book = makeBook(groupNames: ["A"])
+        _ = book.setGroupColor(id: book.groups[0].id, colorIndex: 5)
+        let data = try JSONEncoder().encode(book)
+        let restored = try JSONDecoder().decode(WatchlistBook.self, from: data)
+        #expect(restored.groups[0].colorIndex == 5)
+
+        // 旧 JSON 缺 colorIndex 字段 → 兼容 nil
+        let legacy = """
+        {"groups":[{"id":"\(UUID().uuidString)","name":"X","sortIndex":0,"instrumentIDs":[],"createdAt":0,"updatedAt":0}]}
+        """.data(using: .utf8)!
+        let legacyBook = try JSONDecoder().decode(WatchlistBook.self, from: legacy)
+        #expect(legacyBook.groups[0].colorIndex == nil)
+    }
+
     @Test("removeGroup 后 sortIndex 自动重排连续")
     func removeGroupNormalizesSortIndex() {
         var book = makeBook(groupNames: ["A", "B", "C", "D"])

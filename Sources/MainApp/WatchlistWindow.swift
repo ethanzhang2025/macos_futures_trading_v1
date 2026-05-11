@@ -507,9 +507,11 @@ struct WatchlistWindow: View {
         let pcts = group.instrumentIDs.compactMap { parseChangePct(changePctText(for: $0)) }
         let upCount = pcts.filter { $0 > 0 }.count
         let downCount = pcts.filter { $0 < 0 }.count
+        // v17.36 C1 · 分组颜色染 folder icon（nil = 默认 accent）
+        let groupColor = WatchlistColor.color(forIndex: group.colorIndex)
         return HStack(spacing: 8) {
-            Image(systemName: "folder")
-                .foregroundColor(.accentColor)
+            Image(systemName: "folder.fill")
+                .foregroundColor(groupColor)
             VStack(alignment: .leading, spacing: 2) {
                 Text(group.name)
                 HStack(spacing: 4) {
@@ -545,6 +547,31 @@ struct WatchlistWindow: View {
                 Pasteboard.copy(group.instrumentIDs.joined(separator: ","))
             }
             .disabled(group.instrumentIDs.isEmpty)
+            // v17.36 C1 · 分组颜色（8 预设 + 默认）· trader 视觉分类 主力/套利/股指 等
+            Menu("🎨 分组颜色（当前 \(WatchlistColor.name(forIndex: group.colorIndex))）") {
+                Button {
+                    book.setGroupColor(id: group.id, colorIndex: nil)
+                } label: {
+                    HStack {
+                        Image(systemName: "circle")
+                        Text("默认")
+                        if group.colorIndex == nil { Image(systemName: "checkmark") }
+                    }
+                }
+                Divider()
+                ForEach(WatchlistColor.preset.indices, id: \.self) { i in
+                    Button {
+                        book.setGroupColor(id: group.id, colorIndex: i)
+                    } label: {
+                        HStack {
+                            Image(systemName: "circle.fill")
+                                .foregroundColor(WatchlistColor.preset[i].color)
+                            Text(WatchlistColor.preset[i].name)
+                            if group.colorIndex == i { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+            }
             Divider()
             Button("删除分组", role: .destructive) {
                 pendingDeleteGroup = group

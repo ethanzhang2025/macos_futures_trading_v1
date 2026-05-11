@@ -261,7 +261,7 @@ struct TrainingHistoryPanel: View {
     // MARK: - 空态
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             Image(systemName: "tray")
                 .font(.system(size: 32))
                 .foregroundColor(.secondary)
@@ -271,6 +271,12 @@ struct TrainingHistoryPanel: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
+            // v16.53 · 引导新 trader 一键开始（与 v15.23 batch16 推荐场景配合）
+            // 触发 ⌘⇧S 即弹 ControlBar startSheet（pendingRetrainPattern 留 nil → 自定义模式）
+            Text("提示：⌘⇧S 开始训练 · ⌘⇧T 切回此面板看历史")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()

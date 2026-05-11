@@ -44,6 +44,10 @@ final class TrainingViewModel: ObservableObject {
     /// v16.46 · history panel mostViolatedRules chip 点击 → 跳 rules panel · TrainingWindow 监听清 nil
     @Published var pendingJumpToRulesTab: Bool = false
 
+    /// v16.101 · ControlBar streak chip / 7 天 mini bar 点击 → 跳 history panel
+    /// 与 pendingJumpToRulesTab 同模式 · TrainingWindow 监听切 tab + 清回 false
+    @Published var pendingJumpToHistoryTab: Bool = false
+
     /// 训练结束后弹 sheet 用 · endSession 写入 · 关闭 sheet 清空
     @Published var lastFinishedSession: TrainingSession? = nil
     @Published var lastFinishedScore: TrainingScore? = nil

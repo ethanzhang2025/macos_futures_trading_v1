@@ -81,6 +81,13 @@ struct TrainingWindow: View {
         .onChange(of: viewModel.recentlyAddedSessionID) { newID in
             if newID != nil { tab = .history }
         }
+        // v16.101 · ControlBar streak chip / 7 天 mini bar 点击 → 跳 history tab
+        .onChange(of: viewModel.pendingJumpToHistoryTab) { newVal in
+            if newVal {
+                tab = .history
+                DispatchQueue.main.async { viewModel.pendingJumpToHistoryTab = false }
+            }
+        }
         .background(
             Group {
                 Button("") { showHelpSheet = true }

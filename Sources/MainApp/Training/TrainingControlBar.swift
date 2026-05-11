@@ -434,13 +434,14 @@ struct TrainingControlBar: View {
     /// v16.79/v16.80 · 连续训练天数 streak chip · 算法提到 TrainingSessionLog.consecutiveTrainingDays
     /// v16.83 · milestone emoji 升级：🔥 (≥2) → 🔥🔥 (≥7) → 🚀 (≥14) → 🏆 (≥30)
     /// v16.89 · 加 personal best 对比 · 当前 ≥ 历史最长 → "🎉 新纪录"
+    /// v16.101 · 点击跳 history tab（trader 看 streak 趋势 + 完整历史）
     /// ≥ 2 才显示（1 天不算 streak · 避免噪音）
     @ViewBuilder
     private var consecutiveDaysChip: some View {
         let streak = viewModel.log.consecutiveTrainingDays()
         if streak >= 2 {
             let best = viewModel.log.longestStreakEver()
-            let isNewRecord = streak >= best   // 当前即历史最长（含相等）
+            let isNewRecord = streak >= best
             let (emoji, hint): (String, String) = {
                 switch streak {
                 case 30...:  return ("🏆", "月级习惯（≥30 天）")
@@ -449,34 +450,39 @@ struct TrainingControlBar: View {
                 default:     return ("🔥", "起步阶段（2-6 天）")
                 }
             }()
-            HStack(spacing: 2) {
-                Text(isNewRecord ? "🎉" : emoji)
-                    .font(.system(size: 11))
-                Text("连训 \(streak) 天")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.red)
-                if !isNewRecord, best > streak {
-                    Text("/最长 \(best)")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
+            Button {
+                viewModel.pendingJumpToHistoryTab = true
+            } label: {
+                HStack(spacing: 2) {
+                    Text(isNewRecord ? "🎉" : emoji)
+                        .font(.system(size: 11))
+                    Text("连训 \(streak) 天")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.red)
+                    if !isNewRecord, best > streak {
+                        Text("/最长 \(best)")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
                 }
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Color.red.opacity(0.10))
+                .cornerRadius(3)
             }
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(Color.red.opacity(0.10))
-            .cornerRadius(3)
+            .buttonStyle(.plain)
             .tooltip(isNewRecord
-                     ? "🎉 新纪录！连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 超越历史！"
-                     : "连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 历史最长 \(best) 天 · 继续保持！")
+                     ? "🎉 新纪录！连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 超越历史！点击跳历史 tab 看完整趋势"
+                     : "连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 历史最长 \(best) 天 · 点击跳历史 tab")
         }
     }
 
     /// v16.76 · 最近 7 天活动 mini bar（类 GitHub contributions · trader 看连训习惯）
+    /// v16.101 · 点击跳 history tab · 与 streak chip 同效
     /// 高度按当天 session 数比例 · 今天柱 accent 色 · 其他 secondary
     private var sevenDayMiniBar: some View {
         let cal = Calendar(identifier: .gregorian)
         let today = cal.startOfDay(for: Date())
-        // 倒序 6..0 → 7 天前到今天
         let days: [(date: Date, count: Int)] = (0...6).reversed().map { offset in
             let day = cal.date(byAdding: .day, value: -offset, to: today) ?? today
             let nextDay = cal.date(byAdding: .day, value: 1, to: day) ?? day
@@ -487,21 +493,26 @@ struct TrainingControlBar: View {
         }
         let maxCount = max(1, days.map(\.count).max() ?? 1)
         let totalWeek = days.map(\.count).reduce(0, +)
-        return HStack(alignment: .bottom, spacing: 1) {
-            ForEach(0..<days.count, id: \.self) { i in
-                let d = days[i]
-                let isToday = i == days.count - 1
-                let h = max(2, CGFloat(d.count) / CGFloat(maxCount) * 14)
-                Rectangle()
-                    .fill(d.count == 0
-                          ? Color.secondary.opacity(0.18)
-                          : (isToday ? Color.accentColor : Color.secondary.opacity(0.55)))
-                    .frame(width: 4, height: h)
-                    .cornerRadius(1)
+        return Button {
+            viewModel.pendingJumpToHistoryTab = true
+        } label: {
+            HStack(alignment: .bottom, spacing: 1) {
+                ForEach(0..<days.count, id: \.self) { i in
+                    let d = days[i]
+                    let isToday = i == days.count - 1
+                    let h = max(2, CGFloat(d.count) / CGFloat(maxCount) * 14)
+                    Rectangle()
+                        .fill(d.count == 0
+                              ? Color.secondary.opacity(0.18)
+                              : (isToday ? Color.accentColor : Color.secondary.opacity(0.55)))
+                        .frame(width: 4, height: h)
+                        .cornerRadius(1)
+                }
             }
+            .frame(height: 14)
         }
-        .frame(height: 14)
-        .tooltip("最近 7 天训练：共 \(totalWeek) 次（今日 \(days.last?.count ?? 0) 次 · 最近 7 天最高 \(maxCount) 次/天）")
+        .buttonStyle(.plain)
+        .tooltip("最近 7 天训练：共 \(totalWeek) 次（今日 \(days.last?.count ?? 0) 次 · 最高 \(maxCount) 次/天）· 点击跳历史 tab")
     }
 }
 

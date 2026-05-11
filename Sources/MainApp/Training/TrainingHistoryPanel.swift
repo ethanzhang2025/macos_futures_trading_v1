@@ -580,16 +580,25 @@ struct TrainingHistoryPanel: View {
                 .frame(width: 100)
                 .tint(achieved ? .green : .accentColor)
             // v16.81 · 未达标时显示"再 N 次"hint · 达标显示"✓ 超额 M 次"
+            // v16.115 · 差 1 次冲刺鼓励 + 达标超额按数量分级
             if achieved {
                 let extra = thisWeekCount - weeklyGoal
                 if extra > 0 {
-                    Text("超额 +\(extra)")
+                    let medal: String = {
+                        switch extra {
+                        case 5...:  return "🏆"   // 超额 5+
+                        case 2...:  return "🎯"   // 超额 2-4
+                        default:    return "✓"   // 超额 1
+                        }
+                    }()
+                    Text("\(medal) 超额 +\(extra)")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.green)
                 }
             } else {
                 let remaining = weeklyGoal - thisWeekCount
-                Text("再 \(remaining) 次")
+                let prefix = remaining == 1 ? "🎯 冲刺" : "再"
+                Text("\(prefix) \(remaining) 次")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.orange)
             }

@@ -498,6 +498,9 @@ struct TrainingScoreSheet: View {
             }
             .buttonStyle(.plain)
 
+            // v16.41 · 按规则分组统计 chip 行（trader 看分后立即定位最常违反的规则）
+            violationsByRuleChips
+
             if showViolations {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
@@ -509,6 +512,42 @@ struct TrainingScoreSheet: View {
                 .frame(height: 180)
                 .background(Color(NSColor.controlBackgroundColor))
                 .cornerRadius(6)
+            }
+        }
+    }
+
+    /// v16.41 · 按规则 kind 分组 chip · 数量降序 · 最弱规则橙色标注
+    private var violationsByRuleChips: some View {
+        let grouped = Dictionary(grouping: session.violations, by: { $0.ruleKind })
+            .map { (kind: $0.key, count: $0.value.count) }
+            .sorted { $0.count > $1.count }
+        return Group {
+            if grouped.isEmpty {
+                EmptyView()
+            } else {
+                HStack(spacing: 4) {
+                    Text("最常违反")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    ForEach(Array(grouped.prefix(3).enumerated()), id: \.offset) { idx, item in
+                        let isWeakest = (idx == 0)
+                        HStack(spacing: 3) {
+                            Text(item.kind.displayName)
+                                .font(.system(size: 10))
+                            Text("×\(item.count)")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background((isWeakest ? Color.orange : Color.secondary).opacity(0.12))
+                        .foregroundColor(isWeakest ? .orange : .primary)
+                        .cornerRadius(4)
+                        .tooltip(isWeakest
+                                 ? "最常违反 · 下次训练重点改进 \(item.kind.displayName)（共 \(item.count) 次）"
+                                 : "\(item.kind.displayName) 共违反 \(item.count) 次")
+                    }
+                    Spacer()
+                }
             }
         }
     }

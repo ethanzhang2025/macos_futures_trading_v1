@@ -1574,6 +1574,17 @@ public struct FormulaEditorWindow: View {
                 } label: {
                     Label("跳转检查拼写", systemImage: "magnifyingglass")
                 }
+                // v16.97 · 若 message 含 typo 建议 · 加复制按钮（trader 手动替换免输错）
+                if let suggestion = parseTypoSuggestion(from: warn.message) {
+                    Button {
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(suggestion, forType: .string)
+                        statusMessage = "已复制建议 \(suggestion) 到剪贴板"
+                    } label: {
+                        Label("复制建议 \(suggestion)", systemImage: "doc.on.doc")
+                    }
+                }
             }
         } label: {
             Label("修复", systemImage: "wand.and.stars")
@@ -1591,6 +1602,15 @@ public struct FormulaEditorWindow: View {
         guard let match = regex.firstMatch(in: message, range: NSRange(location: 0, length: ns.length)),
               match.numberOfRanges >= 2 else { return nil }
         return Int(ns.substring(with: match.range(at: 1)))
+    }
+
+    /// v16.97 · 从 v16.93 typo 建议 message "可能是 `X`?" 提取 X
+    private func parseTypoSuggestion(from message: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"可能是 `([A-Z_][A-Z0-9_]*)`"#) else { return nil }
+        let ns = message as NSString
+        guard let match = regex.firstMatch(in: message, range: NSRange(location: 0, length: ns.length)),
+              match.numberOfRanges >= 2 else { return nil }
+        return ns.substring(with: match.range(at: 1))
     }
 
     /// 删除 sourceText 第 N 行（1-based · 越界保护）

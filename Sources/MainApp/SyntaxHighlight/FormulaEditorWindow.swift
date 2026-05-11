@@ -400,7 +400,7 @@ public struct FormulaEditorWindow: View {
                                 }
                             }
                         }
-                        if !lintWarns.isEmpty {
+                        if !lintWarns.isEmpty || !allLintWarns.isEmpty {
                             // v16.75 · 按 severity 排序：error 在前 · warning 在后 · 同级保持原行号顺序
                             let sortedLints = lintWarns.sorted {
                                 if $0.severity != $1.severity { return $0.severity > $1.severity }
@@ -408,6 +408,9 @@ public struct FormulaEditorWindow: View {
                             }
                             let errorCount = sortedLints.filter { $0.severity == .error }.count
                             let unusedLines = sortedLints.filter { $0.kind == .unusedVariable }.map { $0.line }
+                            // v16.154 · 总数（不受 severity filter 影响 · chip 展示完整 warn count）
+                            let totalErrorCount = allLintWarns.filter { $0.severity == .error }.count
+                            let totalWarningCount = allLintWarns.filter { $0.severity == .warning }.count
                             Section(header: HStack {
                                 Text("⚠ Lint 警告").font(.headline).foregroundColor(.orange)
                                 if errorCount > 0 {
@@ -415,6 +418,21 @@ public struct FormulaEditorWindow: View {
                                         .font(.caption).foregroundColor(.secondary)
                                 } else {
                                     Text("(\(sortedLints.count))").font(.caption).foregroundColor(.secondary)
+                                }
+                                // v16.154 · severity 过滤 chip（直接点击切换 · 比齿轮 Menu 直觉）
+                                if totalErrorCount > 0 {
+                                    severityFilterChip(
+                                        label: "🔴 \(totalErrorCount)",
+                                        isOn: showLintErrors,
+                                        tip: "\(showLintErrors ? "隐藏" : "显示") error 紧急 (\(totalErrorCount) 条)"
+                                    ) { showLintErrors.toggle() }
+                                }
+                                if totalWarningCount > 0 {
+                                    severityFilterChip(
+                                        label: "🟡 \(totalWarningCount)",
+                                        isOn: showLintWarnings,
+                                        tip: "\(showLintWarnings ? "隐藏" : "显示") warning 提醒 (\(totalWarningCount) 条)"
+                                    ) { showLintWarnings.toggle() }
                                 }
                                 Spacer()
                                 // v16.113 · 批量删除全部 unused（≥ 2 才显示 · 单条用单 Menu）
@@ -430,6 +448,15 @@ public struct FormulaEditorWindow: View {
                                     .tooltip("批量删除所有 unusedVariable 警告对应的行")
                                 }
                             }) {
+                                // v16.154 · 全 filter 隐藏后 · 提示用户点 chip 重开
+                                if sortedLints.isEmpty {
+                                    HStack {
+                                        Text("⚙️ 已通过 chip 隐藏全部 \(allLintWarns.count) 条 lint · 点击 chip 重新显示")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                    }
+                                }
                                 ForEach(Array(sortedLints.enumerated()), id: \.offset) { _, warn in
                                     HStack {
                                         Text("\(warn.line)").font(.caption.monospacedDigit())
@@ -1564,6 +1591,31 @@ public struct FormulaEditorWindow: View {
             ("行内波浪线 (v16.92)", "整行 dot · error 红 / warning 橙 · trader 写时即看 · v16.107 可关闭"),
         ]),
     ]
+
+    // MARK: - v16.154 · severity 过滤 chip（outline section · 直接点击 toggle）
+
+    /// chip 视觉态：isOn 时实色 · isOff 时灰色描边 · 点击切 toggle
+    private func severityFilterChip(label: String, isOn: Bool, tip: String,
+                                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isOn ? Color.orange.opacity(0.15) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(isOn ? Color.orange.opacity(0.5) : Color.secondary.opacity(0.3),
+                                       lineWidth: 1)
+                )
+                .foregroundColor(isOn ? .orange : .secondary)
+        }
+        .buttonStyle(.plain)
+        .tooltip(tip)
+    }
 
     // MARK: - v16.60 · Lint quick fix Menu（按 warning kind 提供针对性修复）
 

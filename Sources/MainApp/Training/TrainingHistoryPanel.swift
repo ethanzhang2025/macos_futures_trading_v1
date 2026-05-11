@@ -1234,6 +1234,13 @@ struct TrainingHistoryPanel: View {
                                     Label("再练同形态 \(pattern.emoji) \(pattern.displayName)",
                                           systemImage: "arrow.clockwise")
                                 }
+                                // v16.208 · filter 同形态历史（trader 看自己同形态的所有训练）
+                                Button {
+                                    filterPattern = pattern
+                                } label: {
+                                    Label("筛选同形态 \(pattern.emoji) \(pattern.displayName)",
+                                          systemImage: "line.3.horizontal.decrease.circle")
+                                }
                             }
                             // v15.23 batch158 · 单 session 分享（复用 batch133 + batch146）
                             if let score = viewModel.log.score(for: session.id) {

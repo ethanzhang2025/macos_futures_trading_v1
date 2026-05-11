@@ -1048,11 +1048,15 @@ public struct FormulaEditorWindow: View {
                 let dupCount = lintWarnings.filter { $0.kind == .duplicateDefinition }.count
                 let colorCount = lintWarnings.filter { $0.kind == .missingColorAttribute }.count
                 let undefinedCount = lintWarnings.filter { $0.kind == .undefinedVariable }.count
+                let argCount = lintWarnings.filter { $0.kind == .argCountMismatch }.count
+                let suspiciousCount = lintWarnings.filter { $0.kind == .suspiciousVariableName }.count
                 let chipText = [
                     undefinedCount > 0 ? "\(undefinedCount) 未定义" : nil,
                     dupCount > 0 ? "\(dupCount) 重复" : nil,
+                    argCount > 0 ? "\(argCount) 参数" : nil,
                     unusedCount > 0 ? "\(unusedCount) 未用" : nil,
                     colorCount > 0 ? "\(colorCount) 无色" : nil,
+                    suspiciousCount > 0 ? "\(suspiciousCount) 疑似" : nil,
                 ].compactMap { $0 }.joined(separator: " · ")
                 // v16.78 · 有 error 严重度 → chip 用红色（紧急）· 仅 warning → 橙
                 let hasError = lintWarnings.contains { $0.severity == .error }
@@ -1621,6 +1625,25 @@ public struct FormulaEditorWindow: View {
                         Label("复制签名模板", systemImage: "doc.on.doc")
                     }
                 }
+            case .suspiciousVariableName:
+                // v16.109 · 变量定义名 typo 嫌疑 · 跳转 + 提示建议名（无机械修复 · trader 自决）
+                Button {
+                    pendingGotoLine = warn.line
+                    showOutlineSheet = false
+                    statusMessage = "跳到第 \(warn.line) 行 · 检查变量名是否 typo"
+                } label: {
+                    Label("跳转检查变量名", systemImage: "magnifyingglass")
+                }
+                if let close = parseSuspiciousCloseName(from: warn.message) {
+                    Button {
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(close, forType: .string)
+                        statusMessage = "已复制 builtin 名 \(close)"
+                    } label: {
+                        Label("复制 builtin 名 \(close)", systemImage: "doc.on.doc")
+                    }
+                }
             }
         } label: {
             Label("修复", systemImage: "wand.and.stars")
@@ -1661,6 +1684,15 @@ public struct FormulaEditorWindow: View {
     /// v16.105 · 从 undefinedVariable message 提取标识符名（"未定义的标识符 FOOBAR(...)" → "FOOBAR"）
     private func parseUndefinedName(from message: String) -> String? {
         guard let regex = try? NSRegularExpression(pattern: #"未定义的标识符 ([A-Za-z_][A-Za-z0-9_]*)"#) else { return nil }
+        let ns = message as NSString
+        guard let match = regex.firstMatch(in: message, range: NSRange(location: 0, length: ns.length)),
+              match.numberOfRanges >= 2 else { return nil }
+        return ns.substring(with: match.range(at: 1))
+    }
+
+    /// v16.109 · 从 suspiciousVariableName message 提取 close builtin 名（"与 builtin/keyword `X` 仅差..." → X）
+    private func parseSuspiciousCloseName(from message: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"`([A-Z_][A-Z0-9_]*)`"#) else { return nil }
         let ns = message as NSString
         guard let match = regex.firstMatch(in: message, range: NSRange(location: 0, length: ns.length)),
               match.numberOfRanges >= 2 else { return nil }

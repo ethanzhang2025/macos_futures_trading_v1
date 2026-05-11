@@ -555,6 +555,57 @@ public struct FormulaEditorWindow: View {
         let text: String
     }
 
+    // v16.37 · 代码片段（trader 写公式常用 1-2 行表达式 · 插入光标位置不覆盖）
+    private struct CodeSnippet {
+        let name: String
+        let category: String
+        let text: String
+        let description: String
+    }
+
+    private static let codeSnippets: [CodeSnippet] = [
+        // 信号 4
+        CodeSnippet(name: "金叉", category: "信号",
+            text: "CROSS(MA(CLOSE,5),MA(CLOSE,20))",
+            description: "5 日均线上穿 20 日均线（经典金叉）"),
+        CodeSnippet(name: "死叉", category: "信号",
+            text: "CROSSDOWN(MA(CLOSE,5),MA(CLOSE,20))",
+            description: "5 日均线下穿 20 日均线"),
+        CodeSnippet(name: "KDJ 金叉超卖", category: "信号",
+            text: "CROSS(K,D) AND K<20",
+            description: "K 上穿 D · 且 K 在超卖区（< 20）· 高质信号"),
+        CodeSnippet(name: "MACD 顶背离", category: "信号",
+            text: "HIGH>=HHV(HIGH,20) AND DIF<HHV(DIF,20)",
+            description: "价创新高 · 但 MACD DIF 未创新高（动能减弱）"),
+        // 形态 3
+        CodeSnippet(name: "突破新高", category: "形态",
+            text: "CROSS(CLOSE,REF(HHV(HIGH,20),1))",
+            description: "收盘价突破前 20 日最高（突破信号）"),
+        CodeSnippet(name: "假突破回踩", category: "形态",
+            text: "CLOSE<REF(HHV(HIGH,20),1) AND HIGH>REF(HHV(HIGH,20),1)",
+            description: "盘中破前高 · 收盘回落（假突破 · 反手做空候选）"),
+        CodeSnippet(name: "布林挤压", category: "形态",
+            text: "(BOLL_UP-BOLL_LOW)/MA(CLOSE,20)<0.05",
+            description: "布林带宽收窄 < 5%（蓄势 · 即将变盘）"),
+        // 风险 3
+        CodeSnippet(name: "止损 2%", category: "风险",
+            text: "CLOSE<ENTRYPRICE*0.98",
+            description: "持仓后浮亏达 2% 平仓（固定百分比止损）"),
+        CodeSnippet(name: "止盈 5%", category: "风险",
+            text: "CLOSE>=ENTRYPRICE*1.05",
+            description: "持仓后浮盈达 5% 平仓（固定百分比止盈）"),
+        CodeSnippet(name: "移动止损", category: "风险",
+            text: "CLOSE<HHV(CLOSE,5)*0.97",
+            description: "回撤超 5 日最高 3% 平仓（trailing stop · 锁利）"),
+        // 量价 2
+        CodeSnippet(name: "量能放大", category: "量价",
+            text: "VOLUME>REF(VOLUME,1)*1.5",
+            description: "当前量能比上期放大 1.5 倍（有效突破前置条件）"),
+        CodeSnippet(name: "缩量回调", category: "量价",
+            text: "VOLUME<MA(VOLUME,5)*0.7 AND CLOSE<REF(CLOSE,1)",
+            description: "量能 < 5 日均量 70% 且收阴（健康回调 · 不破位则可加仓）"),
+    ]
+
     private static let builtinExamples: [BuiltinExample] = [
         BuiltinExample(name: "MACD（标准）", description: "经典 MACD · DIF/DEA/MACD 三线 · 红柱涨绿柱跌", text: """
         {MACD · 移动平均收敛发散指标}
@@ -846,6 +897,27 @@ public struct FormulaEditorWindow: View {
                 Label("示例", systemImage: "books.vertical.fill")
             }
             .tooltip("加载内置标准公式示例（MACD / KDJ / RSI / BOLL 等）")
+            // v16.37 · 内置代码片段 Menu（trader 高频 1-2 行表达式 · 插入光标位置不覆盖 · 4 类 12 个）
+            Menu {
+                let grouped = Dictionary(grouping: Self.codeSnippets, by: { $0.category })
+                let order = ["信号", "形态", "风险", "量价"]
+                ForEach(order, id: \.self) { cat in
+                    if let items = grouped[cat], !items.isEmpty {
+                        Section(cat) {
+                            ForEach(items, id: \.name) { snip in
+                                Button(snip.name) {
+                                    pendingInsertText = snip.text
+                                    statusMessage = "已插入片段：\(snip.name)"
+                                }
+                                .tooltip("\(snip.description)\n→ \(snip.text)")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("插入片段", systemImage: "wrench.adjustable")
+            }
+            .tooltip("插入 trader 高频 1-2 行表达式到光标位置（金叉 / 突破新高 / 止损止盈 / 量能放大 等 12 个）")
             // v15.22 batch7 · 片段库 Menu（保存当前 / 加载已存 · trader 自定义模板）
             Menu {
                 Button("💾 保存当前为片段…") {

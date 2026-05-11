@@ -624,6 +624,16 @@ struct TrainingHistoryPanel: View {
             ProgressView(value: progress, total: 1.0)
                 .frame(width: 100)
                 .tint(achieved ? .green : .accentColor)
+            // v16.143 · 距周末 N 天提示（trader 周末前赶达标）
+            if let weekEnd = cal.dateInterval(of: .weekOfYear, for: Date())?.end {
+                let daysLeft = max(0, cal.dateComponents([.day], from: Date(), to: weekEnd).day ?? 0)
+                if daysLeft > 0 && !achieved {
+                    Text("⏳\(daysLeft)d")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .tooltip("距本周结束还有 \(daysLeft) 天")
+                }
+            }
             // v16.81 · 未达标时显示"再 N 次"hint · 达标显示"✓ 超额 M 次"
             // v16.115 · 差 1 次冲刺鼓励 + 达标超额按数量分级
             if achieved {

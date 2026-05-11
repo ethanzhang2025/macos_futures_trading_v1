@@ -729,6 +729,21 @@ struct TrainingHistoryPanel: View {
         }
     }
 
+    /// v16.141 · 弱项 chip tooltip · 加最近 3 次该形态分数（trader 看趋势）
+    private func buildWeakPatternTooltip(pattern: TrainingScenarioPattern,
+                                          avg: Int, count: Int) -> String {
+        let recentScores = viewModel.log.sessions
+            .filter { $0.scenarioPattern == pattern }
+            .sorted { $0.endedAt > $1.endedAt }
+            .prefix(3)
+            .compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+        var tip = "一键加练 \(pattern.displayName) · 当前均分 \(avg)（\(count) 次）"
+        if !recentScores.isEmpty {
+            tip += "\n最近 \(recentScores.count) 次：\(recentScores.map { "\($0)" }.joined(separator: " · "))"
+        }
+        return tip
+    }
+
     /// v16.135 · 累积违规 chip tooltip · 加最近 5 次违反 session 名
     private func buildViolationChipTooltip(kind: DisciplineRuleKind, count: Int, isWorst: Bool) -> String {
         let recentSessions = viewModel.log.sessions
@@ -858,7 +873,7 @@ struct TrainingHistoryPanel: View {
                             .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
-                        .tooltip("一键加练 \(b.pattern.displayName) · 当前均分 \(b.avg)（\(b.count) 次）")
+                        .tooltip(buildWeakPatternTooltip(pattern: b.pattern, avg: b.avg, count: b.count))
                     }
                     Spacer()
                 }

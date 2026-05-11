@@ -113,4 +113,39 @@ struct TrainingSessionCSVExporterTests {
         #expect(data[1] == 0xBB)
         #expect(data[2] == 0xBF)
     }
+
+    // MARK: - v16.61 · breakdown drilldown 列
+
+    @Test("v16.61 · header 含 6 列 breakdown")
+    func breakdownHeader() {
+        let csv = TrainingSessionCSVExporter.export(TrainingSessionLog())
+        #expect(csv.contains("配对数"))
+        #expect(csv.contains("盈利配对数"))
+        #expect(csv.contains("最大单笔亏损"))
+        #expect(csv.contains("最大单笔亏损%"))
+        #expect(csv.contains("配对总盈亏"))
+        #expect(csv.contains("平均配对盈亏%"))
+    }
+
+    @Test("v16.61 · 空 session 输出 breakdown 0 值")
+    func breakdownEmptySession() {
+        var log = TrainingSessionLog()
+        log.addSession(TrainingSession(
+            startedAt: t0, endedAt: t0.addingTimeInterval(3600),
+            initialBalance: 100_000, finalBalance: 100_000,
+            scenarioName: "无交易"
+        ))
+        let csv = TrainingSessionCSVExporter.export(log)
+        let lines = csv.split(separator: "\r\n", omittingEmptySubsequences: false).map(String.init)
+        // 关键：omittingEmptySubsequences=false · 空 pattern 列不能被吞导致 index 偏移
+        let header = lines[0].split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+        let dataRow = lines[1].split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+        #expect(header.count == dataRow.count)
+        let pairIdx = header.firstIndex(of: "配对数")!
+        #expect(dataRow[pairIdx] == "0")
+        let winIdx = header.firstIndex(of: "盈利配对数")!
+        #expect(dataRow[winIdx] == "0")
+        let worstIdx = header.firstIndex(of: "最大单笔亏损")!
+        #expect(dataRow[worstIdx] == "0.00")
+    }
 }

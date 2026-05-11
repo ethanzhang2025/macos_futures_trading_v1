@@ -16,6 +16,8 @@ public enum TrainingSessionCSVExporter {
         "总分", "等级", "盈亏子分", "纪律子分",
         "维度_盈亏", "维度_纪律", "维度_胜率", "维度_风险", "维度_效率", "最弱维度",
         "违规数", "警告数", "交易笔数",
+        // v16.61 · drilldown 原始数据（与 v16.56 SubScoreBreakdown 同源 · trader Excel 五维分析）
+        "配对数", "盈利配对数", "最大单笔亏损", "最大单笔亏损%", "配对总盈亏", "平均配对盈亏%",
     ]
 
     public static func export(_ log: TrainingSessionLog, timeZone: TimeZone? = nil) -> String {
@@ -34,6 +36,7 @@ public enum TrainingSessionCSVExporter {
             let sub = score?.subScores
             let errors = s.violations.filter { $0.severity == .error }.count
             let warnings = s.violations.filter { $0.severity == .warning }.count
+            let b = TrainingScorer.subScoreBreakdown(s)
             let row: [String] = [
                 fmt.string(from: s.endedAt),
                 String(s.durationMinutes),
@@ -55,6 +58,12 @@ public enum TrainingSessionCSVExporter {
                 String(errors),
                 String(warnings),
                 String(s.trades.count),
+                String(b.pairCount),
+                String(b.winCount),
+                String(format: "%.2f", b.worstLoss),
+                String(format: "%.2f", b.worstLossPct),
+                String(format: "%.2f", b.totalPairPnL),
+                String(format: "%.3f", b.avgPairPnLPct),
             ]
             lines.append(row.map(escape).joined(separator: ","))
         }

@@ -294,7 +294,9 @@ public enum TrainingScorer {
         let warnings = session.violations.filter { $0.severity == .warning }.count
         let principal = (session.initialBalance as NSDecimalNumber).doubleValue
         let pairPnLs = pairs.map { ($0.pnl as NSDecimalNumber).doubleValue }
-        let worstLoss = max(0, -(pairPnLs.min() ?? 0))
+        // 避免 -0.0 IEEE 符号污染 CSV 输出（"-0.00"）
+        let worstLossRaw = pairPnLs.min() ?? 0
+        let worstLoss = worstLossRaw < 0 ? -worstLossRaw : 0
         let worstLossPct = principal > 0 ? worstLoss / principal * 100 : 0
         let total = pairPnLs.reduce(0, +)
         let avgPct: Double = {

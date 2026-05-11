@@ -135,4 +135,52 @@ struct DisciplineBookTests {
         let kinds = Set(book.rules.map { $0.kind })
         #expect(kinds == Set(DisciplineRuleKind.allCases))
     }
+
+    // MARK: - v16.43 · 4 套规则模板预设值校验（防意外修改）
+
+    @Test("v16.43 · aggressiveIntraday · 高频参数（止损宽 / 持仓短 / 加仓多）")
+    func aggressiveIntradayShape() {
+        let book = DisciplineBook.aggressiveIntraday
+        #expect(book.rules.count == 5)
+        #expect(book.enabledRules.count == 5)
+        let kinds = Set(book.rules.map { $0.kind })
+        #expect(kinds == Set(DisciplineRuleKind.allCases))
+        // 关键参数（trader 切换后应识别为激进风格）
+        #expect(book.rules(of: .stopLossPercent).first?.threshold == 3.0)
+        #expect(book.rules(of: .maxHoldingMinutes).first?.threshold == 30)
+        #expect(book.rules(of: .maxDailyTrades).first?.threshold == 50)
+    }
+
+    @Test("v16.43 · swingHolding · 波段参数（止损宽 / 持仓长 / 单日少笔数）")
+    func swingHoldingShape() {
+        let book = DisciplineBook.swingHolding
+        #expect(book.rules.count == 5)
+        #expect(book.rules(of: .stopLossPercent).first?.threshold == 5.0)
+        #expect(book.rules(of: .maxHoldingMinutes).first?.threshold == 4320)  // 3 天
+        #expect(book.rules(of: .maxDailyTrades).first?.threshold == 5)
+    }
+
+    @Test("v16.43 · minimal · 仅 2 条核心（不被规则淹没）")
+    func minimalShape() {
+        let book = DisciplineBook.minimal
+        #expect(book.rules.count == 2)
+        #expect(book.enabledRules.count == 2)
+        let kinds = Set(book.rules.map { $0.kind })
+        #expect(kinds == Set([.stopLossPercent, .dailyMaxLoss]))
+    }
+
+    @Test("v16.43 · 4 套模板互不相同（各 Equatable 不重复）")
+    func templatesAreDistinct() {
+        let templates = [
+            DisciplineBook.defaultRecommended,
+            DisciplineBook.aggressiveIntraday,
+            DisciplineBook.swingHolding,
+            DisciplineBook.minimal,
+        ]
+        for i in 0..<templates.count {
+            for j in (i+1)..<templates.count {
+                #expect(templates[i] != templates[j], "模板 \(i) 和 \(j) 内容相同")
+            }
+        }
+    }
 }

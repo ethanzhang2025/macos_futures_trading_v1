@@ -1401,24 +1401,31 @@ struct ChartScene: View {
     }
 
     private func drawingToolButton(icon: String, tool: DrawingType?, help: String) -> some View {
-        Button {
+        let isActive = (activeDrawingTool == tool)
+        return Button {
             activeDrawingTool = tool
             pendingDrawingPoint = nil
             pendingExtraPoints = []
         } label: {
             Image(systemName: icon)
                 .frame(width: 20, height: 20)
+                .foregroundColor(isActive ? .accentColor : .primary)  // v17.28 · 选中态 icon 染色
         }
         .buttonStyle(.borderless)
         .padding(2)
-        .background(activeDrawingTool == tool ? Color.accentColor.opacity(0.3) : Color.clear)
+        .background(isActive ? Color.accentColor.opacity(0.25) : Color.clear)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .strokeBorder(Color.accentColor.opacity(isActive ? 0.7 : 0), lineWidth: 1)  // v17.28 · 选中加 border
+        )
         .cornerRadius(4)
         .tooltip(help)
     }
 
     /// v15.85 · 文字标注工具按钮 · 用 "Aa" 字符替代 textformat SF Symbol（更直观）
     private func drawingTextToolButton(help: String) -> some View {
-        Button {
+        let isActive = (activeDrawingTool == .text)
+        return Button {
             activeDrawingTool = .text
             pendingDrawingPoint = nil
             pendingExtraPoints = []
@@ -1426,10 +1433,15 @@ struct ChartScene: View {
             Text("Aa")
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 20, height: 20)
+                .foregroundColor(isActive ? .accentColor : .primary)
         }
         .buttonStyle(.borderless)
         .padding(2)
-        .background(activeDrawingTool == .text ? Color.accentColor.opacity(0.3) : Color.clear)
+        .background(isActive ? Color.accentColor.opacity(0.25) : Color.clear)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .strokeBorder(Color.accentColor.opacity(isActive ? 0.7 : 0), lineWidth: 1)
+        )
         .cornerRadius(4)
         .tooltip(help)
     }

@@ -19,50 +19,60 @@ public enum KLinePeriod: String, Sendable, Codable, CaseIterable {
     case daily    = "D"
     case weekly   = "W"
     case monthly  = "M"
+    // v17.7 · TradingView 对齐 A2.2 · 季 / 半年 / 年（长线 trader）
+    case quarterly  = "Q"
+    case semiAnnual = "HY"
+    case annual     = "Y"
 
     /// 周期秒数（用于K线合成）
     public var seconds: Int {
         switch self {
-        case .second1:  return 1
-        case .second3:  return 3
-        case .second5:  return 5
-        case .second10: return 10
-        case .second15: return 15
-        case .second30: return 30
-        case .minute1:  return 60
-        case .minute3:  return 180
-        case .minute5:  return 300
-        case .minute15: return 900
-        case .minute30: return 1800
-        case .hour1:    return 3600
-        case .hour2:    return 7200
-        case .hour4:    return 14400
-        case .daily:    return 86400
-        case .weekly:   return 604800
-        case .monthly:  return 2592000
+        case .second1:    return 1
+        case .second3:    return 3
+        case .second5:    return 5
+        case .second10:   return 10
+        case .second15:   return 15
+        case .second30:   return 30
+        case .minute1:    return 60
+        case .minute3:    return 180
+        case .minute5:    return 300
+        case .minute15:   return 900
+        case .minute30:   return 1800
+        case .hour1:      return 3600
+        case .hour2:      return 7200
+        case .hour4:      return 14400
+        case .daily:      return 86400
+        case .weekly:     return 604800
+        case .monthly:    return 2592000     // 30 天近似
+        case .quarterly:  return 7776000     // 90 天近似
+        case .semiAnnual: return 15552000    // 180 天近似
+        case .annual:     return 31536000    // 365 天近似
         }
     }
 
     /// 中文显示名
     public var displayName: String {
         switch self {
-        case .second1:  return "1秒"
-        case .second3:  return "3秒"
-        case .second5:  return "5秒"
-        case .second10: return "10秒"
-        case .second15: return "15秒"
-        case .second30: return "30秒"
-        case .minute1:  return "1分"
-        case .minute3:  return "3分"
-        case .minute5:  return "5分"
-        case .minute15: return "15分"
-        case .minute30: return "30分"
-        case .hour1:    return "1时"
-        case .hour2:    return "2时"
-        case .hour4:    return "4时"
-        case .daily:    return "日线"
-        case .weekly:   return "周线"
-        case .monthly:  return "月线"
+        case .second1:    return "1秒"
+        case .second3:    return "3秒"
+        case .second5:    return "5秒"
+        case .second10:   return "10秒"
+        case .second15:   return "15秒"
+        case .second30:   return "30秒"
+        case .minute1:    return "1分"
+        case .minute3:    return "3分"
+        case .minute5:    return "5分"
+        case .minute15:   return "15分"
+        case .minute30:   return "30分"
+        case .hour1:      return "1时"
+        case .hour2:      return "2时"
+        case .hour4:      return "4时"
+        case .daily:      return "日线"
+        case .weekly:     return "周线"
+        case .monthly:    return "月线"
+        case .quarterly:  return "季线"
+        case .semiAnnual: return "半年线"
+        case .annual:     return "年线"
         }
     }
 }

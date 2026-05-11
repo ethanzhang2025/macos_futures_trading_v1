@@ -91,6 +91,8 @@ public struct FormulaEditorWindow: View {
     @AppStorage("viewState.v1.formulaEditor.showLintWarnings") private var showLintWarnings: Bool = true
     /// v16.158 · 本会话隐藏指定 kind 的 lint（不持久化 · trader 临时关掉某类噪音）
     @State private var sessionHiddenLintKinds: Set<MaiLangLintWarning.Kind> = []
+    /// v16.201 · lint 排序模式（持久化 · severity desc 默认 = v16.75 既有）
+    @AppStorage("viewState.v1.formulaEditor.lintSortMode") private var lintSortModeRaw: String = "severity"
     /// v15.23 batch109 · minimap 宽度 4 档（80 窄 / 100 中 / 120 宽 / 160 超宽 · 默认 100 · 持久化）
     @AppStorage("viewState.v1.formulaEditor.minimapWidth") private var minimapWidth: Double = 100
     /// v15.23 batch106 · 主编辑器当前可视行（1-based · minimap viewport 高亮 + 滚动同步）
@@ -409,11 +411,23 @@ public struct FormulaEditorWindow: View {
                             }
                         }
                         if !lintWarns.isEmpty || !allLintWarns.isEmpty {
-                            // v16.75 · 按 severity 排序：error 在前 · warning 在后 · 同级保持原行号顺序
-                            let sortedLints = lintWarns.sorted {
-                                if $0.severity != $1.severity { return $0.severity > $1.severity }
-                                return $0.line < $1.line
-                            }
+                            // v16.75 · 按 severity 排序 · v16.201 加 line/kind 排序选项（持久化）
+                            let sortedLints: [MaiLangLintWarning] = {
+                                switch lintSortModeRaw {
+                                case "line":
+                                    return lintWarns.sorted { $0.line < $1.line }
+                                case "kind":
+                                    return lintWarns.sorted {
+                                        if $0.kind.rawValue != $1.kind.rawValue { return $0.kind.rawValue < $1.kind.rawValue }
+                                        return $0.line < $1.line
+                                    }
+                                default:   // severity（默认 + 既有）
+                                    return lintWarns.sorted {
+                                        if $0.severity != $1.severity { return $0.severity > $1.severity }
+                                        return $0.line < $1.line
+                                    }
+                                }
+                            }()
                             let errorCount = sortedLints.filter { $0.severity == .error }.count
                             let unusedLines = sortedLints.filter { $0.kind == .unusedVariable }.map { $0.line }
                             // v16.154 · 总数（不受 severity filter 影响 · chip 展示完整 warn count）
@@ -441,6 +455,26 @@ public struct FormulaEditorWindow: View {
                                         isOn: showLintWarnings,
                                         tip: "\(showLintWarnings ? "隐藏" : "显示") warning 提醒 (\(totalWarningCount) 条)"
                                     ) { showLintWarnings.toggle() }
+                                }
+                                // v16.201 · 排序 Menu（line / severity / kind 3 选 · 持久化）
+                                if sortedLints.count >= 3 {
+                                    Menu {
+                                        Button("\(lintSortModeRaw == "severity" ? "✓ " : "")按 severity 排序") {
+                                            lintSortModeRaw = "severity"
+                                        }
+                                        Button("\(lintSortModeRaw == "line" ? "✓ " : "")按行号排序") {
+                                            lintSortModeRaw = "line"
+                                        }
+                                        Button("\(lintSortModeRaw == "kind" ? "✓ " : "")按 kind 排序") {
+                                            lintSortModeRaw = "kind"
+                                        }
+                                    } label: {
+                                        Image(systemName: "arrow.up.arrow.down.circle")
+                                            .font(.system(size: 11))
+                                    }
+                                    .menuStyle(.borderlessButton)
+                                    .frame(width: 22)
+                                    .tooltip("排序方式：当前 \(lintSortModeRaw)")
                                 }
                                 Spacer()
                                 // v16.113 · 批量删除全部 unused（≥ 2 才显示 · 单条用单 Menu）

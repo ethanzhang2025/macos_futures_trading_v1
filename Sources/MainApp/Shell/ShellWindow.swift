@@ -27,7 +27,7 @@ public struct ShellWindow: View {
                 Divider()
                 paneContainerPlaceholder
                 Divider()
-                bottomTradingBarPlaceholder
+                BottomTradingBar()
             }
             .frame(minWidth: 1000, minHeight: 700)
         }
@@ -50,21 +50,6 @@ public struct ShellWindow: View {
         }
     }
 
-    // MARK: - 底部交易区占位（Step 7 实装）
-
-    private var bottomTradingBarPlaceholder: some View {
-        HStack(spacing: 16) {
-            Text("📊 持仓 0  ·  📋 委托 0  ·  ✓ 成交 0  ·  💰 资金 ¥100,000  ·  🎯 训练规则 0/0")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.secondary)
-            Spacer()
-            Text("Step 7 实装")
-                .font(.caption2).foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 16).padding(.vertical, 8)
-        .background(Color.secondary.opacity(0.06))
-        .frame(height: ShellMetrics.bottomBarHeight)
-    }
 }
 
 #endif

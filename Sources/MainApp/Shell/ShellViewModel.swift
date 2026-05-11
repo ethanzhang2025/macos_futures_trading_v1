@@ -105,6 +105,63 @@ public final class ShellViewModel: ObservableObject {
         persistWorkspaces()
     }
 
+    // MARK: - v17.1 · 彩色 group 联动
+
+    /// 设定 Pane 的 group color · 若已有 binding 则同步 symbol 到该 Pane · 否则用 Pane symbol 初始化 binding
+    public func setPaneGroupColor(paneID: UUID, color: GroupColor?) {
+        guard let wsIdx = workspaceIndexContainingPane(paneID),
+              let paneIdx = workspaces[wsIdx].panes.firstIndex(where: { $0.id == paneID }) else { return }
+        workspaces[wsIdx].panes[paneIdx].groupColor = color
+        if let c = color {
+            if let existing = groupBindings[c] {
+                // 已有 binding · Pane 跟随 group
+                workspaces[wsIdx].panes[paneIdx].symbol = existing.symbol
+                if let p = existing.periodRaw {
+                    workspaces[wsIdx].panes[paneIdx].periodRaw = p
+                }
+            } else {
+                // 首个加入该组 · Pane symbol 设入 binding
+                let sym = workspaces[wsIdx].panes[paneIdx].symbol ?? "rb2510"
+                groupBindings[c] = SymbolBinding(
+                    symbol: sym,
+                    periodRaw: workspaces[wsIdx].panes[paneIdx].periodRaw
+                )
+            }
+        }
+        persistWorkspaces()
+    }
+
+    /// Pane 改 symbol · 若有 group color 则广播到同组所有 Pane
+    public func setPaneSymbol(paneID: UUID, symbol: String) {
+        guard let wsIdx = workspaceIndexContainingPane(paneID),
+              let paneIdx = workspaces[wsIdx].panes.firstIndex(where: { $0.id == paneID }) else { return }
+        workspaces[wsIdx].panes[paneIdx].symbol = symbol
+        if let color = workspaces[wsIdx].panes[paneIdx].groupColor {
+            // 广播到同色所有 Pane（跨 workspace）
+            groupBindings[color]?.symbol = symbol
+            for wIdx in workspaces.indices {
+                for pIdx in workspaces[wIdx].panes.indices {
+                    if workspaces[wIdx].panes[pIdx].groupColor == color {
+                        workspaces[wIdx].panes[pIdx].symbol = symbol
+                    }
+                }
+            }
+        }
+        persistWorkspaces()
+    }
+
+    /// 获取 Pane 当前有效 symbol（若有 group 则取 group binding · 否则取 pane 自身）
+    public func effectiveSymbol(for config: PaneConfig) -> String? {
+        if let c = config.groupColor, let binding = groupBindings[c] {
+            return binding.symbol
+        }
+        return config.symbol
+    }
+
+    private func workspaceIndexContainingPane(_ paneID: UUID) -> Int? {
+        workspaces.firstIndex { ws in ws.panes.contains { $0.id == paneID } }
+    }
+
     // MARK: - 持久化
 
     private static let kWorkspaces = "shell.v1.workspaces"

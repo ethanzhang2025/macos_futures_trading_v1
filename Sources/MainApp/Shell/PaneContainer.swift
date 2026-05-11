@@ -87,17 +87,36 @@ struct PaneHost: View {
 
 struct PaneHeader: View {
     let config: PaneConfig
+    @EnvironmentObject var shellVM: ShellViewModel
+    @State private var editingSymbol: Bool = false
+    @State private var symbolText: String = ""
+
+    /// 显示的有效 symbol（group binding 优先）
+    private var effectiveSymbol: String? {
+        shellVM.effectiveSymbol(for: config)
+    }
 
     var body: some View {
         HStack(spacing: 6) {
             Text(config.kind.emoji).font(.system(size: 12))
             Text(config.kind.displayName)
                 .font(.system(size: 11, weight: .medium))
-            if let sym = config.symbol {
+            if editingSymbol {
+                TextField("合约", text: $symbolText, onCommit: commitSymbol)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced))
+                    .frame(width: 80)
+                    .onExitCommand { editingSymbol = false }
+            } else if let sym = effectiveSymbol {
                 Text("·").foregroundColor(.secondary).font(.system(size: 11))
                 Text(sym)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.accentColor)
+                    .onTapGesture(count: 2) {
+                        symbolText = sym
+                        editingSymbol = true
+                    }
+                    .help("双击修改合约（同组 Pane 自动跟随）")
             }
             if let period = config.periodRaw {
                 Text("·").foregroundColor(.secondary).font(.system(size: 11))
@@ -106,37 +125,61 @@ struct PaneHeader: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
-            if let color = config.groupColor {
-                Circle()
-                    .fill(color.color)
-                    .frame(width: 10, height: 10)
-                    .help("\(color.displayName) · 联动")
-            } else {
-                // group 设定 button（占位 · v17.1 实装 popover 6 色选择）
-                Button {
-                    // v17.1 实装
-                } label: {
-                    Circle()
-                        .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 1)
-                        .frame(width: 10, height: 10)
-                }
-                .buttonStyle(.plain)
-                .help("设为彩色 group（v17.1 实装）")
-            }
+            groupColorPicker
             Button {
-                // 分离窗口（v17.1 实装 NSWindow 桥接）
+                // 分离窗口（v17.1+ 实装 NSWindow 桥接）
             } label: {
                 Image(systemName: "arrow.up.right.square")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("分离独立窗口（v17.1 实装）")
+            .help("分离独立窗口（v17.x 实装）")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .frame(height: 24)
         .background(Color.secondary.opacity(0.08))
+    }
+
+    // MARK: - v17.1 · 6 色 group 选择器（Menu · 含清除）
+
+    private var groupColorPicker: some View {
+        Menu {
+            Button {
+                shellVM.setPaneGroupColor(paneID: config.id, color: nil)
+            } label: {
+                Text("\(config.groupColor == nil ? "✓ " : "  ")无联动")
+            }
+            Divider()
+            ForEach(GroupColor.allCases) { color in
+                Button {
+                    shellVM.setPaneGroupColor(paneID: config.id, color: color)
+                } label: {
+                    Text("\(config.groupColor == color ? "✓ " : "  ")\(color.displayName)")
+                }
+            }
+        } label: {
+            if let color = config.groupColor {
+                Circle().fill(color.color).frame(width: 10, height: 10)
+            } else {
+                Circle()
+                    .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 1)
+                    .frame(width: 10, height: 10)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(config.groupColor.map { "\($0.displayName) · 同色 Pane 联动" } ?? "设为彩色 group（联动）")
+    }
+
+    private func commitSymbol() {
+        let trimmed = symbolText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            shellVM.setPaneSymbol(paneID: config.id, symbol: trimmed)
+        }
+        editingSymbol = false
     }
 }
 

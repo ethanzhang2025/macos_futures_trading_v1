@@ -86,6 +86,9 @@ public struct FormulaEditorWindow: View {
     @AppStorage("viewState.v1.formulaEditor.showMinimap") private var showMinimap: Bool = true
     /// v16.107 · lint 行内波浪线开关（默认开 · trader 视觉太重时可关）
     @AppStorage("viewState.v1.formulaEditor.showLintUnderline") private var showLintUnderline: Bool = true
+    /// v16.152 · lint outline section 按 severity 过滤（默认全开 · trader noise 控制）
+    @AppStorage("viewState.v1.formulaEditor.showLintErrors") private var showLintErrors: Bool = true
+    @AppStorage("viewState.v1.formulaEditor.showLintWarnings") private var showLintWarnings: Bool = true
     /// v15.23 batch109 · minimap 宽度 4 档（80 窄 / 100 中 / 120 宽 / 160 超宽 · 默认 100 · 持久化）
     @AppStorage("viewState.v1.formulaEditor.minimapWidth") private var minimapWidth: Double = 100
     /// v15.23 batch106 · 主编辑器当前可视行（1-based · minimap viewport 高亮 + 滚动同步）
@@ -272,8 +275,13 @@ public struct FormulaEditorWindow: View {
                     }
                 }
             }()
-            let lintWarns = q.isEmpty ? allLintWarns
+            let searchFilteredLints = q.isEmpty ? allLintWarns
                           : allLintWarns.filter { $0.message.lowercased().contains(q) }
+            // v16.152 · severity 过滤（齿轮 Menu toggle 控制 · 默认全开 · trader noise 控制）
+            let lintWarns = searchFilteredLints.filter {
+                ($0.severity == .error && showLintErrors)
+                || ($0.severity == .warning && showLintWarnings)
+            }
             let deps = MaiLangDependencies.analyze(sourceText)
             let depByName: [String: MaiLangVarDependency] = Dictionary(
                 uniqueKeysWithValues: deps.map { ($0.name.uppercased(), $0) })
@@ -991,12 +999,18 @@ public struct FormulaEditorWindow: View {
                 Toggle("保存时清行末空格", isOn: $trimTrailingWhitespaceOnSave)
                 // v16.107 · lint 行内波浪线开关
                 Toggle("显示 lint 行内波浪线", isOn: $showLintUnderline)
+                // v16.152 · lint outline section 按 severity 过滤（noise 控制）
+                Divider()
+                Toggle("显示 lint 紧急（error）", isOn: $showLintErrors)
+                Toggle("显示 lint 提醒（warning）", isOn: $showLintWarnings)
                 Divider()
                 Button(formatOnSave ? "✓ 自动格式化已启用" : "▢ 自动格式化已关闭") { }
                     .disabled(true)
                 Button(trimTrailingWhitespaceOnSave ? "✓ 清行末空格已启用" : "▢ 清行末空格已关闭") { }
                     .disabled(true)
                 Button(showLintUnderline ? "✓ lint 波浪线已启用" : "▢ lint 波浪线已关闭") { }
+                    .disabled(true)
+                Button("\(showLintErrors ? "✓" : "▢") error · \(showLintWarnings ? "✓" : "▢") warning") { }
                     .disabled(true)
             } label: {
                 Image(systemName: "gearshape")

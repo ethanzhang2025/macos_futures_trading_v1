@@ -166,10 +166,46 @@ struct PaneHeader: View {
         .onTapGesture(count: 2) {
             shellVM.toggleMaximize(config.id)
         }
+        .contextMenu { paneContextMenu }   // v17.20 · Pane 右键操作菜单
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .frame(height: 24)
         .background(Color.secondary.opacity(0.08))
+    }
+
+    /// v17.20 · Pane 右键菜单（更换 kind / 清 group / 重置 symbol / 最大化）
+    @ViewBuilder
+    private var paneContextMenu: some View {
+        Menu("更换 Pane 类型") {
+            // 6 个 popular kinds（与 ⌘K 命令面板对齐）
+            ForEach([PaneKind.chart, .spread, .option, .review, .training, .formulaEditor, .watchlist, .journal, .alert], id: \.self) { kind in
+                Button {
+                    shellVM.changePaneKind(paneID: config.id, to: kind)
+                } label: {
+                    Label("\(kind.emoji) \(kind.displayName)\(config.kind == kind ? "（当前）" : "")",
+                          systemImage: config.kind == kind ? "checkmark" : "")
+                }
+                .disabled(config.kind == kind)
+            }
+        }
+        Divider()
+        Button {
+            shellVM.setPaneGroupColor(paneID: config.id, color: nil)
+        } label: {
+            Text("清除 group 联动")
+        }
+        .disabled(config.groupColor == nil)
+        Button {
+            shellVM.resetPaneConfig(paneID: config.id)
+        } label: {
+            Text("重置 Pane 配置（symbol / period / group）")
+        }
+        Divider()
+        Button {
+            shellVM.toggleMaximize(config.id)
+        } label: {
+            Text(shellVM.maximizedPaneID == config.id ? "退出最大化（Esc）" : "最大化此 Pane")
+        }
     }
 
     // MARK: - v17.1 · 6 色 group 选择器（Menu · 含清除）

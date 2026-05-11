@@ -178,6 +178,26 @@ public final class ShellViewModel: ObservableObject {
         return config.symbol
     }
 
+    // MARK: - v17.20 Pane 右键 actions
+
+    /// 切换 Pane 类型（保留 symbol / period / group · 仅改 kind）
+    public func changePaneKind(paneID: UUID, to kind: PaneKind) {
+        guard let wsIdx = workspaceIndexContainingPane(paneID),
+              let paneIdx = workspaces[wsIdx].panes.firstIndex(where: { $0.id == paneID }) else { return }
+        workspaces[wsIdx].panes[paneIdx].kind = kind
+        persistWorkspaces()
+    }
+
+    /// 重置 Pane 配置（清 symbol / period / group · 保留 kind）· 用于"恢复初始状态"
+    public func resetPaneConfig(paneID: UUID) {
+        guard let wsIdx = workspaceIndexContainingPane(paneID),
+              let paneIdx = workspaces[wsIdx].panes.firstIndex(where: { $0.id == paneID }) else { return }
+        workspaces[wsIdx].panes[paneIdx].symbol = nil
+        workspaces[wsIdx].panes[paneIdx].periodRaw = nil
+        workspaces[wsIdx].panes[paneIdx].groupColor = nil
+        persistWorkspaces()
+    }
+
     private func workspaceIndexContainingPane(_ paneID: UUID) -> Int? {
         workspaces.firstIndex { ws in ws.panes.contains { $0.id == paneID } }
     }

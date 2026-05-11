@@ -33,7 +33,7 @@ struct TrainingScoreSheet: View {
     @State private var emojiScale: CGFloat = 0.5
     /// v16.56 · 5 维主分点击展开 drilldown · nil = 全部折叠 · 单选模式
     @State private var expandedDim: TrainingSubScores.Dimension? = nil
-    /// v16.147 · 改进 plan 5 步行动展开（默认折叠保持密度）
+    /// v16.156 · 改进 plan 5 步行动展开 · onAppear 按弱项分数智能决定（< 70 默认展开 / 强项保持折叠）
     @State private var showPlan: Bool = false
 
     var body: some View {
@@ -179,6 +179,13 @@ struct TrainingScoreSheet: View {
         }
         .padding(24)
         .frame(width: 540, height: sheetHeight)
+        // v16.156 · 改进 plan 智能默认：弱项分数 < 70 时自动展开（trader 弱时主动给建议）
+        .onAppear {
+            if let sub = score.subScores {
+                let weakScore = sub.ordered.first { $0.dimension == sub.weakest }?.score ?? 100
+                showPlan = weakScore < 70
+            }
+        }
         // v16.65 · ↑↓ 键盘切换 drilldown 维度（仅 subScores 存在时生效）
         .background(drilldownKeyboardShortcuts)
         // v16.82 · ESC 关闭 sheet（IDE/sheet 通用 · 与"关闭"⏎按钮互补）

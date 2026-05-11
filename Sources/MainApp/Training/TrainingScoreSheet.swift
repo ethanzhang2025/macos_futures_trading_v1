@@ -478,6 +478,15 @@ struct TrainingScoreSheet: View {
                 Text("🔬 五维细分")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                // v16.178 · 展开维度时 header 常驻 (N/5) chip（v16.85 flash 补充 · trader 一眼定位）
+                if let cur = expandedDim,
+                   let pos = sub.ordered.firstIndex(where: { $0.dimension == cur }) {
+                    Text("\(cur.emoji) \(pos + 1)/\(sub.ordered.count)")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.accentColor.opacity(0.15)))
+                        .foregroundColor(.accentColor)
+                }
                 Spacer()
                 Text("仅作分析视角 · 不计入总分")
                     .font(.system(size: 10))

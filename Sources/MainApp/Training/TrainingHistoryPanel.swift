@@ -637,15 +637,24 @@ struct TrainingHistoryPanel: View {
         let progress = min(Double(thisWeekCount) / Double(max(1, weeklyGoal)), 1.0)
         let achieved = thisWeekCount >= weeklyGoal
         return HStack(spacing: 6) {
-            Image(systemName: achieved ? "checkmark.seal.fill" : "target")
-                .foregroundColor(achieved ? .green : .accentColor)
-                .font(.system(size: 11))
-            Text("本周 \(thisWeekCount)/\(weeklyGoal) 次")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(achieved ? .green : .secondary)
-            ProgressView(value: progress, total: 1.0)
-                .frame(width: 100)
-                .tint(achieved ? .green : .accentColor)
+            // v16.167 · "本周 N/M 次" + progress bar 一起包 Button · 点击 filter 本周
+            Button {
+                filterPeriod = .week
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: achieved ? "checkmark.seal.fill" : "target")
+                        .foregroundColor(achieved ? .green : .accentColor)
+                        .font(.system(size: 11))
+                    Text("本周 \(thisWeekCount)/\(weeklyGoal) 次")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(achieved ? .green : .secondary)
+                    ProgressView(value: progress, total: 1.0)
+                        .frame(width: 100)
+                        .tint(achieved ? .green : .accentColor)
+                }
+            }
+            .buttonStyle(.plain)
+            .tooltip("本周 \(thisWeekCount) / \(weeklyGoal) 次 · 点击 filter 本周查看")
             // v16.143 · 距周末 N 天提示（trader 周末前赶达标）
             if let weekEnd = cal.dateInterval(of: .weekOfYear, for: Date())?.end {
                 let daysLeft = max(0, cal.dateComponents([.day], from: Date(), to: weekEnd).day ?? 0)

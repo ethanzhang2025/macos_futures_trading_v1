@@ -472,6 +472,17 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("本月最弱"))
     }
 
+    // MARK: - v16.169 · 月报 markdown TOC
+
+    @Test("v16.169 · 月报输出目录章节 + 10 条锚点")
+    func reportTOCSection() {
+        let md = TrainingMarkdownReport.generate(TrainingSessionLog())
+        #expect(md.contains("## 目录"))
+        #expect(md.contains("[概览](#概览)"))
+        #expect(md.contains("[改进 plan]"))
+        #expect(md.contains("[最近训练]"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

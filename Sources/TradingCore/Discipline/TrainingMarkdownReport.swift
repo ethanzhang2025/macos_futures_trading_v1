@@ -39,6 +39,19 @@ public enum TrainingMarkdownReport {
         md += "# \(title)\(titleSuffix)\n\n"
         md += "> 生成时间：\(formatDateTime(generatedAt))\n\n"
 
+        // v16.169 · 目录（章节锚点 · 长月报 trader 快速跳转）· markdown 渲染器自动锚点 ## X → #x
+        md += "## 目录\n\n"
+        md += "1. [概览](#概览)\n"
+        md += "2. [等级分布](#等级分布)\n"
+        md += "3. [形态分布](#形态分布)\n"
+        md += "4. [五维平均](#五维平均-v2-评分)\n"
+        md += "5. [改进 plan](#改进-plan)\n"
+        md += "6. [本月最强 / 最弱 session](#本月最强-session)\n"
+        md += "7. [训练时长分布](#训练时长分布)\n"
+        md += "8. [30 天训练日历](#最近-30-天训练习惯-emoji-日历)\n"
+        md += "9. [最近训练](#最近训练)\n"
+        md += "10. [心理风险洞察](#心理风险洞察-v1638--月度最弱心理--改进建议)\n\n"
+
         // 概览（基于 filtered sessions）
         md += "## 概览\n\n"
         md += "- 总训练次数：**\(sessions.count)**\n"

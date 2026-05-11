@@ -730,12 +730,21 @@ public enum TrainingMarkdownReport {
             counts[p] = (cur.count + 1, cur.totalScore + scoreVal)
         }
         guard !counts.isEmpty else { return "_暂无形态记录_\n\n" }
-        var md = "| 形态 | 次数 | 平均分 |\n"
-        md += "|------|------|--------|\n"
-        for pat in TrainingScenarioPattern.allCases {
-            guard let entry = counts[pat], entry.count > 0 else { continue }
+        // v16.206 · 按次数 desc 排序 + 前 3 加 🥇🥈🥉 rank（trader 看本月最练形态）
+        let sortedByCount = counts.map { (pat: $0.key, count: $0.value.count, totalScore: $0.value.totalScore) }
+            .sorted { $0.count > $1.count }
+        let topCounts = sortedByCount.prefix(3).map(\.count)
+        var md = "| 排名 | 形态 | 次数 | 平均分 |\n"
+        md += "|------|------|------|--------|\n"
+        for entry in sortedByCount {
             let avg = entry.count > 0 ? entry.totalScore / entry.count : 0
-            md += "| \(pat.emoji) \(pat.displayName) | \(entry.count) | \(avg) |\n"
+            let rank: String = {
+                if topCounts.count >= 1, entry.count == topCounts[0] { return "🥇" }
+                if topCounts.count >= 2, entry.count == topCounts[1] { return "🥈" }
+                if topCounts.count >= 3, entry.count == topCounts[2] { return "🥉" }
+                return ""
+            }()
+            md += "| \(rank) | \(entry.pat.emoji) \(entry.pat.displayName) | \(entry.count) | \(avg) |\n"
         }
         md += "\n"
         return md

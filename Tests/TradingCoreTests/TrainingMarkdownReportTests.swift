@@ -570,6 +570,16 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("总分趋势"))
     }
 
+    // MARK: - v16.180 · markdown footer
+
+    @Test("v16.180 · 月报包含 footer 数据来源 + 字段说明")
+    func reportFooter() {
+        let md = TrainingMarkdownReport.generate(TrainingSessionLog())
+        #expect(md.contains("数据来源"))
+        #expect(md.contains("TrainingSessionLog"))
+        #expect(md.contains("不上云"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

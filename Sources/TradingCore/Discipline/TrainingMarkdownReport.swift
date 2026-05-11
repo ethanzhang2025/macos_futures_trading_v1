@@ -172,6 +172,10 @@ public enum TrainingMarkdownReport {
             }
         }
 
+        // v16.180 · markdown footer · 数据来源 + 字段说明（trader 月度回顾时知道数据背景）
+        md += "\n---\n\n"
+        md += "_数据来源：本地训练日志（TrainingSessionLog · 不上云）· 总分 v1 (pnl×2 + discipline×2) · 五维 v2 (pnl/discipline/winRate/risk/efficiency) · 评分细节见五维公式 hover_\n"
+
         return md
     }
 

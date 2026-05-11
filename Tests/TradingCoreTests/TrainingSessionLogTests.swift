@@ -445,4 +445,54 @@ struct TrainingSessionLogTests {
             initialBalance: 100_000, finalBalance: 100_000))
         #expect(log.consecutiveTrainingDays(asOf: now) == 0)
     }
+
+    // MARK: - v16.89 · longestStreakEver
+
+    @Test("v16.89 · 空 log · longestStreak = 0")
+    func longestStreak_empty() {
+        #expect(TrainingSessionLog().longestStreakEver() == 0)
+    }
+
+    @Test("v16.89 · 单 session · longestStreak = 1")
+    func longestStreak_single() {
+        var log = TrainingSessionLog()
+        log.addSession(TrainingSession(
+            startedAt: Date(), endedAt: Date().addingTimeInterval(60),
+            initialBalance: 100_000, finalBalance: 100_000))
+        #expect(log.longestStreakEver() == 1)
+    }
+
+    @Test("v16.89 · 历史 5 连训中断后再 3 连训 · 最长 = 5")
+    func longestStreak_multipleSegments() {
+        var log = TrainingSessionLog()
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        // 5 连训：30..26 天前
+        for offset in 26...30 {
+            let d = cal.date(byAdding: .day, value: -offset, to: now)!
+            log.addSession(TrainingSession(
+                startedAt: d, endedAt: d.addingTimeInterval(60),
+                initialBalance: 100_000, finalBalance: 100_000))
+        }
+        // 中断 20-25 天 · 3 连训：3..1 天前
+        for offset in 1...3 {
+            let d = cal.date(byAdding: .day, value: -offset, to: now)!
+            log.addSession(TrainingSession(
+                startedAt: d, endedAt: d.addingTimeInterval(60),
+                initialBalance: 100_000, finalBalance: 100_000))
+        }
+        #expect(log.longestStreakEver() == 5)
+    }
+
+    @Test("v16.89 · 同一天多次 session 不双算（去重）")
+    func longestStreak_dedupSameDay() {
+        var log = TrainingSessionLog()
+        let now = Date()
+        for _ in 0..<5 {
+            log.addSession(TrainingSession(
+                startedAt: now, endedAt: now.addingTimeInterval(60),
+                initialBalance: 100_000, finalBalance: 100_000))
+        }
+        #expect(log.longestStreakEver() == 1)
+    }
 }

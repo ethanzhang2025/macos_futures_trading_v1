@@ -80,6 +80,29 @@ public struct TrainingSessionLog: Sendable, Equatable, Codable {
     /// 总训练次数
     public var sessionCount: Int { sessions.count }
 
+    /// v16.89 · 历史最长连训天数（扫全部 session 日期 · 找最长连续段）
+    /// 与 consecutiveTrainingDays 配套：当前 vs 历史最长 · trader 超越自我鼓励
+    /// 算法：去重日期 → 排序 → 扫连续段（diff == 1 → +1 · 否则 reset 1）
+    /// O(N log N) where N = unique training days
+    public func longestStreakEver() -> Int {
+        let cal = Calendar(identifier: .gregorian)
+        let days = Set(sessions.map { cal.startOfDay(for: $0.startedAt) })
+        guard !days.isEmpty else { return 0 }
+        let sorted = days.sorted()
+        var best = 1
+        var current = 1
+        for i in 1..<sorted.count {
+            let diff = cal.dateComponents([.day], from: sorted[i - 1], to: sorted[i]).day ?? 0
+            if diff == 1 {
+                current += 1
+                best = max(best, current)
+            } else {
+                current = 1
+            }
+        }
+        return best
+    }
+
     /// v16.80 · 连续训练天数（从 reference 开始往前数 · 每天 ≥ 1 次训练才算 · 中断停止）
     /// 用途：ControlBar 🔥 chip + HistoryPanel statsCard · 鼓励 trader 保持习惯
     public func consecutiveTrainingDays(asOf reference: Date = Date(),

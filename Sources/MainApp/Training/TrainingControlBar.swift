@@ -433,11 +433,14 @@ struct TrainingControlBar: View {
 
     /// v16.79/v16.80 · 连续训练天数 streak chip · 算法提到 TrainingSessionLog.consecutiveTrainingDays
     /// v16.83 · milestone emoji 升级：🔥 (≥2) → 🔥🔥 (≥7) → 🚀 (≥14) → 🏆 (≥30)
+    /// v16.89 · 加 personal best 对比 · 当前 ≥ 历史最长 → "🎉 新纪录"
     /// ≥ 2 才显示（1 天不算 streak · 避免噪音）
     @ViewBuilder
     private var consecutiveDaysChip: some View {
         let streak = viewModel.log.consecutiveTrainingDays()
         if streak >= 2 {
+            let best = viewModel.log.longestStreakEver()
+            let isNewRecord = streak >= best   // 当前即历史最长（含相等）
             let (emoji, hint): (String, String) = {
                 switch streak {
                 case 30...:  return ("🏆", "月级习惯（≥30 天）")
@@ -447,17 +450,24 @@ struct TrainingControlBar: View {
                 }
             }()
             HStack(spacing: 2) {
-                Text(emoji)
+                Text(isNewRecord ? "🎉" : emoji)
                     .font(.system(size: 11))
                 Text("连训 \(streak) 天")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(.red)
+                if !isNewRecord, best > streak {
+                    Text("/最长 \(best)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
             }
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(Color.red.opacity(0.10))
             .cornerRadius(3)
-            .tooltip("连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 继续保持！")
+            .tooltip(isNewRecord
+                     ? "🎉 新纪录！连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 超越历史！"
+                     : "连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 历史最长 \(best) 天 · 继续保持！")
         }
     }
 

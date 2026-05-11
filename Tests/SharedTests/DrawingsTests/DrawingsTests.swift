@@ -11,12 +11,13 @@ private func point(_ bar: Int, _ price: Int) -> DrawingPoint {
 
 @Suite("Drawing 创建与类型契约")
 struct DrawingFactoryTests {
-    @Test("17 种 factory 类型正确（v17.8 垂直线 · v17.10 射线 · v17.11 通道线 补齐）")
+    @Test("18 种 factory 类型正确（v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 补齐）")
     func factoryTypes() {
         #expect(Drawing.trendLine(from: point(0, 100), to: point(10, 110)).type == .trendLine)
         #expect(Drawing.horizontalLine(price: 100).type == .horizontalLine)
         #expect(Drawing.verticalLine(barIndex: 5).type == .verticalLine)
         #expect(Drawing.ray(from: point(0, 100), to: point(10, 110)).type == .ray)
+        #expect(Drawing.arrow(from: point(0, 100), to: point(10, 110)).type == .arrow)
         #expect(Drawing.rectangle(from: point(0, 100), to: point(10, 110)).type == .rectangle)
         #expect(Drawing.parallelChannel(from: point(0, 100), to: point(10, 110), offset: 5).type == .parallelChannel)
         #expect(Drawing.channel(from: point(0, 100), to: point(10, 100)).type == .channel)
@@ -49,15 +50,16 @@ struct DrawingFactoryTests {
         #expect(pentagon?.extraPoints?.count == 4)
     }
 
-    @Test("pointsNeeded 契约（17 类全覆盖 · v17.11 补齐 · 1/2/3/0 点）")
+    @Test("pointsNeeded 契约（18 类全覆盖 · v17.14 补齐 · 1/2/3/0 点）")
     func pointsNeededContract() {
         // 1 点（v17.8 加 verticalLine）
         #expect(DrawingType.horizontalLine.pointsNeeded == 1)
         #expect(DrawingType.verticalLine.pointsNeeded == 1)
         #expect(DrawingType.text.pointsNeeded == 1)
-        // 2 点（v1 + v13.13/14 + v15.87/88/89/90 + v17.10 ray + v17.11 channel）
+        // 2 点（v1 + v13.13/14 + v15.87/88/89/90 + v17.10 ray + v17.11 channel + v17.14 arrow）
         #expect(DrawingType.trendLine.pointsNeeded == 2)
         #expect(DrawingType.ray.pointsNeeded == 2)
+        #expect(DrawingType.arrow.pointsNeeded == 2)
         #expect(DrawingType.rectangle.pointsNeeded == 2)
         #expect(DrawingType.parallelChannel.pointsNeeded == 2)
         #expect(DrawingType.channel.pointsNeeded == 2)
@@ -74,7 +76,7 @@ struct DrawingFactoryTests {
         #expect(DrawingType.polygon.pointsNeeded == 0)
 
         // 全覆盖防漏 · 加新 case 但忘记加 pointsNeeded 时此测试会失败
-        let coveredCount = 3 + 12 + 1 + 1  // 1 点 3 + 2 点 12 + 3 点 1 + 0 点 1
+        let coveredCount = 3 + 13 + 1 + 1  // 1 点 3 + 2 点 13 + 3 点 1 + 0 点 1
         #expect(coveredCount == DrawingType.allCases.count)
 
         // needsTwoPoints 兼容入口（pointsNeeded == 2）
@@ -102,13 +104,14 @@ struct DrawingFactoryTests {
 
 @Suite("Drawing Codable 往返")
 struct DrawingCodableTests {
-    @Test("17 种序列化 + 反序列化等价（v17.8 verticalLine · v17.10 ray · v17.11 channel 补齐）")
+    @Test("18 种序列化 + 反序列化等价（v17.8 verticalLine · v17.10 ray · v17.11 channel · v17.14 arrow 补齐）")
     func roundTrip() throws {
         let drawings: [Drawing] = [
             Drawing.trendLine(from: point(0, 100), to: point(10, 120)),
             Drawing.horizontalLine(price: Decimal(string: "3550.5")!),
             Drawing.verticalLine(barIndex: 7, price: Decimal(string: "3550")!),
             Drawing.ray(from: point(0, 100), to: point(10, 120)),
+            Drawing.arrow(from: point(2, 100), to: point(12, 130)),
             Drawing.rectangle(from: point(2, 95), to: point(8, 115)),
             Drawing.parallelChannel(from: point(0, 100), to: point(10, 110), offset: Decimal(string: "3.5")!),
             Drawing.channel(from: point(0, 100), to: point(20, 100)),

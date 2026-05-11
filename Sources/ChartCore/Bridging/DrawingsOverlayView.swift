@@ -2,8 +2,8 @@
 //
 // 职责：
 //   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedIDs
-//   - 用 SwiftUI Canvas 绘制 17 种画线类型（v17.11 后）：
-//     trendLine / horizontalLine / verticalLine / ray / rectangle / parallelChannel / channel / fibonacci / text /
+//   - 用 SwiftUI Canvas 绘制 18 种画线类型（v17.14 后）：
+//     trendLine / horizontalLine / verticalLine / ray / arrow / rectangle / parallelChannel / channel / fibonacci / text /
 //     ellipse / ruler / pitchfork / polygon /
 //     fibonacciFan / priceZone / gannFan / fibonacciTimeZone
 //   - 选中态高亮（线宽 +1.0 · 色彩饱和度提高）· v13.9 升级支持多选
@@ -122,6 +122,7 @@ public struct DrawingsOverlayView: View {
         case .horizontalLine:   drawHorizontalLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .verticalLine:     drawVerticalLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .ray:              drawRay(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .arrow:            drawArrow(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .rectangle:        drawRectangle(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .parallelChannel:  drawParallelChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .channel:          drawChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
@@ -171,6 +172,33 @@ public struct DrawingsOverlayView: View {
         path.move(to: CGPoint(x: x, y: 0))
         path.addLine(to: CGPoint(x: x, y: size.height))
         ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+    }
+
+    /// v17.14 A5.2 · 箭头（start → end 线段 + 末端实心三角头 · 信号标记 / 复盘标注）
+    private func drawArrow(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let a = CGPoint(x: xForBar(d.startPoint.barIndex, size: size), y: yForPrice(d.startPoint.price, size: size))
+        let b = CGPoint(x: xForBar(end.barIndex, size: size), y: yForPrice(end.price, size: size))
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        let length = (dx * dx + dy * dy).squareRoot()
+        guard length > 0.5 else { return }
+        let ux = dx / length, uy = dy / length
+        let arrowSize: CGFloat = max(10, width * 6)
+        let halfWidth: CGFloat = arrowSize * 0.45
+        // 线段截短到三角底（避免线穿过箭头）
+        let lineEnd = CGPoint(x: b.x - ux * arrowSize, y: b.y - uy * arrowSize)
+        var linePath = Path()
+        linePath.move(to: a)
+        linePath.addLine(to: lineEnd)
+        ctx.stroke(linePath, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+        // 三角头：tip=b · base 两翼
+        let px = -uy * halfWidth, py = ux * halfWidth
+        let wing1 = CGPoint(x: lineEnd.x + px, y: lineEnd.y + py)
+        let wing2 = CGPoint(x: lineEnd.x - px, y: lineEnd.y - py)
+        var head = Path()
+        head.move(to: b); head.addLine(to: wing1); head.addLine(to: wing2); head.closeSubpath()
+        ctx.fill(head, with: .color(color.opacity(opacity)))
     }
 
     /// v17.10 A3.2 · 射线（两点定方向 · 从 start 出发经 end 延伸到画布边界 · 复用 pitchforkExtensionScale）
@@ -531,6 +559,7 @@ public struct DrawingsOverlayView: View {
         case .horizontalLine:  return Color(red: 0.30, green: 0.78, blue: 1.00)  // 蓝
         case .verticalLine:    return Color(red: 0.30, green: 0.78, blue: 1.00)  // 蓝（v17.8 · 与 horizontalLine 同色 · 概念对称）
         case .ray:             return Color(red: 0.72, green: 0.93, blue: 0.30)  // 嫩绿（v17.10 · 与 trendLine 黄区分）
+        case .arrow:           return Color(red: 1.00, green: 0.45, blue: 0.20)  // 橙红（v17.14 · 信号醒目 · 与 fibonacci 橙区分）
         case .rectangle:       return Color(red: 0.63, green: 0.42, blue: 0.83)  // 紫
         case .parallelChannel: return Color(red: 0.96, green: 0.27, blue: 0.27)  // 红
         case .channel:         return Color(red: 0.95, green: 0.55, blue: 0.85)  // 粉紫（v17.11 · 回归通道 · 与 parallelChannel 红区分）

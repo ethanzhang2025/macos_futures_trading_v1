@@ -82,6 +82,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .horizontalLine:  return "水平线"
     case .verticalLine:    return "垂直线"
     case .ray:             return "射线"
+    case .arrow:           return "箭头"
     case .rectangle:       return "矩形"
     case .parallelChannel: return "平行通道"
     case .channel:         return "通道线"
@@ -914,6 +915,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "cursorarrow", tool: nil, help: "浏览（取消画线工具）")
             drawingToolButton(icon: "line.diagonal", tool: .trendLine, help: "趋势线（双点）")
             drawingToolButton(icon: "arrow.up.right", tool: .ray, help: "射线（双点定方向 · 从 start 延伸到画布边界）")
+            drawingToolButton(icon: "arrow.up.forward", tool: .arrow, help: "箭头（双点定方向 · 末端三角头 · 信号标记 / 复盘标注）")
             drawingToolButton(icon: "minus", tool: .horizontalLine, help: "水平线（一点）")
             drawingToolButton(icon: "arrow.up.and.down", tool: .verticalLine, help: "垂直线（一点 · 时间锚点 · 横跨全价格）")
             drawingToolButton(icon: "rectangle", tool: .rectangle, help: "矩形（双点对角）")
@@ -3963,6 +3965,11 @@ struct ChartContentView: View {
             let rayEnd = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
             return Self.pointToSegmentDistance(p, a, rayEnd)
 
+        case .arrow:
+            // v17.14 A5.2 · 箭头 hit test · 与 trendLine 同（线段 + 三角头视为可点击区）
+            guard let end = drawing.endPoint else { return .infinity }
+            return Self.pointToSegmentDistance(p, screenPoint(drawing.startPoint), screenPoint(end))
+
         case .channel:
             // v17.11 A3.1 · 通道线 hit test · 3 条平行线段（主线 / +1σ / -1σ）最小距离
             guard let end = drawing.endPoint else { return .infinity }
@@ -4184,6 +4191,8 @@ struct ChartContentView: View {
             return Drawing.trendLine(from: firstPoint, to: hoverPoint)
         case .ray:
             return Drawing.ray(from: firstPoint, to: hoverPoint)
+        case .arrow:
+            return Drawing.arrow(from: firstPoint, to: hoverPoint)
         case .channel:
             return Drawing.channel(from: firstPoint, to: hoverPoint)
         case .ellipse:

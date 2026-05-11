@@ -148,6 +148,12 @@ struct TrainingScoreSheet: View {
         .frame(width: 540, height: sheetHeight)
         // v16.65 · ↑↓ 键盘切换 drilldown 维度（仅 subScores 存在时生效）
         .background(drilldownKeyboardShortcuts)
+        // v16.82 · ESC 关闭 sheet（IDE/sheet 通用 · 与"关闭"⏎按钮互补）
+        .background(
+            Button("") { onDismiss() }
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+        )
     }
 
     /// v16.65 · 隐形 button 持 ↑↓ keyboardShortcut · 切换 5 维 drilldown 展开

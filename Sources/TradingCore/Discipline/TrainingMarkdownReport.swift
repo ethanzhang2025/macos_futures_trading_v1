@@ -134,6 +134,9 @@ public enum TrainingMarkdownReport {
         // v16.165 · 月报最弱 session 引用（trader 月度看 worst 对照学习）
         md += monthlyWorstSessionMarkdown(sessions: sessions, log: log)
 
+        // v16.172 · 单笔盈利最大 session（与 score-best 互补 · pnl 维度的最大单笔）
+        md += monthlyMaxPnlSessionMarkdown(sessions: sessions, log: log)
+
         // v16.118 · 训练时长分布（短/中/长 · trader 看专注时长习惯）
         md += durationDistributionMarkdown(sessions: sessions)
 
@@ -284,6 +287,41 @@ public enum TrainingMarkdownReport {
             md += "\n"
         }
         md += "- 💡 复盘建议：对照本月最强 session 找差异 · 找出可复制的成功模式\n"
+        md += "\n"
+        return md
+    }
+
+    /// v16.172 · 单笔盈利率最大的 session · 与 v16.161 totalScore-best 互补
+    /// 若已与 best 同一 session（盈利冠军同时也是分数冠军 · 已展示）→ 跳过避免重复
+    private static func monthlyMaxPnlSessionMarkdown(sessions: [TrainingSession],
+                                                      log: TrainingSessionLog) -> String {
+        guard !sessions.isEmpty else { return "" }
+        // 取 pnlPercent 最大（最赚 · 不取绝对值 · 大亏损不算 highlight）
+        let topPnL = sessions.sorted {
+            ($0.pnlPercent as NSDecimalNumber).doubleValue > ($1.pnlPercent as NSDecimalNumber).doubleValue
+        }.first!
+        let pnlPct = (topPnL.pnlPercent as NSDecimalNumber).doubleValue
+        guard pnlPct > 0 else { return "" }   // 全月亏损不输出
+        // 找 best score session（v16.161 同算法 · 同 session 则跳过）
+        let scored = sessions.compactMap { s -> (TrainingSession, TrainingScore)? in
+            guard let sc = log.score(for: s.id) else { return nil }
+            return (s, sc)
+        }
+        let bestScoreSession = scored.sorted {
+            if $0.1.totalScore != $1.1.totalScore { return $0.1.totalScore > $1.1.totalScore }
+            return $0.0.endedAt > $1.0.endedAt
+        }.first?.0
+        if bestScoreSession?.id == topPnL.id { return "" }   // 已展示
+        var md = "## 单笔盈利冠军\n\n"
+        md += "- 场景：**\(topPnL.scenarioName.isEmpty ? "未命名" : topPnL.scenarioName)**"
+        if let pat = topPnL.scenarioPattern {
+            md += " · \(pat.emoji) \(pat.displayName)"
+        }
+        md += "\n"
+        md += String(format: "- 盈亏率：**+%.2f%%**（最高单笔）\n", pnlPct)
+        if let sc = log.score(for: topPnL.id) {
+            md += "- 总分：\(sc.totalScore) · \(sc.grade.emoji) \(sc.grade.displayName) 级\n"
+        }
         md += "\n"
         return md
     }

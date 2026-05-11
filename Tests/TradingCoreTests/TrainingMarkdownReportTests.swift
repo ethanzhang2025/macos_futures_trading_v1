@@ -502,6 +502,53 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("每周分布"))
     }
 
+    // MARK: - v16.172 · 单笔盈利冠军
+
+    @Test("v16.172 · 盈利但非 best score 的 session 输出盈利冠军章节")
+    func maxPnLSessionDifferentFromBest() {
+        var log = TrainingSessionLog()
+        // 多个 session · pnl 最大 ≠ score 最大需要不同时间戳 + 不同 violations
+        // makeSession 都是默认 violations=[] 同时间戳 · 同一 session 实例 best 即 maxPnL
+        // 改用直接构造 2 session 不同 pnl + 多违规模拟 score 分歧
+        let violation = DisciplineViolation(
+            ruleID: UUID(), ruleKind: .stopLossPercent,
+            occurredAt: Date(), severity: .error,
+            message: "x"
+        )
+        let high = TrainingSession(
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            endedAt: Date(timeIntervalSince1970: 1_700_003_600),
+            initialBalance: 100_000,
+            finalBalance: 150_000,
+            trades: [],
+            violations: Array(repeating: violation, count: 8),
+            scenarioName: "暴利",
+            scenarioPattern: nil
+        )
+        let stable = TrainingSession(
+            startedAt: Date(timeIntervalSince1970: 1_700_010_000),
+            endedAt: Date(timeIntervalSince1970: 1_700_013_600),
+            initialBalance: 100_000,
+            finalBalance: 101_000,
+            trades: [], violations: [],
+            scenarioName: "稳健",
+            scenarioPattern: nil
+        )
+        log.addSession(high)
+        log.addSession(stable)
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("单笔盈利冠军"))
+        #expect(md.contains("暴利"))
+    }
+
+    @Test("v16.172 · 全月亏损则不输出盈利冠军章节")
+    func maxPnLAllLoss() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "亏单", pnl: -5_000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(!md.contains("单笔盈利冠军"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

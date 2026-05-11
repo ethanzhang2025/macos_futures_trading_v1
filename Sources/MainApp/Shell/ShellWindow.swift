@@ -40,6 +40,7 @@ public struct ShellWindow: View {
             ShellCommandPalette(isPresented: $shellVM.showCommandPalette)
                 .environmentObject(shellVM)
         }
+        .followingChartTheme()  // v17.12 A2.1 · Shell 跟随主图主题（dark/light · UserDefaults chartTheme.v1）
     }
 
     // MARK: - Pane 容器（Step 3 ✅ · ChartScene 真实嵌入 · Step 5 全 18 view 接入）

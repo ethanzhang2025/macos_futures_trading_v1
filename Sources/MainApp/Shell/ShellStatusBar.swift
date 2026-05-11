@@ -10,6 +10,7 @@ struct ShellStatusBar: View {
     @EnvironmentObject var shellVM: ShellViewModel
     @State private var now: Date = Date()
     @State private var trainingLog: TrainingSessionLog = TrainingLogPersistence.load()
+    @State private var currentTheme: ChartTheme = ChartThemeStore.load() ?? .dark
 
     private let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private let dateFmt: DateFormatter = {
@@ -53,6 +54,9 @@ struct ShellStatusBar: View {
             // 当前 Workspace
             workspaceChip
             statusDivider
+            // v17.12 A2.1 · 主题切换 chip
+            themeChip
+            statusDivider
             // 实时时间
             timeChip
         }
@@ -60,6 +64,29 @@ struct ShellStatusBar: View {
         .frame(height: 22)
         .background(.bar)
         .onReceive(clockTimer) { now = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            if let t = ChartThemeStore.load(), t != currentTheme { currentTheme = t }
+        }
+    }
+
+    @ViewBuilder
+    private var themeChip: some View {
+        Button {
+            let next: ChartTheme = (currentTheme == .dark) ? .light : .dark
+            ChartThemeStore.save(next)
+            currentTheme = next
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: currentTheme.icon)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                Text(currentTheme.displayName)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .help("切换 \(currentTheme == .dark ? "浅色" : "深色") 主题")
     }
 
     @ViewBuilder

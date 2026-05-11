@@ -169,6 +169,17 @@ struct ShellCommandPalette: View {
             ))
         }
 
+        // v17.12 A2.1 · 主题切换
+        let current = ChartThemeStore.load() ?? .dark
+        let next: ChartTheme = (current == .dark) ? .light : .dark
+        list.append(PaletteCommand(
+            title: "切换到\(next.displayName)主题",
+            subtitle: "当前：\(current.displayName) · 切换后全 Shell + 子窗口跟随",
+            emoji: next == .dark ? "🌙" : "☀️",
+            category: .action,
+            action: { ChartThemeStore.save(next) }
+        ))
+
         return list
     }
 

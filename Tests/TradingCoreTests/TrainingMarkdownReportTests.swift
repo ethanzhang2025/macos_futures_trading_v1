@@ -610,6 +610,25 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("本月 vs 上月"))
     }
 
+    // MARK: - v16.185 · 最佳训练时段
+
+    @Test("v16.185 · 含 session 输出最佳训练时段表 + 4 时段 + ⭐ 标记")
+    func hourOfDayDistribution() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "x", pnl: 100))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("## 最佳训练时段"))
+        #expect(md.contains("凌晨"))
+        #expect(md.contains("夜晚"))
+        #expect(md.contains("⭐"))   // 仅 1 session 必为最大
+    }
+
+    @Test("v16.185 · 空 log 不输出最佳时段表")
+    func hourOfDayEmpty() {
+        let md = TrainingMarkdownReport.generate(TrainingSessionLog())
+        #expect(!md.contains("最佳训练时段"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

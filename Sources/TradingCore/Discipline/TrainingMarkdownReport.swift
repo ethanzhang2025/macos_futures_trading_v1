@@ -146,6 +146,9 @@ public enum TrainingMarkdownReport {
         // v16.170 · 每周分布表（周一-周日 训练次数 · trader 看哪天最活跃）
         md += weekdayDistributionMarkdown(sessions: sessions)
 
+        // v16.185 · 最佳训练时段（按 hour 分布 · trader 知道高效交易时段）
+        md += hourOfDayDistributionMarkdown(sessions: sessions)
+
         // v16.176 · 最近 N 次总分 sparkline（emoji bar 横排 · 分数走势可视化）
         md += scoreTrendSparklineMarkdown(sessions: sessions, log: log)
 
@@ -357,6 +360,35 @@ public enum TrainingMarkdownReport {
                 let d = t - l
                 md += "| \(dim.emoji) \(dim.displayName) | \(l) | \(t) | \(d >= 0 ? "+" : "")\(d) |\n"
             }
+        }
+        md += "\n"
+        return md
+    }
+
+    /// v16.185 · 最佳训练时段 · 按开始时段（hour）分布 · 4 段汇总（凌晨 / 上午 / 下午 / 夜晚）
+    /// trader 看自己最高效的训练 hour · 调整作息
+    private static func hourOfDayDistributionMarkdown(sessions: [TrainingSession]) -> String {
+        guard !sessions.isEmpty else { return "" }
+        let cal = Calendar(identifier: .gregorian)
+        // 4 时段桶：凌晨 0-6 / 上午 6-12 / 下午 12-18 / 夜晚 18-24
+        var buckets = ["🌙 凌晨 (0-6)": 0, "🌅 上午 (6-12)": 0, "☀️ 下午 (12-18)": 0, "🌃 夜晚 (18-24)": 0]
+        for s in sessions {
+            let hour = cal.component(.hour, from: s.startedAt)
+            switch hour {
+            case 0..<6:   buckets["🌙 凌晨 (0-6)"]! += 1
+            case 6..<12:  buckets["🌅 上午 (6-12)"]! += 1
+            case 12..<18: buckets["☀️ 下午 (12-18)"]! += 1
+            default:      buckets["🌃 夜晚 (18-24)"]! += 1
+            }
+        }
+        let order = ["🌙 凌晨 (0-6)", "🌅 上午 (6-12)", "☀️ 下午 (12-18)", "🌃 夜晚 (18-24)"]
+        let maxCount = buckets.values.max() ?? 0
+        var md = "## 最佳训练时段\n\n"
+        md += "| 时段 | 次数 |\n|------|------|\n"
+        for label in order {
+            let cnt = buckets[label] ?? 0
+            let marker = (cnt > 0 && cnt == maxCount) ? " ⭐" : ""
+            md += "| \(label) | \(cnt)\(marker) |\n"
         }
         md += "\n"
         return md

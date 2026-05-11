@@ -168,4 +168,34 @@ public enum DrawingGeometry {
         guard dx > 0 else { return [] }
         return sequence.map { startBar + dx * $0 }
     }
+
+    /// v17.11 A3.1 · 通道线线性回归参数 · 给定 closes（按 barIndex 顺序）
+    /// - xs = 0..<closes.count（相对 bar 索引）
+    /// - slope/intercept = ordinary least squares · stdDev = √(Σ residual² / N)
+    /// - Returns: slope = price/bar · intercept = relativeBar=0 处价格 · stdDev = ±1σ 平行线偏移
+    public static func channelRegression(closes: [Decimal]) -> (slope: Double, intercept: Double, stdDev: Double)? {
+        guard closes.count >= 2 else { return nil }
+        let n = Double(closes.count)
+        let ys = closes.map { NSDecimalNumber(decimal: $0).doubleValue }
+        let xMean = (n - 1) / 2
+        let yMean = ys.reduce(0, +) / n
+        var num = 0.0
+        var den = 0.0
+        for i in 0..<closes.count {
+            let dx = Double(i) - xMean
+            num += dx * (ys[i] - yMean)
+            den += dx * dx
+        }
+        guard den > 0.000001 else { return nil }
+        let slope = num / den
+        let intercept = yMean - slope * xMean
+        var sumSq = 0.0
+        for i in 0..<closes.count {
+            let predicted = slope * Double(i) + intercept
+            let residual = ys[i] - predicted
+            sumSq += residual * residual
+        }
+        let stdDev = (sumSq / n).squareRoot()
+        return (slope, intercept, stdDev)
+    }
 }

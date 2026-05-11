@@ -2,8 +2,8 @@
 //
 // 职责：
 //   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedIDs
-//   - 用 SwiftUI Canvas 绘制 16 种画线类型（v17.10 后）：
-//     trendLine / horizontalLine / verticalLine / ray / rectangle / parallelChannel / fibonacci / text /
+//   - 用 SwiftUI Canvas 绘制 17 种画线类型（v17.11 后）：
+//     trendLine / horizontalLine / verticalLine / ray / rectangle / parallelChannel / channel / fibonacci / text /
 //     ellipse / ruler / pitchfork / polygon /
 //     fibonacciFan / priceZone / gannFan / fibonacciTimeZone
 //   - 选中态高亮（线宽 +1.0 · 色彩饱和度提高）· v13.9 升级支持多选
@@ -124,6 +124,7 @@ public struct DrawingsOverlayView: View {
         case .ray:              drawRay(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .rectangle:        drawRectangle(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .parallelChannel:  drawParallelChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .channel:          drawChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacci:        drawFibonacci(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .text:             drawText(drawing, ctx, size, baseColor, opacity)
         case .ellipse:          drawEllipse(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
@@ -185,6 +186,47 @@ public struct DrawingsOverlayView: View {
         path.move(to: a)
         path.addLine(to: CGPoint(x: a.x + t * dx, y: a.y + t * dy))
         ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+    }
+
+    /// v17.11 A3.1 · 通道线（线性回归 + ±1σ 平行线 · 自动等距 · 主线实线 + 上下虚线 + 半透明填充）
+    /// 两点 barIndex 定 range（价格忽略）· 内部对 bars[startBar..endBar].close 做最小二乘
+    private func drawChannel(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let startBar = min(d.startPoint.barIndex, end.barIndex)
+        let endBar = max(d.startPoint.barIndex, end.barIndex)
+        guard endBar > startBar, startBar >= 0, endBar < bars.count else { return }
+        let closes = bars[startBar...endBar].map { $0.close }
+        guard let reg = DrawingGeometry.channelRegression(closes: closes) else { return }
+        let n = closes.count
+        let yStartPrice = reg.intercept
+        let yEndPrice = reg.slope * Double(n - 1) + reg.intercept
+        // 屏幕坐标
+        let hi = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
+        let lo = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
+        let span = max(0.0001, hi - lo)
+        func yScreen(_ price: Double) -> CGFloat { CGFloat((hi - price) / span) * size.height }
+        let xS = xForBar(startBar, size: size)
+        let xE = xForBar(endBar, size: size)
+        let mainS = CGPoint(x: xS, y: yScreen(yStartPrice))
+        let mainE = CGPoint(x: xE, y: yScreen(yEndPrice))
+        let upS = CGPoint(x: xS, y: yScreen(yStartPrice + reg.stdDev))
+        let upE = CGPoint(x: xE, y: yScreen(yEndPrice + reg.stdDev))
+        let dnS = CGPoint(x: xS, y: yScreen(yStartPrice - reg.stdDev))
+        let dnE = CGPoint(x: xE, y: yScreen(yEndPrice - reg.stdDev))
+        // 半透明填充（上下 1σ 之间）
+        var fill = Path()
+        fill.move(to: upS); fill.addLine(to: upE); fill.addLine(to: dnE); fill.addLine(to: dnS); fill.closeSubpath()
+        ctx.fill(fill, with: .color(color.opacity(0.08 * opacity)))
+        // 主线实线
+        var mainPath = Path()
+        mainPath.move(to: mainS); mainPath.addLine(to: mainE)
+        ctx.stroke(mainPath, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+        // 上下平行线（虚线 · 细 0.8x）
+        let bandDash: [CGFloat] = dash.isEmpty ? [3, 2] : dash
+        var bandPath = Path()
+        bandPath.move(to: upS); bandPath.addLine(to: upE)
+        bandPath.move(to: dnS); bandPath.addLine(to: dnE)
+        ctx.stroke(bandPath, with: .color(color.opacity(0.75 * opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: bandDash))
     }
 
     private func drawRectangle(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
@@ -491,6 +533,7 @@ public struct DrawingsOverlayView: View {
         case .ray:             return Color(red: 0.72, green: 0.93, blue: 0.30)  // 嫩绿（v17.10 · 与 trendLine 黄区分）
         case .rectangle:       return Color(red: 0.63, green: 0.42, blue: 0.83)  // 紫
         case .parallelChannel: return Color(red: 0.96, green: 0.27, blue: 0.27)  // 红
+        case .channel:         return Color(red: 0.95, green: 0.55, blue: 0.85)  // 粉紫（v17.11 · 回归通道 · 与 parallelChannel 红区分）
         case .fibonacci:       return Color(red: 1.00, green: 0.55, blue: 0.18)  // 橙
         case .text:            return .white
         case .ellipse:         return Color(red: 0.18, green: 0.83, blue: 0.74)  // 青（v13.13）

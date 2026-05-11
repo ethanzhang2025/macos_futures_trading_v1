@@ -1037,21 +1037,28 @@ public struct FormulaEditorWindow: View {
                 let unusedCount = lintWarnings.filter { $0.kind == .unusedVariable }.count
                 let dupCount = lintWarnings.filter { $0.kind == .duplicateDefinition }.count
                 let colorCount = lintWarnings.filter { $0.kind == .missingColorAttribute }.count
+                let undefinedCount = lintWarnings.filter { $0.kind == .undefinedVariable }.count
                 let chipText = [
-                    unusedCount > 0 ? "\(unusedCount) 未用" : nil,
+                    undefinedCount > 0 ? "\(undefinedCount) 未定义" : nil,
                     dupCount > 0 ? "\(dupCount) 重复" : nil,
+                    unusedCount > 0 ? "\(unusedCount) 未用" : nil,
                     colorCount > 0 ? "\(colorCount) 无色" : nil,
                 ].compactMap { $0 }.joined(separator: " · ")
+                // v16.78 · 有 error 严重度 → chip 用红色（紧急）· 仅 warning → 橙
+                let hasError = lintWarnings.contains { $0.severity == .error }
+                let chipColor: Color = hasError ? .red : .orange
                 Button {
-                    pendingGotoLine = lintWarnings.first?.line
+                    // 跳到首个 error · 无 error 则首个 warning（v16.78 按 severity 优先）
+                    let target = lintWarnings.first { $0.severity == .error } ?? lintWarnings.first
+                    pendingGotoLine = target?.line
                 } label: {
                     HStack(spacing: 3) {
-                        Image(systemName: "exclamationmark.triangle.fill")
+                        Image(systemName: hasError ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
                             .font(.system(size: 10))
-                            .foregroundColor(.orange)
+                            .foregroundColor(chipColor)
                         Text(chipText)
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.orange)
+                            .foregroundColor(chipColor)
                     }
                 }
                 .buttonStyle(.borderless)

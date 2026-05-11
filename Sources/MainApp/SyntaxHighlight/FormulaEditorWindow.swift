@@ -1685,6 +1685,7 @@ public struct FormulaEditorWindow: View {
             ("已隐藏 chip 行 (v16.158)", "顶部「已隐藏：[kind ⤺]」· 点击 chip 单独恢复"),
             ("全部恢复 (v16.160)", "≥ 2 已隐藏时显示「全部恢复」button · 一键清空"),
             ("仅看 error (v16.173)", "一键隐藏全部 warning 类 · 聚焦紧急"),
+            ("全部隐藏 (v16.192)", "一键关掉所有 6 类 · 专注代码模式 · 配合「全部恢复」"),
             ("⌘W 关闭 sheet (v16.171)", "outline sheet macOS 标准 ⌘W · 与 ESC 互补"),
         ]),
     ]

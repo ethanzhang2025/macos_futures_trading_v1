@@ -721,6 +721,22 @@ struct TrainingHistoryPanel: View {
         }
     }
 
+    /// v16.135 · 累积违规 chip tooltip · 加最近 5 次违反 session 名
+    private func buildViolationChipTooltip(kind: DisciplineRuleKind, count: Int, isWorst: Bool) -> String {
+        let recentSessions = viewModel.log.sessions
+            .filter { $0.violations.contains { $0.ruleKind == kind } }
+            .sorted { $0.endedAt > $1.endedAt }
+            .prefix(5)
+        var base = isWorst
+            ? "累积最常违反 · \(kind.displayName) 共 \(count) 次 · 点击跳规则面板调阈值"
+            : "\(kind.displayName) 累积违反 \(count) 次 · 点击跳规则面板"
+        if !recentSessions.isEmpty {
+            let names = recentSessions.map { $0.scenarioName.isEmpty ? "(未命名)" : $0.scenarioName }
+            base += "\n最近 \(recentSessions.count) 次：\n" + names.map { "· \($0)" }.joined(separator: "\n")
+        }
+        return base
+    }
+
     /// v16.62 · 全部 sessions 5 维平均 chip 行（trader 月度五维倾向）
     /// v16.73 · tooltip 加 min/max/N · trader hover 看 spread
     /// 数据源：log.scores subScores · 仅含 v2 评分的 session（老 session 缺 subScores 跳过）
@@ -914,6 +930,7 @@ struct TrainingHistoryPanel: View {
                     ForEach(Array(grouped.prefix(3).enumerated()), id: \.offset) { idx, item in
                         let isWorst = (idx == 0)
                         // v16.46 · 点击 chip → 跳 rules panel 调该规则阈值（与 viewModel 闭环）
+                        // v16.135 · tooltip 加最近 5 次违规 session 名（trader 一眼看哪些 session 触发）
                         Button {
                             viewModel.pendingJumpToRulesTab = true
                         } label: {
@@ -930,9 +947,7 @@ struct TrainingHistoryPanel: View {
                             .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
-                        .tooltip(isWorst
-                                 ? "累积最常违反 · \(item.kind.displayName) 共 \(item.count) 次 · 点击跳规则面板调阈值"
-                                 : "\(item.kind.displayName) 累积违反 \(item.count) 次 · 点击跳规则面板")
+                        .tooltip(buildViolationChipTooltip(kind: item.kind, count: item.count, isWorst: isWorst))
                     }
                     Spacer()
                 }

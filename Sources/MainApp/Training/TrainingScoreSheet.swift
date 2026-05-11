@@ -569,6 +569,13 @@ struct TrainingScoreSheet: View {
                     .foregroundColor(.secondary)
                     .frame(width: 10)
             }
+            // v16.200 · 整数节点 · 当前展开行加蓝底高亮（trader 视觉强化当前位置）
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isExpanded ? Color.accentColor.opacity(0.10) : Color.clear)
+            )
             .contentShape(Rectangle())
             .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.15)) {

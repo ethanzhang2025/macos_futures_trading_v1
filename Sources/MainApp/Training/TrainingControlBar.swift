@@ -53,9 +53,11 @@ struct TrainingControlBar: View {
             }
 
             if viewModel.isSessionActive {
+                // v16.52 · 暂停时 elapsed 灰色化（与 v16.42 暂停状态视觉强化）
                 Text("⏱ \(elapsedText)")
                     .font(.system(size: 14, design: .monospaced))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(viewModel.isSessionPaused ? .secondary : .accentColor)
+                    .opacity(viewModel.isSessionPaused ? 0.6 : 1.0)
                     .frame(minWidth: 70, alignment: .leading)
 
                 // v15.23 batch138 · 推荐时长进度条（仅 preset session · 自定义无）

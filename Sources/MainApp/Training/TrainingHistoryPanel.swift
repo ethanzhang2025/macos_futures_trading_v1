@@ -835,19 +835,25 @@ struct TrainingHistoryPanel: View {
                         .foregroundColor(.green)
                         .frame(width: 38, alignment: .leading)
                     ForEach(buckets.prefix(3), id: \.pattern) { b in
-                        HStack(spacing: 3) {
-                            Text(b.pattern.emoji)
-                            Text(b.pattern.displayName)
-                                .font(.system(size: 10))
-                            Text("\(b.avg)")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundColor(b.avg >= 90 ? .purple : .green)
+                        // v16.124 · 点击 chip 过滤该形态（trader 回顾强项）
+                        Button {
+                            filterPattern = b.pattern
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(b.pattern.emoji)
+                                Text(b.pattern.displayName)
+                                    .font(.system(size: 10))
+                                Text("\(b.avg)")
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(b.avg >= 90 ? .purple : .green)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.10))
+                            .cornerRadius(4)
                         }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.10))
-                        .cornerRadius(4)
-                        .tooltip("\(b.pattern.displayName) · 均分 \(b.avg)（\(b.count) 次）· 你的强项！")
+                        .buttonStyle(.plain)
+                        .tooltip("\(b.pattern.displayName) · 均分 \(b.avg)（\(b.count) 次）· 你的强项！· 点击过滤回顾")
                     }
                     Spacer()
                 }

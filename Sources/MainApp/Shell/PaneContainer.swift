@@ -7,8 +7,20 @@ import SwiftUI
 
 struct PaneContainer: View {
     let workspace: Workspace
+    @EnvironmentObject var shellVM: ShellViewModel
 
     var body: some View {
+        // v17.5 · 最大化模式：仅显示 maximizedPaneID 对应 Pane（其他隐藏）
+        if let maxID = shellVM.maximizedPaneID,
+           let maxConfig = workspace.panes.first(where: { $0.id == maxID }) {
+            PaneHost(config: maxConfig)
+        } else {
+            layoutBody
+        }
+    }
+
+    @ViewBuilder
+    private var layoutBody: some View {
         switch workspace.paneLayout {
         case .single:
             paneAt(0)
@@ -126,8 +138,22 @@ struct PaneHeader: View {
             }
             Spacer()
             groupColorPicker
+            // v17.5 · 最大化 / 退出最大化
             Button {
-                // 分离窗口（v17.1+ 实装 NSWindow 桥接）
+                shellVM.toggleMaximize(config.id)
+            } label: {
+                Image(systemName: shellVM.maximizedPaneID == config.id
+                      ? "arrow.down.right.and.arrow.up.left"
+                      : "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(shellVM.maximizedPaneID == config.id
+                  ? "退出最大化（Esc）"
+                  : "最大化此 Pane（双击 header）")
+            Button {
+                // 分离窗口（v17.x 实装 NSWindow 桥接）
             } label: {
                 Image(systemName: "arrow.up.right.square")
                     .font(.system(size: 11))
@@ -135,6 +161,10 @@ struct PaneHeader: View {
             }
             .buttonStyle(.plain)
             .help("分离独立窗口（v17.x 实装）")
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            shellVM.toggleMaximize(config.id)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

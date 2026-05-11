@@ -42,6 +42,22 @@ public final class ShellViewModel: ObservableObject {
 
     @Published public var showCommandPalette: Bool = false
 
+    // MARK: - v17.5 · Pane 最大化（文华 Enter/Esc 二态切换 · 单 Pane 占满主区）
+
+    @Published public var maximizedPaneID: UUID? = nil
+
+    public func toggleMaximize(_ paneID: UUID) {
+        if maximizedPaneID == paneID {
+            maximizedPaneID = nil
+        } else {
+            maximizedPaneID = paneID
+        }
+    }
+
+    public func exitMaximize() {
+        maximizedPaneID = nil
+    }
+
     // MARK: - 初始化
 
     public init() {

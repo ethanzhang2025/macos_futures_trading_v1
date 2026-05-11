@@ -51,6 +51,12 @@ struct ShellKeyboardShortcuts: View {
             .keyboardShortcut("b", modifiers: [.command, .shift])
             .opacity(0)
 
+            // v17.5 · Esc 退出 Pane 最大化（文华 Esc 风格）
+            Button("") { shellVM.exitMaximize() }
+                .keyboardShortcut(.escape, modifiers: [])
+                .opacity(0)
+                .disabled(shellVM.maximizedPaneID == nil)
+
             // ⌘+⌥+1..9 跳到第 N 个二级 Workspace
             workspaceShortcut(idx: 0, key: "1")
             workspaceShortcut(idx: 1, key: "2")

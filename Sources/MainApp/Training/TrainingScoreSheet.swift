@@ -450,6 +450,24 @@ struct TrainingScoreSheet: View {
                     .foregroundColor(.orange)
             }
         }
+        // v16.51 · hover 显示该维度计算公式（trader 学习评分逻辑透明度）
+        .tooltip(dimensionFormulaHint(dimension))
+    }
+
+    /// v16.51 · 5 维主分计算公式中文说明（trader hover 即学）
+    private func dimensionFormulaHint(_ d: TrainingSubScores.Dimension) -> String {
+        switch d {
+        case .pnl:
+            return "盈亏维度：v1 主分 pnlScore × 2（满分 50 → 100 等价折算）· 收益率高分高"
+        case .discipline:
+            return "纪律维度：v1 主分 disciplineScore × 2（满分 50 → 100 等价折算）· 0 违规 = 50 / -10/error / -3/warning"
+        case .winRate:
+            return "胜率维度：trades FIFO 配对（合约+方向）· 盈利 pair 占比 × 100 · 无 pair → 50 中性"
+        case .risk:
+            return "风险维度：单笔最大亏损率（亏损额 / 初始资金 × 100%）· 5% → 0 / 0% → 100 线性"
+        case .efficiency:
+            return "效率维度：平均每笔 pnl%（总收益 / 配对数 / 初始资金）· ±0.5% → 0/100 线性"
+        }
     }
 
     private func weaknessTip(_ sub: TrainingSubScores) -> some View {

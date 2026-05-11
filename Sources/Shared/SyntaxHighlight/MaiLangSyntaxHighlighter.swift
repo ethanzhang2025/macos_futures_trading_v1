@@ -151,6 +151,15 @@ public enum MaiLangSyntaxHighlighter {
         "OC", "WC", "HLAVGMA", "OCAVGMA",
         "CONSECUP", "CONSECDOWN", "MACROSS", "GAPSIZE",
         "VOLATILITYRANK", "VOLATILITYRATIO",
+        // v16.35 · 第 9 批 30 个（Hilbert 变换 + 信号滤波 + 周期形态 + 枢轴 + 波动评分 + 回测）
+        "HT_DCPERIOD", "HT_DCPHASE", "HT_LEADSINE", "HT_PHASOR", "HT_SINE", "HT_TRENDLINE", "HT_TRENDMODE",
+        "BUTTERWORTH", "HP_FILTER", "DETREND", "EMD", "EXPSMOOTHING",
+        "CYCLE", "FRACTALH", "FRACTALL", "TYPING", "TROUGH",
+        "PIVOT", "R1", "S1", "PRICELEVEL",
+        "HV", "VHF", "MOMENTUMSCORE",
+        "MAXIDX", "MAXSTREAK",
+        "AC", "MARKETFI",
+        "EQUITY", "MAR",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

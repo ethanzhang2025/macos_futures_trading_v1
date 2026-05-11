@@ -432,6 +432,45 @@ public enum MaiLangFunctionSignatures {
         // 波动评估 2
         sig("VOLATILITYRANK", ["周期 N"],        "波动率分位排名（0-100% · IV/HV rank）",  .高级),
         sig("VOLATILITYRATIO", ["短周期 N1", "长周期 N2"], "短长波动率比（短 std / 长 std）", .高级),
+        // v16.35 · 第 9 批 30 个 · 量化研究高频（HT 谱/滤波/Hilbert 变换/枢轴/形态/回测）
+        // Hilbert 变换族 7（量化周期分析必备）
+        sig("HT_DCPERIOD",    ["序列"],          "Hilbert 主导周期（dominant cycle period）", .高级),
+        sig("HT_DCPHASE",     ["序列"],          "Hilbert 主导相位（dominant cycle phase）",  .高级),
+        sig("HT_LEADSINE",    ["序列"],          "Hilbert 领先正弦（与 SINE 提前一相位）",   .高级),
+        sig("HT_PHASOR",      ["序列"],          "Hilbert 相量分量（in-phase component）",   .高级),
+        sig("HT_SINE",        ["序列"],          "Hilbert 正弦波（cycle phase 正弦）",       .高级),
+        sig("HT_TRENDLINE",   ["序列"],          "Hilbert 趋势线（去周期 instant trend）",   .高级),
+        sig("HT_TRENDMODE",   ["序列"],          "Hilbert 趋势模式（1=趋势 / 0=周期）",      .高级),
+        // 信号滤波 5
+        sig("BUTTERWORTH",    ["序列", "cutoff 周期 N"], "Butterworth 二阶低通滤波（Ehlers）", .高级),
+        sig("HP_FILTER",      ["序列", "平滑 lambda"],   "Hodrick-Prescott 滤波（IIR 近似）",  .高级),
+        sig("DETREND",        ["序列", "周期 N"], "去趋势（X - LinearRegression(X, N)）",     .高级),
+        sig("EMD",            ["短周期 N1", "长周期 N2"], "经验模态分解（Ehlers EMD 振荡器）",  .高级),
+        sig("EXPSMOOTHING",   ["序列", "alpha"],  "指数平滑（直接 alpha 控制 · 比 EMA 灵活）", .均线),
+        // 周期 / 形态 5
+        sig("CYCLE",          ["序列"],          "Ehlers 周期检测（dominant cycle 长度）",   .高级),
+        sig("FRACTALH",       [],                "Bill Williams 分形高（5 根 K 线模式）",    .逻辑),
+        sig("FRACTALL",       [],                "Bill Williams 分形低（5 根 K 线模式）",    .逻辑),
+        sig("TYPING",         [],                "K 线分型（顶/底/无 → 1/-1/0）",           .逻辑),
+        sig("TROUGH",         ["序列"],          "谷值检测（与 LASTPEAK 对偶）",            .统计),
+        // 枢轴 / 支撑阻力 4
+        sig("PIVOT",          [],                "经典枢轴点 P=(H+L+C)/3",                  .价量),
+        sig("R1",             [],                "经典阻力位 R1=2P-L",                       .价量),
+        sig("S1",             [],                "经典支撑位 S1=2P-H",                       .价量),
+        sig("PRICELEVEL",     ["周期 N"],        "价格关键位（N 周期支阻识别）",            .价量),
+        // 波动 / 动量评分 3
+        sig("HV",             ["周期 N"],        "历史波动率（年化 · close 对数收益 std）", .高级),
+        sig("VHF",             ["周期 N"],       "Vertical Horizontal Filter（Wilder · 趋势 vs 震荡）", .高级),
+        sig("MOMENTUMSCORE",  ["周期 N"],        "动量综合得分（多周期合成 0-100）",        .高级),
+        // 索引 / 计数 2
+        sig("MAXIDX",         ["序列", "周期 N"], "N 周期内最大值的相对索引（0=当前 / N-1=最远）", .统计),
+        sig("MAXSTREAK",      ["条件", "周期 N"], "N 周期内连续成立的最大长度",             .统计),
+        // 特殊 / Bill Williams 2
+        sig("AC",             [],                "Bill Williams Acceleration/Deceleration",  .高级),
+        sig("MARKETFI",       [],                "Market Facilitation Index（BW · 价幅/量）", .价量),
+        // 回测系统 2
+        sig("EQUITY",         ["收益率序列"],    "资金曲线（1 + 累乘收益率）",              .统计),
+        sig("MAR",            ["收益序列", "周期 N"], "MAR 比率（年化收益 / 最大回撤）",     .统计),
     ]
 
     /// v15.22 batch35 · 模糊搜索（name + summary 均不区分大小写 · 中文 summary 不受影响 · 空 query → 返回全部）

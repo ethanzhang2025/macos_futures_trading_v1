@@ -3246,6 +3246,15 @@ struct ChartContentView: View {
                 drawings.append(contentsOf: copies)
                 selectedDrawingIDs = Set(copies.map(\.id))
             }
+            // v17.22 · priceLabel 加"编辑标签"入口（label 可选 · 默认仅显示价格 · 可右键加用户文字）
+            if n == 1, let id = selectedDrawingIDs.first,
+               let drawing = drawings.first(where: { $0.id == id }),
+               drawing.type == .priceLabel {
+                Button(drawing.text?.isEmpty == false ? "编辑标签…" : "添加标签…") {
+                    editTextDrawing(drawing)
+                }
+                .disabled(drawing.locked)
+            }
             // 编辑文字仅当 selected 全部是单条 .text 类型时才有意义 · 锁定时禁用 · v13.12 加改字号
             if n == 1, let id = selectedDrawingIDs.first,
                let drawing = drawings.first(where: { $0.id == id }),
@@ -3278,10 +3287,10 @@ struct ChartContentView: View {
                 }
                 .disabled(drawing.locked)
             }
-            // v13.18 水平线 → 一键创建价格触及预警（与 WP-52 AlertCore 联动）
+            // v13.18 水平线 → 一键创建价格触及预警（与 WP-52 AlertCore 联动）· v17.22 加 priceLabel 支持
             if n == 1, let id = selectedDrawingIDs.first,
                let drawing = drawings.first(where: { $0.id == id }),
-               drawing.type == .horizontalLine {
+               drawing.type == .horizontalLine || drawing.type == .priceLabel {
                 Button("为此画线创建预警…") {
                     createAlertForDrawing(drawing)
                 }
@@ -3650,28 +3659,31 @@ struct ChartContentView: View {
         )
     }
 
-    /// v13.5 编辑文字画线内容（弹 NSAlert + NSTextField）
+    /// v13.5 编辑文字画线内容（弹 NSAlert + NSTextField）· v17.22 也支持 priceLabel 编辑 label
     private func editTextDrawing(_ drawing: Drawing) {
-        guard drawing.type == .text else { return }
+        guard drawing.type == .text || drawing.type == .priceLabel else { return }
         let alert = NSAlert()
-        alert.messageText = L("编辑文字")
-        alert.informativeText = L("修改标注内容：")
+        let isText = (drawing.type == .text)
+        alert.messageText = L(isText ? "编辑文字" : "编辑标签")
+        alert.informativeText = L(isText ? "修改标注内容：" : "为价格标签添加文字（留空仅显示价格）：")
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         textField.stringValue = drawing.text ?? ""
         alert.accessoryView = textField
         alert.addButton(withTitle: L("确定"))
         alert.addButton(withTitle: L("取消"))
         if alert.runModal() == .alertFirstButtonReturn {
-            let newText = textField.stringValue.isEmpty ? "标注" : textField.stringValue
+            let raw = textField.stringValue
+            // text 类型空 → 默认"标注" · priceLabel 类型空 → nil（仅显示价格）
+            let newText: String? = isText ? (raw.isEmpty ? "标注" : raw) : (raw.isEmpty ? nil : raw)
             if let idx = drawings.firstIndex(where: { $0.id == drawing.id }) {
                 drawings[idx].text = newText
             }
         }
     }
 
-    /// v13.18 为水平线画线创建价格触及预警（与 WP-52 AlertCore 联动 · 通过 NotificationCenter 通知 AlertWindow）
+    /// v13.18 为水平线画线创建价格触及预警（与 WP-52 AlertCore 联动）· v17.22 加 priceLabel 支持（语义同 horizontalLine）
     private func createAlertForDrawing(_ drawing: Drawing) {
-        guard drawing.type == .horizontalLine else { return }
+        guard drawing.type == .horizontalLine || drawing.type == .priceLabel else { return }
         let price = drawing.startPoint.price
         let priceStr = formatPrice(price)
         let nsAlert = NSAlert()

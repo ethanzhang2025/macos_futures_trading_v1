@@ -39,6 +39,9 @@ public struct MaiLangCodeView: NSViewRepresentable {
     @Binding var pendingScrollToLine: Int?
     /// v15.23 batch106 · 可视行回调（first/last 1-based · 监听 NSScrollView 滚动 + 文本变化）· minimap viewport 高亮用
     let onVisibleLinesChange: ((Int, Int) -> Void)?
+    /// v16.92 · lint 警告行内波浪线下划（与 v15.96 errorMarker 同 underline 风格 · 按 severity 颜色区分）
+    /// 空数组 = 不画 · 仅 error 用红波浪线 · warning 用橙波浪线
+    let lintWarnings: [MaiLangLintWarning]
 
     public init(text: Binding<String>, scheme: SyntaxColorScheme = .dark,
                 fontSize: CGFloat = 13, errorMarker: CodeErrorMarker? = nil,
@@ -49,7 +52,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 pendingGotoLine: Binding<Int?> = .constant(nil),
                 pendingInsertText: Binding<String?> = .constant(nil),
                 pendingScrollToLine: Binding<Int?> = .constant(nil),
-                onVisibleLinesChange: ((Int, Int) -> Void)? = nil) {
+                onVisibleLinesChange: ((Int, Int) -> Void)? = nil,
+                lintWarnings: [MaiLangLintWarning] = []) {
         self._text = text
         self.scheme = scheme
         self.fontSize = fontSize
@@ -62,6 +66,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
         self._pendingInsertText = pendingInsertText
         self._pendingScrollToLine = pendingScrollToLine
         self.onVisibleLinesChange = onVisibleLinesChange
+        self.lintWarnings = lintWarnings
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -609,6 +614,18 @@ public struct MaiLangCodeView: NSViewRepresentable {
                 }
             }
         }
+        // v16.92 · lint warning 行内波浪线（按 severity 颜色 · error 红 / warning 橙）
+        // 先画 lint · 后画 errorMarker → 编译错误覆盖 lint（错误优先级最高）
+        for warn in lintWarnings {
+            guard let warnRange = lineRange(warn.line, in: source) else { continue }
+            let safe = NSIntersectionRange(warnRange, fullRange)
+            if safe.length > 0 {
+                let underline = NSUnderlineStyle.thick.rawValue | NSUnderlineStyle.patternDot.rawValue
+                storage.addAttribute(.underlineStyle, value: underline, range: safe)
+                let color: NSColor = warn.severity == .error ? .systemRed : .systemOrange
+                storage.addAttribute(.underlineColor, value: color, range: safe)
+            }
+        }
         // v15.22 batch6 · 错误位置红色标注（编译失败后定位）· v15.95 升级波浪线下划（IDE 风格 · 视觉更专业）
         // NSUnderlineStyle .single + .patternDot 组合接近 IDE 拼写错误波浪线 · macOS 13+ 原生支持
         if let marker = errorMarker,
@@ -767,6 +784,37 @@ public struct MaiLangCodeView: NSViewRepresentable {
             i += 1
         }
         return line
+    }
+
+    /// v16.92 · 行号（1-based）→ 该行去掉前导空白的 NSRange UTF-16 偏移（用于 lint 整行 underline）
+    /// 行不存在 / 全空白 → nil
+    private func lineRange(_ line: Int, in source: String) -> NSRange? {
+        let ns = source as NSString
+        let length = ns.length
+        var currentLine = 1
+        var lineStart = 0
+        var i = 0
+        while i < length && currentLine < line {
+            if ns.character(at: i) == 0x0A {
+                currentLine += 1
+                lineStart = i + 1
+            }
+            i += 1
+        }
+        guard currentLine == line else { return nil }
+        var lineEnd = lineStart
+        while lineEnd < length && ns.character(at: lineEnd) != 0x0A {
+            lineEnd += 1
+        }
+        // 跳过前导空白避免 underline 缩进
+        var nonWhiteStart = lineStart
+        while nonWhiteStart < lineEnd {
+            let c = ns.character(at: nonWhiteStart)
+            if c != 0x20 && c != 0x09 { break }
+            nonWhiteStart += 1
+        }
+        guard nonWhiteStart < lineEnd else { return nil }
+        return NSRange(location: nonWhiteStart, length: lineEnd - nonWhiteStart)
     }
 
     /// v15.22 batch6 · 行/列（1-based）→ NSRange UTF-16 偏移 · 越界返回 nil

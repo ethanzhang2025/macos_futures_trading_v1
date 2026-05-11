@@ -143,7 +143,9 @@ public struct FormulaEditorWindow: View {
                                 onVisibleLinesChange: { s, e in
                                     visibleStartLine = s
                                     visibleEndLine = e
-                                })
+                                },
+                                // v16.92 · lint 行内波浪线（按 severity 颜色）
+                                lintWarnings: MaiLangLint.analyze(sourceText))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // v15.23 batch129 · split 视图右 pane（只读 · 同屏对比另一 tab · ⌘\\ 切换）
                 if let splitIdx = splitTabIdx, splitIdx < tabs.count, splitIdx != activeIdx {
@@ -1496,6 +1498,7 @@ public struct FormulaEditorWindow: View {
             ("点击行号", "选中整行（左侧 gutter）"),
             ("⌘⇧M", "切换 minimap 缩略图（v15.23 · 拖动 scroll-only · 双击 goto + 移光标 · 4 档宽度）"),
             ("minimap 标记", "🟧未用变量/缺颜色 · 🟥编译错误 · 🟥紧急 lint (undefined/重复定义 · v16.77) · 🟨当前 token 引用"),
+            ("lint 行内波浪线 (v16.92)", "整行 dot 波浪线：error 红色（undefined/重复）/ warning 橙色（unused/缺色）"),
             ("status bar", "实时显示光标位置 行:列 · ⚠ 警告数（点击跳第一个）"),
         ]),
         ("🔍 查找", [

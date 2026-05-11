@@ -34,6 +34,9 @@ struct TrainingHistoryPanel: View {
     /// v16.58 · 高亮新加 session（dismiss sheet 后 5s · 与 viewModel.recentlyAddedSessionID 同步）
     @State private var highlightedSessionID: UUID? = nil
     @State private var highlightClearTask: Task<Void, Never>? = nil
+    /// v16.64 · 删除 session 5s undo · banner 显示 · trader 误删保护
+    @State private var pendingUndoSession: TrainingSession? = nil
+    @State private var undoClearTask: Task<Void, Never>? = nil
 
     /// v15.23 batch136 · 排序枚举
     enum SortKey: String, CaseIterable {
@@ -97,6 +100,10 @@ struct TrainingHistoryPanel: View {
                 .keyboardShortcut("k", modifiers: [.command, .option])
                 .opacity(0)
             )
+            // v16.64 · 删除 session undo banner（5s 自动清 · trader 误删保护）
+            if let s = pendingUndoSession {
+                undoBanner(for: s)
+            }
             if viewModel.log.sessions.isEmpty {
                 emptyState
             } else {
@@ -260,6 +267,82 @@ struct TrainingHistoryPanel: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - v16.64 · 删除 undo banner
+
+    /// 删除 session 时先存到 pendingUndoSession + 启动 5s 自动清任务
+    private func deleteSessionWithUndo(_ session: TrainingSession) {
+        // 先 fetch score 备份（addSession 会重算 · 但配对/score 一致）
+        viewModel.log.removeSession(id: session.id)
+        pendingUndoSession = session
+        undoClearTask?.cancel()
+        undoClearTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if Task.isCancelled { return }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                pendingUndoSession = nil
+            }
+        }
+    }
+
+    /// 撤销删除：重新 add · 触发评分缓存（与原 score 等价 · TrainingScorer 纯函数）
+    private func undoDelete() {
+        guard let s = pendingUndoSession else { return }
+        viewModel.log.addSession(s)
+        undoClearTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            pendingUndoSession = nil
+        }
+    }
+
+    /// 立即关闭 banner（不撤销）· 与"清空"按钮分开 · trader 看一眼后主动关闭
+    private func dismissUndoBanner() {
+        undoClearTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            pendingUndoSession = nil
+        }
+    }
+
+    /// undo banner UI · 5s 内一键撤销 · 删除任何 session 都触发
+    private func undoBanner(for session: TrainingSession) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "trash.fill")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+            Text("已删除：\(session.scenarioName.isEmpty ? "未命名训练" : session.scenarioName)")
+                .font(.system(size: 12))
+            Spacer()
+            Button {
+                undoDelete()
+            } label: {
+                Label("撤销", systemImage: "arrow.uturn.backward")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .keyboardShortcut("z", modifiers: [.command])
+            .tooltip("撤销删除（⌘Z · 5s 内有效）")
+            Button {
+                dismissUndoBanner()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .tooltip("关闭（不撤销）")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.orange.opacity(0.12))
+        .overlay(
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundColor(.orange.opacity(0.35)),
+            alignment: .bottom
+        )
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     // MARK: - 空态
@@ -802,7 +885,7 @@ struct TrainingHistoryPanel: View {
                             }
                             Divider()
                             Button("删除", role: .destructive) {
-                                viewModel.log.removeSession(id: session.id)
+                                deleteSessionWithUndo(session)
                             }
                         }
                 }

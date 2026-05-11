@@ -873,7 +873,7 @@ struct ReviewWindow: View {
                 // v16.39 · 月报含 base64 PNG 图（trader 邮件粘贴可见图但 markdown 大）
                 Toggle("月报含图", isOn: $exportReportWithCharts)
                     .toggleStyle(.checkbox)
-                    .tooltip("勾选后月报/周报末尾追加 4 张关键图（盈亏 + 胜率 + 心理洞察 + Setup × Pattern · base64 PNG · 邮件可见 · markdown 文件 ~700KB）")
+                    .tooltip("勾选后月报/周报末尾追加 5 张关键图（盈亏 + 胜率 + 心理洞察 + Setup × Pattern + 训练 5 维雷达图 · base64 PNG · 邮件可见 · markdown 文件 ~900KB）")
                 // v15.21 batch114 · ⌘R 重新加载复盘数据（trader 实时数据更新或纠错重算）
                 Button {
                     summary = nil
@@ -1155,24 +1155,109 @@ struct ReviewWindow: View {
         return md
     }
 
-    /// 月报/周报关键 4 图 markdown（按 flag 开 · 默认 nil 不嵌入）
+    /// 月报/周报关键 5 图 markdown（按 flag 开 · 默认 nil 不嵌入）
     /// v16.57 · 加 Setup × Pattern 矩阵（与 v16.47 第 15 张卡片视觉一致）
+    /// v16.88 · 加 5 维平均雷达图（与 v16.62 panel chip + v16.63 月报章节 + v16.87 单 session 雷达 PNG 同源）
     @MainActor
     private func keyChartsMarkdownIfEnabled(_ s: ReviewSummary) -> String {
         guard exportReportWithCharts else { return "" }
         var md = "\n## 关键图表（base64 PNG · 邮件可见）\n\n"
-        let charts: [(String, AnyView)] = [
+        var charts: [(String, AnyView)] = [
             ("月度盈亏", AnyView(monthlyPnLChart(s.monthlyPnL))),
             ("胜率曲线", AnyView(winRateChart(s.winRateCurve))),
             ("心理风险洞察", AnyView(psychInsightView(s.psychTagCounts))),
             ("Setup × Pattern 矩阵", AnyView(setupPatternHeatmapView(s))),
         ]
+        // v16.88 · 仅有 v2 subScores session 时加雷达图（老 log 跳过）
+        if let radar = trainingFiveDimRadarViewIfAvailable() {
+            charts.append(("训练 5 维平均雷达图", radar))
+        }
         for (title, view) in charts {
             if let seg = renderChartToBase64Markdown(title: title, content: view) {
                 md += seg + "\n"
             }
         }
         return md
+    }
+
+    /// v16.88 · 训练 5 维平均雷达图 view（与 TrainingScoreSheet.radarChart 同模式 · ReviewWindow 内独立 inline · 不污染 TradingCore）
+    /// 数据：TrainingLogPersistence.load() 全部 v2 subScores session 求 5 维平均
+    /// nil 表示无 v2 评分 session · 月报跳过该图（兼容老 log）
+    @MainActor
+    private func trainingFiveDimRadarViewIfAvailable() -> AnyView? {
+        let log = TrainingLogPersistence.load()
+        let subs = log.sessions.compactMap { log.score(for: $0.id)?.subScores }
+        guard !subs.isEmpty else { return nil }
+        let n = subs.count
+        let avgPnl = subs.map(\.pnl).reduce(0, +) / n
+        let avgDisc = subs.map(\.discipline).reduce(0, +) / n
+        let avgWin = subs.map(\.winRate).reduce(0, +) / n
+        let avgRisk = subs.map(\.risk).reduce(0, +) / n
+        let avgEff = subs.map(\.efficiency).reduce(0, +) / n
+        let dims: [(emoji: String, name: String, score: Int)] = [
+            ("💰", "盈亏", avgPnl),
+            ("🛡️", "纪律", avgDisc),
+            ("🎯", "胜率", avgWin),
+            ("⚠️", "风险", avgRisk),
+            ("⚡", "效率", avgEff),
+        ]
+        let view = VStack(spacing: 8) {
+            Text("训练 5 维平均（\(n) 次 v2 评分）")
+                .font(.system(size: 12, weight: .semibold))
+            Canvas { ctx, size in
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let maxR = min(size.width, size.height) / 2 - 24
+                let count = dims.count
+                let angleStep = 2 * Double.pi / Double(count)
+                let startAngle = -Double.pi / 2
+                func vertex(_ i: Int, ratio: Double) -> CGPoint {
+                    let a = startAngle + angleStep * Double(i)
+                    return CGPoint(x: center.x + CGFloat(cos(a)) * CGFloat(maxR * ratio),
+                                   y: center.y + CGFloat(sin(a)) * CGFloat(maxR * ratio))
+                }
+                func polygon(ratio: Double) -> Path {
+                    var p = Path()
+                    for i in 0..<count {
+                        let pt = vertex(i, ratio: ratio)
+                        if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+                    }
+                    p.closeSubpath()
+                    return p
+                }
+                ctx.stroke(polygon(ratio: 1.0), with: .color(.secondary.opacity(0.30)), lineWidth: 1)
+                for ratio in [0.25, 0.50, 0.75] {
+                    ctx.stroke(polygon(ratio: ratio), with: .color(.secondary.opacity(0.15)), lineWidth: 0.5)
+                }
+                for i in 0..<count {
+                    var line = Path()
+                    line.move(to: center)
+                    line.addLine(to: vertex(i, ratio: 1.0))
+                    ctx.stroke(line, with: .color(.secondary.opacity(0.15)), lineWidth: 0.5)
+                }
+                var scorePath = Path()
+                for (i, d) in dims.enumerated() {
+                    let pt = vertex(i, ratio: Double(d.score) / 100.0)
+                    if i == 0 { scorePath.move(to: pt) } else { scorePath.addLine(to: pt) }
+                }
+                scorePath.closeSubpath()
+                ctx.fill(scorePath, with: .color(.blue.opacity(0.18)))
+                ctx.stroke(scorePath, with: .color(.blue), lineWidth: 1.5)
+                let worst = dims.min(by: { $0.score < $1.score })?.name
+                for (i, d) in dims.enumerated() {
+                    let pt = vertex(i, ratio: Double(d.score) / 100.0)
+                    let isWorst = d.name == worst
+                    let r: CGFloat = isWorst ? 4 : 2.8
+                    ctx.fill(
+                        Path(ellipseIn: CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)),
+                        with: .color(isWorst ? .orange : .blue)
+                    )
+                    let label = vertex(i, ratio: 1.0 + 18.0 / maxR)
+                    ctx.draw(Text("\(d.emoji) \(d.score)").font(.system(size: 11)), at: label)
+                }
+            }
+            .frame(width: 320, height: 320)
+        }
+        return AnyView(view)
     }
 
     /// v15.19 batch41 · 单 chartCard PNG 导出（trader 分享单图）

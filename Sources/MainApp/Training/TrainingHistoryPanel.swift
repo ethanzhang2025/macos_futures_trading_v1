@@ -83,6 +83,16 @@ struct TrainingHistoryPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
+            // v16.48 · ⌘⌥K 直接启动最弱形态训练（与 v16.31 ScoreSheet 同设计 · 跨 panel 快捷键一致）
+            .background(
+                Button("") {
+                    if let weakest = viewModel.log.weakestPattern() {
+                        viewModel.pendingRetrainPattern = weakest
+                    }
+                }
+                .keyboardShortcut("k", modifiers: [.command, .option])
+                .opacity(0)
+            )
             if viewModel.log.sessions.isEmpty {
                 emptyState
             } else {

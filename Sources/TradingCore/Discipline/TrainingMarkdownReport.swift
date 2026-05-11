@@ -140,6 +140,9 @@ public enum TrainingMarkdownReport {
         // v16.165 · 月报最弱 session 引用（trader 月度看 worst 对照学习）
         md += monthlyWorstSessionMarkdown(sessions: sessions, log: log)
 
+        // v16.188 · 本月最常违反规则 Top 3（trader 月度看纪律弱点）
+        md += mostViolatedRulesMarkdown(sessions: sessions)
+
         // v16.172 · 单笔盈利最大 session（与 score-best 互补 · pnl 维度的最大单笔）
         md += monthlyMaxPnlSessionMarkdown(sessions: sessions, log: log)
 
@@ -433,6 +436,26 @@ public enum TrainingMarkdownReport {
         md += "```\n\n"
         let delta = last - first
         md += "- 起始 \(first) → 最新 \(last) · 趋势 \(delta >= 0 ? "+" : "")\(delta)\n\n"
+        return md
+    }
+
+    /// v16.188 · 本月最常违反规则 Top 3 · trader 月度看纪律弱点
+    /// 按 ruleKind 分组计数 · 总数排序 desc · 仅 ≥ 1 violation 输出
+    private static func mostViolatedRulesMarkdown(sessions: [TrainingSession]) -> String {
+        let allViolations = sessions.flatMap(\.violations)
+        guard !allViolations.isEmpty else { return "" }
+        let grouped = Dictionary(grouping: allViolations, by: { $0.ruleKind })
+            .map { (kind: $0.key, count: $0.value.count) }
+            .sorted { $0.count > $1.count }
+        let top = grouped.prefix(3)
+        var md = "## 本月最常违反规则\n\n"
+        md += "| 排名 | 规则 | 次数 |\n|------|------|------|\n"
+        for (idx, item) in top.enumerated() {
+            let medal = ["🥇", "🥈", "🥉"][idx]
+            md += "| \(medal) | \(item.kind.displayName) | \(item.count) |\n"
+        }
+        let totalCount = allViolations.count
+        md += "\n_共 \(totalCount) 次违规 · 集中于上述 \(top.count) 类规则 · 建议优先复盘 \(top.first?.kind.displayName ?? "") 类_\n\n"
         return md
     }
 

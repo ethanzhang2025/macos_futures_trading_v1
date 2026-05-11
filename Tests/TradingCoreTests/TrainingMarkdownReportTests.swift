@@ -630,6 +630,36 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("## 最佳训练时段"))   // v16.186 TOC 含锚点 · 改 ## 精确匹配
     }
 
+    // MARK: - v16.188 · 最常违反规则 Top 3
+
+    @Test("v16.188 · 含违规 session 输出 Top 3 规则表 + 🥇🥈🥉 + 复盘建议")
+    func mostViolatedRules() {
+        var log = TrainingSessionLog()
+        let v1 = DisciplineViolation(ruleID: UUID(), ruleKind: .stopLossPercent,
+                                     occurredAt: Date(), severity: .error, message: "x")
+        let v2 = DisciplineViolation(ruleID: UUID(), ruleKind: .maxHoldingMinutes,
+                                     occurredAt: Date(), severity: .warning, message: "x")
+        let s = TrainingSession(
+            startedAt: Date(), endedAt: Date().addingTimeInterval(60),
+            initialBalance: 100_000, finalBalance: 100_000,
+            trades: [], violations: [v1, v1, v1, v2, v2],   // stopLoss×3 / hold×2
+            scenarioName: "test"
+        )
+        log.addSession(s)
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("最常违反规则"))
+        #expect(md.contains("🥇"))
+        #expect(md.contains("单笔止损百分比"))   // v1 displayName · 应是 Top 1
+    }
+
+    @Test("v16.188 · 0 违规 不输出最常违反规则章节")
+    func mostViolatedRulesEmpty() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "无违规", pnl: 1000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(!md.contains("## 最常违反规则"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

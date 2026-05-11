@@ -483,6 +483,25 @@ struct TrainingMarkdownReportTests {
         #expect(md.contains("[最近训练]"))
     }
 
+    // MARK: - v16.170 · 每周分布表
+
+    @Test("v16.170 · 含 session 输出每周分布表 + 7 天行 + 🔥 最活跃日")
+    func weekdayDistributionSection() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "x", pnl: 100))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("每周分布"))
+        #expect(md.contains("周一"))
+        #expect(md.contains("周日"))
+        #expect(md.contains("🔥"))   // 仅 1 session → 该日必为最大值
+    }
+
+    @Test("v16.170 · 空 log 不输出每周分布表")
+    func weekdayDistributionEmptyLog() {
+        let md = TrainingMarkdownReport.generate(TrainingSessionLog())
+        #expect(!md.contains("每周分布"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

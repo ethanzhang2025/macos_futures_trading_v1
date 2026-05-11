@@ -140,6 +140,9 @@ public enum TrainingMarkdownReport {
         // v16.164 · 最近 30 天训练日历 mini sparkline（emoji 方块 · trader 看习惯密度）
         md += recentTrainingCalendarMarkdown(sessions: sessions, generatedAt: generatedAt)
 
+        // v16.170 · 每周分布表（周一-周日 训练次数 · trader 看哪天最活跃）
+        md += weekdayDistributionMarkdown(sessions: sessions)
+
         // 最近训练（filtered sessions desc by endedAt · 取前 recentLimit）
         md += "## 最近训练\n\n"
         let recent = sessions
@@ -217,6 +220,33 @@ public enum TrainingMarkdownReport {
         for (dim, avg) in items {
             let marker = dim == worst ? " ⚠ 最弱" : ""
             md += "| \(dim.emoji) \(dim.displayName) | \(avg)\(marker) |\n"
+        }
+        md += "\n"
+        return md
+    }
+
+    /// v16.170 · 每周分布表 · 哪一天 trader 最活跃训练
+    /// Calendar.weekday: 1=周日 / 2=周一 / ... / 7=周六（gregorian 默认）
+    /// 输出表格 · 最活跃日加 🔥 标记
+    private static func weekdayDistributionMarkdown(sessions: [TrainingSession]) -> String {
+        guard !sessions.isEmpty else { return "" }
+        let cal = Calendar(identifier: .gregorian)
+        var counts: [Int: Int] = [:]   // weekday → count
+        for s in sessions {
+            let wd = cal.component(.weekday, from: s.endedAt)
+            counts[wd, default: 0] += 1
+        }
+        let names = [1: "周日", 2: "周一", 3: "周二", 4: "周三",
+                     5: "周四", 6: "周五", 7: "周六"]
+        // 周一开头排序（trader 习惯）：2,3,4,5,6,7,1
+        let order = [2, 3, 4, 5, 6, 7, 1]
+        let maxCount = counts.values.max() ?? 0
+        var md = "## 每周分布（哪天最活跃）\n\n"
+        md += "| 星期 | 次数 |\n|------|------|\n"
+        for wd in order {
+            let cnt = counts[wd] ?? 0
+            let marker = (cnt > 0 && cnt == maxCount) ? " 🔥" : ""
+            md += "| \(names[wd] ?? "?") | \(cnt)\(marker) |\n"
         }
         md += "\n"
         return md

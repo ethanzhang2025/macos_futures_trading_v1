@@ -1532,6 +1532,15 @@ public struct FormulaEditorWindow: View {
                 } label: {
                     Label("插入颜色属性", systemImage: "paintpalette")
                 }
+            case .undefinedVariable:
+                // 仅跳转 · trader 自己决定是定义还是改名（无机械修复方案）
+                Button {
+                    pendingGotoLine = warn.line
+                    showOutlineSheet = false
+                    statusMessage = "跳到第 \(warn.line) 行 · 检查标识符拼写或补定义"
+                } label: {
+                    Label("跳转检查拼写", systemImage: "magnifyingglass")
+                }
             }
         } label: {
             Label("修复", systemImage: "wand.and.stars")

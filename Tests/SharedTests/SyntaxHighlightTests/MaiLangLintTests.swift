@@ -136,7 +136,47 @@ struct MaiLangLintTests {
         """
         // tokenize 把 { ... } 整体识别为 comment token · 内部 TEMP 不会作为 identifier
         let warns = MaiLangLint.analyze(src)
-        #expect(warns.count == 1)
-        #expect(warns[0].line == 1)
+        // v16.66 加 undefinedVariable 规则后 · 仍仅 1 warn（OUT 未定义 TEMP 是 unused）
+        // TEMP 是已定义 + 注释引用不计 → 触发 unusedVariable
+        let unused = warns.filter { $0.kind == .unusedVariable }
+        #expect(unused.count == 1)
+        #expect(unused[0].line == 1)
+    }
+
+    // MARK: - v16.66 · undefinedVariable 规则
+
+    @Test("v16.66 · 使用未定义变量 → 警告")
+    func undefinedVariableDetected() {
+        // FOOBAR 未定义 · 非保留字 · 非已声明 → 警告
+        let src = "OUT:MA(FOOBAR,5),COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let und = warns.filter { $0.kind == .undefinedVariable }
+        #expect(und.count == 1)
+        #expect(und[0].message.contains("FOOBAR"))
+    }
+
+    @Test("v16.66 · 已定义变量 + builtin 不警告")
+    func undefinedVariableSkipsReservedAndDefined() {
+        // outline 每行只取首个语句 · MA5/OUT 必须分两行
+        let src = """
+        MA5:=MA(CLOSE,5);
+        OUT:MA5,COLORRED;
+        """
+        let warns = MaiLangLint.analyze(src)
+        let und = warns.filter { $0.kind == .undefinedVariable }
+        #expect(und.isEmpty)
+    }
+
+    @Test("v16.66 · 同名未定义只警告一次（首次出现）")
+    func undefinedVariableDedup() {
+        let src = """
+        OUT1:FOO+1,COLORRED;
+        OUT2:FOO*2,COLORBLUE;
+        OUT3:FOO-3,COLORGREEN;
+        """
+        let warns = MaiLangLint.analyze(src)
+        let und = warns.filter { $0.kind == .undefinedVariable && $0.message.contains("FOO") }
+        #expect(und.count == 1)
+        #expect(und[0].line == 1)   // 首次出现
     }
 }

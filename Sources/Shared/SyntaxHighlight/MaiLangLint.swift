@@ -21,6 +21,7 @@ public struct MaiLangLintWarning: Sendable, Equatable {
         case unusedVariable        // 中间变量定义但全文无其他引用
         case duplicateDefinition   // 同名变量被定义两次及以上（可能是 typo · 后续覆盖前定义）
         case missingColorAttribute // 输出变量未指定 COLORxxx 属性（默认色不醒目）
+        case undefinedVariable     // v16.66 · 引用了未定义的标识符（非保留字 · 非已声明变量 · 可能 typo）
     }
 
     public init(line: Int, kind: Kind, message: String) {
@@ -87,6 +88,41 @@ public enum MaiLangLint {
                     kind: .missingColorAttribute,
                     message: "输出变量 \(entry.name) 未指定颜色（建议加 COLORRED / COLORBLUE 等）"))
             }
+        }
+
+        // v16.66 规则 4：未定义的标识符（可能 typo）· 非保留字 + 非已声明变量
+        // 用 outline 名集合 + isReservedWord 反向过滤 identifier tokens
+        let definedNames: Set<String> = Set(outline.map { $0.name.uppercased() })
+        // 按 token location 计算行号 · 预算 lineStarts O(n) 后二分 O(log n) 查询
+        let ns = source as NSString
+        var lineStarts: [Int] = [0]
+        for i in 0..<ns.length where ns.character(at: i) == 0x0A {
+            lineStarts.append(i + 1)
+        }
+        func lineOf(_ loc: Int) -> Int {
+            var lo = 0, hi = lineStarts.count - 1, ans = 0
+            while lo <= hi {
+                let mid = (lo + hi) / 2
+                if lineStarts[mid] <= loc { ans = mid; lo = mid + 1 } else { hi = mid - 1 }
+            }
+            return ans + 1
+        }
+        var reported: Set<String> = []
+        for t in tokens where t.kind == .identifier {
+            let upper = t.text.uppercased()
+            // 仅检测全大写英文字母+数字（trader 麦语言习惯）· 跳过中文/特殊字符
+            guard upper.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }),
+                  upper.first?.isLetter == true,
+                  upper.count >= 2 else { continue }
+            if MaiLangSyntaxHighlighter.isReservedWord(upper) { continue }
+            if definedNames.contains(upper) { continue }
+            // 已报告同名只警告一次（首次出现）
+            if reported.contains(upper) { continue }
+            reported.insert(upper)
+            warnings.append(MaiLangLintWarning(
+                line: lineOf(t.range.location),
+                kind: .undefinedVariable,
+                message: "未定义的标识符 \(t.text)（可能 typo · 检查是否拼错变量名或缺定义）"))
         }
 
         return warnings.sorted { $0.line < $1.line }

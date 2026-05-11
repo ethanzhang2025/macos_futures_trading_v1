@@ -599,6 +599,13 @@ public struct FormulaEditorWindow: View {
                                         }
                                         .buttonStyle(.borderless)
                                     }
+                                    // v16.215 · 整行可点击跳行（v16.92 outline UX 增强 · 不必精确点按钮）
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        pendingGotoLine = warn.line
+                                        showOutlineSheet = false
+                                        statusMessage = "跳转到第 \(warn.line) 行 · \(warn.message)"
+                                    }
                                     // v16.158 · 右键隐藏此 kind 类（本会话 · 不持久化）
                                     .contextMenu {
                                         Button {

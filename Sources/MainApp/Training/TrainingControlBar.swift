@@ -103,6 +103,16 @@ struct TrainingControlBar: View {
                         Text(idleHint)
                             .font(.caption)
                             .foregroundColor(idleHintColor)
+                        // v16.177 · ⚙️ 规则 chip 点击 → 跳 RulesPanel tab（与 v16.46 mostViolated 同模式）
+                        Button {
+                            viewModel.pendingJumpToRulesTab = true
+                        } label: {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                        .tooltip("打开纪律规则面板（编辑/启用/导入）")
                         todayVsYesterdayChip
                         consecutiveDaysChip
                         sevenDayMiniBar

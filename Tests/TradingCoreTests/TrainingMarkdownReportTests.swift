@@ -83,9 +83,11 @@ struct TrainingMarkdownReportTests {
             log.addSession(makeSession(scenarioName: "x", pattern: .oscillation))
         }
         let md = TrainingMarkdownReport.generate(log, recentLimit: 3)
-        // 表格行（| date | ... |）不算 header 应该刚好 3
-        let dataRows = md.components(separatedBy: "\n").filter {
-            $0.hasPrefix("| 20") || $0.hasPrefix("| 19")
+        // v16.203 后表格首列是 "排名" · 数据行不再以 "| 20" 开头
+        // 改用 contains 日期格式 + 在 ## 最近训练 章节后查 row
+        let recentSection = md.components(separatedBy: "## 最近训练").last ?? ""
+        let dataRows = recentSection.components(separatedBy: "\n").filter {
+            $0.contains("| 2") && $0.contains("震荡")   // 〰️ 震荡 = .oscillation displayName
         }
         #expect(dataRows.count == 3)
     }

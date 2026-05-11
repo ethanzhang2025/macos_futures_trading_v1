@@ -185,15 +185,18 @@ public enum TrainingMarkdownReport {
         if recent.isEmpty {
             md += "_暂无训练记录_\n"
         } else {
-            md += "| 日期 | 场景 | 形态 | 总分 | 等级 | 5 维 | 盈亏% |\n"
-            md += "|------|------|------|------|------|------|-------|\n"
+            // v16.203 · 计算 top3 score 用于 rank emoji（按 totalScore desc）
+            let topScores = recent.compactMap { log.score(for: $0.id)?.totalScore }.sorted(by: >).prefix(3)
+            md += "| 排名 | 日期 | 场景 | 形态 | 总分 | 等级 | 5 维 | 盈亏% |\n"
+            md += "|------|------|------|------|------|------|------|-------|\n"
             for session in recent {
                 let s = log.score(for: session.id)
                 let date = formatDateTime(session.endedAt)
                 let scenarioName = session.scenarioName.isEmpty ? "—" : session.scenarioName
                 let patternStr = session.scenarioPattern
                     .map { "\($0.emoji) \($0.displayName)" } ?? "—"
-                let total = "\(s?.totalScore ?? 0)"
+                let scoreVal = s?.totalScore ?? 0
+                let total = "\(scoreVal)"
                 let grade = s?.grade.emoji ?? "—"
                 // v16.198 · 5 维 emoji dots（与 HistoryPanel v16.150 mini dots 同 4 阶梯）
                 let dotsStr: String = {
@@ -201,7 +204,14 @@ public enum TrainingMarkdownReport {
                     return sub.ordered.map { scoreToDot($0.score) }.joined()
                 }()
                 let pnlPct = String(format: "%+.2f", (session.pnlPercent as NSDecimalNumber).doubleValue)
-                md += "| \(date) | \(scenarioName) | \(patternStr) | \(total) | \(grade) | \(dotsStr) | \(pnlPct)% |\n"
+                // v16.203 · 前 3 加 🥇🥈🥉 rank（同分按出现顺序取第一个）
+                let rank: String = {
+                    if topScores.count >= 1, scoreVal == topScores[0] { return "🥇" }
+                    if topScores.count >= 2, scoreVal == topScores[1] { return "🥈" }
+                    if topScores.count >= 3, scoreVal == topScores[2] { return "🥉" }
+                    return ""
+                }()
+                md += "| \(rank) | \(date) | \(scenarioName) | \(patternStr) | \(total) | \(grade) | \(dotsStr) | \(pnlPct)% |\n"
             }
         }
 

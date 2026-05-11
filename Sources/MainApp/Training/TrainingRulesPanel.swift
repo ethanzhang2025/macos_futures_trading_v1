@@ -161,6 +161,8 @@ struct TrainingRulesPanel: View {
             Toast.errorBody("导入失败", "JSON 格式无效（需含 DisciplineBook 结构）")
             return
         }
+        // v16.117 · 覆盖确认（防误操作丢失现有规则）
+        guard confirmOverwriteRules(newCount: book.rules.count) else { return }
         viewModel.applyRuleTemplate(book)
         Toast.info("导入成功", "\(book.rules.count) 条规则 · 启用 \(book.enabledRules.count)")
     }
@@ -191,8 +193,23 @@ struct TrainingRulesPanel: View {
             Toast.errorBody("导入失败", "剪贴板内容非有效 DisciplineBook JSON")
             return
         }
+        // v16.117 · 覆盖确认
+        guard confirmOverwriteRules(newCount: book.rules.count) else { return }
         viewModel.applyRuleTemplate(book)
         Toast.info("导入成功", "\(book.rules.count) 条规则 · 启用 \(book.enabledRules.count)")
+    }
+
+    /// v16.117 · 覆盖现有规则集 confirm（防误操作丢失数据）· 当前为空时直接 true
+    private func confirmOverwriteRules(newCount: Int) -> Bool {
+        let curCount = viewModel.book.rules.count
+        guard curCount > 0 else { return true }   // 当前为空 → 无 confirm 必要
+        let alert = NSAlert()
+        alert.messageText = L("确认覆盖当前规则集？")
+        alert.informativeText = L("当前有 \(curCount) 条规则将被新的 \(newCount) 条覆盖 · 此操作不可撤销")
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: L("覆盖"))
+        alert.addButton(withTitle: L("取消"))
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// v16.44 · 当前规则集匹配的模板（与 v16.43 4 套对比 · 不匹配 → "自定义"）

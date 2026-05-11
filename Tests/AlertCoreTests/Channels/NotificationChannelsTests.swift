@@ -212,19 +212,103 @@ struct DispatcherChannelsIntegrationTests {
 @Suite("NotificationChannelKind · WP-52 v1 扩展（console + file）")
 struct NotificationChannelKindExtensionTests {
 
-    @Test("CaseIterable 包含 5 种")
+    @Test("CaseIterable 包含 6 种")
     func allCasesIncludesNew() {
         let all = Set(NotificationChannelKind.allCases)
-        #expect(all == [.inApp, .systemNotice, .sound, .console, .file])
+        #expect(all == [.inApp, .systemNotice, .sound, .console, .file, .webhook])
     }
 
     @Test("rawValue 与 case 对齐（向后兼容旧 JSON）")
     func rawValuesMatchCaseNames() {
         #expect(NotificationChannelKind.console.rawValue == "console")
         #expect(NotificationChannelKind.file.rawValue == "file")
+        #expect(NotificationChannelKind.webhook.rawValue == "webhook")
         // 旧值仍可解码
         #expect(NotificationChannelKind(rawValue: "inApp") == .inApp)
         #expect(NotificationChannelKind(rawValue: "systemNotice") == .systemNotice)
         #expect(NotificationChannelKind(rawValue: "sound") == .sound)
+    }
+}
+
+// MARK: - WebhookChannel (v17.32 B3)
+
+/// Mock HTTP 客户端 · 拦截 request 不联网 · 记录调用参数
+private actor MockWebhookClient: WebhookHTTPClient {
+    private(set) var calls: [(url: URL, headers: [String: String], body: Data)] = []
+    private let response: (statusCode: Int, body: Data)?
+
+    init(response: (statusCode: Int, body: Data)? = (200, Data())) {
+        self.response = response
+    }
+
+    func post(url: URL, headers: [String: String], body: Data, timeout: TimeInterval) async -> (statusCode: Int, body: Data)? {
+        calls.append((url, headers, body))
+        return response
+    }
+}
+
+@Suite("WebhookChannel · v17.32 B3 通用 JSON POST")
+struct WebhookChannelTests {
+
+    @Test("kind = .webhook")
+    func kindIsWebhook() {
+        let channel = WebhookChannel(url: URL(string: "https://example.com/hook")!)
+        #expect(channel.kind == .webhook)
+    }
+
+    @Test("send · POST JSON 含 alert_name / instrument_id / trigger_price / message")
+    func sendPostsExpectedJson() async throws {
+        let mock = MockWebhookClient(response: (200, Data()))
+        let channel = WebhookChannel(
+            url: URL(string: "https://example.com/hook")!,
+            headers: ["X-Custom": "abc"],
+            client: mock,
+            timestampFormatter: { _ in "2025-04-24T19:46:40Z" }
+        )
+        await channel.send(makeEvent(name: "RB0 突破"))
+        let calls = await mock.calls
+        #expect(calls.count == 1)
+        let call = try #require(calls.first)
+        #expect(call.url.absoluteString == "https://example.com/hook")
+        #expect(call.headers["X-Custom"] == "abc")
+        let json = try #require(try JSONSerialization.jsonObject(with: call.body) as? [String: Any])
+        #expect(json["alert_name"] as? String == "RB0 突破")
+        #expect(json["instrument_id"] as? String == "RB0")
+        #expect(json["trigger_price"] as? String == "3220")
+        #expect(json["message"] as? String == "价格 3220 高于 3200")
+        #expect(json["triggered_at"] as? String == "2025-04-24T19:46:40Z")
+        let success = await channel.lastDeliverySuccess
+        #expect(success == true)
+    }
+
+    @Test("send · 非 2xx 标记失败（4xx · 5xx · 传输失败均失败）")
+    func sendMarksFailureForNon2xx() async {
+        let badStatus = MockWebhookClient(response: (404, Data()))
+        let ch1 = WebhookChannel(url: URL(string: "https://x.test")!, client: badStatus)
+        await ch1.send(makeEvent())
+        #expect(await ch1.lastDeliverySuccess == false)
+
+        let transportFail = MockWebhookClient(response: nil)
+        let ch2 = WebhookChannel(url: URL(string: "https://x.test")!, client: transportFail)
+        await ch2.send(makeEvent())
+        #expect(await ch2.lastDeliverySuccess == false)
+    }
+
+    @Test("dispatcher 集成 · webhook 与其他 channel 互不影响")
+    func integratesWithDispatcher() async {
+        let mock = MockWebhookClient(response: (200, Data()))
+        let webhook = WebhookChannel(url: URL(string: "https://x.test")!, client: mock)
+        let collector = LineCollector()
+        let console = ConsoleChannel(
+            prefix: "[T]",
+            timestampFormatter: { _ in "T" },
+            writer: { line in Task { await collector.append(line) } }
+        )
+        let dispatcher = NotificationDispatcher(channels: [webhook, console])
+
+        await dispatcher.dispatch(makeEvent(), to: [.webhook])
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(await mock.calls.count == 1)
+        #expect(await collector.lines.isEmpty)  // console 不应被命中
     }
 }

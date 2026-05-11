@@ -67,6 +67,7 @@ public enum AlertConfigCSVExporter {
         case .sound:        return "声音"
         case .console:      return "调试输出"
         case .file:         return "文件日志"
+        case .webhook:      return "Webhook"
         }
     }
 

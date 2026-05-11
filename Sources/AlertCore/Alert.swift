@@ -95,6 +95,7 @@ public enum NotificationChannelKind: String, Sendable, Codable, CaseIterable {
     case sound           // 系统声音 / 自定义铃声
     case console         // 🆕 stdout 调试通道（开发期 / Linux production-grade · 带时间戳与前缀）
     case file            // 🆕 本地文件追加日志通道（持久化预警记录 · 与 SQLite history 互补）
+    case webhook         // 🆕 v17.32 B3 · HTTP POST JSON 通用 webhook（Discord/Telegram 经 IFTTT/Zapier · 或 trader 自架 endpoint）
 }
 
 /// 单条预警

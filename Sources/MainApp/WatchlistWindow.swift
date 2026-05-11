@@ -69,6 +69,11 @@ struct WatchlistWindow: View {
     @State private var quotes: [String: SinaQuote] = [:]
     @State private var quoteFetchTask: Task<Void, Never>?
 
+    /// v17.34 C5 · 合约旗标 store · UserDefaults 持久化 · didChangeNotification 跨窗口同步
+    private let flagStore = InstrumentFlagStore()
+    /// 旗标版本号 · UserDefaults 变化时 +1 触发 row 重渲（@State 不能直接观察 flagStore · 用 tick）
+    @State private var flagsRevision: Int = 0
+
     /// v15.78 · combo 异常周期 fetch · 30s 间隔（detector 是纯函数 · 不发网络请求）
     @State private var comboFetchTask: Task<Void, Never>?
 
@@ -155,6 +160,10 @@ struct WatchlistWindow: View {
             quoteFetchTask = nil
             comboFetchTask?.cancel()
             comboFetchTask = nil
+        }
+        // v17.34 C5 · 跨窗口旗标同步（与 ChartTheme / SimulatedTradingStore 同模式）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            flagsRevision += 1
         }
         .onChange(of: book) { newValue in
             // M5 自动持久化：每次 book 变化异步 save · isLoaded 守卫避免初始 Mock 误写覆盖真数据
@@ -1054,13 +1063,22 @@ struct WatchlistWindow: View {
         let pctValue = parseChangePct(change)
         // v15.21 batch130 · 极端涨跌幅警示（≥ 9% 接近涨跌停 · row outline 提示 · trader 视觉警觉）
         let isExtreme = abs(pctValue ?? 0) >= 9
+        // v17.34 C5 · 当前合约旗标（持久化 InstrumentFlagStore · UserDefaults 跨窗口同步）
+        let flag = flagStore.flag(for: id)
         return HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.5))
                 .frame(width: 24)
-            Text(id)
-                .font(.system(.body, design: .monospaced))
-                .fontWeight(.medium)
+            HStack(spacing: 4) {
+                if flag != .none {
+                    Text(flag.emoji)
+                        .font(.system(size: 11))
+                        .tooltip(flag.displayName)
+                }
+                Text(id)
+                    .font(.system(.body, design: .monospaced))
+                    .fontWeight(.medium)
+            }
                 .frame(width: 100, alignment: .leading)
             Text(priceText(for: id))
                 .font(.system(.body, design: .monospaced))
@@ -1117,6 +1135,23 @@ struct WatchlistWindow: View {
                 Pasteboard.copy(line)
             }
             Divider()
+            // v17.34 C5 · 旗标 / 评级（持久化 · 跨窗口同步）
+            Menu("🚩 旗标 \(flag == .none ? "" : "（当前 \(flag.emoji)）")") {
+                ForEach(InstrumentFlag.allCases, id: \.self) { f in
+                    Button {
+                        flagStore.setFlag(f, for: id)
+                        flagsRevision += 1
+                    } label: {
+                        HStack {
+                            Text(f.emoji.isEmpty ? "—" : f.emoji)
+                            Text(f.displayName)
+                            if flag == f {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
             Menu("📋 创建预警模板") {
                 ForEach(AlertPreset.allCases) { preset in
                     Button(preset.displayName) {

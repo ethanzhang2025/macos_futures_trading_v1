@@ -102,7 +102,7 @@ struct TrainingControlBar: View {
                     HStack(spacing: 6) {
                         Text(idleHint)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(idleHintColor)
                         todayVsYesterdayChip
                         consecutiveDaysChip
                         sevenDayMiniBar
@@ -432,10 +432,25 @@ struct TrainingControlBar: View {
         }
         var hint = "✅ 已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
         // v16.132 · 上次训练距今（trader 看间隔 · 避免长时间不练）
+        // v16.159 · > 24h 加 🔔 / > 72h 加 ⏰ 警示（提醒重新开始）
         if let last = viewModel.log.sessions.map(\.endedAt).max() {
-            hint += " · 上次 \(timeSinceText(last))"
+            let secs = Date().timeIntervalSince(last)
+            let prefix: String
+            if secs > 72 * 3600 { prefix = " · ⏰ 上次 " }       // 3 天 +
+            else if secs > 24 * 3600 { prefix = " · 🔔 上次 " }  // 24h +
+            else { prefix = " · 上次 " }
+            hint += prefix + timeSinceText(last)
         }
         return hint
+    }
+
+    /// v16.159 · idleHint 颜色（长时间未训练 → 警示色 · 帮助 trader 注意到该回来训练）
+    private var idleHintColor: Color {
+        guard let last = viewModel.log.sessions.map(\.endedAt).max() else { return .secondary }
+        let secs = Date().timeIntervalSince(last)
+        if secs > 72 * 3600 { return .red }       // > 3 天
+        if secs > 24 * 3600 { return .orange }    // > 24h
+        return .secondary
     }
 
     /// v16.132 · 友好时间差（"刚刚" / "N 分钟前" / "N 小时前" / "N 天前"）

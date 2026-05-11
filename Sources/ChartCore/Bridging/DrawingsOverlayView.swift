@@ -120,6 +120,7 @@ public struct DrawingsOverlayView: View {
         switch drawing.type {
         case .trendLine:        drawTrendLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .horizontalLine:   drawHorizontalLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .verticalLine:     drawVerticalLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .rectangle:        drawRectangle(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .parallelChannel:  drawParallelChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacci:        drawFibonacci(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
@@ -159,6 +160,15 @@ public struct DrawingsOverlayView: View {
         let label = formatPrice(d.startPoint.price)
         let text = Text(label).font(.system(size: 10, design: .monospaced)).foregroundColor(color)
         ctx.draw(text, at: CGPoint(x: size.width - 30, y: y - 8))
+    }
+
+    /// v17.8 A3.4 · 垂直线（时间锚点 · 单点 barIndex 决定位置 · 横跨整个价格区间）
+    private func drawVerticalLine(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        let x = xForBar(d.startPoint.barIndex, size: size)
+        var path = Path()
+        path.move(to: CGPoint(x: x, y: 0))
+        path.addLine(to: CGPoint(x: x, y: size.height))
+        ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
     }
 
     private func drawRectangle(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
@@ -461,6 +471,7 @@ public struct DrawingsOverlayView: View {
         switch type {
         case .trendLine:       return Color(red: 1.00, green: 0.78, blue: 0.18)  // 黄
         case .horizontalLine:  return Color(red: 0.30, green: 0.78, blue: 1.00)  // 蓝
+        case .verticalLine:    return Color(red: 0.30, green: 0.78, blue: 1.00)  // 蓝（v17.8 · 与 horizontalLine 同色 · 概念对称）
         case .rectangle:       return Color(red: 0.63, green: 0.42, blue: 0.83)  // 紫
         case .parallelChannel: return Color(red: 0.96, green: 0.27, blue: 0.27)  // 红
         case .fibonacci:       return Color(red: 1.00, green: 0.55, blue: 0.18)  // 橙

@@ -80,6 +80,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     switch type {
     case .trendLine:       return "趋势线"
     case .horizontalLine:  return "水平线"
+    case .verticalLine:    return "垂直线"
     case .rectangle:       return "矩形"
     case .parallelChannel: return "平行通道"
     case .fibonacci:       return "斐波那契"
@@ -3904,6 +3905,11 @@ struct ChartContentView: View {
         case .horizontalLine:
             let y = screenPoint(drawing.startPoint).y
             return abs(p.y - y)
+
+        case .verticalLine:
+            // v17.8 A3.4 · 垂直线 hit test · 距离 = |p.x - x|
+            let x = screenPoint(drawing.startPoint).x
+            return abs(p.x - x)
 
         case .rectangle:
             guard let end = drawing.endPoint else { return .infinity }

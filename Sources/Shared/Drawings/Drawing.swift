@@ -8,6 +8,7 @@ import Foundation
 public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case trendLine          // 趋势线（两点）
     case horizontalLine     // 水平线（单点价格）
+    case verticalLine       // 垂直线（单点 · 时间锚点 · 横跨全价格 · v17.8 A3.4）
     case rectangle          // 矩形（对角两点）
     case parallelChannel    // 平行通道（两点定主轴 + 偏移定副线）
     case fibonacci          // 斐波那契回调（两点定 0/100%）
@@ -24,7 +25,7 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     /// 完成画线所需的点数 · v13.31 polygon 用 0 表示动态（用户主动触发完成）
     public var pointsNeeded: Int {
         switch self {
-        case .horizontalLine, .text: return 1
+        case .horizontalLine, .verticalLine, .text: return 1
         case .trendLine, .rectangle, .parallelChannel, .fibonacci, .fibonacciFan, .ellipse, .ruler, .priceZone, .gannFan, .fibonacciTimeZone: return 2
         case .pitchfork: return 3
         case .polygon: return 0  // 0 = 动态点数 · 用户点 N 次后主动触发完成
@@ -140,6 +141,11 @@ extension Drawing {
     /// 水平线：单点决定一条横跨整图的水平线
     public static func horizontalLine(price: Decimal, barIndex: Int = 0) -> Drawing {
         Drawing(type: .horizontalLine, startPoint: DrawingPoint(barIndex: barIndex, price: price))
+    }
+
+    /// 垂直线（v17.8 A3.4 · 时间锚点 · 单点决定一条横跨整价格的垂直线 · price 任意 · barIndex 决定位置）
+    public static func verticalLine(barIndex: Int, price: Decimal = 0) -> Drawing {
+        Drawing(type: .verticalLine, startPoint: DrawingPoint(barIndex: barIndex, price: price))
     }
 
     /// 矩形：对角两点定一矩形（顶点未规定顺序，几何辅助会归一化）

@@ -30,12 +30,17 @@ struct TrainingControlBar: View {
     @State private var nowTick: Date = Date()
     /// v15.23 batch16 · 选中的预设场景（nil = 自定义）
     @State private var selectedPresetID: UUID? = nil
+    /// v16.213 · 下次训练专项维度（来自 ScoreSheet 弱项 "🎯 专项" button · 空 = 无）
+    @AppStorage("viewState.v1.training.focusDimension") private var focusDimensionRaw: String = ""
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         HStack(spacing: 12) {
             statusIndicator
+
+            // v16.213 · 下次专项 chip（紧贴 statusIndicator · active/idle 都显示 · 提醒 trader）
+            focusDimensionChip
 
             // v15.23 batch143 · streak chip（≥ 2 才显示 · 与 history panel 同步）
             let streak = viewModel.log.currentStreak
@@ -447,6 +452,31 @@ struct TrainingControlBar: View {
         if errorCount > 0 { return .red }
         if warningCount > 0 { return .orange }
         return .secondary
+    }
+
+    /// v16.213 · "下次专项" chip · 持久化自 ScoreSheet · 右键取消
+    @ViewBuilder
+    private var focusDimensionChip: some View {
+        if !focusDimensionRaw.isEmpty,
+           let dim = TrainingSubScores.Dimension(rawValue: focusDimensionRaw) {
+            HStack(spacing: 3) {
+                Text("🎯").font(.system(size: 11))
+                Text("专项 \(dim.emoji) \(dim.displayName)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.purple)
+            }
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(Color.purple.opacity(0.10))
+            .cornerRadius(3)
+            .tooltip("本次专项练 \(dim.displayName) 维度（来自 ScoreSheet 弱项设定）· 右键取消")
+            .contextMenu {
+                Button {
+                    focusDimensionRaw = ""
+                } label: {
+                    Label("取消专项", systemImage: "xmark.circle")
+                }
+            }
+        }
     }
 
     private var idleHint: String {

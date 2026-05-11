@@ -714,6 +714,18 @@ struct TrainingScoreSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
+                // v16.213 · "下次专项" button（持久化 weakest dim · ControlBar 显示 chip）
+                Button {
+                    UserDefaults.standard.set(sub.weakest.rawValue,
+                                              forKey: "viewState.v1.training.focusDimension")
+                    flashFeedback("🎯 下次专项：\(sub.weakest.emoji) \(sub.weakest.displayName)")
+                } label: {
+                    Text("🎯 专项")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.purple)
+                }
+                .buttonStyle(.plain)
+                .tooltip("把 \(sub.weakest.displayName) 设为下次训练专项 · ControlBar 显示提醒 · 右键取消")
                 // v16.147 · 5 步行动 plan 展开/收起 chevron
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) { showPlan.toggle() }

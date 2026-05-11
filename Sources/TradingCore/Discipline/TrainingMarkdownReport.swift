@@ -112,6 +112,9 @@ public enum TrainingMarkdownReport {
         // v16.63 · 五维平均（仅含 v2 subScores 的 session · 旧 session 自动跳过）
         md += fiveDimAverageMarkdown(sessions: sessions, log: log)
 
+        // v16.153 · 月报最弱维度 5 步行动 plan（trader 月度回顾自带行动建议）
+        md += monthlyImprovementPlanMarkdown(sessions: sessions, log: log)
+
         // v16.118 · 训练时长分布（短/中/长 · trader 看专注时长习惯）
         md += durationDistributionMarkdown(sessions: sessions)
 
@@ -192,6 +195,30 @@ public enum TrainingMarkdownReport {
         for (dim, avg) in items {
             let marker = dim == worst ? " ⚠ 最弱" : ""
             md += "| \(dim.emoji) \(dim.displayName) | \(avg)\(marker) |\n"
+        }
+        md += "\n"
+        return md
+    }
+
+    /// v16.153 · 月报基于 5 维平均最弱维度输出 5 步改进 plan（复用 v16.147 TrainingScorer.improvementPlan）
+    /// 仅 v2 subScores 非 nil 的 session 参与 · 老 session 自动跳过返回 ""
+    private static func monthlyImprovementPlanMarkdown(sessions: [TrainingSession],
+                                                        log: TrainingSessionLog) -> String {
+        let subs = sessions.compactMap { log.score(for: $0.id)?.subScores }
+        guard !subs.isEmpty else { return "" }
+        let n = subs.count
+        let items: [(TrainingSubScores.Dimension, Int)] = [
+            (.pnl, subs.map(\.pnl).reduce(0, +) / n),
+            (.discipline, subs.map(\.discipline).reduce(0, +) / n),
+            (.winRate, subs.map(\.winRate).reduce(0, +) / n),
+            (.risk, subs.map(\.risk).reduce(0, +) / n),
+            (.efficiency, subs.map(\.efficiency).reduce(0, +) / n),
+        ]
+        guard let weakest = items.min(by: { $0.1 < $1.1 }) else { return "" }
+        let plan = TrainingScorer.improvementPlan(for: weakest.0, score: weakest.1)
+        var md = "## 改进 plan · \(weakest.0.emoji) \(weakest.0.displayName)（均分 \(weakest.1)）\n\n"
+        for (idx, step) in plan.enumerated() {
+            md += "\(idx + 1). \(step)\n"
         }
         md += "\n"
         return md

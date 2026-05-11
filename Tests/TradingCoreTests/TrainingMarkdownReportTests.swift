@@ -392,6 +392,27 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("五维平均"))
     }
 
+    // MARK: - v16.153 · 月报最弱维度 5 步改进 plan 章节
+
+    @Test("v16.153 · 含 v2 subScores 的 session 输出改进 plan 章节（含 5 步）")
+    func monthlyImprovementPlanSection() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "s1", pnl: -5000))   // 大亏 → 触发 risk/pnl 弱
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("改进 plan"))
+        #expect(md.contains("均分"))
+        // 5 步全部在 markdown 里（按 1./2./3./4./5. numbered）
+        for n in 1...5 {
+            #expect(md.contains("\(n). "))
+        }
+    }
+
+    @Test("v16.153 · 空 log 不输出改进 plan 章节（无 v2 subScores）")
+    func monthlyImprovementPlanEmptyLog() {
+        let md = TrainingMarkdownReport.generate(TrainingSessionLog())
+        #expect(!md.contains("改进 plan"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

@@ -177,6 +177,14 @@ struct TrainingHistoryPanel: View {
                             Label("保存周报为 .md 文件", systemImage: "square.and.arrow.down")
                         }
                     }
+                    Section("📊 5 维平均（v16.138 · IM 简短分享）") {
+                        Button {
+                            copyFiveDimMarkdownToPasteboard()
+                        } label: {
+                            Label("复制 5 维平均 markdown", systemImage: "tablecells")
+                        }
+                        .tooltip("仅本 panel 的 5 维平均表 · IM 一键分享 trader 倾向")
+                    }
                     Section("CSV 数据（v16.20/v16.24 · 离线分析 + 跨设备同步）") {
                         Button {
                             saveCSVToFile(filtered: false)
@@ -1363,6 +1371,40 @@ struct TrainingHistoryPanel: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let md = TrainingMarkdownReport.generateWeekly(viewModel.log)
         try? md.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    // MARK: - v16.138 · 5 维平均 markdown（IM 分享）
+
+    private func copyFiveDimMarkdownToPasteboard() {
+        let subs = viewModel.log.sessions.compactMap {
+            viewModel.log.score(for: $0.id)?.subScores
+        }
+        guard !subs.isEmpty else {
+            Toast.errorBody("无数据", "尚未有 v2 评分的 session")
+            return
+        }
+        let n = subs.count
+        let avgPnl = subs.map(\.pnl).reduce(0, +) / n
+        let avgDisc = subs.map(\.discipline).reduce(0, +) / n
+        let avgWin = subs.map(\.winRate).reduce(0, +) / n
+        let avgRisk = subs.map(\.risk).reduce(0, +) / n
+        let avgEff = subs.map(\.efficiency).reduce(0, +) / n
+        let items: [(emoji: String, name: String, score: Int)] = [
+            ("💰", "盈亏", avgPnl), ("🛡️", "纪律", avgDisc),
+            ("🎯", "胜率", avgWin), ("⚠️", "风险", avgRisk),
+            ("⚡", "效率", avgEff),
+        ]
+        let worst = items.min(by: { $0.score < $1.score })!.name
+        var md = "# 5 维平均（\(n) 次 v2 评分）\n\n"
+        md += "| 维度 | 均分 |\n|------|------|\n"
+        for it in items {
+            let marker = it.name == worst ? " ⚠ 最弱" : ""
+            md += "| \(it.emoji) \(it.name) | \(it.score)\(marker) |\n"
+        }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(md, forType: .string)
+        Toast.info("复制成功", "5 维平均 markdown · \(md.count) 字符 · 已粘到剪贴板")
     }
 
     // MARK: - v16.20 · CSV 导出（离线 Excel/Numbers 分析）

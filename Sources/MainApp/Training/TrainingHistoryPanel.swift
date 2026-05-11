@@ -551,6 +551,20 @@ struct TrainingHistoryPanel: View {
             ProgressView(value: progress, total: 1.0)
                 .frame(width: 100)
                 .tint(achieved ? .green : .accentColor)
+            // v16.81 · 未达标时显示"再 N 次"hint · 达标显示"✓ 超额 M 次"
+            if achieved {
+                let extra = thisWeekCount - weeklyGoal
+                if extra > 0 {
+                    Text("超额 +\(extra)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.green)
+                }
+            } else {
+                let remaining = weeklyGoal - thisWeekCount
+                Text("再 \(remaining) 次")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.orange)
+            }
             // v15.23 batch154 · vs 上周对比（次数 / 平均分 deltas）
             weeklyComparisonChip(thisWeekStart: weekStart, thisWeekCount: thisWeekCount)
             // v16.67 · vs 上月对比 chip（trader 长期反馈 · 与 weeklyComparisonChip 同模式）

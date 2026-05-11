@@ -410,9 +410,13 @@ struct TrainingHistoryPanel: View {
                 }
                 // v16.80 · 连训天数（与 ControlBar 🔥 chip 同算法 · ≥ 2 才显示）
                 // v16.84 · 同步 milestone emoji 升级（与 ControlBar v16.83 一致）
+                // v16.90 · 当前 < 历史最长 → 显示 "X / 最长 Y" · 当前 ≥ 历史 → 🎉
                 let dayStreak = viewModel.log.consecutiveTrainingDays()
                 if dayStreak >= 2 {
+                    let best = viewModel.log.longestStreakEver()
+                    let isNewRecord = dayStreak >= best
                     let emoji: String = {
+                        if isNewRecord { return "🎉" }
                         switch dayStreak {
                         case 30...:  return "🏆"
                         case 14...:  return "🚀"
@@ -420,9 +424,17 @@ struct TrainingHistoryPanel: View {
                         default:     return "🔥"
                         }
                     }()
-                    statLine("\(emoji) 连训",
-                             value: "\(dayStreak) 天",
-                             color: .red)
+                    let label = isNewRecord ? "\(emoji) 新纪录" : "\(emoji) 连训"
+                    let value = isNewRecord || best == dayStreak
+                                ? "\(dayStreak) 天"
+                                : "\(dayStreak)/\(best) 天"
+                    statLine(label, value: value, color: .red)
+                }
+                // v16.90 · 显示历史最长（当前无连训 · 但有训练记录时鼓励重启）
+                else if dayStreak < 2 && viewModel.log.longestStreakEver() >= 3 {
+                    statLine("🏅 历史最长",
+                             value: "\(viewModel.log.longestStreakEver()) 天",
+                             color: .secondary)
                 }
             }
 

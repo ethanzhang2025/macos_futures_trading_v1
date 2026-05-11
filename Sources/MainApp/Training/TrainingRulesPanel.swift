@@ -85,13 +85,19 @@ struct TrainingRulesPanel: View {
                 }
                 Divider()
                 // v16.99 · trader 分享规则集（导出 JSON · 与团队共享自定义纪律）
-                Section("📤 导入/导出（v16.99/106 · JSON）") {
+                Section("📤 导入/导出（v16.99/106/121 · JSON + markdown）") {
                     Button {
                         copyRulesJSONToPasteboard()
                     } label: {
                         Label("复制规则集 JSON 到剪贴板", systemImage: "doc.on.doc")
                     }
                     .tooltip("v16.106 · 直接发 IM/微信分享 · 不必存文件")
+                    Button {
+                        copyRulesMarkdownToPasteboard()
+                    } label: {
+                        Label("复制规则集 Markdown 表格", systemImage: "tablecells")
+                    }
+                    .tooltip("v16.121 · 可读性优先 · 适合粘到笔记 / wiki / 邮件")
                     Button {
                         exportRulesJSON()
                     } label: {
@@ -165,6 +171,29 @@ struct TrainingRulesPanel: View {
         guard confirmOverwriteRules(newCount: book.rules.count) else { return }
         viewModel.applyRuleTemplate(book)
         Toast.info("导入成功", "\(book.rules.count) 条规则 · 启用 \(book.enabledRules.count)")
+    }
+
+    // MARK: - v16.121 · markdown 表格（可读性优先 · 适合笔记/wiki/邮件）
+
+    private func copyRulesMarkdownToPasteboard() {
+        let book = viewModel.book
+        var md = "# 纪律规则集（\(book.rules.count) 条 · 启用 \(book.enabledRules.count)）\n\n"
+        if book.rules.isEmpty {
+            md += "_暂无规则_\n"
+        } else {
+            md += "| 启用 | 类型 | 阈值 | 备注 |\n"
+            md += "|------|------|------|------|\n"
+            for rule in book.rules {
+                let enabled = rule.enabled ? "✓" : "—"
+                let thresholdStr = "\(NSDecimalNumber(decimal: rule.threshold).stringValue) \(rule.kind.thresholdUnit)"
+                let note = rule.note.isEmpty ? "—" : rule.note
+                md += "| \(enabled) | \(rule.kind.displayName) | \(thresholdStr) | \(note) |\n"
+            }
+        }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(md, forType: .string)
+        Toast.info("复制成功", "\(book.rules.count) 条规则 · markdown 表格 · 已粘到剪贴板")
     }
 
     // MARK: - v16.106 · 剪贴板版（不存文件直接 IM 分享）

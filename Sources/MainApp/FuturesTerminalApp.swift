@@ -310,7 +310,19 @@ struct FuturesTerminalApp: App {
     static let bundleAppVersion = "0.0.1"
 
     var body: some Scene {
-        // 主图表窗口（默认启动 + Cmd+N 新建多个 · 每窗口独立 renderer / viewport）
+        // v17.0 PoC Step 1 · Shell 主工作台（占位 · Step 2+ 完整实装）· 默认启动
+        // 老 28 个 WindowGroup 保留作为"分离窗口"模式
+        WindowGroup("主工作台", id: "shell") {
+            ShellWindow()
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
+                .environment(\.alertEvaluator, alertEvaluator)
+                .environment(\.simulatedTradingEngine, simulatedTradingEngine)
+                .environment(\.bannerService, bannerService)
+        }
+        .defaultSize(width: 1600, height: 1000)
+
+        // 主图表窗口（保留 · 用户主动"分离"才打开 · Cmd+N 新建多个）
         // v15.17 · 移除全局 .preferredColorScheme(.dark) · ChartScene 内动态 chartTheme.colorScheme · sheet/popup 跟主题
         WindowGroup("K 线图表", id: "chart") {
             ChartScene()

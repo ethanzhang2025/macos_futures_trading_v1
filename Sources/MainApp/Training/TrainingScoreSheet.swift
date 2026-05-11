@@ -488,6 +488,16 @@ struct TrainingScoreSheet: View {
                         .foregroundColor(.accentColor)
                 }
                 Spacer()
+                // v16.184 · 快捷键提示（trader 一眼看键盘控制）· tooltip 完整说明
+                Text("⌨️ 1-5 / ↑↓ / ⌘⌥P")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .opacity(0.7)
+                    .tooltip("数字键 1-5 直跳维度（v16.168）· ↑↓ 切换（v16.65）· ⌘⌥P 复制 5 步 plan（v16.175）")
+                Text("·")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .opacity(0.5)
                 Text("仅作分析视角 · 不计入总分")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)

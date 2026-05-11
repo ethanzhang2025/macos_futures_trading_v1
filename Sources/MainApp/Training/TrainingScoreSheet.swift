@@ -508,6 +508,18 @@ struct TrainingScoreSheet: View {
             }
             // v16.51 · hover 显示该维度计算公式（trader 学习评分逻辑透明度）
             .tooltip(dimensionFormulaHint(dimension))
+            // v16.163 · 右键复制公式 hint（trader 一键保存学习公式 · 与 v16.131 复制 drilldown 互补）
+            .contextMenu {
+                Button {
+                    let text = "【\(dimension.emoji) \(dimension.displayName) 公式】\n\(dimensionFormulaHint(dimension))"
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString(text, forType: .string)
+                    flashFeedback("✓ 已复制 \(dimension.displayName) 公式")
+                } label: {
+                    Label("复制\(dimension.displayName)计算公式", systemImage: "doc.on.doc")
+                }
+            }
 
             // v16.56 · 展开行：本次具体数据计算（与公式 hint 配套 · hover 学公式 / 点击看本次数据）
             // v16.131 · 右键复制本维度详情（trader 单维度分析分享）

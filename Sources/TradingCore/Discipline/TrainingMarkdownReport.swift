@@ -146,6 +146,9 @@ public enum TrainingMarkdownReport {
         // v16.170 · 每周分布表（周一-周日 训练次数 · trader 看哪天最活跃）
         md += weekdayDistributionMarkdown(sessions: sessions)
 
+        // v16.176 · 最近 N 次总分 sparkline（emoji bar 横排 · 分数走势可视化）
+        md += scoreTrendSparklineMarkdown(sessions: sessions, log: log)
+
         // 最近训练（filtered sessions desc by endedAt · 取前 recentLimit）
         md += "## 最近训练\n\n"
         let recent = sessions
@@ -288,6 +291,42 @@ public enum TrainingMarkdownReport {
         }
         md += "- 💡 复盘建议：对照本月最强 session 找差异 · 找出可复制的成功模式\n"
         md += "\n"
+        return md
+    }
+
+    /// v16.176 · 最近 N 次总分 sparkline · emoji bar 高度按分数（0-100）
+    /// 取最近 20 次（按 endedAt desc）· 翻成时间正序展示
+    /// emoji 高度 5 级：▁ < 20 / ▃ 20-39 / ▅ 40-59 / ▇ 60-79 / █ 80+
+    private static func scoreTrendSparklineMarkdown(sessions: [TrainingSession],
+                                                     log: TrainingSessionLog) -> String {
+        let scored = sessions.compactMap { s -> Int? in log.score(for: s.id).map { $0.totalScore } }
+        guard scored.count >= 2 else { return "" }
+        // 按时间排序 desc → 取前 N → 反转为正序展示
+        let recent = sessions.sorted { $0.endedAt > $1.endedAt }.prefix(20)
+        let scoresInOrder = recent.compactMap { log.score(for: $0.id)?.totalScore }.reversed()
+        guard scoresInOrder.count >= 2 else { return "" }
+        let barEmoji: (Int) -> String = { s in
+            switch s {
+            case 80...:  return "█"
+            case 60...:  return "▇"
+            case 40...:  return "▅"
+            case 20...:  return "▃"
+            default:     return "▁"
+            }
+        }
+        var md = "## 最近 \(scoresInOrder.count) 次总分趋势\n\n"
+        md += "```\n"
+        md += scoresInOrder.map { barEmoji($0) }.joined()
+        md += "\n"
+        // 第二行：标注前后分数
+        let first = scoresInOrder.first ?? 0
+        let last = scoresInOrder.last ?? 0
+        md += String(repeating: " ", count: 0) + "\(first)"
+        md += String(repeating: " ", count: max(0, scoresInOrder.count - 4))
+        md += " \(last)\n"
+        md += "```\n\n"
+        let delta = last - first
+        md += "- 起始 \(first) → 最新 \(last) · 趋势 \(delta >= 0 ? "+" : "")\(delta)\n\n"
         return md
     }
 

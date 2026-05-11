@@ -546,7 +546,28 @@ struct TrainingMarkdownReportTests {
         var log = TrainingSessionLog()
         log.addSession(makeSession(scenarioName: "亏单", pnl: -5_000))
         let md = TrainingMarkdownReport.generate(log)
-        #expect(!md.contains("单笔盈利冠军"))
+        #expect(!md.contains("## 单笔盈利冠军"))
+    }
+
+    // MARK: - v16.176 · 最近 N 次总分 sparkline
+
+    @Test("v16.176 · ≥ 2 session 输出总分 sparkline + 起始/最新分数 + 趋势")
+    func scoreTrendSparkline() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "s1", pnl: 1000))
+        log.addSession(makeSession(scenarioName: "s2", pnl: 5000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("总分趋势"))
+        #expect(md.contains("起始"))
+        #expect(md.contains("最新"))
+    }
+
+    @Test("v16.176 · 仅 1 session 不输出 sparkline（< 2）")
+    func scoreTrendSparklineOnlyOne() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "s1", pnl: 1000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(!md.contains("总分趋势"))
     }
 
     // MARK: - v16.86/91 · streak overview

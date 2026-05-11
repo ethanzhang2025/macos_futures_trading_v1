@@ -284,6 +284,24 @@ struct TrainingHistoryPanel: View {
         .padding(.vertical, 8)
     }
 
+    // MARK: - v16.128 · session emoji 摘要（contextMenu 复制用）
+
+    private func miniEmojiSummary(session: TrainingSession, score: TrainingScore) -> String {
+        var parts: [String] = []
+        parts.append("\(score.grade.emoji) \(score.totalScore) 分 · 等级 \(score.grade.displayName)")
+        if let pat = session.scenarioPattern {
+            parts.append("\(pat.emoji) \(pat.displayName)")
+        }
+        let errorCount = session.violations.filter { $0.severity == .error }.count
+        let warningCount = session.violations.filter { $0.severity == .warning }.count
+        if errorCount + warningCount > 0 {
+            parts.append("⚠️ \(errorCount + warningCount) 违规")
+        } else {
+            parts.append("✨ 0 违规")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     // MARK: - v16.64 · 删除 undo banner
 
     /// 删除 session 时先存到 pendingUndoSession + 启动 5s 自动清任务
@@ -1063,6 +1081,15 @@ struct TrainingHistoryPanel: View {
                             // v15.23 batch158 · 单 session 分享（复用 batch133 + batch146）
                             if let score = viewModel.log.score(for: session.id) {
                                 Divider()
+                                // v16.128 · emoji 摘要（轻量 · IM 一行分享 · 与 ScoreSheet v16.50 同模式）
+                                Button {
+                                    let summary = miniEmojiSummary(session: session, score: score)
+                                    let pb = NSPasteboard.general
+                                    pb.clearContents()
+                                    pb.setString(summary, forType: .string)
+                                } label: {
+                                    Label("复制 emoji 摘要", systemImage: "text.bubble")
+                                }
                                 Button {
                                     let md = TrainingMarkdownReport.generateSingleSession(
                                         session, score: score)

@@ -141,6 +141,13 @@ struct TrainingHistoryPanel: View {
             Text("\(viewModel.log.sessionCount) 次")
                 .font(.caption)
                 .foregroundColor(.secondary)
+            // v16.127 · header 加 streak hint（trader 第一眼看连训习惯）· ≥ 2 才显示
+            let dayStreak = viewModel.log.consecutiveTrainingDays()
+            if dayStreak >= 2 {
+                Text("· 🔥 连训 \(dayStreak) 天")
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(.red)
+            }
             Spacer()
             // v15.23 batch126 · 月报导出（剪贴板 / .md 文件 · 只在有 session 时显示）
             // v15.23 batch197 · 加周报子菜单（与 ReviewWindow 周报对齐）

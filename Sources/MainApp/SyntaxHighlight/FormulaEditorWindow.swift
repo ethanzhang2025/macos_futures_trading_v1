@@ -1578,6 +1578,15 @@ public struct FormulaEditorWindow: View {
                 }
                 // v16.97 · 若 message 含 typo 建议 · 加复制按钮（trader 手动替换免输错）
                 if let suggestion = parseTypoSuggestion(from: warn.message) {
+                    // v16.105 · 真正的 quick fix：直接替换该行第一处 undefined identifier
+                    if let undefName = parseUndefinedName(from: warn.message) {
+                        Button {
+                            quickFixReplaceInLine(warn.line, oldName: undefName, newName: suggestion)
+                            statusMessage = "已替换 \(undefName) → \(suggestion)（第 \(warn.line) 行）"
+                        } label: {
+                            Label("替换为 \(suggestion)", systemImage: "wand.and.stars")
+                        }
+                    }
                     Button {
                         let pb = NSPasteboard.general
                         pb.clearContents()
@@ -1641,6 +1650,28 @@ public struct FormulaEditorWindow: View {
         guard let match = regex.firstMatch(in: message, range: NSRange(location: 0, length: ns.length)),
               match.numberOfRanges >= 2 else { return nil }
         return ns.substring(with: match.range(at: 1))
+    }
+
+    /// v16.105 · 从 undefinedVariable message 提取标识符名（"未定义的标识符 FOOBAR(...)" → "FOOBAR"）
+    private func parseUndefinedName(from message: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"未定义的标识符 ([A-Za-z_][A-Za-z0-9_]*)"#) else { return nil }
+        let ns = message as NSString
+        guard let match = regex.firstMatch(in: message, range: NSRange(location: 0, length: ns.length)),
+              match.numberOfRanges >= 2 else { return nil }
+        return ns.substring(with: match.range(at: 1))
+    }
+
+    /// v16.105 · 替换指定行内首次出现的 oldName → newName（word boundary 保护 · 防误替换子串）
+    private func quickFixReplaceInLine(_ lineNumber: Int, oldName: String, newName: String) {
+        var lines = sourceText.components(separatedBy: "\n")
+        guard lineNumber >= 1, lineNumber <= lines.count else { return }
+        let lineContent = lines[lineNumber - 1]
+        guard let regex = try? NSRegularExpression(
+            pattern: "\\b\(NSRegularExpression.escapedPattern(for: oldName))\\b") else { return }
+        let ns = lineContent as NSString
+        guard let m = regex.firstMatch(in: lineContent, range: NSRange(location: 0, length: ns.length)) else { return }
+        lines[lineNumber - 1] = ns.replacingCharacters(in: m.range, with: newName)
+        sourceText = lines.joined(separator: "\n")
     }
 
     /// 删除 sourceText 第 N 行（1-based · 越界保护）

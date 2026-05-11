@@ -386,4 +386,63 @@ struct TrainingSessionLogTests {
         // 放宽到 ≥ 2 次 + < 80 → 应选 fakeBreakout（均分 70 < 80）
         #expect(log.weakestPattern(minSessions: 2, threshold: 80) == .fakeBreakout)
     }
+
+    // MARK: - v16.80 · consecutiveTrainingDays
+
+    @Test("v16.80 · 空 log · streak = 0")
+    func consecutiveDays_empty() {
+        #expect(TrainingSessionLog().consecutiveTrainingDays() == 0)
+    }
+
+    @Test("v16.80 · 仅今天 · streak = 1")
+    func consecutiveDays_todayOnly() {
+        var log = TrainingSessionLog()
+        let now = Date()
+        log.addSession(TrainingSession(
+            startedAt: now, endedAt: now.addingTimeInterval(60),
+            initialBalance: 100_000, finalBalance: 100_000))
+        #expect(log.consecutiveTrainingDays(asOf: now) == 1)
+    }
+
+    @Test("v16.80 · 今天 + 昨天 · streak = 2")
+    func consecutiveDays_twoDays() {
+        var log = TrainingSessionLog()
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        let yesterday = cal.date(byAdding: .day, value: -1, to: now)!
+        log.addSession(TrainingSession(
+            startedAt: now, endedAt: now.addingTimeInterval(60),
+            initialBalance: 100_000, finalBalance: 100_000))
+        log.addSession(TrainingSession(
+            startedAt: yesterday, endedAt: yesterday.addingTimeInterval(60),
+            initialBalance: 100_000, finalBalance: 100_000))
+        #expect(log.consecutiveTrainingDays(asOf: now) == 2)
+    }
+
+    @Test("v16.80 · 今天 + 前天（缺昨天）· streak = 1（中断停止）")
+    func consecutiveDays_broken() {
+        var log = TrainingSessionLog()
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        let dayBeforeYesterday = cal.date(byAdding: .day, value: -2, to: now)!
+        log.addSession(TrainingSession(
+            startedAt: now, endedAt: now.addingTimeInterval(60),
+            initialBalance: 100_000, finalBalance: 100_000))
+        log.addSession(TrainingSession(
+            startedAt: dayBeforeYesterday, endedAt: dayBeforeYesterday.addingTimeInterval(60),
+            initialBalance: 100_000, finalBalance: 100_000))
+        #expect(log.consecutiveTrainingDays(asOf: now) == 1)
+    }
+
+    @Test("v16.80 · 今天没训练 · streak = 0（无论历史多长）")
+    func consecutiveDays_noTodayBreaksImmediately() {
+        var log = TrainingSessionLog()
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        let yesterday = cal.date(byAdding: .day, value: -1, to: now)!
+        log.addSession(TrainingSession(
+            startedAt: yesterday, endedAt: yesterday.addingTimeInterval(60),
+            initialBalance: 100_000, finalBalance: 100_000))
+        #expect(log.consecutiveTrainingDays(asOf: now) == 0)
+    }
 }

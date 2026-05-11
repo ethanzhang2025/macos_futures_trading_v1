@@ -408,6 +408,13 @@ struct TrainingHistoryPanel: View {
                                     : "\(totalMinutes) min",
                              color: .accentColor)
                 }
+                // v16.80 · 连训天数（与 ControlBar 🔥 chip 同算法 · ≥ 2 才显示）
+                let dayStreak = viewModel.log.consecutiveTrainingDays()
+                if dayStreak >= 2 {
+                    statLine("🔥 连训",
+                             value: "\(dayStreak) 天",
+                             color: .red)
+                }
             }
 
             distributionBar

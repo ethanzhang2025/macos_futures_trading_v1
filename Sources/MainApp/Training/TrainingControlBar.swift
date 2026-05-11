@@ -431,21 +431,11 @@ struct TrainingControlBar: View {
         return "已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
     }
 
-    /// v16.79 · 连续训练天数 streak chip（today 必须 ≥ 1 才连 · 中断回到 0 · 鼓励保持习惯）
-    /// 从今天往前数 · 每天 ≥ 1 次训练才算 · 第一次中断停止 · ≥ 2 才显示（1 天不算 streak）
+    /// v16.79/v16.80 · 连续训练天数 streak chip · 算法提到 TrainingSessionLog.consecutiveTrainingDays
+    /// ≥ 2 才显示（1 天不算 streak · 避免噪音）
     @ViewBuilder
     private var consecutiveDaysChip: some View {
-        let cal = Calendar(identifier: .gregorian)
-        let today = cal.startOfDay(for: Date())
-        var streak = 0
-        for offset in 0..<365 {   // cap 365 防极端
-            guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { break }
-            let nextDay = cal.date(byAdding: .day, value: 1, to: day) ?? day
-            let count = viewModel.log.sessions.filter {
-                $0.startedAt >= day && $0.startedAt < nextDay
-            }.count
-            if count > 0 { streak += 1 } else { break }
-        }
+        let streak = viewModel.log.consecutiveTrainingDays()
         if streak >= 2 {
             HStack(spacing: 2) {
                 Text("🔥")

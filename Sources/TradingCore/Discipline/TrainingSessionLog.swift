@@ -80,6 +80,24 @@ public struct TrainingSessionLog: Sendable, Equatable, Codable {
     /// 总训练次数
     public var sessionCount: Int { sessions.count }
 
+    /// v16.80 · 连续训练天数（从 reference 开始往前数 · 每天 ≥ 1 次训练才算 · 中断停止）
+    /// 用途：ControlBar 🔥 chip + HistoryPanel statsCard · 鼓励 trader 保持习惯
+    public func consecutiveTrainingDays(asOf reference: Date = Date(),
+                                         cap: Int = 365) -> Int {
+        let cal = Calendar(identifier: .gregorian)
+        let today = cal.startOfDay(for: reference)
+        var streak = 0
+        for offset in 0..<cap {
+            guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { break }
+            let nextDay = cal.date(byAdding: .day, value: 1, to: day) ?? day
+            let count = sessions.filter {
+                $0.startedAt >= day && $0.startedAt < nextDay
+            }.count
+            if count > 0 { streak += 1 } else { break }
+        }
+        return streak
+    }
+
     /// v15.23 batch135 · 当前连胜/连败 streak
     /// - count: 连续次数（≥ 1）· 0 表示无 session
     /// - isWinning: true = 连胜 / false = 连败

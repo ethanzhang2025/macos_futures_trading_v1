@@ -751,13 +751,15 @@ struct TrainingHistoryPanel: View {
                     stat(.efficiency, subs.map(\.efficiency)),
                 ]
                 let worstAvg = stats.min(by: { $0.avg < $1.avg })?.avg ?? 0
+                // v16.133 · 全部 5 维 ≥ 80 → 完美状态 ✨（trader 全面均衡）
+                let allBalanced = stats.allSatisfy { $0.avg >= 80 }
                 HStack(spacing: 6) {
-                    Text("🔬 五维")
+                    Text(allBalanced ? "✨ 五维" : "🔬 五维")
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(allBalanced ? .purple : .secondary)
                         .frame(width: 38, alignment: .leading)
                     ForEach(stats, id: \.dim) { d in
-                        let isWeakest = d.avg == worstAvg
+                        let isWeakest = d.avg == worstAvg && !allBalanced
                         HStack(spacing: 2) {
                             Text(d.dim.emoji).font(.system(size: 11))
                             Text("\(d.avg)")
@@ -766,7 +768,7 @@ struct TrainingHistoryPanel: View {
                         }
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .background((isWeakest ? Color.orange : Color.secondary).opacity(0.10))
+                        .background((isWeakest ? Color.orange : (allBalanced ? Color.purple : Color.secondary)).opacity(0.10))
                         .cornerRadius(3)
                         .tooltip("\(d.dim.displayName)：\(n) 次 v2 评分 · 平均 \(d.avg) · 最低 \(d.min) · 最高 \(d.max) · spread \(d.max - d.min)\((d.max - d.min) > 30 ? " ⚠️ 起伏大" : "")")
                     }

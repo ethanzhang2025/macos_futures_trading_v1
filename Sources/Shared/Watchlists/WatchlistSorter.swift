@@ -18,6 +18,7 @@ public enum WatchlistSortField: String, CaseIterable, Sendable, Codable {
     case openInterest    // 持仓量
     case volume          // v15.38 V2 · 成交量（活跃度 · trader 找活跃合约）
     case amplitude       // v15.38 V2 · 振幅 = (high - low) / preClose · 日内波动率
+    case spread          // v17.33 C4 · Bid-Ask 价差% = (ask-bid)/last · trader 找窄/宽价差合约
 
     public var displayName: String {
         switch self {
@@ -29,6 +30,7 @@ public enum WatchlistSortField: String, CaseIterable, Sendable, Codable {
         case .openInterest:  return "持仓量"
         case .volume:        return "成交量"
         case .amplitude:     return "振幅"
+        case .spread:        return "买卖价差"
         }
     }
 }
@@ -51,7 +53,7 @@ public enum WatchlistSorter {
             return ids   // 不排
         case .instrumentID:
             return ids.sorted { ascending ? $0 < $1 : $0 > $1 }
-        case .lastPrice, .changePct, .change, .openInterest, .volume, .amplitude:
+        case .lastPrice, .changePct, .change, .openInterest, .volume, .amplitude, .spread:
             return ids.sorted { lhs, rhs in
                 let lk = keyForID(lhs)
                 let rk = keyForID(rhs)

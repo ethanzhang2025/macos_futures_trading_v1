@@ -74,5 +74,26 @@ struct WatchlistSorterTests {
         #expect(WatchlistSortField.lastPrice.displayName == "最新价")
         #expect(WatchlistSortField.changePct.displayName == "涨跌幅")
         #expect(WatchlistSortField.openInterest.displayName == "持仓量")
+        // v17.33 C4
+        #expect(WatchlistSortField.spread.displayName == "买卖价差")
+    }
+
+    // v17.33 C4 · spread 字段升降序
+    @Test(".spread 升序（窄价差优先）/ 降序（宽价差优先）")
+    func spreadOrdering() {
+        // 模拟价差%：A=0.05 B=0.20 C=0.10 → 升序 A→C→B
+        let spreads: [String: Double] = ["A": 0.05, "B": 0.20, "C": 0.10]
+        let ids = ["A", "B", "C"]
+        let asc = WatchlistSorter.sort(ids: ids, field: .spread, ascending: true, keyForID: { spreads[$0] })
+        #expect(asc == ["A", "C", "B"])
+        let desc = WatchlistSorter.sort(ids: ids, field: .spread, ascending: false, keyForID: { spreads[$0] })
+        #expect(desc == ["B", "C", "A"])
+    }
+
+    @Test(".spread nil key（无 Bid/Ask 数据合约）排末尾")
+    func spreadNilFallsToEnd() {
+        let spreads: [String: Double?] = ["A": 0.05, "B": nil, "C": 0.10]
+        let asc = WatchlistSorter.sort(ids: ["A", "B", "C"], field: .spread, ascending: true, keyForID: { spreads[$0] ?? nil })
+        #expect(asc == ["A", "C", "B"])
     }
 }

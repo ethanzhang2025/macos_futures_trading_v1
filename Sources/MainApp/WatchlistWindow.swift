@@ -825,6 +825,9 @@ struct WatchlistWindow: View {
                 .hidden()
             sortableHeaderCell(L("振幅"), field: .amplitude, width: 0, alignment: .trailing)
                 .hidden()
+            // v17.33 C4 · Bid-Ask 价差 hidden sort header（仅菜单触发 · row 见 tooltip）
+            sortableHeaderCell(L("买卖价差"), field: .spread, width: 0, alignment: .trailing)
+                .hidden()
             Spacer()
             // v15.38 V2 · 排序菜单（一键切到隐藏字段）
             sortFieldMenu
@@ -923,6 +926,14 @@ struct WatchlistWindow: View {
             let pre = NSDecimalNumber(decimal: q.preSettlement).doubleValue
             guard pre > 1e-9 else { return nil }
             return (hi - lo) / pre * 100   // 百分比
+        case .spread:
+            // v17.33 C4 · 买卖价差% = (ask - bid) / last · last ≤ 0 / bid·ask 0 → nil 排末
+            guard let q = quotes[id], q.bidPrice > 0, q.askPrice > 0 else { return nil }
+            let bid = NSDecimalNumber(decimal: q.bidPrice).doubleValue
+            let ask = NSDecimalNumber(decimal: q.askPrice).doubleValue
+            let last = NSDecimalNumber(decimal: q.lastPrice).doubleValue
+            guard last > 1e-9 else { return nil }
+            return (ask - bid) / last * 100
         case .manual, .instrumentID:
             return nil   // sorter 不调 keyForID
         }
@@ -1580,7 +1591,7 @@ struct WatchlistWindow: View {
         return MockQuote.price(for: id)
     }
 
-    /// v15.21 batch133 · row 涨跌幅 hover 提示（绝对涨跌 + 振幅 + 昨结算）· quote 缺失时降级
+    /// v15.21 batch133 · row 涨跌幅 hover 提示（绝对涨跌 + 振幅 + 昨结算 · v17.33 加 Bid/Ask/spread）
     private func detailedChangeText(for id: String) -> String {
         guard let q = quotes[id] else { return "（无实时数据 · 仅 Mock 价格）" }
         let abs = NSDecimalNumber(decimal: q.change).doubleValue
@@ -1588,7 +1599,17 @@ struct WatchlistWindow: View {
             ? NSDecimalNumber(decimal: (q.high - q.low) / q.preSettlement).doubleValue * 100
             : 0
         let pre = NSDecimalNumber(decimal: q.preSettlement).doubleValue
-        return String(format: "绝对涨跌：%+.2f · 振幅：%.2f%% · 昨结算：%.2f", abs, amp, pre)
+        let bidAskLine: String
+        if q.bidPrice > 0, q.askPrice > 0, q.lastPrice > 0 {
+            let bid = NSDecimalNumber(decimal: q.bidPrice).doubleValue
+            let ask = NSDecimalNumber(decimal: q.askPrice).doubleValue
+            let last = NSDecimalNumber(decimal: q.lastPrice).doubleValue
+            let spreadPct = (ask - bid) / last * 100
+            bidAskLine = String(format: " · 买 %.2f / 卖 %.2f · 价差 %.3f%%", bid, ask, spreadPct)
+        } else {
+            bidAskLine = ""
+        }
+        return String(format: "绝对涨跌：%+.2f · 振幅：%.2f%% · 昨结算：%.2f%@", abs, amp, pre, bidAskLine)
     }
 
     /// v15.19 batch48 · 右键一键创建单个预警预设（联动 AlertPreset + alertAddedFromChart 通知）

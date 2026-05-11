@@ -2,8 +2,8 @@
 //
 // 职责：
 //   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedIDs
-//   - 用 SwiftUI Canvas 绘制 20 种画线类型（v17.16 后）：
-//     trendLine / horizontalLine / verticalLine / priceLabel / ray / arrow / rectangle / parallelChannel / channel / fibonacci / fibonacciExtension / text /
+//   - 用 SwiftUI Canvas 绘制 21 种画线类型（v17.17 后）：
+//     trendLine / horizontalLine / verticalLine / priceLabel / ray / arrow / rectangle / parallelChannel / channel / fibonacci / fibonacciExtension / fibonacciArc / text /
 //     ellipse / ruler / pitchfork / polygon /
 //     fibonacciFan / priceZone / gannFan / fibonacciTimeZone
 //   - 选中态高亮（线宽 +1.0 · 色彩饱和度提高）· v13.9 升级支持多选
@@ -129,6 +129,7 @@ public struct DrawingsOverlayView: View {
         case .channel:          drawChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacci:        drawFibonacci(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacciExtension: drawFibonacciExtension(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .fibonacciArc:     drawFibonacciArc(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .text:             drawText(drawing, ctx, size, baseColor, opacity)
         case .ellipse:          drawEllipse(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .ruler:            drawRuler(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
@@ -326,6 +327,41 @@ public struct DrawingsOverlayView: View {
                 .foregroundColor(color)
             ctx.draw(text, at: CGPoint(x: 4, y: y - 8))
         }
+    }
+
+    /// v17.17 A4.3 · 斐波弧 · 圆心 = A · 基准半径 = ||AB||（屏幕距离）· 3 个 fib 比例的半圆弧
+    /// 半圆方向：朝向 B 所在象限（沿 AB 方向延伸的 180°）· 用 Path.addArc
+    private func drawFibonacciArc(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let center = CGPoint(x: xForBar(d.startPoint.barIndex, size: size), y: yForPrice(d.startPoint.price, size: size))
+        let endPt = CGPoint(x: xForBar(end.barIndex, size: size), y: yForPrice(end.price, size: size))
+        let baseR = ((endPt.x - center.x) * (endPt.x - center.x) + (endPt.y - center.y) * (endPt.y - center.y)).squareRoot()
+        guard baseR > 0.5 else { return }
+        // 半圆起止角：沿 AB 方向 · ±90°（180°半圆 · 朝 B 一侧展开）
+        let baseAngle = atan2(endPt.y - center.y, endPt.x - center.x)
+        let startAngle = baseAngle - .pi / 2
+        let endAngle = baseAngle + .pi / 2
+        let levels = FibonacciLevels.fanCore  // 38.2 / 50 / 61.8
+        // 0% / 100% 中心虚线（视觉参考 · 短线段不绘 · 仅画 fib 弧）
+        for (i, ratio) in levels.enumerated() {
+            let r = baseR * CGFloat(NSDecimalNumber(decimal: ratio).doubleValue)
+            var path = Path()
+            path.addArc(center: center, radius: r, startAngle: Angle(radians: startAngle), endAngle: Angle(radians: endAngle), clockwise: false)
+            ctx.stroke(path, with: .color(color.opacity(0.75 * opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: dash))
+            // 弧顶 label（沿 baseAngle 方向）· r × (cos, sin)
+            let labelX = center.x + r * CGFloat(cos(baseAngle))
+            let labelY = center.y + r * CGFloat(sin(baseAngle))
+            let pct = NSDecimalNumber(decimal: ratio).doubleValue * 100
+            let label = Text(String(format: "%.1f%%", pct))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(color)
+            ctx.draw(label, at: CGPoint(x: labelX, y: labelY))
+            _ = i
+        }
+        // AB 半径线（实线 · 视觉参考）
+        var radialPath = Path()
+        radialPath.move(to: center); radialPath.addLine(to: endPt)
+        ctx.stroke(radialPath, with: .color(color.opacity(0.4 * opacity)), style: StrokeStyle(lineWidth: width * 0.6, dash: [3, 2]))
     }
 
     /// v17.16 A4.1 · 斐波扩展 · 突破后目标位（all ratios > 1.0 · 1.0 = B 锚 · 1.272/1.414/1.618/2/2.618 = projection）
@@ -619,6 +655,7 @@ public struct DrawingsOverlayView: View {
         case .channel:         return Color(red: 0.95, green: 0.55, blue: 0.85)  // 粉紫（v17.11 · 回归通道 · 与 parallelChannel 红区分）
         case .fibonacci:       return Color(red: 1.00, green: 0.55, blue: 0.18)  // 橙
         case .fibonacciExtension: return Color(red: 0.95, green: 0.78, blue: 0.30)  // 金黄（v17.16 · 与 fibonacci 橙互补 · 同语义不同方向）
+        case .fibonacciArc:    return Color(red: 1.00, green: 0.70, blue: 0.35)     // 杏橙（v17.17 · fib 系族同色调 · 偏暖）
         case .text:            return .white
         case .ellipse:         return Color(red: 0.18, green: 0.83, blue: 0.74)  // 青（v13.13）
         case .ruler:           return Color(red: 0.96, green: 0.69, blue: 0.18)  // 金（v13.14）

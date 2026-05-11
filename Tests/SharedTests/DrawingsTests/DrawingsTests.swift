@@ -11,7 +11,7 @@ private func point(_ bar: Int, _ price: Int) -> DrawingPoint {
 
 @Suite("Drawing 创建与类型契约")
 struct DrawingFactoryTests {
-    @Test("20 种 factory 类型正确（v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 补齐）")
+    @Test("21 种 factory 类型正确（v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 · v17.17 斐波弧 补齐）")
     func factoryTypes() {
         #expect(Drawing.trendLine(from: point(0, 100), to: point(10, 110)).type == .trendLine)
         #expect(Drawing.horizontalLine(price: 100).type == .horizontalLine)
@@ -24,6 +24,7 @@ struct DrawingFactoryTests {
         #expect(Drawing.channel(from: point(0, 100), to: point(10, 100)).type == .channel)
         #expect(Drawing.fibonacci(from: point(0, 100), to: point(10, 110)).type == .fibonacci)
         #expect(Drawing.fibonacciExtension(from: point(0, 100), to: point(10, 110)).type == .fibonacciExtension)
+        #expect(Drawing.fibonacciArc(from: point(0, 100), to: point(10, 110)).type == .fibonacciArc)
         #expect(Drawing.text(at: point(5, 105), content: "买入").type == .text)
         #expect(Drawing.ellipse(from: point(0, 100), to: point(10, 110)).type == .ellipse)
         #expect(Drawing.ruler(from: point(0, 100), to: point(10, 110)).type == .ruler)
@@ -52,7 +53,7 @@ struct DrawingFactoryTests {
         #expect(pentagon?.extraPoints?.count == 4)
     }
 
-    @Test("pointsNeeded 契约（20 类全覆盖 · v17.16 补齐 · 1/2/3/0 点）")
+    @Test("pointsNeeded 契约（21 类全覆盖 · v17.17 补齐 · 1/2/3/0 点）")
     func pointsNeededContract() {
         // 1 点（v17.8 加 verticalLine · v17.15 加 priceLabel）
         #expect(DrawingType.horizontalLine.pointsNeeded == 1)
@@ -68,6 +69,7 @@ struct DrawingFactoryTests {
         #expect(DrawingType.channel.pointsNeeded == 2)
         #expect(DrawingType.fibonacci.pointsNeeded == 2)
         #expect(DrawingType.fibonacciExtension.pointsNeeded == 2)
+        #expect(DrawingType.fibonacciArc.pointsNeeded == 2)
         #expect(DrawingType.ellipse.pointsNeeded == 2)
         #expect(DrawingType.ruler.pointsNeeded == 2)
         #expect(DrawingType.fibonacciFan.pointsNeeded == 2)
@@ -80,7 +82,7 @@ struct DrawingFactoryTests {
         #expect(DrawingType.polygon.pointsNeeded == 0)
 
         // 全覆盖防漏 · 加新 case 但忘记加 pointsNeeded 时此测试会失败
-        let coveredCount = 4 + 14 + 1 + 1  // 1 点 4 + 2 点 14 + 3 点 1 + 0 点 1
+        let coveredCount = 4 + 15 + 1 + 1  // 1 点 4 + 2 点 15 + 3 点 1 + 0 点 1
         #expect(coveredCount == DrawingType.allCases.count)
 
         // needsTwoPoints 兼容入口（pointsNeeded == 2）
@@ -109,7 +111,7 @@ struct DrawingFactoryTests {
 
 @Suite("Drawing Codable 往返")
 struct DrawingCodableTests {
-    @Test("20 种序列化 + 反序列化等价（v17.16 fibonacciExtension 补齐）")
+    @Test("21 种序列化 + 反序列化等价（v17.17 fibonacciArc 补齐）")
     func roundTrip() throws {
         let drawings: [Drawing] = [
             Drawing.trendLine(from: point(0, 100), to: point(10, 120)),
@@ -123,6 +125,7 @@ struct DrawingCodableTests {
             Drawing.channel(from: point(0, 100), to: point(20, 100)),
             Drawing.fibonacci(from: point(0, 100), to: point(10, 150)),
             Drawing.fibonacciExtension(from: point(0, 100), to: point(10, 150)),
+            Drawing.fibonacciArc(from: point(0, 100), to: point(10, 150)),
             Drawing.text(at: point(5, 105), content: "测试"),
             Drawing.ellipse(from: point(0, 100), to: point(10, 120)),
             Drawing.ruler(from: point(0, 100), to: point(10, 130)),

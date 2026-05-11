@@ -196,6 +196,8 @@ struct SubChartView: View {
     @State private var seriesC: [Double?] = []
     /// VolumeProfile 副图专用 bins · 其他副图为空
     @State private var profileBins: [VolumeProfile.Bin] = []
+    /// v17.30 B2 · Value Area（POC + VAH + VAL · 70% 成交量带）
+    @State private var profileValueArea: VolumeProfile.ValueArea?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -328,6 +330,7 @@ struct SubChartView: View {
         case .volumeProfile:
             // 全量 bars 计算 VP（trader 视角"永久价格分布" · 不随视口变化）· bin=24
             profileBins = VolumeProfile.compute(bars: bars, binCount: 24)
+            profileValueArea = VolumeProfile.valueArea(bins: profileBins, percent: 0.7)
             seriesA = profileBins.map { Optional($0.volume) }
             seriesB = []
             seriesC = []
@@ -421,12 +424,14 @@ struct SubChartView: View {
             // BBW（squeeze 信号）/ ATRP（跨品种波动率）· 单位 %
             case .bbw, .atrp:
                 Text("\(kind.shortName) \(fmt(aLast))%").foregroundColor(Self.yellowColor)
-            // v15.19 batch25 · Volume Profile · HUD 显示峰值 bin 价格区间（trader 一眼看支撑阻力位）
+            // v15.19 batch25 · Volume Profile · HUD 显示 POC + VAH + VAL（trader 一眼看支撑阻力位 + 70% 区）
+            // v17.30 B2 · 加 Value Area · POC / VAH / VAL 三价位
             case .volumeProfile:
-                if let peak = profileBins.max(by: { $0.volume < $1.volume }) {
-                    let priceLow = NSDecimalNumber(decimal: peak.priceLow).doubleValue
-                    let priceHigh = NSDecimalNumber(decimal: peak.priceHigh).doubleValue
-                    Text("VP 峰值 \(String(format: "%.2f", priceLow))-\(String(format: "%.2f", priceHigh))")
+                if let va = profileValueArea {
+                    let poc = NSDecimalNumber(decimal: va.pocPrice).doubleValue
+                    let vah = NSDecimalNumber(decimal: va.vahPrice).doubleValue
+                    let val = NSDecimalNumber(decimal: va.valPrice).doubleValue
+                    Text("POC \(String(format: "%.2f", poc)) · VAH \(String(format: "%.2f", vah)) · VAL \(String(format: "%.2f", val))")
                         .foregroundColor(Self.purpleColor)
                 } else {
                     Text("VP 加载中").foregroundColor(.secondary)
@@ -555,6 +560,7 @@ struct SubChartView: View {
 
     /// v15.19 batch25 · Volume Profile · 水平柱状渲染（trader 找支撑阻力区直观）
     /// y 轴：价格（高价在上 · 低价在下）· x 轴：累计成交量从左生长 · 峰值 bin 染深紫
+    /// v17.30 B2 · POC 满色 · 70% Value Area 内 bin 半透明蓝 · VA 外 bin 弱紫 + POC/VAH/VAL 三引导线
     private func drawVolumeProfile(_ ctx: GraphicsContext, size: CGSize) {
         guard !profileBins.isEmpty else { return }
         let n = profileBins.count
@@ -562,16 +568,49 @@ struct SubChartView: View {
         guard maxVol > 0 else { return }
         let binHeight = size.height / CGFloat(n)
         let xScale = size.width * 0.9 / CGFloat(maxVol)
-        // 峰值 bin（命中最大 volume）特别染色
-        let peakIdx = profileBins.firstIndex(where: { $0.volume == maxVol }) ?? -1
+        let va = profileValueArea
         for (i, bin) in profileBins.enumerated() {
             // 高价在顶 · 低价在底（i=0 是最低价 · 倒序映射）
             let yTop = size.height - CGFloat(i + 1) * binHeight + 1
             let barWidth = CGFloat(bin.volume) * xScale
             let rect = CGRect(x: 0, y: yTop, width: barWidth, height: binHeight - 2)
-            let color = (i == peakIdx) ? Self.purpleColor : Self.purpleColor.opacity(0.45)
+            let color: Color
+            if let va {
+                if i == va.pocIndex {
+                    color = Self.purpleColor                         // POC 满色
+                } else if i >= va.valIndex && i <= va.vahIndex {
+                    color = Self.blueColor.opacity(0.55)             // 70% VA 内 · 半透明蓝
+                } else {
+                    color = Self.purpleColor.opacity(0.30)           // VA 外 · 弱紫
+                }
+            } else {
+                color = Self.purpleColor.opacity(0.45)
+            }
             ctx.fill(Path(rect), with: .color(color))
         }
+        if let va {
+            drawValueAreaGuides(ctx, size: size, va: va, binHeight: binHeight)
+        }
+    }
+
+    /// v17.30 B2 · POC 实线 + VAH/VAL 虚线 · 横跨整个副图
+    private func drawValueAreaGuides(
+        _ ctx: GraphicsContext, size: CGSize,
+        va: VolumeProfile.ValueArea, binHeight: CGFloat
+    ) {
+        // i 是按价格升序的 bin 下标 · 屏幕 y = size.height - (i + 0.5) * binHeight
+        let yFor: (Int) -> CGFloat = { i in size.height - (CGFloat(i) + 0.5) * binHeight }
+        let pocY = yFor(va.pocIndex)
+        let vahY = yFor(va.vahIndex)
+        let valY = yFor(va.valIndex)
+
+        var pocPath = Path()
+        pocPath.move(to: CGPoint(x: 0, y: pocY))
+        pocPath.addLine(to: CGPoint(x: size.width, y: pocY))
+        ctx.stroke(pocPath, with: .color(Self.purpleColor), lineWidth: 1.2)
+
+        drawDashLine(at: vahY, ctx: ctx, width: size.width, color: Self.blueColor.opacity(0.8))
+        drawDashLine(at: valY, ctx: ctx, width: size.width, color: Self.blueColor.opacity(0.8))
     }
 
     /// v15.18 · 固定 0~100 区间多线绘制（Aroon / STC / Choppiness 共用）

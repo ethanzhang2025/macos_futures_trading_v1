@@ -500,6 +500,17 @@ struct TrainingControlBar: View {
                 default:     return ("🔥", "起步阶段（2-6 天）")
                 }
             }()
+            // v16.139 · 接近下一 milestone（≤ 2 天）时显示鼓励
+            let nextMilestone: (days: Int, label: String)? = {
+                if streak < 7 { return (7, "🔥🔥 周级") }
+                if streak < 14 { return (14, "🚀 两周") }
+                if streak < 30 { return (30, "🏆 月级") }
+                return nil
+            }()
+            let nearHint = nextMilestone.flatMap { ms -> String? in
+                let remaining = ms.days - streak
+                return remaining <= 2 ? " · 再 \(remaining) 天达 \(ms.label)" : nil
+            }
             Button {
                 viewModel.pendingJumpToHistoryTab = true
             } label: {
@@ -522,8 +533,8 @@ struct TrainingControlBar: View {
             }
             .buttonStyle(.plain)
             .tooltip(isNewRecord
-                     ? "🎉 新纪录！连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 超越历史！点击跳历史 tab 看完整趋势"
-                     : "连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 历史最长 \(best) 天 · 点击跳历史 tab")
+                     ? "🎉 新纪录！连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 超越历史！点击跳历史 tab 看完整趋势\(nearHint ?? "")"
+                     : "连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 历史最长 \(best) 天 · 点击跳历史 tab\(nearHint ?? "")")
         }
     }
 

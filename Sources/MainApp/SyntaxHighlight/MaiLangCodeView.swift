@@ -95,6 +95,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
         context.coordinator.attachVisibleLinesObserver(scrollView: scrollView, textView: tv)
         // v16.10 · hover popover · 替代 .toolTip 系统 1s 延迟 · 200ms 防抖立即显示函数签名
         context.coordinator.attachHoverTracking(textView: tv)
+        // v16.59 · Ctrl+Space IDE 标准补全快捷键
+        context.coordinator.attachKeyMonitor(textView: tv)
         return scrollView
     }
 
@@ -147,6 +149,8 @@ public struct MaiLangCodeView: NSViewRepresentable {
         var parent: MaiLangCodeView
         weak var textView: NSTextView?
         nonisolated(unsafe) var visibleObserver: NSObjectProtocol?
+        /// v16.59 · Ctrl+Space 触发补全的 local key monitor（IDE 标准快捷键）
+        nonisolated(unsafe) var keyMonitor: Any?
         /// 防 applyHighlight 内部 setSelectedRange 反递归触发 textViewDidChangeSelection 死循环
         /// （v15.25 Mac 切机暴露 · makeNSView 设 tv.string 即触发栈溢出 SIGSEGV）
         private var isApplyingHighlight = false
@@ -159,6 +163,34 @@ public struct MaiLangCodeView: NSViewRepresentable {
             }
             if let obs = hoverScrollObserver {
                 NotificationCenter.default.removeObserver(obs)
+            }
+            if let m = keyMonitor {
+                NSEvent.removeMonitor(m)
+            }
+        }
+
+        /// v16.59 · Ctrl+Space 触发补全 popup（IDE 标准 · 与 v16.2 ≥ 2 字母自动 trigger 互补）
+        /// - trader 输入 1 字母即可手动 Ctrl+Space 弹候选 · 不需要先输 2 字母
+        /// - 空 prefix 时也弹（completions: 返回 top 50 候选 · 见 textView(_:completions:...)）
+        /// - 仅当 first responder 为本 textView 时拦截 · 避免影响其他窗口输入
+        func attachKeyMonitor(textView: NSTextView) {
+            weak var weakTV: NSTextView? = textView
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                // 提前用 nonisolated 数据筛掉无关事件（keyCode/modifierFlags 是 Sendable）
+                // keyCode 49 = space · 仅 .control 修饰键（排除 ctrl+option+space 等组合）
+                guard event.keyCode == 49,
+                      event.modifierFlags.intersection([.control, .command, .option, .shift]) == [.control] else {
+                    return event
+                }
+                // 本地 key monitor 在主线程触发 · 安全 hop 到 MainActor 调 NSTextView 方法
+                return MainActor.assumeIsolated {
+                    guard let tv = weakTV,
+                          tv.window?.firstResponder === tv else {
+                        return event
+                    }
+                    tv.complete(nil)
+                    return nil
+                }
             }
         }
 
@@ -366,15 +398,16 @@ public struct MaiLangCodeView: NSViewRepresentable {
         }
 
         /// v15.22 batch9 · 自动补全候选（NSTextView 默认 F5 / Esc 触发 popup）
+        /// v16.59 · Ctrl+Space 触发（attachKeyMonitor · 即使空 prefix 也弹）· 空 prefix 时返回全部
         /// trader 输入"M" → Esc → 弹 MA / MAX / MIN / MEDIAN / MOD / MULAR 等候选
         public func textView(_ textView: NSTextView,
                              completions words: [String],
                              forPartialWordRange charRange: NSRange,
                              indexOfSelectedItem index: UnsafeMutablePointer<Int>?) -> [String] {
             let prefix = (textView.string as NSString).substring(with: charRange).uppercased()
-            guard !prefix.isEmpty else { return [] }
-            let candidates = MaiLangSyntaxHighlighter.allCompletionCandidates
-                .filter { $0.hasPrefix(prefix) }
+            let all = MaiLangSyntaxHighlighter.allCompletionCandidates
+            // v16.59 · 空 prefix（Ctrl+Space 光标在空白处）→ 返回全部候选 · NSTextView popup 自带滚动
+            let candidates = prefix.isEmpty ? all : all.filter { $0.hasPrefix(prefix) }
             if !candidates.isEmpty, let idx = index {
                 idx.pointee = 0
             }

@@ -15,8 +15,8 @@ public struct ShellWindow: View {
 
     public var body: some View {
         NavigationSplitView {
-            // 左 Sidebar（Step 6 实装 · Step 1 占位）
-            sidebarPlaceholder
+            // 左 Sidebar（Step 6 ✅）
+            ShellSidebar()
                 .frame(minWidth: ShellMetrics.sidebarWidth,
                        idealWidth: ShellMetrics.sidebarWidth)
         } detail: {
@@ -35,33 +35,7 @@ public struct ShellWindow: View {
         .environmentObject(shellVM)
     }
 
-    // MARK: - Sidebar 占位（Step 6 实装）
-
-    private var sidebarPlaceholder: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("📂 Sidebar")
-                .font(.title3.bold())
-            Divider()
-            Text("Step 6 实装：")
-                .font(.caption).foregroundColor(.secondary)
-            Text("· 自选 mini list\n· 板块树\n· 持仓速览\n· 异动 chip\n· 训练 streak 🔥")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Spacer()
-            Divider()
-            Text("v17.0 PoC Step 2 · Tab 切换就绪")
-                .font(.caption2).foregroundColor(.secondary)
-            Text("workspaces: \(shellVM.workspaces.count)")
-                .font(.caption2.monospaced()).foregroundColor(.accentColor)
-            if let ws = shellVM.activeWorkspace {
-                Text("active: \(ws.name)")
-                    .font(.caption2.monospaced()).foregroundColor(.accentColor)
-            }
-        }
-        .padding(12)
-    }
-
-    // MARK: - Pane 容器（Step 3 实装 · ChartScene 已嵌入 · 其他 view 占位）
+    // MARK: - Pane 容器（Step 3 ✅ · ChartScene 真实嵌入 · Step 5 全 18 view 接入）
 
     @ViewBuilder
     private var paneContainerPlaceholder: some View {

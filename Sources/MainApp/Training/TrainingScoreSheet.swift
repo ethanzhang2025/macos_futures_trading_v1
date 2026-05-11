@@ -108,6 +108,18 @@ struct TrainingScoreSheet: View {
                 }
                 .keyboardShortcut("c", modifiers: [.command])
                 .tooltip("复制本次训练详细 markdown（⌘C · 粘贴到笔记 / AI 求点评）")
+                // v16.50 · 一行 emoji 摘要复制（朋友圈/IM 简短分享 · 与「复制分析」完整版互补）
+                Button {
+                    let summary = oneLineEmojiSummary()
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString(summary, forType: .string)
+                    flashFeedback("✓ 已复制摘要：\(summary)")
+                } label: {
+                    Label("复制摘要", systemImage: "text.bubble")
+                }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+                .tooltip("复制 1 行 emoji 摘要（⌘⌥C · 朋友圈/IM 一行分享 · 比 markdown 简短）")
                 // v15.23 batch146 · 截图为 PNG 分享（朋友圈晒分）
                 Button {
                     copyScreenshotToPasteboard()
@@ -623,6 +635,27 @@ struct TrainingScoreSheet: View {
     }
 
     // MARK: - v15.23 batch150 · 反馈提示
+
+    /// v16.50 · 1 行 emoji 摘要（朋友圈/IM 分享 · 60-80 字符精简）
+    private func oneLineEmojiSummary() -> String {
+        var parts: [String] = []
+        parts.append("\(score.grade.emoji) \(score.totalScore) 分 · 等级 \(score.grade.displayName)")
+        if let pat = session.scenarioPattern {
+            parts.append("\(pat.emoji) \(pat.displayName)")
+        }
+        if let comp = comparison, comp.priorCount > 0 {
+            let arrow = comp.trendVsAverage.emoji
+            let delta = comp.deltaVsAverage
+            let sign = delta >= 0 ? "+" : ""
+            parts.append("同形态\(arrow)\(sign)\(delta)")
+        }
+        if errorCount + warningCount > 0 {
+            parts.append("⚠️ \(errorCount + warningCount) 违规")
+        } else {
+            parts.append("✨ 0 违规")
+        }
+        return parts.joined(separator: " · ")
+    }
 
     private func flashFeedback(_ msg: String) {
         actionFeedback = msg

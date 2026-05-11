@@ -207,9 +207,11 @@ struct TrainingScoreSheet: View {
 
     /// v16.65 · 隐形 button 持 ↑↓ keyboardShortcut · 切换 5 维 drilldown 展开
     /// trader 看完一维公式按 ↓ 自动展开下一维 · 完整学习 5 维不用鼠标
+    /// v16.168 · 数字键 1-5 直达对应维度（与 ↑↓ 互补 · trader 数字键跳转）
     @ViewBuilder
     private var drilldownKeyboardShortcuts: some View {
-        if score.subScores != nil {
+        if let sub = score.subScores {
+            let dims = sub.ordered.map(\.dimension)
             Group {
                 Button("") { stepDrilldown(by: -1) }
                     .keyboardShortcut(.upArrow, modifiers: [])
@@ -217,6 +219,26 @@ struct TrainingScoreSheet: View {
                 Button("") { stepDrilldown(by: 1) }
                     .keyboardShortcut(.downArrow, modifiers: [])
                     .opacity(0)
+                // v16.168 · 数字键 1-5 跳维度（不需要 modifier · sheet 内独占）
+                ForEach(Array(dims.enumerated()), id: \.offset) { idx, dim in
+                    Button("") { jumpToDimension(dim, totalCount: dims.count) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(idx + 1)")), modifiers: [])
+                        .opacity(0)
+                }
+            }
+        }
+    }
+
+    /// v16.168 · 数字键直跳指定维度（已展开同维度 → 切换折叠 · 否则切换到该维度）
+    private func jumpToDimension(_ dim: TrainingSubScores.Dimension, totalCount: Int) {
+        let isAlreadyExpanded = (expandedDim == dim)
+        withAnimation(.easeInOut(duration: 0.15)) {
+            expandedDim = isAlreadyExpanded ? nil : dim
+        }
+        if !isAlreadyExpanded {
+            if let sub = score.subScores,
+               let pos = sub.ordered.firstIndex(where: { $0.dimension == dim }) {
+                flashFeedback("📊 \(dim.emoji) \(dim.displayName) (\(pos + 1)/\(totalCount))")
             }
         }
     }

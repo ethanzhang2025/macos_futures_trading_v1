@@ -401,16 +401,28 @@ struct TrainingHistoryPanel: View {
                 }
                 // v16.49 · 累计训练时长（鼓励高频 · 与 v15.23 batch144 weeklyGoalRow 互补）
                 // v16.108 · 加平均每次时长（trader 看专注度 · 太短 = 试探 / 太长 = 拖延）
+                // v16.122 · milestone emoji 升级（小时数突破鼓励）
                 let totalMinutes = viewModel.log.sessions.map { $0.durationMinutes }.reduce(0, +)
                 if totalMinutes > 0 {
                     let n = max(1, viewModel.log.sessionCount)
                     let avgMin = totalMinutes / n
+                    let hours = Double(totalMinutes) / 60.0
+                    let milestone: String = {
+                        switch hours {
+                        case 1000...:  return "🌟"   // 1000h 大师
+                        case 500...:   return "👑"   // 500h 资深
+                        case 100...:   return "🏆"   // 100h 高手
+                        case 50...:    return "🚀"   // 50h 进阶
+                        case 10...:    return "🎯"   // 10h 起步
+                        default:       return "⏱"
+                        }
+                    }()
                     let value = totalMinutes >= 60
-                                ? String(format: "%.1f h · 均 %d 分/次", Double(totalMinutes) / 60.0, avgMin)
+                                ? String(format: "%.1f h · 均 %d 分/次", hours, avgMin)
                                 : "\(totalMinutes) min · 均 \(avgMin) 分/次"
-                    statLine("⏱ 累计",
+                    statLine("\(milestone) 累计",
                              value: value,
-                             color: .accentColor)
+                             color: hours >= 50 ? .purple : .accentColor)
                 }
                 // v16.80 · 连训天数（与 ControlBar 🔥 chip 同算法 · ≥ 2 才显示）
                 // v16.84 · 同步 milestone emoji 升级（与 ControlBar v16.83 一致）

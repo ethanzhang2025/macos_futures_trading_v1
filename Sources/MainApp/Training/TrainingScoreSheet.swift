@@ -131,6 +131,17 @@ struct TrainingScoreSheet: View {
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .tooltip("评分卡截图为 PNG（⌘⇧C · 粘贴到微信/朋友圈）")
+                // v16.87 · 独立 5 维雷达图 PNG（朋友圈分享单 session 形状）
+                if score.subScores != nil {
+                    Button {
+                        copyRadarPNGToPasteboard()
+                        flashFeedback("✓ 已截图 5 维雷达图 · 粘贴分享")
+                    } label: {
+                        Label("雷达图", systemImage: "scope")
+                    }
+                    .keyboardShortcut("r", modifiers: [.command, .option])
+                    .tooltip("仅 5 维雷达图 PNG（⌘⌥R · 比 ⌘⇧C 更精简 · 突出五维形状）")
+                }
                 // v15.23 batch150 · 反馈提示（3 秒消失）
                 if let feedback = actionFeedback {
                     Text(feedback)
@@ -824,6 +835,72 @@ struct TrainingScoreSheet: View {
         .background(Color(NSColor.windowBackgroundColor))
 
         let renderer = ImageRenderer(content: shareCard)
+        renderer.scale = 2  // retina
+        guard let nsImage = renderer.nsImage,
+              let tiff = nsImage.tiffRepresentation,
+              let bmp = NSBitmapImageRep(data: tiff),
+              let png = bmp.representation(using: .png, properties: [:]) else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setData(png, forType: .png)
+    }
+
+    /// v16.87 · 独立 5 维雷达图 PNG（朋友圈分享单 session 形状 · 比 ⌘⇧C 更精简）
+    /// 布局：标题 + 大雷达图（260×260）+ 五维数据列表 + emoji 摘要
+    private func copyRadarPNGToPasteboard() {
+        guard let sub = score.subScores else { return }
+        let card = VStack(alignment: .center, spacing: 12) {
+            // 标题：场景 + 形态 + 总分等级
+            VStack(spacing: 4) {
+                Text(session.scenarioName.isEmpty ? "训练评分" : session.scenarioName)
+                    .font(.title3.bold())
+                HStack(spacing: 6) {
+                    if let pattern = session.scenarioPattern {
+                        Text("\(pattern.emoji) \(pattern.displayName)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text("\(score.grade.emoji) \(score.totalScore)/100 · \(score.grade.displayName) 级")
+                        .font(.caption.bold())
+                        .foregroundColor(gradeColor(score.grade))
+                }
+            }
+            // 大雷达图
+            radarChart(sub)
+                .frame(width: 260, height: 260)
+            // 五维数据列表（emoji + name + 分数 · 最弱橙色）
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(sub.ordered, id: \.dimension) { entry in
+                    HStack(spacing: 6) {
+                        Text(entry.dimension.emoji)
+                            .font(.system(size: 12))
+                        Text(entry.dimension.displayName)
+                            .font(.system(size: 11))
+                            .frame(width: 50, alignment: .leading)
+                        Text("\(entry.score)")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(subScoreColor(entry.score))
+                        if entry.dimension == sub.weakest {
+                            Text("← 最弱")
+                                .font(.system(size: 10))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+            }
+            .frame(width: 200, alignment: .leading)
+            // emoji 摘要（v16.50 复用）
+            Text(oneLineEmojiSummary())
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 320)
+        }
+        .padding(20)
+        .frame(width: 360)
+        .background(Color(NSColor.windowBackgroundColor))
+
+        let renderer = ImageRenderer(content: card)
         renderer.scale = 2  // retina
         guard let nsImage = renderer.nsImage,
               let tiff = nsImage.tiffRepresentation,

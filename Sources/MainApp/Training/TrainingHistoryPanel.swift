@@ -1359,6 +1359,8 @@ struct TrainingHistoryPanel: View {
             Text(score?.grade.emoji ?? "❔")
                 .font(.system(size: 18))
                 .frame(width: 28)
+                // v16.179 · grade emoji hover tooltip 显示总分 + 5 维 + violations
+                .tooltip(gradeEmojiTooltip(session: session, score: score))
 
             // v15.23 batch118 · 场景 mini thumbnail（pattern 非 nil 时显示 · 32×20pt）
             if let pattern = session.scenarioPattern {
@@ -1472,6 +1474,25 @@ struct TrainingHistoryPanel: View {
         } catch {
             Toast.error("保存失败", error)
         }
+    }
+
+    /// v16.179 · session row grade emoji tooltip · 总分 + 5 维 + violations 速览
+    private func gradeEmojiTooltip(session: TrainingSession, score: TrainingScore?) -> String {
+        guard let sc = score else { return "❔ 未评分" }
+        var parts: [String] = []
+        parts.append("\(sc.grade.emoji) \(sc.grade.displayName) 级 · 总分 \(sc.totalScore)")
+        if let sub = sc.subScores {
+            let line = sub.ordered.map { "\($0.dimension.emoji)\($0.score)" }.joined(separator: " ")
+            parts.append(line)
+        }
+        let errors = session.violations.filter { $0.severity == .error }.count
+        let warns = session.violations.filter { $0.severity == .warning }.count
+        if errors > 0 || warns > 0 {
+            parts.append("⚠️ \(errors) error / \(warns) warning")
+        } else {
+            parts.append("✓ 0 违规")
+        }
+        return parts.joined(separator: "\n")
     }
 
     /// v16.150 · 5 维 dot 颜色（与 ScoreSheet subScoreColor 同阶梯 · 视觉一致）

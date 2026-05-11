@@ -4,9 +4,12 @@
 
 #if canImport(SwiftUI) && os(macOS)
 import SwiftUI
+import TradingCore
 
 struct ShellSidebar: View {
     @EnvironmentObject var shellVM: ShellViewModel
+    /// v17.3 · 训练 log 真实数据（启动时一次性加载 · 后续重启刷新）
+    @State private var trainingLog: TrainingSessionLog = TrainingLogPersistence.load()
 
     var body: some View {
         List {
@@ -115,30 +118,73 @@ struct ShellSidebar: View {
 
     // MARK: - 训练
 
+    // MARK: - 训练（v17.3 · 接 TrainingLogPersistence 真实数据）
+
     private var trainingSection: some View {
         Section {
-            HStack {
-                Text("🔥")
-                Text("连胜 7 次")
-                    .font(.system(size: 12))
-                Spacer()
+            // 连胜/连败 streak
+            let streak = trainingLog.currentStreak
+            if streak.count >= 2 {
+                HStack {
+                    Text(streak.isWinning ? "🔥" : "💧")
+                    Text("\(streak.isWinning ? "连胜" : "连败") \(streak.count) 次")
+                        .font(.system(size: 12))
+                    Spacer()
+                }
             }
-            HStack {
-                Text("📊")
-                Text("本月均分 82")
-                    .font(.system(size: 12))
-                Spacer()
+            // 本月均分
+            if let avg = thisMonthAvg {
+                HStack {
+                    Text("📊")
+                    Text("本月均分 \(avg)")
+                        .font(.system(size: 12))
+                    Spacer()
+                }
             }
+            // 训练总次数
             HStack {
                 Text("🎯")
-                Text("下次专项: 纪律")
+                Text("累计 \(trainingLog.sessions.count) 次训练")
                     .font(.system(size: 12))
                 Spacer()
+            }
+            // 下次专项（v16.213 加的 focusDimension）
+            if let dim = focusDimension {
+                HStack {
+                    Text("🎯")
+                    Text("下次专项: \(dim)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.purple)
+                    Spacer()
+                }
+            }
+            if trainingLog.sessions.isEmpty {
+                Text("尚未开始训练 · 主区切到 🎯 训练模块")
+                    .font(.caption).foregroundColor(.secondary)
             }
         } header: {
             Label("训练", systemImage: "target")
                 .foregroundColor(.green)
         }
+    }
+
+    /// 本月均分（仅含 v2 score · 与 HistoryPanel 同算法）
+    private var thisMonthAvg: Int? {
+        let cal = Calendar(identifier: .gregorian)
+        guard let monthStart = cal.dateInterval(of: .month, for: Date())?.start else { return nil }
+        let scores = trainingLog.sessions
+            .filter { $0.endedAt >= monthStart }
+            .compactMap { trainingLog.score(for: $0.id)?.totalScore }
+        guard !scores.isEmpty else { return nil }
+        return Int(round(Double(scores.reduce(0, +)) / Double(scores.count)))
+    }
+
+    /// v16.213 专项维度（@AppStorage 读 raw → 中文）
+    private var focusDimension: String? {
+        guard let raw = UserDefaults.standard.string(forKey: "viewState.v1.training.focusDimension"),
+              !raw.isEmpty,
+              let dim = TrainingSubScores.Dimension(rawValue: raw) else { return nil }
+        return "\(dim.emoji) \(dim.displayName)"
     }
 }
 

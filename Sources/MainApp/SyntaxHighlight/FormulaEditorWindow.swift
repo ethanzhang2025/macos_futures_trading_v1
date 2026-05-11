@@ -84,6 +84,8 @@ public struct FormulaEditorWindow: View {
     @AppStorage("viewState.v1.formulaEditor.recentFiles") private var recentFilesJSON: String = ""
     /// v15.23 batch105 · minimap 缩略图开关（IDE 级长公式快速导航 · 默认开 · ⌘⇧M 切换）
     @AppStorage("viewState.v1.formulaEditor.showMinimap") private var showMinimap: Bool = true
+    /// v16.107 · lint 行内波浪线开关（默认开 · trader 视觉太重时可关）
+    @AppStorage("viewState.v1.formulaEditor.showLintUnderline") private var showLintUnderline: Bool = true
     /// v15.23 batch109 · minimap 宽度 4 档（80 窄 / 100 中 / 120 宽 / 160 超宽 · 默认 100 · 持久化）
     @AppStorage("viewState.v1.formulaEditor.minimapWidth") private var minimapWidth: Double = 100
     /// v15.23 batch106 · 主编辑器当前可视行（1-based · minimap viewport 高亮 + 滚动同步）
@@ -144,8 +146,8 @@ public struct FormulaEditorWindow: View {
                                     visibleStartLine = s
                                     visibleEndLine = e
                                 },
-                                // v16.92 · lint 行内波浪线（按 severity 颜色）
-                                lintWarnings: MaiLangLint.analyze(sourceText))
+                                // v16.92 · lint 行内波浪线（按 severity 颜色）· v16.107 可关闭
+                                lintWarnings: showLintUnderline ? MaiLangLint.analyze(sourceText) : [])
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // v15.23 batch129 · split 视图右 pane（只读 · 同屏对比另一 tab · ⌘\\ 切换）
                 if let splitIdx = splitTabIdx, splitIdx < tabs.count, splitIdx != activeIdx {
@@ -176,8 +178,8 @@ public struct FormulaEditorWindow: View {
                                         scheme: scheme,
                                         fontSize: CGFloat(fontSizeStored),
                                         isEditable: false,
-                                        // v16.96 · split view 右 pane 也显示 lint 行内波浪线（与左 pane 一致）
-                                        lintWarnings: MaiLangLint.analyze(splitTab.content))
+                                        // v16.96 · split view 右 pane 也显示 lint 行内波浪线（与左 pane 一致）· v16.107 可关闭
+                                        lintWarnings: showLintUnderline ? MaiLangLint.analyze(splitTab.content) : [])
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(maxWidth: .infinity)
@@ -973,17 +975,21 @@ public struct FormulaEditorWindow: View {
             Menu {
                 Toggle("保存时自动格式化", isOn: $formatOnSave)
                 Toggle("保存时清行末空格", isOn: $trimTrailingWhitespaceOnSave)
+                // v16.107 · lint 行内波浪线开关
+                Toggle("显示 lint 行内波浪线", isOn: $showLintUnderline)
                 Divider()
                 Button(formatOnSave ? "✓ 自动格式化已启用" : "▢ 自动格式化已关闭") { }
                     .disabled(true)
                 Button(trimTrailingWhitespaceOnSave ? "✓ 清行末空格已启用" : "▢ 清行末空格已关闭") { }
+                    .disabled(true)
+                Button(showLintUnderline ? "✓ lint 波浪线已启用" : "▢ lint 波浪线已关闭") { }
                     .disabled(true)
             } label: {
                 Image(systemName: "gearshape")
             }
             .menuStyle(.borderlessButton)
             .frame(width: 32)
-            .tooltip("编辑器选项 · 保存自动格式化等")
+            .tooltip("编辑器选项 · 保存自动格式化 / lint 显示等")
             // 主题切换
             Picker("主题", selection: $schemeRaw) {
                 Text("🌙 暗色").tag("dark")

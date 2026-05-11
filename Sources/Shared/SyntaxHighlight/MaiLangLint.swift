@@ -25,6 +25,7 @@ public struct MaiLangLintWarning: Sendable, Equatable {
         case missingColorAttribute // 输出变量未指定 COLORxxx 属性（默认色不醒目）
         case undefinedVariable     // v16.66 · 引用了未定义的标识符（非保留字 · 非已声明变量 · 可能 typo）
         case argCountMismatch      // v16.98 · builtin 函数调用参数数量与签名不符（MA(CLOSE) 漏第 2 参数）
+        case suspiciousVariableName // v16.109 · 变量定义名与 builtin/keyword 仅差 1 字符（trader 定义 typo · 如 MAVRG ≈ MA?）
 
         /// v16.74 · 默认严重度（undefined/duplicate/argCount 是 error · 其他是 warning）
         public var defaultSeverity: Severity {
@@ -33,6 +34,7 @@ public struct MaiLangLintWarning: Sendable, Equatable {
             case .duplicateDefinition: return .error
             case .argCountMismatch: return .error
             case .unusedVariable, .missingColorAttribute: return .warning
+            case .suspiciousVariableName: return .warning
             }
         }
     }
@@ -98,6 +100,28 @@ public enum MaiLangLint {
                     message: "重复定义：\(entry.name)（首次定义在第 \(firstLine) 行）"))
             } else {
                 firstSeenLine[key] = entry.line
+            }
+        }
+
+        // v16.109 规则 6：变量定义名与 builtin/keyword 仅差 1 字符（trader 定义 typo）
+        // 例：MAVRG ≈ MA?（外加 VRG 但 trader 可能想写 MA + 名字）· FOOBAA ≈ FOOBAR
+        // 仅 distance == 1 严格 · 避免误报（MA1/MA5 与 MA 已 distance=1 但是合理变量名）
+        // → 排除：oldName 全为字母前缀 + 数字后缀（如 MA5/EMA10）· trader 标准命名
+        // → 限制：≥ 5 字符才检测（DIF/DEA/MACD 等 trader 常用 3-4 字符变量名距离 builtin 易误报）
+        let builtinAndKeyword: Set<String> = Set(
+            MaiLangSyntaxHighlighter.allCompletionCandidates)
+        for entry in outline {
+            let upper = entry.name.uppercased()
+            // 短名（≤ 4）易误报（DIF≈IF/DEA≈DMA/MACD≈MAD 等 trader 常用）· 跳过
+            guard upper.count >= 5 else { continue }
+            // 跳过：纯 letter+digit 命名（MA5/EMA10/RSI14 等 trader 标准）
+            if isLetterDigitVariable(upper) { continue }
+            // 找距离 = 1 的 builtin
+            if let closest = closestExactDistance(upper, in: builtinAndKeyword, distance: 1) {
+                warnings.append(MaiLangLintWarning(
+                    line: entry.line,
+                    kind: .suspiciousVariableName,
+                    message: "变量名 \(entry.name) 与 builtin/keyword `\(closest)` 仅差 1 字符 · 可能 typo? "))
             }
         }
 
@@ -232,6 +256,38 @@ public enum MaiLangLint {
             }
         }
         return best?.name
+    }
+
+    /// v16.109 · 距离 = N 的 closest match（严格）· nil 表示无
+    static func closestExactDistance(_ word: String, in known: Set<String>, distance: Int) -> String? {
+        guard word.count >= 3 else { return nil }
+        for name in known {
+            guard abs(name.count - word.count) <= distance else { continue }
+            if levenshtein(word, name) == distance {
+                return name   // 找到一个就返回（不需全部最优）
+            }
+        }
+        return nil
+    }
+
+    /// v16.109 · 是否为 "字母前缀 + 数字后缀" 命名（MA5 / EMA10 / RSI14 等 trader 标准）
+    /// 此类命名虽与 builtin 距离 1 但合理 · 不触发 suspiciousVariableName
+    static func isLetterDigitVariable(_ word: String) -> Bool {
+        var seenDigit = false
+        for c in word {
+            if c.isASCII {
+                if c.isLetter {
+                    if seenDigit { return false }   // 字母数字交错 → 非标准
+                } else if c.isNumber {
+                    seenDigit = true
+                } else {
+                    return false
+                }
+            } else {
+                return false
+            }
+        }
+        return seenDigit   // 必须含数字才是 "letter+digit" 模式
     }
 
     /// Levenshtein 距离（动态规划 O(m*n)）· 仅小字符串使用

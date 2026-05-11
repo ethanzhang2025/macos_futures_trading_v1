@@ -302,4 +302,49 @@ struct MaiLangLintTests {
         let mismatch = warns.filter { $0.kind == .argCountMismatch }
         #expect(mismatch.isEmpty)
     }
+
+    // MARK: - v16.109 · suspiciousVariableName 规则
+
+    @Test("v16.109 · isLetterDigitVariable 识别 MA5/EMA10 等标准命名")
+    func suspiciousVariableName_letterDigit() {
+        #expect(MaiLangLint.isLetterDigitVariable("MA5"))
+        #expect(MaiLangLint.isLetterDigitVariable("EMA10"))
+        #expect(MaiLangLint.isLetterDigitVariable("RSI14"))
+        #expect(!MaiLangLint.isLetterDigitVariable("MA"))           // 无数字
+        #expect(!MaiLangLint.isLetterDigitVariable("MA5A"))         // 字母数字交错
+        #expect(!MaiLangLint.isLetterDigitVariable("MAVRG"))        // 无数字 → 非标准
+    }
+
+    @Test("v16.109 · MA5 := ... 标准命名不触发 suspicious")
+    func suspiciousVariableName_skipsStandardNaming() {
+        // MA5:=MA(CLOSE,5);OUT:MA5,COLORRED;
+        // 但 outline 每行只取首个语句 · 分两行
+        let src = """
+        MA5:=MA(CLOSE,5);
+        OUT:MA5,COLORRED;
+        """
+        let warns = MaiLangLint.analyze(src)
+        let sus = warns.filter { $0.kind == .suspiciousVariableName }
+        #expect(sus.isEmpty)
+    }
+
+    @Test("v16.109 · closestExactDistance 距离严格匹配")
+    func suspiciousVariableName_exactDistance() {
+        let known: Set<String> = ["MAX", "MIN", "ABS"]
+        // "MAY" 与 "MAX" 距离 1
+        #expect(MaiLangLint.closestExactDistance("MAY", in: known, distance: 1) == "MAX")
+        // "MABS" 与 "ABS" 距离 1（首字符差）
+        #expect(MaiLangLint.closestExactDistance("MABS", in: known, distance: 1) != nil)
+        // 短词 < 3 字符 → nil
+        #expect(MaiLangLint.closestExactDistance("AB", in: known, distance: 1) == nil)
+    }
+
+    @Test("v16.109 · 短名 ≤ 4 字符不触发（DIF/DEA/MACD trader 常用）")
+    func suspiciousVariableName_skipsShortNames() {
+        // DIF 与 IF（keyword）距离 1 · 但 ≤ 4 字符 → 不触发
+        let src = "DIF:=CLOSE-REF(CLOSE,1);OUT:DIF,COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let sus = warns.filter { $0.kind == .suspiciousVariableName }
+        #expect(sus.isEmpty)
+    }
 }

@@ -77,6 +77,10 @@ struct TrainingWindow: View {
                 DispatchQueue.main.async { viewModel.pendingJumpToRulesTab = false }
             }
         }
+        // v16.58 · 训练结束 sheet 关闭后自动切 history tab（HistoryPanel 接力高亮 + scroll）
+        .onChange(of: viewModel.recentlyAddedSessionID) { newID in
+            if newID != nil { tab = .history }
+        }
         .background(
             Group {
                 Button("") { showHelpSheet = true }

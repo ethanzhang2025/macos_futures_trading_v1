@@ -31,6 +31,9 @@ struct TrainingHistoryPanel: View {
     /// v16.55 · 增量分页 limit · 默认 50 · "加载更多" 每次 +50 · 切 filter/sort/search 自动 reset
     @State private var visibleLimit: Int = 50
     private let pageSize: Int = 50
+    /// v16.58 · 高亮新加 session（dismiss sheet 后 5s · 与 viewModel.recentlyAddedSessionID 同步）
+    @State private var highlightedSessionID: UUID? = nil
+    @State private var highlightClearTask: Task<Void, Never>? = nil
 
     /// v15.23 batch136 · 排序枚举
     enum SortKey: String, CaseIterable {
@@ -699,64 +702,117 @@ struct TrainingHistoryPanel: View {
         let visible = Array(filtered.prefix(visibleLimit))
         let remaining = max(0, totalMatched - visible.count)
         let hasAnyFilter = filterPattern != nil || filterPeriod != .all || !trimmedSearch.isEmpty
-        return List {
-            if visible.isEmpty, hasAnyFilter {
-                HStack {
-                    Spacer()
-                    VStack(spacing: 6) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(.system(size: 24)).foregroundColor(.secondary)
-                        Text("没有匹配的训练记录")
-                            .font(.callout).foregroundColor(.secondary)
-                        Button("清空筛选") {
-                            filterPattern = nil
-                            filterPeriod = .all
-                            searchText = ""
+        return ScrollViewReader { proxy in
+            List {
+                if visible.isEmpty, hasAnyFilter {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 6) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.system(size: 24)).foregroundColor(.secondary)
+                            Text("没有匹配的训练记录")
+                                .font(.callout).foregroundColor(.secondary)
+                            Button("清空筛选") {
+                                filterPattern = nil
+                                filterPeriod = .all
+                                searchText = ""
+                            }
+                            .buttonStyle(.borderless)
                         }
-                        .buttonStyle(.borderless)
+                        Spacer()
                     }
-                    Spacer()
+                    .padding()
                 }
-                .padding()
-            }
-            ForEach(visible) { session in
-                sessionRow(session)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        selectedSessionID = session.id
-                    }
-                    .contextMenu {
-                        Button("查看评分") { selectedSessionID = session.id }
-                        // v15.23 batch158 · 单 session 分享（复用 batch133 + batch146）
-                        if let score = viewModel.log.score(for: session.id) {
+                ForEach(visible) { session in
+                    sessionRow(session)
+                        .id(session.id)   // v16.58 · ScrollViewReader anchor
+                        .listRowBackground(
+                            highlightedSessionID == session.id
+                                ? Color.accentColor.opacity(0.18)
+                                : Color.clear
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            selectedSessionID = session.id
+                        }
+                        .contextMenu {
+                            Button("查看评分") { selectedSessionID = session.id }
+                            // v15.23 batch158 · 单 session 分享（复用 batch133 + batch146）
+                            if let score = viewModel.log.score(for: session.id) {
+                                Divider()
+                                Button {
+                                    let md = TrainingMarkdownReport.generateSingleSession(
+                                        session, score: score)
+                                    let pb = NSPasteboard.general
+                                    pb.clearContents()
+                                    pb.setString(md, forType: .string)
+                                } label: {
+                                    Label("复制单次分析（markdown）", systemImage: "doc.on.doc")
+                                }
+                            }
                             Divider()
-                            Button {
-                                let md = TrainingMarkdownReport.generateSingleSession(
-                                    session, score: score)
-                                let pb = NSPasteboard.general
-                                pb.clearContents()
-                                pb.setString(md, forType: .string)
-                            } label: {
-                                Label("复制单次分析（markdown）", systemImage: "doc.on.doc")
+                            Button("删除", role: .destructive) {
+                                viewModel.log.removeSession(id: session.id)
                             }
                         }
-                        Divider()
-                        Button("删除", role: .destructive) {
-                            viewModel.log.removeSession(id: session.id)
-                        }
-                    }
+                }
+                // v16.55 · 分页底部行（仅剩余 > 0 时显示）
+                if remaining > 0 {
+                    loadMoreRow(remaining: remaining, totalMatched: totalMatched, shown: visible.count)
+                }
             }
-            // v16.55 · 分页底部行（仅剩余 > 0 时显示）
-            if remaining > 0 {
-                loadMoreRow(remaining: remaining, totalMatched: totalMatched, shown: visible.count)
+            .listStyle(.inset)
+            // v16.55 · filter/sort/search 任一变化 → 自动 reset 到第一页（macOS 13 单参数 onChange）
+            .onChange(of: filterPattern) { _ in visibleLimit = pageSize }
+            .onChange(of: filterPeriod) { _ in visibleLimit = pageSize }
+            .onChange(of: sortKey) { _ in visibleLimit = pageSize }
+            .onChange(of: searchText) { _ in visibleLimit = pageSize }
+            // v16.58 · 训练结束 sheet dismiss · viewModel 推 recentlyAddedSessionID · 高亮 5s + scroll
+            .onChange(of: viewModel.recentlyAddedSessionID) { newID in
+                handleRecentlyAdded(newID, proxy: proxy)
             }
         }
-        .listStyle(.inset)
-        // v16.55 · filter/sort/search 任一变化 → 自动 reset 到第一页（macOS 13 单参数 onChange）
-        .onChange(of: filterPattern) { _ in visibleLimit = pageSize }
-        .onChange(of: filterPeriod) { _ in visibleLimit = pageSize }
-        .onChange(of: sortKey) { _ in visibleLimit = pageSize }
-        .onChange(of: searchText) { _ in visibleLimit = pageSize }
+    }
+
+    /// v16.58 · 处理新加 session 接力：清不匹配 filter → highlight → scroll → 5s 自动清
+    private func handleRecentlyAdded(_ newID: UUID?, proxy: ScrollViewProxy) {
+        guard let id = newID,
+              let s = viewModel.log.session(id: id) else { return }
+        // 当前 filter 是否会把它筛掉？若会 · 清掉让 trader 一定看见
+        if !sessionMatchesFilters(s) {
+            filterPattern = nil
+            filterPeriod = .all
+            searchText = ""
+        }
+        // 默认日期降序时新 session 必定在 visible 内 · 其他排序需要 reset 分页保证可见
+        visibleLimit = pageSize
+        highlightedSessionID = id
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                proxy.scrollTo(id, anchor: .top)
+            }
+        }
+        highlightClearTask?.cancel()
+        highlightClearTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if Task.isCancelled { return }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                highlightedSessionID = nil
+            }
+            viewModel.recentlyAddedSessionID = nil
+        }
+    }
+
+    /// v16.58 · 检查 session 是否被当前 filter/search 覆盖
+    private func sessionMatchesFilters(_ s: TrainingSession) -> Bool {
+        if let p = filterPattern, s.scenarioPattern != p { return false }
+        if let cutoff = filterPeriod.cutoff, s.startedAt < cutoff { return false }
+        let trimmed = searchText.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty,
+           !s.scenarioName.localizedCaseInsensitiveContains(trimmed) {
+            return false
+        }
+        return true
     }
 
     /// v16.55 · 列表底部 "加载更多 / 展开全部" 行

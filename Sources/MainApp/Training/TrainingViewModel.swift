@@ -48,6 +48,10 @@ final class TrainingViewModel: ObservableObject {
     @Published var lastFinishedSession: TrainingSession? = nil
     @Published var lastFinishedScore: TrainingScore? = nil
 
+    /// v16.58 · 最近新加 session ID · dismiss sheet 时设 · HistoryPanel 监听高亮 5s + 自动 scroll
+    /// 与 lastFinishedSession 分开持有：sheet 关闭后这个还保留 5s，trader 回到 history 能看清楚是哪条
+    @Published var recentlyAddedSessionID: UUID? = nil
+
     var isSessionActive: Bool { sessionStartedAt != nil }
 
     // MARK: - v16.42 · 暂停/继续（trader 训练中接电话/上厕所 · elapsed 时钟暂停）
@@ -144,6 +148,8 @@ final class TrainingViewModel: ObservableObject {
     }
 
     func dismissLastFinishedSheet() {
+        // v16.58 · 关闭 sheet 前抓取 session id · 让 HistoryPanel 接力高亮 + scroll
+        recentlyAddedSessionID = lastFinishedSession?.id
         lastFinishedSession = nil
         lastFinishedScore = nil
     }

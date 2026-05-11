@@ -10,6 +10,11 @@ struct ShellKeyboardShortcuts: View {
 
     var body: some View {
         Group {
+            // ⌘+K 全局命令面板（v17.2）
+            Button("") { shellVM.showCommandPalette = true }
+                .keyboardShortcut("k", modifiers: [.command])
+                .opacity(0)
+
             // ⌘+1..5 切一级模块
             primaryTabShortcut(.watching,  key: "1")
             primaryTabShortcut(.arbitrage, key: "2")

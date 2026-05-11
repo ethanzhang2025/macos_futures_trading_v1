@@ -38,6 +38,10 @@ public final class ShellViewModel: ObservableObject {
 
     @Published public var groupBindings: [GroupColor: SymbolBinding] = [:]
 
+    // MARK: - v17.2 · 全局命令面板
+
+    @Published public var showCommandPalette: Bool = false
+
     // MARK: - 初始化
 
     public init() {

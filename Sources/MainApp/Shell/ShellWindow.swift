@@ -30,10 +30,14 @@ public struct ShellWindow: View {
                 BottomTradingBar()
             }
             .frame(minWidth: 1000, minHeight: 700)
-            .background(ShellKeyboardShortcuts())  // v17.0 Step 8 · ⌘ 全局快捷键
+            .background(ShellKeyboardShortcuts())
         }
         .navigationTitle("中国期货 Mac 工作台 · v17.0 PoC")
         .environmentObject(shellVM)
+        .sheet(isPresented: $shellVM.showCommandPalette) {
+            ShellCommandPalette(isPresented: $shellVM.showCommandPalette)
+                .environmentObject(shellVM)
+        }
     }
 
     // MARK: - Pane 容器（Step 3 ✅ · ChartScene 真实嵌入 · Step 5 全 18 view 接入）

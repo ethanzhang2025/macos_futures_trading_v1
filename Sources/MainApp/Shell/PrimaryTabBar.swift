@@ -51,7 +51,7 @@ struct PrimaryTabBar: View {
 
     private var globalSearchButton: some View {
         Button {
-            // v17.0 占位 · v17.1 实装 ⌘K 命令面板
+            shellVM.showCommandPalette = true
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass")
@@ -66,7 +66,7 @@ struct PrimaryTabBar: View {
                 .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .help("全局命令面板（v17.1 实装）")
+        .help("全局命令面板（合约 / 模块 / Workspace · ⌘K）")
     }
 
     private var connectionStatus: some View {

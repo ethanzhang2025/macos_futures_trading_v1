@@ -94,6 +94,7 @@ struct TrainingControlBar: View {
                         Text("今日已练 \(today.count) 次 · \(today.minutes) 分")
                             .font(.caption.monospacedDigit())
                             .foregroundColor(.secondary)
+                        todayVsYesterdayChip
                         consecutiveDaysChip
                         sevenDayMiniBar
                     }
@@ -102,6 +103,7 @@ struct TrainingControlBar: View {
                         Text(idleHint)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        todayVsYesterdayChip
                         consecutiveDaysChip
                         sevenDayMiniBar
                     }
@@ -429,6 +431,40 @@ struct TrainingControlBar: View {
             return "先启用至少 1 条纪律规则才能开始训练"
         }
         return "已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
+    }
+
+    /// v16.104 · 今日 vs 昨日次数对比 chip（与 weekly/monthly 同模式 · ControlBar 短时反馈）
+    /// 仅昨日有训练时显示 · 与 streak chip 并列
+    @ViewBuilder
+    private var todayVsYesterdayChip: some View {
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        let today = cal.startOfDay(for: now)
+        guard let yesterday = cal.date(byAdding: .day, value: -1, to: today) else {
+            EmptyView()
+            return
+        }
+        let todayCount = viewModel.log.sessions.filter { $0.startedAt >= today }.count
+        let yesterdayCount = viewModel.log.sessions.filter {
+            $0.startedAt >= yesterday && $0.startedAt < today
+        }.count
+        if yesterdayCount > 0 {
+            let delta = todayCount - yesterdayCount
+            let (icon, color): (String, Color) = {
+                if delta > 0 { return ("arrow.up.right", .red) }
+                if delta < 0 { return ("arrow.down.right", .green) }
+                return ("equal", .secondary)
+            }()
+            HStack(spacing: 1) {
+                Image(systemName: icon)
+                    .font(.system(size: 9))
+                    .foregroundColor(color)
+                Text("vs 昨 \(delta >= 0 ? "+" : "")\(delta)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .tooltip("今日 \(todayCount) 次 vs 昨日 \(yesterdayCount) 次")
+        }
     }
 
     /// v16.79/v16.80 · 连续训练天数 streak chip · 算法提到 TrainingSessionLog.consecutiveTrainingDays

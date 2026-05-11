@@ -197,14 +197,12 @@ public enum SimpleBacktestEngine {
     /// 标准差为 0 → 返回 0（避免 NaN）
     private static func barReturnsSharpe(equityCurve: [Decimal]) -> Double {
         guard equityCurve.count >= 2 else { return 0 }
-        var returns: [Double] = []
-        returns.reserveCapacity(equityCurve.count - 1)
-        for i in 1..<equityCurve.count {
-            let r = NSDecimalNumber(decimal: equityCurve[i] - equityCurve[i - 1]).doubleValue
-            returns.append(r)
+        let returns: [Double] = (1..<equityCurve.count).map { i in
+            NSDecimalNumber(decimal: equityCurve[i] - equityCurve[i - 1]).doubleValue
         }
-        let mean = returns.reduce(0, +) / Double(returns.count)
-        let variance = returns.map { pow($0 - mean, 2) }.reduce(0, +) / Double(returns.count)
+        let n = Double(returns.count)
+        let mean = returns.reduce(0, +) / n
+        let variance = returns.reduce(0) { acc, r in acc + (r - mean) * (r - mean) } / n
         let std = variance.squareRoot()
         guard std > 1e-12 else { return 0 }
         return mean / std

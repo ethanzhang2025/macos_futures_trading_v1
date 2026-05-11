@@ -627,11 +627,11 @@ struct TrainingHistoryPanel: View {
     }
 
     /// v16.62 · 全部 sessions 5 维平均 chip 行（trader 月度五维倾向）
+    /// v16.73 · tooltip 加 min/max/N · trader hover 看 spread
     /// 数据源：log.scores subScores · 仅含 v2 评分的 session（老 session 缺 subScores 跳过）
     /// 最低维度橙色高亮 · trader 一眼看月度最弱
     private var fiveDimAverageRow: some View {
-        struct DimAvg { let dim: TrainingSubScores.Dimension; let avg: Int }
-        // 聚合所有 session subScores 求平均（缺失 subScores 的旧 session 自动跳过）
+        struct DimStat { let dim: TrainingSubScores.Dimension; let avg: Int; let min: Int; let max: Int }
         let subs = viewModel.log.sessions.compactMap {
             viewModel.log.score(for: $0.id)?.subScores
         }
@@ -639,21 +639,29 @@ struct TrainingHistoryPanel: View {
             if subs.isEmpty {
                 EmptyView()
             } else {
-                let n = Double(subs.count)
-                let avgs: [DimAvg] = [
-                    .init(dim: .pnl,       avg: Int(round(Double(subs.map(\.pnl).reduce(0, +)) / n))),
-                    .init(dim: .discipline, avg: Int(round(Double(subs.map(\.discipline).reduce(0, +)) / n))),
-                    .init(dim: .winRate,   avg: Int(round(Double(subs.map(\.winRate).reduce(0, +)) / n))),
-                    .init(dim: .risk,      avg: Int(round(Double(subs.map(\.risk).reduce(0, +)) / n))),
-                    .init(dim: .efficiency, avg: Int(round(Double(subs.map(\.efficiency).reduce(0, +)) / n))),
+                let n = subs.count
+                func stat(_ dim: TrainingSubScores.Dimension, _ values: [Int]) -> DimStat {
+                    DimStat(
+                        dim: dim,
+                        avg: Int(round(Double(values.reduce(0, +)) / Double(n))),
+                        min: values.min() ?? 0,
+                        max: values.max() ?? 0
+                    )
+                }
+                let stats: [DimStat] = [
+                    stat(.pnl,       subs.map(\.pnl)),
+                    stat(.discipline, subs.map(\.discipline)),
+                    stat(.winRate,   subs.map(\.winRate)),
+                    stat(.risk,      subs.map(\.risk)),
+                    stat(.efficiency, subs.map(\.efficiency)),
                 ]
-                let worstAvg = avgs.min(by: { $0.avg < $1.avg })?.avg ?? 0
+                let worstAvg = stats.min(by: { $0.avg < $1.avg })?.avg ?? 0
                 HStack(spacing: 6) {
                     Text("🔬 五维")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                         .frame(width: 38, alignment: .leading)
-                    ForEach(avgs, id: \.dim) { d in
+                    ForEach(stats, id: \.dim) { d in
                         let isWeakest = d.avg == worstAvg
                         HStack(spacing: 2) {
                             Text(d.dim.emoji).font(.system(size: 11))
@@ -665,7 +673,7 @@ struct TrainingHistoryPanel: View {
                         .padding(.vertical, 2)
                         .background((isWeakest ? Color.orange : Color.secondary).opacity(0.10))
                         .cornerRadius(3)
-                        .tooltip("\(d.dim.displayName)：\(subs.count) 次 v2 评分平均 = \(d.avg)")
+                        .tooltip("\(d.dim.displayName)：\(n) 次 v2 评分 · 平均 \(d.avg) · 最低 \(d.min) · 最高 \(d.max) · spread \(d.max - d.min)")
                     }
                     Spacer()
                 }

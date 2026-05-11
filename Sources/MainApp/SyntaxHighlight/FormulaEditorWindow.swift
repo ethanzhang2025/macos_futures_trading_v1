@@ -175,7 +175,9 @@ public struct FormulaEditorWindow: View {
                         MaiLangCodeView(text: .constant(splitTab.content),
                                         scheme: scheme,
                                         fontSize: CGFloat(fontSizeStored),
-                                        isEditable: false)
+                                        isEditable: false,
+                                        // v16.96 · split view 右 pane 也显示 lint 行内波浪线（与左 pane 一致）
+                                        lintWarnings: MaiLangLint.analyze(splitTab.content))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(maxWidth: .infinity)

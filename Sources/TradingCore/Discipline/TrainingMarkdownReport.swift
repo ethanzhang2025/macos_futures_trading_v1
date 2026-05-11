@@ -95,6 +95,9 @@ public enum TrainingMarkdownReport {
         // v16.63 · 五维平均（仅含 v2 subScores 的 session · 旧 session 自动跳过）
         md += fiveDimAverageMarkdown(sessions: sessions, log: log)
 
+        // v16.118 · 训练时长分布（短/中/长 · trader 看专注时长习惯）
+        md += durationDistributionMarkdown(sessions: sessions)
+
         // 最近训练（filtered sessions desc by endedAt · 取前 recentLimit）
         md += "## 最近训练\n\n"
         let recent = sessions
@@ -118,6 +121,33 @@ public enum TrainingMarkdownReport {
             }
         }
 
+        return md
+    }
+
+    /// v16.118 · 训练时长分布 markdown 章节（短/中/长 3 段 · trader 专注习惯）
+    /// 短：< 15 分（试探 / 中断）· 中：15-30 分（专注训练）· 长：> 30 分（完整复盘）
+    private static func durationDistributionMarkdown(sessions: [TrainingSession]) -> String {
+        guard !sessions.isEmpty else { return "" }
+        let shortCount = sessions.filter { $0.durationMinutes < 15 }.count
+        let mediumCount = sessions.filter { $0.durationMinutes >= 15 && $0.durationMinutes <= 30 }.count
+        let longCount = sessions.filter { $0.durationMinutes > 30 }.count
+        let total = sessions.count
+        func pct(_ n: Int) -> String {
+            String(format: "%.0f", Double(n) / Double(total) * 100)
+        }
+        var md = "## 训练时长分布（trader 专注习惯）\n\n"
+        md += "| 分段 | 次数 | 占比 |\n"
+        md += "|------|------|------|\n"
+        md += "| 🏃 短 (< 15 分) | \(shortCount) | \(pct(shortCount))% |\n"
+        md += "| 🎯 中 (15-30 分) | \(mediumCount) | \(pct(mediumCount))% |\n"
+        md += "| 🧘 长 (> 30 分) | \(longCount) | \(pct(longCount))% |\n"
+        md += "\n"
+        // 建议
+        if shortCount > total / 2 {
+            md += "**💡 建议**：超过半数训练 < 15 分钟 · 可能过于试探 / 中断频繁 · 建议至少 15 分钟一次专注训练\n\n"
+        } else if longCount > total / 2 {
+            md += "**💡 建议**：超过半数训练 > 30 分钟 · 单次过长可能效率递减 · 建议拆短 + 中间休息\n\n"
+        }
         return md
     }
 

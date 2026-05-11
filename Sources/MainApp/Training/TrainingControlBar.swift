@@ -430,7 +430,11 @@ struct TrainingControlBar: View {
         if viewModel.book.enabledRules.isEmpty {
             return "⚠️ 先启用至少 1 条纪律规则才能开始训练"
         }
-        var hint = "✅ 已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
+        // v16.166 · 显示 "已启用 X / 共 Y" 格式（trader 看启用占比）
+        let enabled = viewModel.book.enabledRules.count
+        let total = viewModel.book.rules.count
+        let countText = enabled == total ? "全部 \(total) 条" : "\(enabled) / \(total) 条"
+        var hint = "✅ 已启用 \(countText)规则 · 准备就绪"
         // v16.132 · 上次训练距今（trader 看间隔 · 避免长时间不练）
         // v16.159 · > 24h 加 🔔 / > 72h 加 ⏰ 警示（提醒重新开始）
         if let last = viewModel.log.sessions.map(\.endedAt).max() {

@@ -185,8 +185,8 @@ public enum TrainingMarkdownReport {
         if recent.isEmpty {
             md += "_暂无训练记录_\n"
         } else {
-            md += "| 日期 | 场景 | 形态 | 总分 | 等级 | 盈亏% |\n"
-            md += "|------|------|------|------|------|-------|\n"
+            md += "| 日期 | 场景 | 形态 | 总分 | 等级 | 5 维 | 盈亏% |\n"
+            md += "|------|------|------|------|------|------|-------|\n"
             for session in recent {
                 let s = log.score(for: session.id)
                 let date = formatDateTime(session.endedAt)
@@ -195,8 +195,13 @@ public enum TrainingMarkdownReport {
                     .map { "\($0.emoji) \($0.displayName)" } ?? "—"
                 let total = "\(s?.totalScore ?? 0)"
                 let grade = s?.grade.emoji ?? "—"
+                // v16.198 · 5 维 emoji dots（与 HistoryPanel v16.150 mini dots 同 4 阶梯）
+                let dotsStr: String = {
+                    guard let sub = s?.subScores else { return "—" }
+                    return sub.ordered.map { scoreToDot($0.score) }.joined()
+                }()
                 let pnlPct = String(format: "%+.2f", (session.pnlPercent as NSDecimalNumber).doubleValue)
-                md += "| \(date) | \(scenarioName) | \(patternStr) | \(total) | \(grade) | \(pnlPct)% |\n"
+                md += "| \(date) | \(scenarioName) | \(patternStr) | \(total) | \(grade) | \(dotsStr) | \(pnlPct)% |\n"
             }
         }
 
@@ -461,6 +466,16 @@ public enum TrainingMarkdownReport {
         }
         md += "\n"
         return md
+    }
+
+    /// v16.198 · 5 维分数 → emoji 圆点（与 HistoryPanel mini dots 同 4 阶梯 · markdown 可渲染）
+    private static func scoreToDot(_ s: Int) -> String {
+        switch s {
+        case 80...:  return "🟢"
+        case 60...:  return "🔵"
+        case 40...:  return "🟠"
+        default:     return "🔴"
+        }
     }
 
     /// v16.195 · 本月平均 vs 全期平均对比 · trader 看本月相对自己历史水平

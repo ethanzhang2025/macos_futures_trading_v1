@@ -781,7 +781,7 @@ struct ReviewWindow: View {
                 // v16.39 · 月报含 base64 PNG 图（trader 邮件粘贴可见图但 markdown 大）
                 Toggle("月报含图", isOn: $exportReportWithCharts)
                     .toggleStyle(.checkbox)
-                    .tooltip("勾选后月报/周报末尾追加 3 张关键图（base64 PNG · 邮件粘贴可见图 · 但 markdown 文件 ~500KB）")
+                    .tooltip("勾选后月报/周报末尾追加 4 张关键图（盈亏 + 胜率 + 心理洞察 + Setup × Pattern · base64 PNG · 邮件可见 · markdown 文件 ~700KB）")
                 // v15.21 batch114 · ⌘R 重新加载复盘数据（trader 实时数据更新或纠错重算）
                 Button {
                     summary = nil
@@ -1063,7 +1063,8 @@ struct ReviewWindow: View {
         return md
     }
 
-    /// 月报/周报关键 3 图 markdown（按 flag 开 · 默认 nil 不嵌入）
+    /// 月报/周报关键 4 图 markdown（按 flag 开 · 默认 nil 不嵌入）
+    /// v16.57 · 加 Setup × Pattern 矩阵（与 v16.47 第 15 张卡片视觉一致）
     @MainActor
     private func keyChartsMarkdownIfEnabled(_ s: ReviewSummary) -> String {
         guard exportReportWithCharts else { return "" }
@@ -1072,6 +1073,7 @@ struct ReviewWindow: View {
             ("月度盈亏", AnyView(monthlyPnLChart(s.monthlyPnL))),
             ("胜率曲线", AnyView(winRateChart(s.winRateCurve))),
             ("心理风险洞察", AnyView(psychInsightView(s.psychTagCounts))),
+            ("Setup × Pattern 矩阵", AnyView(setupPatternHeatmapView(s))),
         ]
         for (title, view) in charts {
             if let seg = renderChartToBase64Markdown(title: title, content: view) {

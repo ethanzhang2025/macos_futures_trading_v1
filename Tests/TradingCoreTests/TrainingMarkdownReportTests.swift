@@ -373,4 +373,22 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("古早"))
         #expect(md.contains("总训练次数：**1**"))
     }
+
+    // MARK: - v16.63 · 五维平均章节
+
+    @Test("v16.63 · 含 v2 subScores 的 session 输出五维平均章节")
+    func fiveDimAverageSection() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "s1", pnl: 5000))   // 评分含 subScores
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("五维平均"))
+        #expect(md.contains("v2 评分"))
+        #expect(md.contains("最弱"))   // 必有最弱标记
+    }
+
+    @Test("v16.63 · 空 log 不输出五维平均章节")
+    func fiveDimAverageEmptyLog() {
+        let md = TrainingMarkdownReport.generate(TrainingSessionLog())
+        #expect(!md.contains("五维平均"))
+    }
 }

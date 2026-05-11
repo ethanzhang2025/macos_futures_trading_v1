@@ -68,6 +68,9 @@ public enum TrainingMarkdownReport {
         md += "## 形态分布\n\n"
         md += patternDistributionMarkdown(sessions: sessions, log: log)
 
+        // v16.63 · 五维平均（仅含 v2 subScores 的 session · 旧 session 自动跳过）
+        md += fiveDimAverageMarkdown(sessions: sessions, log: log)
+
         // 最近训练（filtered sessions desc by endedAt · 取前 recentLimit）
         md += "## 最近训练\n\n"
         let recent = sessions
@@ -91,6 +94,35 @@ public enum TrainingMarkdownReport {
             }
         }
 
+        return md
+    }
+
+    /// v16.63 · 五维平均 markdown 章节（与 HistoryPanel fiveDimAverageRow / CSV 五维列同源）
+    /// 仅 v2 subScores 非 nil 的 session 参与 · 老 session 自动跳过
+    /// 输出表格 · 最弱维度 emoji 加 ⚠ 标记 · trader 月度看五维倾向
+    private static func fiveDimAverageMarkdown(sessions: [TrainingSession],
+                                                log: TrainingSessionLog) -> String {
+        let subs = sessions.compactMap { log.score(for: $0.id)?.subScores }
+        guard !subs.isEmpty else { return "" }
+        let n = subs.count
+        let avgPnl = subs.map(\.pnl).reduce(0, +) / n
+        let avgDisc = subs.map(\.discipline).reduce(0, +) / n
+        let avgWin = subs.map(\.winRate).reduce(0, +) / n
+        let avgRisk = subs.map(\.risk).reduce(0, +) / n
+        let avgEff = subs.map(\.efficiency).reduce(0, +) / n
+        let items: [(TrainingSubScores.Dimension, Int)] = [
+            (.pnl, avgPnl), (.discipline, avgDisc), (.winRate, avgWin),
+            (.risk, avgRisk), (.efficiency, avgEff),
+        ]
+        let worst = items.min(by: { $0.1 < $1.1 })?.0 ?? .pnl
+        var md = "## 五维平均（v2 评分 · \(n) 次）\n\n"
+        md += "| 维度 | 均分 |\n"
+        md += "|------|------|\n"
+        for (dim, avg) in items {
+            let marker = dim == worst ? " ⚠ 最弱" : ""
+            md += "| \(dim.emoji) \(dim.displayName) | \(avg)\(marker) |\n"
+        }
+        md += "\n"
         return md
     }
 

@@ -140,18 +140,39 @@ struct PaneHeader: View {
     }
 }
 
-// MARK: - PaneBody · 按 PaneKind 实例化 view
+// MARK: - PaneBody · 按 PaneKind 实例化 view（v17.0 Step 5 · 全 20 类接入）
 
 struct PaneBody: View {
     let config: PaneConfig
 
     var body: some View {
         switch config.kind {
-        case .chart:
-            ChartScene()
-        default:
-            // Step 5 适配其他 27 view · Step 3 仅嵌入 ChartScene · 其他用占位
-            placeholderFor(config.kind)
+        // 看盘类
+        case .chart:              ChartScene()
+        case .watchlist:          WatchlistWindow()
+        case .sectorHeatmap:      SectorWindow()
+        case .anomalyMonitor:     AnomalyMonitorWindow()
+        case .multiChart:         placeholderFor(config.kind)  // MultiChartHost 需 host 参数 · Step 5+ 适配
+        // 套利类
+        case .spread:             SpreadWindow()
+        case .calendarSpread:     CalendarSpreadWindow()
+        case .spreadAlert:        SpreadAlertWindow()
+        // 期权类
+        case .option:             OptionWindow()
+        case .optionBacktest:     placeholderFor(config.kind)  // Sheet · Step 5+ 包成 Window
+        // 复盘类
+        case .review:             ReviewWindow()
+        case .journal:            JournalWindow()
+        // 训练类
+        case .training:           TrainingWindow()
+        case .formulaEditor:      FormulaEditorWindow()
+        // 工具类
+        case .position:           PositionWindow()
+        case .correlation:        CorrelationWindow()
+        case .moneyFlow:          MoneyFlowWindow()
+        case .heatmap:            HeatmapWindow()
+        case .instrumentDashboard: InstrumentDashboardWindow()
+        case .sessionCompare:     SessionCompareWindow()
         }
     }
 
@@ -161,7 +182,7 @@ struct PaneBody: View {
             Text(kind.emoji).font(.system(size: 40))
             Text(kind.displayName)
                 .font(.title3.bold())
-            Text("Step 5 实装：嵌入对应 view")
+            Text("Step 5+ 适配（需特殊 init / host 参数）")
                 .font(.caption).foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

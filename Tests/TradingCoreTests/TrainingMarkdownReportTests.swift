@@ -391,4 +391,40 @@ struct TrainingMarkdownReportTests {
         let md = TrainingMarkdownReport.generate(TrainingSessionLog())
         #expect(!md.contains("五维平均"))
     }
+
+    // MARK: - v16.86/91 · streak overview
+
+    @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")
+    func streakNewRecord() {
+        var log = TrainingSessionLog()
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        // 连续 3 天（今天 + 昨天 + 前天）· 历史最长 = 3 · 当前 = 3
+        for offset in 0...2 {
+            let d = cal.date(byAdding: .day, value: -offset, to: now)!
+            log.addSession(TrainingSession(
+                startedAt: d, endedAt: d.addingTimeInterval(60),
+                initialBalance: 100_000, finalBalance: 100_000))
+        }
+        let md = TrainingMarkdownReport.generate(log, generatedAt: now)
+        #expect(md.contains("当前连训"))
+        #expect(md.contains("新纪录"))
+    }
+
+    @Test("v16.91 · 当前已中断但历史 ≥ 3 天 → 重启提示")
+    func streakInterruptedShowsHistory() {
+        var log = TrainingSessionLog()
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        // 5 天前-7 天前 = 历史 3 连训 · 今天/昨天 = 0 · 当前断
+        for offset in 5...7 {
+            let d = cal.date(byAdding: .day, value: -offset, to: now)!
+            log.addSession(TrainingSession(
+                startedAt: d, endedAt: d.addingTimeInterval(60),
+                initialBalance: 100_000, finalBalance: 100_000))
+        }
+        let md = TrainingMarkdownReport.generate(log, generatedAt: now)
+        #expect(md.contains("历史最长连训"))
+        #expect(md.contains("重新开始"))
+    }
 }

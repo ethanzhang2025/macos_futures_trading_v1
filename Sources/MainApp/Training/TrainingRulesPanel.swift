@@ -350,6 +350,7 @@ struct TrainingRulesPanel: View {
     /// v16.130 · 该 rule kind 的历史违规次数 badge
     /// 0 不显示 · 1 灰 · 2-4 橙 · 5+ 红 · trader 一眼看痛点规则
     /// v16.136 · tooltip 加最近 5 次违规 session 名（与 v16.135 HistoryPanel chip 同模式）
+    /// v16.212 · tooltip 加 trend 最近 5 session vs 前 5 session 违规次数对比（≥10 session 才显示）
     @ViewBuilder
     private func violationCountBadge(for kind: DisciplineRuleKind) -> some View {
         let count = viewModel.log.sessions
@@ -369,9 +370,22 @@ struct TrainingRulesPanel: View {
                 .sorted { $0.endedAt > $1.endedAt }
                 .prefix(5)
                 .map { $0.scenarioName.isEmpty ? "(未命名)" : $0.scenarioName }
-            let tip: String = recentNames.isEmpty
-                ? "历史违反该规则 \(count) 次"
-                : "历史违反该规则 \(count) 次\n最近 \(recentNames.count) 次：\n" + recentNames.map { "· \($0)" }.joined(separator: "\n")
+            var lines: [String] = ["历史违反该规则 \(count) 次"]
+            if !recentNames.isEmpty {
+                lines.append("最近 \(recentNames.count) 次：")
+                lines.append(contentsOf: recentNames.map { "· \($0)" })
+            }
+            // v16.212 · 趋势对比（最近 5 session vs 前 5 session 该 kind 违规计数）
+            let allSorted = viewModel.log.sessions.sorted { $0.endedAt > $1.endedAt }
+            if allSorted.count >= 10 {
+                let recentN = allSorted.prefix(5).flatMap { $0.violations }.filter { $0.ruleKind == kind }.count
+                let prevN = allSorted.dropFirst(5).prefix(5).flatMap { $0.violations }.filter { $0.ruleKind == kind }.count
+                let delta = recentN - prevN
+                let arrow = delta > 0 ? "↑" : (delta < 0 ? "↓" : "−")
+                let sign = delta > 0 ? "+" : ""
+                lines.append("趋势 最近 5 vs 前 5：\(arrow) \(sign)\(delta)（\(recentN) vs \(prevN)）")
+            }
+            let tip = lines.joined(separator: "\n")
             Text("⚠️ \(count)")
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(color)

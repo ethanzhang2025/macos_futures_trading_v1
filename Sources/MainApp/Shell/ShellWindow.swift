@@ -30,6 +30,7 @@ public struct ShellWindow: View {
                 BottomTradingBar()
             }
             .frame(minWidth: 1000, minHeight: 700)
+            .background(ShellKeyboardShortcuts())  // v17.0 Step 8 · ⌘ 全局快捷键
         }
         .navigationTitle("中国期货 Mac 工作台 · v17.0 PoC")
         .environmentObject(shellVM)

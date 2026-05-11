@@ -404,6 +404,7 @@ public struct MaiLangCodeView: NSViewRepresentable {
 
         /// v15.22 batch9 · 自动补全候选（NSTextView 默认 F5 / Esc 触发 popup）
         /// v16.59 · Ctrl+Space 触发（attachKeyMonitor · 即使空 prefix 也弹）· 空 prefix 时返回全部
+        /// v16.102 · prefix 无匹配 → fallback 子序列 fuzzy 匹配（trader 输 EXPADMA 命中 EXPANDMAX）
         /// trader 输入"M" → Esc → 弹 MA / MAX / MIN / MEDIAN / MOD / MULAR 等候选
         public func textView(_ textView: NSTextView,
                              completions words: [String],
@@ -411,12 +412,37 @@ public struct MaiLangCodeView: NSViewRepresentable {
                              indexOfSelectedItem index: UnsafeMutablePointer<Int>?) -> [String] {
             let prefix = (textView.string as NSString).substring(with: charRange).uppercased()
             let all = MaiLangSyntaxHighlighter.allCompletionCandidates
-            // v16.59 · 空 prefix（Ctrl+Space 光标在空白处）→ 返回全部候选 · NSTextView popup 自带滚动
-            let candidates = prefix.isEmpty ? all : all.filter { $0.hasPrefix(prefix) }
-            if !candidates.isEmpty, let idx = index {
+            // v16.59 · 空 prefix（Ctrl+Space 光标在空白处）→ 返回全部候选
+            if prefix.isEmpty {
+                if let idx = index { idx.pointee = 0 }
+                return all
+            }
+            // 优先 prefix 匹配
+            let prefixMatches = all.filter { $0.hasPrefix(prefix) }
+            if !prefixMatches.isEmpty {
+                if let idx = index { idx.pointee = 0 }
+                return prefixMatches
+            }
+            // v16.102 · prefix 无命中 → fuzzy 子序列匹配（query chars 按顺序在 candidate 内 · 不必连续）
+            // 例：EXPADMA → EXPANDMAX（E-X-P-A-D-M-A 按序）· FOOBR → 无匹配
+            // 仅 prefix ≥ 3 字符才 fuzzy（防短词太多噪音）
+            guard prefix.count >= 3 else { return [] }
+            let fuzzyMatches = all.filter { isSubsequence(prefix, of: $0) }
+                                  .sorted { $0.count < $1.count }   // 短的更可能是 trader 想要的
+            if !fuzzyMatches.isEmpty, let idx = index {
                 idx.pointee = 0
             }
-            return candidates
+            return fuzzyMatches
+        }
+
+        /// v16.102 · 子序列匹配（query chars 按顺序出现在 target · 不必连续）
+        private func isSubsequence(_ query: String, of target: String) -> Bool {
+            var qi = query.startIndex
+            for c in target {
+                if qi == query.endIndex { return true }
+                if query[qi] == c { qi = query.index(after: qi) }
+            }
+            return qi == query.endIndex
         }
 
         // MARK: - v16.10 · hover popover（替代 .toolTip 系统 1s 延迟 · 200ms 防抖立即显示）

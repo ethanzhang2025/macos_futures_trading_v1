@@ -2,8 +2,8 @@
 //
 // 职责：
 //   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedIDs
-//   - 用 SwiftUI Canvas 绘制 19 种画线类型（v17.15 后）：
-//     trendLine / horizontalLine / verticalLine / priceLabel / ray / arrow / rectangle / parallelChannel / channel / fibonacci / text /
+//   - 用 SwiftUI Canvas 绘制 20 种画线类型（v17.16 后）：
+//     trendLine / horizontalLine / verticalLine / priceLabel / ray / arrow / rectangle / parallelChannel / channel / fibonacci / fibonacciExtension / text /
 //     ellipse / ruler / pitchfork / polygon /
 //     fibonacciFan / priceZone / gannFan / fibonacciTimeZone
 //   - 选中态高亮（线宽 +1.0 · 色彩饱和度提高）· v13.9 升级支持多选
@@ -128,6 +128,7 @@ public struct DrawingsOverlayView: View {
         case .parallelChannel:  drawParallelChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .channel:          drawChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacci:        drawFibonacci(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .fibonacciExtension: drawFibonacciExtension(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .text:             drawText(drawing, ctx, size, baseColor, opacity)
         case .ellipse:          drawEllipse(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .ruler:            drawRuler(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
@@ -318,6 +319,30 @@ public struct DrawingsOverlayView: View {
             path.move(to: CGPoint(x: 0, y: y))
             path.addLine(to: CGPoint(x: size.width, y: y))
             ctx.stroke(path, with: .color(color.opacity(0.7 * opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: dash))
+            let pct = NSDecimalNumber(decimal: levels[i]).doubleValue * 100
+            let priceLabel = formatPrice(price)
+            let text = Text(String(format: "%.1f%% %@", pct, priceLabel))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(color)
+            ctx.draw(text, at: CGPoint(x: 4, y: y - 8))
+        }
+    }
+
+    /// v17.16 A4.1 · 斐波扩展 · 突破后目标位（all ratios > 1.0 · 1.0 = B 锚 · 1.272/1.414/1.618/2/2.618 = projection）
+    private func drawFibonacciExtension(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard d.endPoint != nil else { return }
+        let prices = DrawingGeometry.fibonacciExtensionPrices(for: d)
+        let levels = FibonacciLevels.projection
+        for (i, price) in prices.enumerated() {
+            let y = yForPrice(price, size: size)
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: size.width, y: y))
+            // 1.0（B 锚）实线 · 其余虚线（区分主锚 / 外推目标）
+            let isAnchor = (levels[i] == 1)
+            let lineDash: [CGFloat] = isAnchor ? dash : (dash.isEmpty ? [4, 3] : dash)
+            ctx.stroke(path, with: .color(color.opacity((isAnchor ? 0.9 : 0.7) * opacity)),
+                       style: StrokeStyle(lineWidth: width * (isAnchor ? 1.0 : 0.8), dash: lineDash))
             let pct = NSDecimalNumber(decimal: levels[i]).doubleValue * 100
             let priceLabel = formatPrice(price)
             let text = Text(String(format: "%.1f%% %@", pct, priceLabel))
@@ -593,6 +618,7 @@ public struct DrawingsOverlayView: View {
         case .parallelChannel: return Color(red: 0.96, green: 0.27, blue: 0.27)  // 红
         case .channel:         return Color(red: 0.95, green: 0.55, blue: 0.85)  // 粉紫（v17.11 · 回归通道 · 与 parallelChannel 红区分）
         case .fibonacci:       return Color(red: 1.00, green: 0.55, blue: 0.18)  // 橙
+        case .fibonacciExtension: return Color(red: 0.95, green: 0.78, blue: 0.30)  // 金黄（v17.16 · 与 fibonacci 橙互补 · 同语义不同方向）
         case .text:            return .white
         case .ellipse:         return Color(red: 0.18, green: 0.83, blue: 0.74)  // 青（v13.13）
         case .ruler:           return Color(red: 0.96, green: 0.69, blue: 0.18)  // 金（v13.14）

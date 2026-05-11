@@ -29,6 +29,16 @@ public enum FibonacciLevels {
         Decimal(string: "0.5")!,
         Decimal(string: "0.618")!
     ]
+
+    /// v17.16 A4.1 · 斐波扩展（projection）比例 · 突破后目标位（all > 1.0 · 1.0 = B 锚点 · 之后为外推）
+    public static let projection: [Decimal] = [
+        1,
+        Decimal(string: "1.272")!,
+        Decimal(string: "1.414")!,
+        Decimal(string: "1.618")!,
+        Decimal(string: "2")!,
+        Decimal(string: "2.618")!
+    ]
 }
 
 /// 江恩 9 角度（v15.89 · num/den 表示 ratio = num × dy_unit / den · 1×1 = 主线 45°）
@@ -61,6 +71,17 @@ public enum DrawingGeometry {
     /// - Returns: 与 levels 同长的价格数组；非 fibonacci 类型或缺 endPoint 返回空
     public static func fibonacciPrices(for drawing: Drawing, levels: [Decimal] = FibonacciLevels.standard) -> [Decimal] {
         guard drawing.type == .fibonacci, let end = drawing.endPoint else { return [] }
+        let p0 = drawing.startPoint.price
+        let p1 = end.price
+        let span = p1 - p0
+        return levels.map { p0 + span * $0 }
+    }
+
+    /// v17.16 A4.1 · 斐波扩展（projection）价格序列 · 突破后目标位
+    /// - 计算同 fibonacci · 仅 levels 改为 > 1.0（外推到 B 之外）
+    /// - Returns: 与 levels 同长的价格数组；非 fibonacciExtension / 缺 endPoint 返回空
+    public static func fibonacciExtensionPrices(for drawing: Drawing, levels: [Decimal] = FibonacciLevels.projection) -> [Decimal] {
+        guard drawing.type == .fibonacciExtension, let end = drawing.endPoint else { return [] }
         let p0 = drawing.startPoint.price
         let p1 = end.price
         let span = p1 - p0

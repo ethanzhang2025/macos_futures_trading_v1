@@ -88,6 +88,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .parallelChannel: return "平行通道"
     case .channel:         return "通道线"
     case .fibonacci:       return "斐波那契"
+    case .fibonacciExtension: return "斐波扩展"
     case .text:            return "文字标注"
     case .ellipse:         return "椭圆"
     case .ruler:           return "测量工具"
@@ -924,6 +925,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "lines.measurement.horizontal", tool: .parallelChannel, help: "平行通道（双点 · 默认 +1.0 偏移）")
             drawingToolButton(icon: "chart.line.uptrend.xyaxis", tool: .channel, help: "通道线（双点定 bar 范围 · 内部线性回归 + ±1σ 平行 · 自动等距）")
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
+            drawingToolButton(icon: "arrow.up.right.and.arrow.down.left.rectangle", tool: .fibonacciExtension, help: "斐波扩展（双点 · 突破后目标位 1.272/1.414/1.618/2/2.618）")
             drawingToolButton(icon: "wand.and.rays", tool: .fibonacciFan, help: "斐波那契扇形（双点 · 38.2/50/61.8 三射线）")
             drawingToolButton(icon: "rectangle.split.1x2", tool: .priceZone, help: "价格区域（双点 · 上下价格全图横跨 · 关键支撑/阻力带）")
             drawingToolButton(icon: "fanblades", tool: .gannFan, help: "江恩扇形（双点定 1×1 · 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）")
@@ -4039,6 +4041,17 @@ struct ChartContentView: View {
             }
             return minD
 
+        case .fibonacciExtension:
+            // v17.16 A4.1 · 斐波扩展 hit test · 同 fibonacci 模式（6 条水平线最小距离）
+            guard drawing.endPoint != nil else { return .infinity }
+            let prices = DrawingGeometry.fibonacciExtensionPrices(for: drawing)
+            var minD: CGFloat = .infinity
+            for price in prices {
+                let y = screenPoint(DrawingPoint(barIndex: drawing.startPoint.barIndex, price: price)).y
+                minD = min(minD, abs(p.y - y))
+            }
+            return minD
+
         case .text:
             let pt = screenPoint(drawing.startPoint)
             return hypot(p.x - pt.x, p.y - pt.y)
@@ -4184,6 +4197,8 @@ struct ChartContentView: View {
             return Drawing.parallelChannel(from: firstPoint, to: hoverPoint, offset: offset)
         case .fibonacci:
             return Drawing.fibonacci(from: firstPoint, to: hoverPoint)
+        case .fibonacciExtension:
+            return Drawing.fibonacciExtension(from: firstPoint, to: hoverPoint)
         case .fibonacciFan:
             return Drawing.fibonacciFan(from: firstPoint, to: hoverPoint)
         case .priceZone:

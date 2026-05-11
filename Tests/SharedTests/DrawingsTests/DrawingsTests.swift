@@ -11,7 +11,7 @@ private func point(_ bar: Int, _ price: Int) -> DrawingPoint {
 
 @Suite("Drawing 创建与类型契约")
 struct DrawingFactoryTests {
-    @Test("19 种 factory 类型正确（v17.14 箭头 · v17.15 价格标签 补齐）")
+    @Test("20 种 factory 类型正确（v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 补齐）")
     func factoryTypes() {
         #expect(Drawing.trendLine(from: point(0, 100), to: point(10, 110)).type == .trendLine)
         #expect(Drawing.horizontalLine(price: 100).type == .horizontalLine)
@@ -23,6 +23,7 @@ struct DrawingFactoryTests {
         #expect(Drawing.parallelChannel(from: point(0, 100), to: point(10, 110), offset: 5).type == .parallelChannel)
         #expect(Drawing.channel(from: point(0, 100), to: point(10, 100)).type == .channel)
         #expect(Drawing.fibonacci(from: point(0, 100), to: point(10, 110)).type == .fibonacci)
+        #expect(Drawing.fibonacciExtension(from: point(0, 100), to: point(10, 110)).type == .fibonacciExtension)
         #expect(Drawing.text(at: point(5, 105), content: "买入").type == .text)
         #expect(Drawing.ellipse(from: point(0, 100), to: point(10, 110)).type == .ellipse)
         #expect(Drawing.ruler(from: point(0, 100), to: point(10, 110)).type == .ruler)
@@ -51,7 +52,7 @@ struct DrawingFactoryTests {
         #expect(pentagon?.extraPoints?.count == 4)
     }
 
-    @Test("pointsNeeded 契约（19 类全覆盖 · v17.15 补齐 · 1/2/3/0 点）")
+    @Test("pointsNeeded 契约（20 类全覆盖 · v17.16 补齐 · 1/2/3/0 点）")
     func pointsNeededContract() {
         // 1 点（v17.8 加 verticalLine · v17.15 加 priceLabel）
         #expect(DrawingType.horizontalLine.pointsNeeded == 1)
@@ -66,6 +67,7 @@ struct DrawingFactoryTests {
         #expect(DrawingType.parallelChannel.pointsNeeded == 2)
         #expect(DrawingType.channel.pointsNeeded == 2)
         #expect(DrawingType.fibonacci.pointsNeeded == 2)
+        #expect(DrawingType.fibonacciExtension.pointsNeeded == 2)
         #expect(DrawingType.ellipse.pointsNeeded == 2)
         #expect(DrawingType.ruler.pointsNeeded == 2)
         #expect(DrawingType.fibonacciFan.pointsNeeded == 2)
@@ -78,7 +80,7 @@ struct DrawingFactoryTests {
         #expect(DrawingType.polygon.pointsNeeded == 0)
 
         // 全覆盖防漏 · 加新 case 但忘记加 pointsNeeded 时此测试会失败
-        let coveredCount = 4 + 13 + 1 + 1  // 1 点 4 + 2 点 13 + 3 点 1 + 0 点 1
+        let coveredCount = 4 + 14 + 1 + 1  // 1 点 4 + 2 点 14 + 3 点 1 + 0 点 1
         #expect(coveredCount == DrawingType.allCases.count)
 
         // needsTwoPoints 兼容入口（pointsNeeded == 2）
@@ -107,7 +109,7 @@ struct DrawingFactoryTests {
 
 @Suite("Drawing Codable 往返")
 struct DrawingCodableTests {
-    @Test("19 种序列化 + 反序列化等价（v17.14 arrow · v17.15 priceLabel 补齐）")
+    @Test("20 种序列化 + 反序列化等价（v17.16 fibonacciExtension 补齐）")
     func roundTrip() throws {
         let drawings: [Drawing] = [
             Drawing.trendLine(from: point(0, 100), to: point(10, 120)),
@@ -120,6 +122,7 @@ struct DrawingCodableTests {
             Drawing.parallelChannel(from: point(0, 100), to: point(10, 110), offset: Decimal(string: "3.5")!),
             Drawing.channel(from: point(0, 100), to: point(20, 100)),
             Drawing.fibonacci(from: point(0, 100), to: point(10, 150)),
+            Drawing.fibonacciExtension(from: point(0, 100), to: point(10, 150)),
             Drawing.text(at: point(5, 105), content: "测试"),
             Drawing.ellipse(from: point(0, 100), to: point(10, 120)),
             Drawing.ruler(from: point(0, 100), to: point(10, 130)),
@@ -138,6 +141,38 @@ struct DrawingCodableTests {
             let back = try decoder.decode(Drawing.self, from: data)
             #expect(back == d)
         }
+    }
+}
+
+// v17.16 A4.1 斐波扩展 projection 价格序列
+@Suite("DrawingGeometry fibonacciExtension v17.16")
+struct FibonacciExtensionTests {
+    @Test("非 fibonacciExtension 类型返回空")
+    func wrongTypeEmpty() {
+        let d = Drawing.fibonacci(from: DrawingPoint(barIndex: 0, price: 100), to: DrawingPoint(barIndex: 10, price: 200))
+        #expect(DrawingGeometry.fibonacciExtensionPrices(for: d).isEmpty)
+    }
+
+    @Test("上涨 100→200 · 6 个 projection 价格 · 1.0=200 · 1.272=227.2 · 1.618=261.8 · 2.0=300 · 2.618=361.8")
+    func uptrendExtension() {
+        let d = Drawing.fibonacciExtension(from: DrawingPoint(barIndex: 0, price: 100), to: DrawingPoint(barIndex: 10, price: 200))
+        let prices = DrawingGeometry.fibonacciExtensionPrices(for: d)
+        #expect(prices.count == 6)
+        #expect(prices[0] == 200)                            // 1.0
+        #expect(prices[1] == Decimal(string: "227.2")!)      // 1.272
+        #expect(prices[2] == Decimal(string: "241.4")!)      // 1.414
+        #expect(prices[3] == Decimal(string: "261.8")!)      // 1.618
+        #expect(prices[4] == 300)                            // 2.0
+        #expect(prices[5] == Decimal(string: "361.8")!)      // 2.618
+    }
+
+    @Test("下跌方向 · span 为负 · 价格递减")
+    func downtrendExtension() {
+        let d = Drawing.fibonacciExtension(from: DrawingPoint(barIndex: 0, price: 200), to: DrawingPoint(barIndex: 10, price: 100))
+        let prices = DrawingGeometry.fibonacciExtensionPrices(for: d)
+        // span = -100 · 1.0 → 100 · 2.0 → 0
+        #expect(prices[0] == 100)
+        #expect(prices[4] == 0)
     }
 }
 

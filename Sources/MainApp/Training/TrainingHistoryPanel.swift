@@ -469,6 +469,8 @@ struct TrainingHistoryPanel: View {
                         return base
                     }()
                     // v16.157 · 点击切月 filter（trader 看本月时长贡献来源）
+                    // v16.187 · tooltip 加按月时长分布（trader 看哪月最专注）
+                    let monthlyTooltip = buildMonthlyDurationTooltip(milestone: milestone, hours: hours)
                     Button {
                         filterPeriod = .month
                     } label: {
@@ -477,7 +479,7 @@ struct TrainingHistoryPanel: View {
                                  color: hours >= 50 ? .purple : .accentColor)
                     }
                     .buttonStyle(.plain)
-                    .tooltip("\(milestone) 累计训练 \(String(format: "%.1f h", hours)) · 点击 filter 本月查看时长来源")
+                    .tooltip(monthlyTooltip)
                 }
                 // v16.80 · 连训天数（与 ControlBar 🔥 chip 同算法 · ≥ 2 才显示）
                 // v16.84 · 同步 milestone emoji 升级（与 ControlBar v16.83 一致）
@@ -1474,6 +1476,39 @@ struct TrainingHistoryPanel: View {
         } catch {
             Toast.error("保存失败", error)
         }
+    }
+
+    /// v16.187 · 累计时长 chip tooltip · 顶部 base 信息 + 按月时长分布（最近 3 月）
+    private func buildMonthlyDurationTooltip(milestone: String, hours: Double) -> String {
+        var lines: [String] = []
+        lines.append("\(milestone) 累计训练 \(String(format: "%.1f h", hours))")
+        lines.append("点击 filter 本月查看时长来源")
+        // 按月聚合（最近 3 月）
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        var monthly: [(label: String, mins: Int)] = []
+        for offset in 0..<3 {
+            guard let start = cal.date(byAdding: .month, value: -offset, to: now),
+                  let interval = cal.dateInterval(of: .month, for: start) else { continue }
+            let mins = viewModel.log.sessions
+                .filter { $0.startedAt >= interval.start && $0.startedAt < interval.end }
+                .map { $0.durationMinutes }
+                .reduce(0, +)
+            if mins > 0 {
+                let comp = cal.dateComponents([.year, .month], from: start)
+                let label = String(format: "%04d-%02d", comp.year ?? 0, comp.month ?? 0)
+                monthly.append((label, mins))
+            }
+        }
+        if !monthly.isEmpty {
+            lines.append("")
+            lines.append("按月分布：")
+            for m in monthly {
+                let h = Double(m.mins) / 60.0
+                lines.append("· \(m.label): \(String(format: "%.1f h", h))")
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// v16.179 · session row grade emoji tooltip · 总分 + 5 维 + violations 速览

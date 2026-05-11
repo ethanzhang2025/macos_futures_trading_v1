@@ -1517,6 +1517,7 @@ struct TrainingHistoryPanel: View {
     }
 
     /// v16.187 · 累计时长 chip tooltip · 顶部 base 信息 + 按月时长分布（最近 3 月）
+    /// v16.199 · 加本月 vs 上月对比（趋势 emoji ↑↓=）
     private func buildMonthlyDurationTooltip(milestone: String, hours: Double) -> String {
         var lines: [String] = []
         lines.append("\(milestone) 累计训练 \(String(format: "%.1f h", hours))")
@@ -1544,6 +1545,16 @@ struct TrainingHistoryPanel: View {
             for m in monthly {
                 let h = Double(m.mins) / 60.0
                 lines.append("· \(m.label): \(String(format: "%.1f h", h))")
+            }
+            // v16.199 · 本月 vs 上月对比（需至少 2 月数据）
+            if monthly.count >= 2 {
+                let thisH = Double(monthly[0].mins) / 60.0
+                let lastH = Double(monthly[1].mins) / 60.0
+                let delta = thisH - lastH
+                let trend = delta >= 0 ? "↑" : "↓"
+                let emoji = delta >= 0 ? "📈" : "📉"
+                lines.append("")
+                lines.append(String(format: "本月 vs 上月：%@ %+.1fh %@", trend, delta, emoji))
             }
         }
         return lines.joined(separator: "\n")

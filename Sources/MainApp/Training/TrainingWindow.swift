@@ -166,8 +166,22 @@ struct TrainingWindow: View {
             ("盈亏子分", ">5%=50 / >2%=40 / >0=30 / =0=20 / >-2%=10 / <-2%=0"),
             ("纪律子分", "50 - error×10 - warning×3（clamp 0-50）"),
             ("5 维 hover 公式 (v16.51)", "ScoreSheet 五维主分 hover 显示计算公式"),
-            ("5 维 ↑↓ drilldown (v16.65)", "ScoreSheet 5 维主分点击/键盘展开本次具体数据"),
+            ("5 维 ↑↓ drilldown (v16.65/85)", "ScoreSheet 5 维主分点击/键盘展开本次具体数据 + actionFeedback 提示"),
             ("⌘⌥C 复制摘要 (v16.50)", "1 行 emoji 摘要分享到 IM"),
+            ("⌘⌥R 雷达图 PNG (v16.87)", "ScoreSheet 5 维雷达图独立导出 · 朋友圈分享"),
+            ("ESC 关闭 sheet (v16.82)", "替代 ⏎ 关闭按钮"),
+        ]),
+        ("🔥 训练习惯（streak 体系 v16.79-91）", [
+            ("ControlBar 连训 chip", "🔥 (≥2) → 🔥🔥 (≥7) → 🚀 (≥14) → 🏆 (≥30) → 🎉 新纪录"),
+            ("最近 7 天 mini bar (v16.76)", "类 GitHub contributions · idle 状态可视化"),
+            ("personal best (v16.89)", "当前 vs 历史最长 streak · 超越自我鼓励"),
+            ("HistoryPanel 同步显示", "statsCard 🔥 连训 chip 同 ControlBar"),
+            ("月报 overview 章节 (v16.86/91)", "markdown 月报含 streak + 新纪录提示"),
+        ]),
+        ("📋 RulesPanel · JSON 导入/导出 (v16.99)", [
+            ("⋯ Menu → 导出当前规则集为 JSON", "trader 分享 / 备份"),
+            ("⋯ Menu → 导入规则集 JSON", "从文件加载 · 覆盖当前"),
+            ("4 套模板 (v16.43)", "🎯 保守 / ⚡ 激进 / 📈 波段 / 🌱 极简"),
         ]),
     ]
 

@@ -1356,9 +1356,37 @@ struct TrainingHistoryPanel: View {
                 Text(String(format: "%+.2f%%", (session.pnlPercent as NSDecimalNumber).doubleValue))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(session.pnl >= 0 ? .green : .red)
+                // v16.150 · mini 5 维 dots（visual 一眼看 5 维形状 · 老 log 跳过）
+                if let sub = score?.subScores {
+                    miniSubDotsRow(sub)
+                }
             }
         }
         .padding(.vertical, 3)
+    }
+
+    /// v16.150 · session 行内 mini 5 维 dots · 顺序 pnl/disc/win/risk/eff · 颜色按各维分数
+    private func miniSubDotsRow(_ sub: TrainingSubScores) -> some View {
+        let entries = sub.ordered  // [(dimension, score)] 5 元 · 与 ScoreSheet 同序
+        let tip = entries.map { "\($0.dimension.emoji) \($0.score)" }.joined(separator: " / ")
+        return HStack(spacing: 2) {
+            ForEach(entries, id: \.dimension) { e in
+                Circle()
+                    .fill(subDotColor(e.score))
+                    .frame(width: 5, height: 5)
+            }
+        }
+        .tooltip(tip)
+    }
+
+    /// v16.150 · 5 维 dot 颜色（与 ScoreSheet subScoreColor 同阶梯 · 视觉一致）
+    private func subDotColor(_ s: Int) -> Color {
+        switch s {
+        case 80...100: return .green
+        case 60..<80:  return .blue
+        case 40..<60:  return .orange
+        default:       return .red
+        }
     }
 
     // MARK: - Helpers

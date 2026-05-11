@@ -3316,10 +3316,10 @@ struct ChartContentView: View {
                 }
                 .disabled(drawing.locked)
             }
-            // v13.18 水平线 → 一键创建价格触及预警（与 WP-52 AlertCore 联动）· v17.22 加 priceLabel 支持
+            // v13.18 水平线 → 一键创建价格触及预警（与 WP-52 AlertCore 联动）· v17.22 加 priceLabel 支持 · v17.30 加 trendLine 支持
             if n == 1, let id = selectedDrawingIDs.first,
                let drawing = drawings.first(where: { $0.id == id }),
-               drawing.type == .horizontalLine || drawing.type == .priceLabel {
+               drawing.type == .horizontalLine || drawing.type == .priceLabel || drawing.type == .trendLine {
                 Button("为此画线创建预警…") {
                     createAlertForDrawing(drawing)
                 }
@@ -3710,10 +3710,20 @@ struct ChartContentView: View {
         }
     }
 
-    /// v13.18 为水平线画线创建价格触及预警（与 WP-52 AlertCore 联动）· v17.22 加 priceLabel 支持
+    /// v13.18 为水平线画线创建价格触及预警（与 WP-52 AlertCore 联动）· v17.22 加 priceLabel 支持 · v17.30 B1 加 trendLine
     /// v17.26 · priceLabel 有 user label 时用作 alert 默认名称（更可读 · 如 "关键支撑 触及 3540"）
     private func createAlertForDrawing(_ drawing: Drawing) {
-        guard drawing.type == .horizontalLine || drawing.type == .priceLabel else { return }
+        switch drawing.type {
+        case .horizontalLine, .priceLabel:
+            createHorizontalLineAlert(drawing)
+        case .trendLine:
+            createTrendLineAlert(drawing)
+        default:
+            return
+        }
+    }
+
+    private func createHorizontalLineAlert(_ drawing: Drawing) {
         let price = drawing.startPoint.price
         let priceStr = formatPrice(price)
         let nsAlert = NSAlert()
@@ -3721,7 +3731,6 @@ struct ChartContentView: View {
         nsAlert.messageText = L(isPriceLabel ? "为价格标签创建预警" : "为水平线创建预警")
         nsAlert.informativeText = "价格触及 \(priceStr) 时预警 · \(instrumentLabel)"
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
-        // priceLabel 有 user label → 用作 alert 名（更具语义 · 如 "关键支撑 触及 3540"）
         if let label = drawing.text, !label.isEmpty {
             textField.stringValue = "\(label) 触及 \(priceStr)"
         } else {
@@ -3738,6 +3747,53 @@ struct ChartContentView: View {
                 condition: .horizontalLineTouched(drawingID: drawing.id, price: price)
             ))
         }
+    }
+
+    /// v17.30 B1 · 为趋势线创建突破预警 · 两端点 (barIndex,price) → snapshot (Date,Decimal)
+    /// evaluator 按 onTick now 线性插值算线价 · 上穿/下穿任一触发
+    private func createTrendLineAlert(_ drawing: Drawing) {
+        guard let endPoint = drawing.endPoint else { return }
+        let startBar = drawing.startPoint.barIndex
+        let endBar = endPoint.barIndex
+        guard let t0 = timestamp(forBarIndex: startBar),
+              let t1 = timestamp(forBarIndex: endBar) else {
+            let warn = NSAlert()
+            warn.messageText = L("无法创建趋势线预警")
+            warn.informativeText = L("趋势线端点超出当前 K 线范围 · 请重画后再试。")
+            warn.addButton(withTitle: L("好"))
+            warn.runModal()
+            return
+        }
+        let p0 = drawing.startPoint.price
+        let p1 = endPoint.price
+        let priceStr0 = formatPrice(p0)
+        let priceStr1 = formatPrice(p1)
+        let nsAlert = NSAlert()
+        nsAlert.messageText = L("为趋势线创建突破预警")
+        nsAlert.informativeText = "价格穿越 \(priceStr0) → \(priceStr1) 趋势线时预警 · \(instrumentLabel)"
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        textField.stringValue = "\(instrumentLabel) 趋势线突破"
+        nsAlert.accessoryView = textField
+        nsAlert.addButton(withTitle: L("创建"))
+        nsAlert.addButton(withTitle: L("取消"))
+        if nsAlert.runModal() == .alertFirstButtonReturn {
+            let name = textField.stringValue.isEmpty ? "趋势线预警" : textField.stringValue
+            postAlertCreated(Alert(
+                name: name,
+                instrumentID: instrumentLabel,
+                condition: .trendLineCrossed(
+                    drawingID: drawing.id,
+                    startTimestamp: t0, startPrice: p0,
+                    endTimestamp: t1, endPrice: p1
+                )
+            ))
+        }
+    }
+
+    /// 根据 barIndex 取 KLine.openTime · 越界返回 nil
+    private func timestamp(forBarIndex idx: Int) -> Date? {
+        guard idx >= 0, idx < bars.count else { return nil }
+        return bars[idx].openTime
     }
 
     /// 主图右键 hover 价位一键创建价格预警

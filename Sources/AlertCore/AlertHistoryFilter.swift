@@ -75,7 +75,7 @@ public enum AlertHistoryStatistics {
             case .priceAbove, .priceBelow:                 return .price
             case .priceCrossAbove, .priceCrossBelow:       return .cross
             case .priceBreakoutHigh, .priceBreakoutLow:    return .breakout
-            case .horizontalLineTouched:                   return .lineTouched
+            case .horizontalLineTouched, .trendLineCrossed: return .lineTouched
             case .volumeSpike, .openInterestSpike, .priceMoveSpike: return .spike
             case .indicator:                               return .indicator
             case .spreadDeviation:                         return .spread

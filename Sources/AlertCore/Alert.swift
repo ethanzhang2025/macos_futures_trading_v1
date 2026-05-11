@@ -31,11 +31,21 @@ public enum AlertCondition: Sendable, Codable, Equatable, Hashable {
     /// 跌破前 N 根（同周期）K 线最低价（不含本根 · 当前 bar.close < min(lows[-N..<-1])）
     case priceBreakoutLow(period: KLinePeriod, lookback: Int)
 
-    // MARK: - 画线类（v1 仅水平线，其他画线类型留 v2）
+    // MARK: - 画线类
 
     /// 价格触及水平线（drawingID 引用 WP-42 Drawing UUID）
-    /// v1 只支持 horizontalLine 类型；趋势线/矩形/斐波那契等留 v2 接 DrawingGeometry
     case horizontalLineTouched(drawingID: UUID, price: Decimal)
+
+    /// 价格穿越趋势线（v17.30 B1 · drawingID 引用 WP-42 Drawing UUID）
+    /// 两端点 snapshot 为 (Date, Decimal) · evaluator 用线性插值算"当前时间的线价"
+    /// 上穿/下穿任一发生即触发（与 horizontalLineTouched 同语义 · 但线价随时间漂移）
+    case trendLineCrossed(
+        drawingID: UUID,
+        startTimestamp: Date,
+        startPrice: Decimal,
+        endTimestamp: Date,
+        endPrice: Decimal
+    )
 
     // MARK: - 异常类（3 子类）
 

@@ -357,6 +357,65 @@ struct EvaluatorPriceTests {
         await evaluator.onTick(makeTick("rb2510", price: 3500))  // 下穿 → 再触发
         #expect(try await history.allHistory().count == 2)
     }
+
+    // v17.30 B1 · 趋势线突破
+    @Test("trendLineCrossed：随时间漂移的线价 · 中点上穿触发")
+    func trendLineCrossedAtMidpoint() async throws {
+        let history = InMemoryAlertHistoryStore()
+        let evaluator = AlertEvaluator(history: history)
+        let drawingID = UUID()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)        // start
+        let t1 = t0.addingTimeInterval(3600)                       // end (+1h)
+        let tMid = t0.addingTimeInterval(1800)                     // 中点 · 线价 = 3550
+        let a = Alert(
+            name: "趋势线突破", instrumentID: "rb2510",
+            condition: .trendLineCrossed(
+                drawingID: drawingID,
+                startTimestamp: t0, startPrice: 3500,
+                endTimestamp: t1, endPrice: 3600
+            ),
+            channels: [], cooldownSeconds: 0
+        )
+        await evaluator.addAlert(a)
+
+        // 中点线价 = 3550 · 先 3540 后 3560 → 上穿
+        await evaluator.onTick(makeTick("rb2510", price: 3540), now: tMid)
+        await evaluator.onTick(makeTick("rb2510", price: 3560), now: tMid)
+        #expect(try await history.allHistory().count == 1)
+
+        // 同点位反向 · 下穿
+        await evaluator.onTick(makeTick("rb2510", price: 3565), now: tMid)
+        await evaluator.onTick(makeTick("rb2510", price: 3545), now: tMid)
+        #expect(try await history.allHistory().count == 2)
+    }
+
+    @Test("trendLineCrossed：线价随时间推进 · 同价格在前段不触发后段触发")
+    func trendLineCrossedDriftsWithTime() async throws {
+        let history = InMemoryAlertHistoryStore()
+        let evaluator = AlertEvaluator(history: history)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let t1 = t0.addingTimeInterval(3600)
+        let a = Alert(
+            name: "趋势线漂移", instrumentID: "rb2510",
+            condition: .trendLineCrossed(
+                drawingID: UUID(),
+                startTimestamp: t0, startPrice: 3500,
+                endTimestamp: t1, endPrice: 3600
+            ),
+            channels: [], cooldownSeconds: 0
+        )
+        await evaluator.addAlert(a)
+
+        // 起点附近线价 ≈ 3500 · 价格在 3530 → 3540 不跨线
+        await evaluator.onTick(makeTick("rb2510", price: 3530), now: t0)
+        await evaluator.onTick(makeTick("rb2510", price: 3540), now: t0)
+        #expect(try await history.allHistory().count == 0)
+
+        // 终点线价 ≈ 3600 · 价格 3590 → 3610 上穿
+        await evaluator.onTick(makeTick("rb2510", price: 3590), now: t1)
+        await evaluator.onTick(makeTick("rb2510", price: 3610), now: t1)
+        #expect(try await history.allHistory().count == 1)
+    }
 }
 
 // MARK: - 6. AlertEvaluator · 频控

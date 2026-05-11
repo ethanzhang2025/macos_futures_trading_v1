@@ -52,6 +52,8 @@ public enum AlertHistoryCSVExporter {
         case .priceBreakoutHigh(let p, let n):  return "突破 \(p.rawValue) 前 \(n) 根高"
         case .priceBreakoutLow(let p, let n):   return "跌破 \(p.rawValue) 前 \(n) 根低"
         case .horizontalLineTouched(_, let p):  return "触线 \(p)"
+        case .trendLineCrossed(_, _, let p0, _, let p1):
+                                                return "穿越趋势线 \(p0)→\(p1)"
         case .volumeSpike(let m, let n):        return "成交量 ≥ \(m)× / \(n)期"
         case .openInterestSpike(let m, let n):  return "持仓量 ≥ \(m)× / \(n)期"
         case .priceMoveSpike(let p, let s):     return "急动 ≥ \(p)% / \(s)秒"

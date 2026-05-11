@@ -322,6 +322,11 @@ public actor AlertEvaluator {
                 guard let prev = prevPrice else { return (false, "") }
                 let crossed = (prev < price && tick.lastPrice >= price) || (prev > price && tick.lastPrice <= price)
                 return (crossed, "价格触及水平线 \(price)（前 \(prev) → 现 \(tick.lastPrice)）")
+            case let .trendLineCrossed(_, t0, p0, t1, p1):
+                guard let prev = prevPrice else { return (false, "") }
+                let lineNow = interpolateTrendLine(t0: t0, p0: p0, t1: t1, p1: p1, at: now)
+                let crossed = (prev < lineNow && tick.lastPrice >= lineNow) || (prev > lineNow && tick.lastPrice <= lineNow)
+                return (crossed, "价格穿越趋势线 \(lineNow)（前 \(prev) → 现 \(tick.lastPrice)）")
             case .volumeSpike(let multiple, let windowBars):
                 guard let avg = averageVolume(for: tick.instrumentID, lastNBars: windowBars), avg > 0 else { return (false, "") }
                 let ratio = Decimal(tick.volume) / Decimal(avg)
@@ -382,6 +387,21 @@ public actor AlertEvaluator {
         if !alert.channels.isEmpty {
             await dispatcher.dispatch(event.notificationEvent, to: alert.channels)
         }
+    }
+
+    // MARK: - 私有：趋势线插值（v17.30 B1）
+
+    /// 按时间在 (t0, p0)-(t1, p1) 上线性插值 · 端点重合则退化为 p0
+    /// 允许 t < t0 或 t > t1（外推 · 趋势线无限延伸语义）
+    nonisolated private func interpolateTrendLine(
+        t0: Date, p0: Decimal,
+        t1: Date, p1: Decimal,
+        at t: Date
+    ) -> Decimal {
+        let dt = t1.timeIntervalSince(t0)
+        guard abs(dt) > 1e-9 else { return p0 }
+        let alpha = t.timeIntervalSince(t0) / dt
+        return p0 + (p1 - p0) * Decimal(alpha)
     }
 
     // MARK: - 私有：滑动窗口

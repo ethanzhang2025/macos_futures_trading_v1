@@ -36,6 +36,9 @@ struct ReviewWindow: View {
     /// nil = 全部 · String = 指定 setup（含 unlabeledSetupKey 显式选未标）
     @State private var filterSetup: String? = nil
 
+    /// v16.39 · 月报/周报含 base64 PNG 关键图（默认关 · trader 主动开 · 邮件粘贴可见图但 markdown 大）
+    @AppStorage("viewState.v1.review.exportWithCharts") private var exportReportWithCharts: Bool = false
+
     /// v15.23 batch205 · 跨窗口跳主图
     @Environment(\.openWindow) private var openWindow
 
@@ -586,6 +589,10 @@ struct ReviewWindow: View {
                 Button("导出全部图…") { exportAllChartCards(s) }
                     .tooltip("一键导出全部 14 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v16.38 加心理风险洞察）")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
+                // v16.39 · 月报含 base64 PNG 图（trader 邮件粘贴可见图但 markdown 大）
+                Toggle("月报含图", isOn: $exportReportWithCharts)
+                    .toggleStyle(.checkbox)
+                    .tooltip("勾选后月报/周报末尾追加 3 张关键图（base64 PNG · 邮件粘贴可见图 · 但 markdown 文件 ~500KB）")
                 // v15.21 batch114 · ⌘R 重新加载复盘数据（trader 实时数据更新或纠错重算）
                 Button {
                     summary = nil
@@ -687,6 +694,8 @@ struct ReviewWindow: View {
         md += "\n" + TrainingMarkdownReport.generateSetupPatternCrossReference(
             log, setups: setupSlices(from: s.setupMatrix), start: weekStart, end: now
         )
+        // v16.39 · 关键图表 base64 PNG（按 toolbar Toggle 开关）
+        md += keyChartsMarkdownIfEnabled(s)
         do {
             try md.data(using: .utf8)?.write(to: url, options: .atomic)
             Toast.info("导出成功", "已生成最近 7 天周报到 \(url.lastPathComponent)。")
@@ -737,6 +746,8 @@ struct ReviewWindow: View {
         md += "\n" + TrainingMarkdownReport.generateSetupPatternCrossReference(
             log, setups: setupSlices(from: s.setupMatrix), start: monthStart, end: monthEnd
         )
+        // v16.39 · 关键图表 base64 PNG（按 toolbar Toggle 开关）
+        md += keyChartsMarkdownIfEnabled(s)
         do {
             try md.data(using: .utf8)?.write(to: url, options: .atomic)
             Toast.info("导出成功",
@@ -818,6 +829,41 @@ struct ReviewWindow: View {
             zoomedCard = ZoomedCard(title: title, subtitle: subtitle, content: AnyView(body), index: index, total: total)
         }
         chart
+    }
+
+    // MARK: - v16.39 · 月报/周报含 base64 PNG 关键图（trader 邮件粘贴可见图）
+
+    /// 渲染单图为 base64 PNG markdown 段（标题 + ![title](data:image/png;base64,...）
+    /// 失败返回 nil（caller 跳过该图 · 不破坏整个月报导出）
+    @MainActor
+    private func renderChartToBase64Markdown<Content: View>(title: String, content: Content) -> String? {
+        let exportable = VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline)
+            content
+        }
+        .padding(20)
+        .background(Color.white)
+        guard let pngData = PNGRenderer.render(exportable, width: 720, height: 480) else { return nil }
+        let base64 = pngData.base64EncodedString()
+        return "### \(title)\n\n![\(title)](data:image/png;base64,\(base64))\n"
+    }
+
+    /// 月报/周报关键 3 图 markdown（按 flag 开 · 默认 nil 不嵌入）
+    @MainActor
+    private func keyChartsMarkdownIfEnabled(_ s: ReviewSummary) -> String {
+        guard exportReportWithCharts else { return "" }
+        var md = "\n## 关键图表（base64 PNG · 邮件可见）\n\n"
+        let charts: [(String, AnyView)] = [
+            ("月度盈亏", AnyView(monthlyPnLChart(s.monthlyPnL))),
+            ("胜率曲线", AnyView(winRateChart(s.winRateCurve))),
+            ("心理风险洞察", AnyView(psychInsightView(s.psychTagCounts))),
+        ]
+        for (title, view) in charts {
+            if let seg = renderChartToBase64Markdown(title: title, content: view) {
+                md += seg + "\n"
+            }
+        }
+        return md
     }
 
     /// v15.19 batch41 · 单 chartCard PNG 导出（trader 分享单图）

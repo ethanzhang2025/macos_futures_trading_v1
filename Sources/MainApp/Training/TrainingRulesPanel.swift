@@ -84,6 +84,22 @@ struct TrainingRulesPanel: View {
                     .tooltip("止损 2% + 单日亏损 5000 · 不被规则淹没")
                 }
                 Divider()
+                // v16.99 · trader 分享规则集（导出 JSON · 与团队共享自定义纪律）
+                Section("📤 导入/导出（v16.99 · JSON）") {
+                    Button {
+                        exportRulesJSON()
+                    } label: {
+                        Label("导出当前规则集为 JSON", systemImage: "square.and.arrow.up")
+                    }
+                    .tooltip("trader 分享自定义规则集给团队 / 备份")
+                    Button {
+                        importRulesJSON()
+                    } label: {
+                        Label("导入规则集 JSON", systemImage: "square.and.arrow.down")
+                    }
+                    .tooltip("从 JSON 文件加载规则集 · 覆盖当前")
+                }
+                Divider()
                 Button("清空所有规则", role: .destructive) { viewModel.clearRules() }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -93,6 +109,48 @@ struct TrainingRulesPanel: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - v16.99 · 规则集 JSON 导入/导出
+
+    private func exportRulesJSON() {
+        let panel = NSSavePanel()
+        panel.title = L("导出规则集 JSON")
+        panel.allowedContentTypes = [.json]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        panel.nameFieldStringValue = "纪律规则_\(dateFmt.string(from: Date())).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(viewModel.book) else {
+            Toast.errorBody("导出失败", "JSON 编码失败")
+            return
+        }
+        do {
+            try data.write(to: url, options: .atomic)
+            Toast.info("导出成功", "\(viewModel.book.rules.count) 条规则 · \(data.count) 字节")
+        } catch {
+            Toast.error("导出失败", error)
+        }
+    }
+
+    private func importRulesJSON() {
+        let panel = NSOpenPanel()
+        panel.title = L("导入规则集 JSON")
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let data = try? Data(contentsOf: url) else {
+            Toast.errorBody("导入失败", "读取文件失败")
+            return
+        }
+        guard let book = try? JSONDecoder().decode(DisciplineBook.self, from: data) else {
+            Toast.errorBody("导入失败", "JSON 格式无效（需含 DisciplineBook 结构）")
+            return
+        }
+        viewModel.applyRuleTemplate(book)
+        Toast.info("导入成功", "\(book.rules.count) 条规则 · 启用 \(book.enabledRules.count)")
     }
 
     /// v16.44 · 当前规则集匹配的模板（与 v16.43 4 套对比 · 不匹配 → "自定义"）

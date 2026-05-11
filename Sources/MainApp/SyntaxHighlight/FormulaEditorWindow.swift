@@ -455,6 +455,21 @@ public struct FormulaEditorWindow: View {
                                     .buttonStyle(.borderless)
                                     .tooltip("批量删除所有 unusedVariable 警告对应的行")
                                 }
+                                // v16.173 · 一键隐藏全部 warning kinds（保留 error · trader 聚焦紧急）
+                                let warningKinds: Set<MaiLangLintWarning.Kind> = Set(
+                                    allLintWarns.filter { $0.severity == .warning }.map(\.kind))
+                                let warningKindsNotYetHidden = warningKinds.subtracting(sessionHiddenLintKinds)
+                                if warningKindsNotYetHidden.count >= 2 {
+                                    Button {
+                                        sessionHiddenLintKinds.formUnion(warningKinds)
+                                        statusMessage = "已隐藏全部 warning 类 lint · 仅显示 error"
+                                    } label: {
+                                        Label("仅看 error", systemImage: "eye.slash.fill")
+                                            .font(.system(size: 11))
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .tooltip("一键隐藏全部 warning 类（\(warningKinds.count) 类）· 仅保留 error · 与 v16.158 单类 hide 共享 sessionHiddenLintKinds")
+                                }
                             }) {
                                 // v16.154 · 全 filter 隐藏后 · 提示用户点 chip 重开
                                 if sortedLints.isEmpty {

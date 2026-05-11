@@ -50,6 +50,23 @@ public enum TrainingMarkdownReport {
         } else {
             md += "- 最佳：—\n"
         }
+        // v16.123 · 累计训练时长 + milestone（与 v16.122 HistoryPanel 同 5 级 emoji）
+        let totalMinutes = sessions.map { $0.durationMinutes }.reduce(0, +)
+        if totalMinutes > 0 {
+            let hours = Double(totalMinutes) / 60.0
+            let milestone: String = {
+                switch hours {
+                case 1000...:  return "🌟"
+                case 500...:   return "👑"
+                case 100...:   return "🏆"
+                case 50...:    return "🚀"
+                case 10...:    return "🎯"
+                default:       return "⏱"
+                }
+            }()
+            md += "- 累计训练时长：\(milestone) **\(String(format: "%.1f", hours))** 小时\n"
+        }
+
         // v16.86 · 连训天数（与 ControlBar/HistoryPanel 同算法 · 月报展示 trader 习惯）
         // v16.91 · 加 personal best 对比（v16.89）· 当前 ≥ 历史 → 🎉 新纪录
         let streak = log.consecutiveTrainingDays(asOf: generatedAt)

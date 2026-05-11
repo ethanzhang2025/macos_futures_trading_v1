@@ -93,8 +93,8 @@
 | # | 任务 | 类别 | 工作量 | 状态 | 完成版本 | 备注 |
 |---|------|------|-------|------|---------|------|
 | B1 | 画线警报（趋势线 / 水平线突破）| 警报 | 1-2d | ✅ | v17.30 | AlertCondition.trendLineCrossed · 两端点 timestamp 线性插值 · 水平线 v13.18 已存 |
-| B2 | Volume Profile（成交量分布柱）| 图表 | 2-3d | ⬜ | — | 价格 bin × 成交量 |
-| B3 | Webhook 警报渠道（Discord/Telegram）| 警报 | 1d | ⬜ | — | NotificationChannels 扩展 |
+| B2 | Volume Profile（成交量分布柱）| 图表 | 2-3d | ✅ | v17.31 | v15.19 算法 + 副图 · v17.31 加 Value Area（POC/VAH/VAL · 70%）+ 引导线 + HUD |
+| B3 | Webhook 警报渠道（Discord/Telegram）| 警报 | 1d | ✅ | v17.32 | WebhookChannel actor · 通用 JSON POST · Discord/Telegram 经 IFTTT 接力 · 注入 HTTPClient 便于测试 |
 
 ---
 
@@ -152,11 +152,11 @@
 | 段 | 项数 | 完成 | 进度 |
 |----|------|------|------|
 | A · 图表 + 画线 | 21 | 15 | **71%** |
-| B · 警报 + Volume | 3 | 1 | **33%** |
+| B · 警报 + Volume | 3 | 3 | **100% ✅** |
 | C · 自选 + 期权 | 5 | 0 | 0% |
 | D · Strategy Tester | 5 | 0 | 0% |
 | E · 麦语言生态 | 4 | E1 5/30 部分 | ~5% |
-| **总计** | **38** | **16** | **~42%** |
+| **总计** | **38** | **18** | **~47%** |
 
 A 段实际可完成项已 100%（剩 6 项均阻塞：Metal renderer 改动 / Apple 设备验证 / 等用户反馈）。
 

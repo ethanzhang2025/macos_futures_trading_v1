@@ -28,6 +28,9 @@ struct TrainingHistoryPanel: View {
     @State private var sortKey: SortKey = .dateDesc
     /// v16.26 · 场景名搜索（与形态/时段 filter 同时 AND · 大小写不敏感）
     @State private var searchText: String = ""
+    /// v16.55 · 增量分页 limit · 默认 50 · "加载更多" 每次 +50 · 切 filter/sort/search 自动 reset
+    @State private var visibleLimit: Int = 50
+    private let pageSize: Int = 50
 
     /// v15.23 batch136 · 排序枚举
     enum SortKey: String, CaseIterable {
@@ -76,8 +79,6 @@ struct TrainingHistoryPanel: View {
             }
         }
     }
-
-    private let recentLimit = 50
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -665,26 +666,24 @@ struct TrainingHistoryPanel: View {
     // MARK: - 列表
 
     private var sessionList: some View {
-        let recent = viewModel.log.recentSessions(limit: recentLimit)
-        // batch122/130 · 形态 + 时间段双重过滤（AND · 任一非 nil 都 filter）
-        var filtered: [TrainingSession] = recent
+        // v16.55 · 全集 filter + sort · 最后 prefix(visibleLimit) · trader 100+ session 性能
+        // 旧实现先 recentSessions(50) 再 filter · filter 命中少时看不到第 51+ 条匹配
+        var filtered: [TrainingSession] = viewModel.log.sessions
         if let p = filterPattern {
             filtered = filtered.filter { $0.scenarioPattern == p }
         }
         if let cutoff = filterPeriod.cutoff {
             filtered = filtered.filter { $0.startedAt >= cutoff }
         }
-        // v16.26 · 场景名搜索（大小写不敏感 · 含子串即命中）
         let trimmedSearch = searchText.trimmingCharacters(in: .whitespaces)
         if !trimmedSearch.isEmpty {
             filtered = filtered.filter {
                 $0.scenarioName.localizedCaseInsensitiveContains(trimmedSearch)
             }
         }
-        // v15.23 batch136 · 排序（recentSessions 已按日期降序 · 仅非默认时重排）
         switch sortKey {
         case .dateDesc:
-            break  // 已是默认顺序
+            filtered.sort { $0.endedAt > $1.endedAt }
         case .scoreDesc:
             filtered.sort { (viewModel.log.score(for: $0.id)?.totalScore ?? 0)
                           > (viewModel.log.score(for: $1.id)?.totalScore ?? 0) }
@@ -696,9 +695,12 @@ struct TrainingHistoryPanel: View {
         case .pnlAsc:
             filtered.sort { $0.pnl < $1.pnl }
         }
+        let totalMatched = filtered.count
+        let visible = Array(filtered.prefix(visibleLimit))
+        let remaining = max(0, totalMatched - visible.count)
         let hasAnyFilter = filterPattern != nil || filterPeriod != .all || !trimmedSearch.isEmpty
         return List {
-            if filtered.isEmpty, hasAnyFilter {
+            if visible.isEmpty, hasAnyFilter {
                 HStack {
                     Spacer()
                     VStack(spacing: 6) {
@@ -717,7 +719,7 @@ struct TrainingHistoryPanel: View {
                 }
                 .padding()
             }
-            ForEach(filtered) { session in
+            ForEach(visible) { session in
                 sessionRow(session)
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -744,8 +746,46 @@ struct TrainingHistoryPanel: View {
                         }
                     }
             }
+            // v16.55 · 分页底部行（仅剩余 > 0 时显示）
+            if remaining > 0 {
+                loadMoreRow(remaining: remaining, totalMatched: totalMatched, shown: visible.count)
+            }
         }
         .listStyle(.inset)
+        // v16.55 · filter/sort/search 任一变化 → 自动 reset 到第一页（macOS 13 单参数 onChange）
+        .onChange(of: filterPattern) { _ in visibleLimit = pageSize }
+        .onChange(of: filterPeriod) { _ in visibleLimit = pageSize }
+        .onChange(of: sortKey) { _ in visibleLimit = pageSize }
+        .onChange(of: searchText) { _ in visibleLimit = pageSize }
+    }
+
+    /// v16.55 · 列表底部 "加载更多 / 展开全部" 行
+    private func loadMoreRow(remaining: Int, totalMatched: Int, shown: Int) -> some View {
+        HStack(spacing: 12) {
+            Text("显示 \(shown) / 共 \(totalMatched)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+            Spacer()
+            Button {
+                visibleLimit += pageSize
+            } label: {
+                Label("加载更多 +\(min(pageSize, remaining))", systemImage: "chevron.down.circle")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.borderless)
+            .tooltip("一次加载 \(pageSize) 条 · 剩余 \(remaining) 条")
+            if remaining > pageSize {
+                Button {
+                    visibleLimit = totalMatched
+                } label: {
+                    Label("全部展开", systemImage: "arrow.down.to.line")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.borderless)
+                .tooltip("一次加载全部 \(totalMatched) 条 · 200+ 时可能卡顿")
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private func sessionRow(_ session: TrainingSession) -> some View {

@@ -16,16 +16,39 @@ public struct MaiLangLintWarning: Sendable, Equatable {
     public let line: Int       // 1-based
     public let kind: Kind
     public let message: String
+    /// v16.74 · 严重度（铺路 minimap 颜色区分 / 排序优先级）· 默认 .warning
+    public let severity: Severity
 
     public enum Kind: String, Sendable, Equatable {
         case unusedVariable        // 中间变量定义但全文无其他引用
         case duplicateDefinition   // 同名变量被定义两次及以上（可能是 typo · 后续覆盖前定义）
         case missingColorAttribute // 输出变量未指定 COLORxxx 属性（默认色不醒目）
         case undefinedVariable     // v16.66 · 引用了未定义的标识符（非保留字 · 非已声明变量 · 可能 typo）
+
+        /// v16.74 · 默认严重度（undefined 是 error · 其他是 warning）
+        public var defaultSeverity: Severity {
+            switch self {
+            case .undefinedVariable: return .error
+            case .duplicateDefinition: return .error
+            case .unusedVariable, .missingColorAttribute: return .warning
+            }
+        }
     }
 
-    public init(line: Int, kind: Kind, message: String) {
+    /// v16.74 · 严重度（minimap 颜色 / outline 排序权重）
+    public enum Severity: String, Sendable, Equatable, Comparable {
+        case warning  // 提醒类（unused / missingColor）
+        case error    // 紧急类（undefined / duplicateDef）
+
+        public static func < (lhs: Severity, rhs: Severity) -> Bool {
+            // error > warning（排序时 error 优先）
+            lhs == .warning && rhs == .error
+        }
+    }
+
+    public init(line: Int, kind: Kind, message: String, severity: Severity? = nil) {
         self.line = line; self.kind = kind; self.message = message
+        self.severity = severity ?? kind.defaultSeverity
     }
 }
 

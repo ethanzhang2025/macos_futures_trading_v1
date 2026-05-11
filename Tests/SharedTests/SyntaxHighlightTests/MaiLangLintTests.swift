@@ -179,4 +179,28 @@ struct MaiLangLintTests {
         #expect(und.count == 1)
         #expect(und[0].line == 1)   // 首次出现
     }
+
+    // MARK: - v16.74 · severity 等级
+
+    @Test("v16.74 · severity 默认值：undefined/duplicate=error · unused/missingColor=warning")
+    func severityDefaults() {
+        #expect(MaiLangLintWarning.Kind.undefinedVariable.defaultSeverity == .error)
+        #expect(MaiLangLintWarning.Kind.duplicateDefinition.defaultSeverity == .error)
+        #expect(MaiLangLintWarning.Kind.unusedVariable.defaultSeverity == .warning)
+        #expect(MaiLangLintWarning.Kind.missingColorAttribute.defaultSeverity == .warning)
+    }
+
+    @Test("v16.74 · analyze 输出 warning 自动带 severity")
+    func severityCarried() {
+        let src = "OUT:FOOBAR,COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let und = warns.first { $0.kind == .undefinedVariable }!
+        #expect(und.severity == .error)
+    }
+
+    @Test("v16.74 · Severity Comparable · warning < error")
+    func severityComparable() {
+        #expect(MaiLangLintWarning.Severity.warning < .error)
+        #expect(!(MaiLangLintWarning.Severity.error < .warning))
+    }
 }

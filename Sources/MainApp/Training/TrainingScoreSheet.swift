@@ -180,10 +180,19 @@ struct TrainingScoreSheet: View {
         // v16.65 · ↑↓ 键盘切换 drilldown 维度（仅 subScores 存在时生效）
         .background(drilldownKeyboardShortcuts)
         // v16.82 · ESC 关闭 sheet（IDE/sheet 通用 · 与"关闭"⏎按钮互补）
+        // v16.126 · 优先关 drilldown · 全部已折叠时才关 sheet（IDE 二级 dismiss）
         .background(
-            Button("") { onDismiss() }
-                .keyboardShortcut(.cancelAction)
-                .opacity(0)
+            Button("") {
+                if expandedDim != nil {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        expandedDim = nil
+                    }
+                } else {
+                    onDismiss()
+                }
+            }
+            .keyboardShortcut(.cancelAction)
+            .opacity(0)
         )
     }
 

@@ -39,6 +39,9 @@ struct ReviewWindow: View {
     /// v16.39 · 月报/周报含 base64 PNG 关键图（默认关 · trader 主动开 · 邮件粘贴可见图但 markdown 大）
     @AppStorage("viewState.v1.review.exportWithCharts") private var exportReportWithCharts: Bool = false
 
+    /// v16.69 · 15 张图导航 chip bar 触发的 scrollTo 索引（设值 → onChange 滚动 → 立即清 nil）
+    @State private var pendingScrollChartIdx: Int? = nil
+
     /// v15.23 batch205 · 跨窗口跳主图
     @Environment(\.openWindow) private var openWindow
 
@@ -307,17 +310,81 @@ struct ReviewWindow: View {
         VStack(spacing: 0) {
             header(s)
             Divider()
-            ScrollView {
-                LazyVGrid(columns: gridColumns, spacing: 16) {
-                    // v15.21 batch123 · chartCard 数据驱动 · 全屏 ←/→ 切换前后图依赖此数组顺序
-                    ForEach(Array(reviewCardSpecs(s).enumerated()), id: \.offset) { idx, spec in
-                        chartCard(spec.title, subtitle: spec.subtitle, index: idx, total: reviewCardSpecs(s).count) {
-                            spec.content
+            // v16.69 · 15 张图分类导航 chip bar（trader 长 grid 快速定位 · 接 v16.47）
+            chartNavigationBar(s)
+            Divider()
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                        // v15.21 batch123 · chartCard 数据驱动 · 全屏 ←/→ 切换前后图依赖此数组顺序
+                        ForEach(Array(reviewCardSpecs(s).enumerated()), id: \.offset) { idx, spec in
+                            chartCard(spec.title, subtitle: spec.subtitle, index: idx, total: reviewCardSpecs(s).count) {
+                                spec.content
+                            }
+                            .id("chart_\(idx)")   // v16.69 · 导航 chip 锚点
                         }
                     }
+                    .padding(16)
                 }
-                .padding(16)
+                .onChange(of: pendingScrollChartIdx) { newIdx in
+                    guard let i = newIdx else { return }
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        proxy.scrollTo("chart_\(i)", anchor: .top)
+                    }
+                    DispatchQueue.main.async { pendingScrollChartIdx = nil }
+                }
             }
+        }
+    }
+
+    /// v16.69 · 15 张图分类 chip bar · 4 分类（盈亏/胜率/时段/策略）· 点击跳到首张
+    @ViewBuilder
+    private func chartNavigationBar(_ s: ReviewSummary) -> some View {
+        let total = reviewCardSpecs(s).count
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                navChip(label: "💰 盈亏", indices: [0, 1, 5, 6])    // 月度/分布/回撤/盈亏比
+                navChip(label: "📈 胜率", indices: [2, 8])           // 胜率曲线/连胜连败
+                navChip(label: "⏱ 时段", indices: [4, 7, 10, 11])   // 持仓时间/时段/日历/时长×盈亏
+                navChip(label: "🎯 策略", indices: [3, 12, 14])     // 品种/策略/Setup×Pattern
+                navChip(label: "🧠 心理", indices: [9, 13])         // 心理标签/心理洞察
+                // 单独全部图 Menu
+                Menu {
+                    ForEach(Array(reviewCardSpecs(s).enumerated()), id: \.offset) { idx, spec in
+                        Button("\(idx + 1). \(spec.title)") {
+                            pendingScrollChartIdx = idx
+                        }
+                    }
+                } label: {
+                    Label("全部 \(total) 张", systemImage: "list.bullet")
+                        .font(.system(size: 11))
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 100)
+                .tooltip("跳转到指定卡片")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .frame(height: 32)
+    }
+
+    /// v16.69 · 单个分类 chip · 点击跳到该类首张图
+    @ViewBuilder
+    private func navChip(label: String, indices: [Int]) -> some View {
+        if let first = indices.first {
+            Button {
+                pendingScrollChartIdx = first
+            } label: {
+                Text("\(label) (\(indices.count))")
+                    .font(.system(size: 11))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.accentColor.opacity(0.12))
+                    .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+            .tooltip("\(label) 类 \(indices.count) 张 · 点击跳到首张")
         }
     }
 

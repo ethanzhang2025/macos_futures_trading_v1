@@ -3698,16 +3698,23 @@ struct ChartContentView: View {
         }
     }
 
-    /// v13.18 为水平线画线创建价格触及预警（与 WP-52 AlertCore 联动）· v17.22 加 priceLabel 支持（语义同 horizontalLine）
+    /// v13.18 为水平线画线创建价格触及预警（与 WP-52 AlertCore 联动）· v17.22 加 priceLabel 支持
+    /// v17.26 · priceLabel 有 user label 时用作 alert 默认名称（更可读 · 如 "关键支撑 触及 3540"）
     private func createAlertForDrawing(_ drawing: Drawing) {
         guard drawing.type == .horizontalLine || drawing.type == .priceLabel else { return }
         let price = drawing.startPoint.price
         let priceStr = formatPrice(price)
         let nsAlert = NSAlert()
-        nsAlert.messageText = L("为水平线创建预警")
+        let isPriceLabel = (drawing.type == .priceLabel)
+        nsAlert.messageText = L(isPriceLabel ? "为价格标签创建预警" : "为水平线创建预警")
         nsAlert.informativeText = "价格触及 \(priceStr) 时预警 · \(instrumentLabel)"
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
-        textField.stringValue = "\(instrumentLabel) 触及 \(priceStr)"
+        // priceLabel 有 user label → 用作 alert 名（更具语义 · 如 "关键支撑 触及 3540"）
+        if let label = drawing.text, !label.isEmpty {
+            textField.stringValue = "\(label) 触及 \(priceStr)"
+        } else {
+            textField.stringValue = "\(instrumentLabel) 触及 \(priceStr)"
+        }
         nsAlert.accessoryView = textField
         nsAlert.addButton(withTitle: L("创建"))
         nsAlert.addButton(withTitle: L("取消"))

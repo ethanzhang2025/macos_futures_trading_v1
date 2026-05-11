@@ -386,17 +386,31 @@ public struct FormulaEditorWindow: View {
                             }
                         }
                         if !lintWarns.isEmpty {
+                            // v16.75 · 按 severity 排序：error 在前 · warning 在后 · 同级保持原行号顺序
+                            let sortedLints = lintWarns.sorted {
+                                if $0.severity != $1.severity { return $0.severity > $1.severity }
+                                return $0.line < $1.line
+                            }
+                            let errorCount = sortedLints.filter { $0.severity == .error }.count
                             Section(header: HStack {
                                 Text("⚠ Lint 警告").font(.headline).foregroundColor(.orange)
-                                Text("(\(lintWarns.count))").font(.caption).foregroundColor(.secondary)
+                                if errorCount > 0 {
+                                    Text("(\(errorCount) 紧急 + \(sortedLints.count - errorCount) 提醒)")
+                                        .font(.caption).foregroundColor(.secondary)
+                                } else {
+                                    Text("(\(sortedLints.count))").font(.caption).foregroundColor(.secondary)
+                                }
                             }) {
-                                ForEach(Array(lintWarns.enumerated()), id: \.offset) { _, warn in
+                                ForEach(Array(sortedLints.enumerated()), id: \.offset) { _, warn in
                                     HStack {
                                         Text("\(warn.line)").font(.caption.monospacedDigit())
                                             .foregroundColor(.secondary)
                                             .frame(width: 32, alignment: .trailing)
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .foregroundColor(.orange)
+                                        // v16.75 · severity 颜色 + icon 区分（error 红 / warning 橙）
+                                        Image(systemName: warn.severity == .error
+                                              ? "exclamationmark.octagon.fill"
+                                              : "exclamationmark.triangle.fill")
+                                            .foregroundColor(warn.severity == .error ? .red : .orange)
                                             .font(.system(size: 11))
                                         Text(warn.message)
                                             .font(.system(size: 12))

@@ -441,6 +441,13 @@ public struct FormulaEditorWindow: View {
                                 } else {
                                     Text("(\(sortedLints.count))").font(.caption).foregroundColor(.secondary)
                                 }
+                                // v16.205 · filter 后显示 "X / Y" 计数（filter 生效时 trader 知道隐藏多少）
+                                if sortedLints.count < allLintWarns.count {
+                                    Text("· \(sortedLints.count) / \(allLintWarns.count)")
+                                        .font(.caption)
+                                        .foregroundColor(.accentColor)
+                                        .tooltip("当前显示 \(sortedLints.count) / 总 \(allLintWarns.count) · \(allLintWarns.count - sortedLints.count) 条被 filter 隐藏")
+                                }
                                 // v16.154 · severity 过滤 chip（直接点击切换 · 比齿轮 Menu 直觉）
                                 if totalErrorCount > 0 {
                                     severityFilterChip(

@@ -101,6 +101,23 @@ struct TrainingControlBar: View {
             Spacer()
 
             if viewModel.isSessionActive {
+                // v16.42 · 暂停/继续（trader 训练中接电话/上厕所 · ⌘⇧P）
+                Button {
+                    if viewModel.isSessionPaused {
+                        viewModel.resumeSession()
+                    } else {
+                        viewModel.pauseSession()
+                    }
+                } label: {
+                    Label(viewModel.isSessionPaused ? "继续" : "暂停",
+                          systemImage: viewModel.isSessionPaused ? "play.circle" : "pause.circle")
+                        .font(.system(size: 13))
+                }
+                .buttonStyle(.bordered)
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .tooltip(viewModel.isSessionPaused
+                         ? "继续训练（⌘⇧P · 计时恢复）"
+                         : "暂停训练（⌘⇧P · 计时停 · 接电话/上厕所用）")
                 Button(role: .destructive) {
                     Task { await endSession() }
                 } label: {
@@ -152,10 +169,12 @@ struct TrainingControlBar: View {
     private var statusIndicator: some View {
         if viewModel.isSessionActive {
             HStack(spacing: 6) {
-                Circle().fill(Color.green).frame(width: 9, height: 9)
-                Text("训练中")
+                // v16.42 · 暂停时灯泡橙色 + 文案变"已暂停"
+                Circle().fill(viewModel.isSessionPaused ? Color.orange : Color.green)
+                    .frame(width: 9, height: 9)
+                Text(viewModel.isSessionPaused ? "已暂停" : "训练中")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.green)
+                    .foregroundColor(viewModel.isSessionPaused ? .orange : .green)
             }
         } else {
             HStack(spacing: 6) {
@@ -365,7 +384,13 @@ struct TrainingControlBar: View {
 
     private var elapsedSeconds: Int {
         guard let start = viewModel.sessionStartedAt else { return 0 }
-        return Int(nowTick.timeIntervalSince(start))
+        // v16.42 · 扣减暂停时长（累积 + 当前正在暂停的部分）
+        let total = nowTick.timeIntervalSince(start)
+        var pause = viewModel.sessionAccumulatedPause
+        if let pausedAt = viewModel.sessionPausedAt {
+            pause += nowTick.timeIntervalSince(pausedAt)
+        }
+        return max(0, Int(total - pause))
     }
 
     private var elapsedText: String {

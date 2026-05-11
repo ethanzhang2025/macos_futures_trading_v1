@@ -47,6 +47,26 @@ final class TrainingViewModel: ObservableObject {
 
     var isSessionActive: Bool { sessionStartedAt != nil }
 
+    // MARK: - v16.42 · 暂停/继续（trader 训练中接电话/上厕所 · elapsed 时钟暂停）
+
+    /// 当前暂停的开始时间（nil = 未暂停 · 非 nil = 暂停中）
+    @Published var sessionPausedAt: Date? = nil
+    /// 累积暂停时长（多次暂停求和 · 用于扣减 elapsed）· session 结束清 0
+    @Published var sessionAccumulatedPause: TimeInterval = 0
+
+    var isSessionPaused: Bool { sessionPausedAt != nil }
+
+    func pauseSession() {
+        guard isSessionActive, sessionPausedAt == nil else { return }
+        sessionPausedAt = Date()
+    }
+
+    func resumeSession() {
+        guard let pausedAt = sessionPausedAt else { return }
+        sessionAccumulatedPause += Date().timeIntervalSince(pausedAt)
+        sessionPausedAt = nil
+    }
+
     // MARK: - 规则 CRUD
 
     func addRule(_ rule: DisciplineRule) {
@@ -110,6 +130,8 @@ final class TrainingViewModel: ObservableObject {
         sessionScenarioName = ""
         sessionScenarioPattern = nil
         sessionRecommendedMinutes = nil
+        sessionPausedAt = nil
+        sessionAccumulatedPause = 0
         liveViolations.removeAll()
     }
 

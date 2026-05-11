@@ -131,6 +131,10 @@ public enum MaiLangLint {
             return ans + 1
         }
         var reported: Set<String> = []
+        // v16.93 · 已知名集合（builtin + 已定义）· 用于 typo 建议
+        let knownNames: Set<String> = MaiLangSyntaxHighlighter.allCompletionCandidates.reduce(into: definedNames) {
+            $0.insert($1)
+        }
         for t in tokens where t.kind == .identifier {
             let upper = t.text.uppercased()
             // 仅检测全大写英文字母+数字（trader 麦语言习惯）· 跳过中文/特殊字符
@@ -142,12 +146,60 @@ public enum MaiLangLint {
             // 已报告同名只警告一次（首次出现）
             if reported.contains(upper) { continue }
             reported.insert(upper)
+            // v16.93 · typo 建议（Levenshtein 距离 ≤ 2 且长度差 ≤ 2 的最近已知名）
+            var message = "未定义的标识符 \(t.text)（可能 typo · 检查是否拼错变量名或缺定义）"
+            if let suggestion = closestKnownName(upper, in: knownNames) {
+                message += " · 可能是 `\(suggestion)`？"
+            }
             warnings.append(MaiLangLintWarning(
                 line: lineOf(t.range.location),
                 kind: .undefinedVariable,
-                message: "未定义的标识符 \(t.text)（可能 typo · 检查是否拼错变量名或缺定义）"))
+                message: message))
         }
 
         return warnings.sorted { $0.line < $1.line }
+    }
+
+    /// v16.93 · 找最近已知名（Levenshtein 距离 ≤ 2 + 长度差 ≤ 2 + 距离最小 · 平局取最短）
+    /// 返回 nil 表示无足够接近的建议
+    static func closestKnownName(_ word: String, in known: Set<String>) -> String? {
+        guard word.count >= 3 else { return nil }   // 短词建议噪音大
+        var best: (name: String, dist: Int)? = nil
+        for name in known {
+            // 性能优化：长度差超 2 直接跳过
+            guard abs(name.count - word.count) <= 2 else { continue }
+            let d = levenshtein(word, name)
+            if d == 0 { continue }   // 相等（已 reserved/defined 检查过 · 防御）
+            if d > 2 { continue }
+            if best == nil || d < best!.dist || (d == best!.dist && name.count < best!.name.count) {
+                best = (name, d)
+            }
+        }
+        return best?.name
+    }
+
+    /// Levenshtein 距离（动态规划 O(m*n)）· 仅小字符串使用
+    static func levenshtein(_ a: String, _ b: String) -> Int {
+        let aa = Array(a)
+        let bb = Array(b)
+        let m = aa.count
+        let n = bb.count
+        if m == 0 { return n }
+        if n == 0 { return m }
+        var prev = Array(0...n)
+        var curr = Array(repeating: 0, count: n + 1)
+        for i in 1...m {
+            curr[0] = i
+            for j in 1...n {
+                let cost = aa[i - 1] == bb[j - 1] ? 0 : 1
+                curr[j] = min(
+                    prev[j] + 1,        // 删
+                    curr[j - 1] + 1,    // 插
+                    prev[j - 1] + cost  // 替换
+                )
+            }
+            swap(&prev, &curr)
+        }
+        return prev[n]
     }
 }

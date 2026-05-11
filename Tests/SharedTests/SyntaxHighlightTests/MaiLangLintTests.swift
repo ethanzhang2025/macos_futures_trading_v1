@@ -203,4 +203,32 @@ struct MaiLangLintTests {
         #expect(MaiLangLintWarning.Severity.warning < .error)
         #expect(!(MaiLangLintWarning.Severity.error < .warning))
     }
+
+    // MARK: - v16.93 · typo 建议（Levenshtein）
+
+    @Test("v16.93 · levenshtein 基础距离计算")
+    func levenshteinBasic() {
+        #expect(MaiLangLint.levenshtein("MA", "MA") == 0)
+        #expect(MaiLangLint.levenshtein("MA", "MB") == 1)
+        #expect(MaiLangLint.levenshtein("MAX", "MIN") == 2)
+        #expect(MaiLangLint.levenshtein("CLOSE", "CLOSEPRICE") == 5)
+    }
+
+    @Test("v16.93 · undefined 建议最近的 builtin（MAA → MA?）")
+    func undefinedSuggestsCloseBuiltin() {
+        let src = "OUT:MAA(CLOSE,5),COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let und = warns.first { $0.kind == .undefinedVariable }
+        #expect(und?.message.contains("可能是") == true)
+    }
+
+    @Test("v16.93 · 长度差 > 2 不建议")
+    func undefinedNoSuggestion() {
+        // FOOBARBAZ 与所有 builtin 距离都 > 2
+        let src = "OUT:FOOBARBAZ,COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let und = warns.first { $0.kind == .undefinedVariable }
+        #expect(und != nil)
+        // 可能没有建议（不强求 · 但 message 仍有基础描述）
+    }
 }

@@ -196,16 +196,32 @@ struct TrainingWindow: View {
             ("⋯ Menu → 粘贴/文件导入", "v16.99/106 · v16.117 覆盖确认"),
             ("4 套模板 (v16.43)", "🎯 保守 / ⚡ 激进 / 📈 波段 / 🌱 极简"),
         ]),
-        ("🏆 历史 Panel polish (v16.55-124)", [
+        ("🏆 历史 Panel polish (v16.55-138)", [
             ("增量分页 (v16.55)", "默认 50 + 加载更多 +50 + 全部展开"),
             ("删除 ⌘Z undo (v16.64)", "5s 内可撤销 banner"),
             ("月度 vs 上月对比 (v16.67)", "weekly + monthly 长期反馈"),
             ("⚠️ 弱项加练 / 🏆 强项展示 (v16.19/114)", "≥3 次 + 均分 <70 弱 / ≥80 强 · 点击过滤"),
-            ("📛 累积违规 chip (v16.45/46)", "顶 3 跳 RulesPanel 调阈值"),
-            ("🔬 5 维平均 chip + spread (v16.62/73/116)", "tooltip min/max + 起伏大警示"),
+            ("📛 累积违规 chip (v16.45/46/135)", "顶 3 跳 RulesPanel · tooltip 含最近 5 session"),
+            ("🔬 5 维平均 chip (v16.62/73/116/133/134)", "spread/min/max/spread 警示 · ≥80 ✨ / ≥90 🌟"),
             ("再练同形态 contextMenu (v16.112)", "右键一键重练"),
+            ("复制 emoji 摘要 (v16.128)", "session 右键 IM 一行分享"),
             ("CSV filter 后子集 (v16.72)", "trader 月度/形态筛选后导出"),
+            ("5 维 markdown 复制 (v16.138)", "导出 Menu IM 分享 trader 倾向"),
             ("weekly goal 冲刺鼓励 (v16.115)", "🎯 差 1 次 / ✓🎯🏆 超额分级"),
+            ("header streak hint (v16.127)", "第一眼看 🔥 连训 X 天"),
+            ("累计时长 milestone (v16.122)", "⏱→🎯→🚀→🏆→👑→🌟"),
+        ]),
+        ("📋 RulesPanel polish (v16.130-136)", [
+            ("每条规则 ⚠️ 违规 badge (v16.130)", "0 不显示 · 1 灰 · 2-4 橙 · 5+ 红"),
+            ("badge tooltip 最近 session (v16.136)", "hover 看哪些 session 触发"),
+            ("Markdown 表格导出 (v16.121)", "可读性优先 vs JSON · 笔记 wiki 友好"),
+            ("覆盖确认 dialog (v16.117)", "import 防误覆盖现有规则"),
+        ]),
+        ("🚀 ControlBar idle 信息密度 (v16.76-139)", [
+            ("today vs yesterday (v16.104)", "短时对比 · ↑/↓/= 三态"),
+            ("🔥 streak chip (v16.79/83/89/101/139)", "milestone 4 级 · personal best · 点击跳 history · 接近升级鼓励"),
+            ("7 天 mini bar (v16.76/101)", "类 GitHub · 点击跳 history"),
+            ("上次训练距今 (v16.132)", "刚刚 / N 分钟前 / N 小时前 / N 天前"),
         ]),
     ]
 

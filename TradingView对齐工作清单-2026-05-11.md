@@ -103,10 +103,10 @@
 | # | 任务 | 类别 | 工作量 | 状态 | 完成版本 | 备注 |
 |---|------|------|-------|------|---------|------|
 | C1 | 自选列自定义 / 颜色分组 | 自选 | 1d | ⬜ | — | WatchlistWindow 列编辑器 |
-| C2 | Greeks（Δ/Γ/Θ/Vega）显示 | 期权 | 1.5d | ⬜ | — | OptionWindow 加列 |
-| C3 | 期权风险图（P/L curve）| 期权 | 1.5d | ⬜ | — | OptionBacktestSheet 扩展 |
-| C4 | Bid/Ask spread 显示 | 行情 | 0.3d | ⬜ | — | ComboHUDInfo 加字段 |
-| C5 | 自选 旗标 / 评级 | 自选 | 0.5d | ⬜ | — | — |
+| C2 | Greeks（Δ/Γ/Θ/Vega）显示 | 期权 | 1.5d | ✅ | v17.35 | OptionWindow 期权链已含 Δ Γ Θ · v17.35 补 ν ρ · 5 Greeks 完整 |
+| C3 | 期权风险图（P/L curve）| 期权 | 1.5d | ✅ | v15.31+ | OptionPayoffAnalyzer + OptionWindow strategyPnLChart · hockey stick + breakeven + spot vline + hover |
+| C4 | Bid/Ask spread 显示 | 行情 | 0.3d | ✅ | v17.33 | WatchlistSortField.spread + row tooltip · SinaQuote bid/ask 真值 |
+| C5 | 自选 旗标 / 评级 | 自选 | 0.5d | ✅ | v17.34 | InstrumentFlag 5 级 · UserDefaults 持久化 · row emoji + 右键菜单 |
 
 ---
 
@@ -153,10 +153,10 @@
 |----|------|------|------|
 | A · 图表 + 画线 | 21 | 15 | **71%** |
 | B · 警报 + Volume | 3 | 3 | **100% ✅** |
-| C · 自选 + 期权 | 5 | 0 | 0% |
+| C · 自选 + 期权 | 5 | 4 | **80%** |
 | D · Strategy Tester | 5 | 0 | 0% |
 | E · 麦语言生态 | 4 | E1 5/30 部分 | ~5% |
-| **总计** | **38** | **18** | **~47%** |
+| **总计** | **38** | **22** | **~58%** |
 
 A 段实际可完成项已 100%（剩 6 项均阻塞：Metal renderer 改动 / Apple 设备验证 / 等用户反馈）。
 

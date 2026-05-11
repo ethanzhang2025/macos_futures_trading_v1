@@ -172,9 +172,17 @@ struct TrainingHistoryPanel: View {
                     }
                     Section("CSV 数据（v16.20/v16.24 · 离线分析 + 跨设备同步）") {
                         Button {
-                            saveCSVToFile()
+                            saveCSVToFile(filtered: false)
                         } label: {
-                            Label("导出训练历史 CSV", systemImage: "tablecells")
+                            Label("导出训练历史 CSV（全部）", systemImage: "tablecells")
+                        }
+                        // v16.72 · 加 filter 后子集导出（trader 月度/形态筛选后只导出可见子集）
+                        if filterPattern != nil || filterPeriod != .all || !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                            Button {
+                                saveCSVToFile(filtered: true)
+                            } label: {
+                                Label("导出筛选后子集 CSV", systemImage: "line.3.horizontal.decrease.circle")
+                            }
                         }
                         Button {
                             importCSVFromFile()
@@ -1160,17 +1168,32 @@ struct TrainingHistoryPanel: View {
     }
 
     // MARK: - v16.20 · CSV 导出（离线 Excel/Numbers 分析）
+    // v16.72 · filtered=true 时仅导出当前 filter/search 后子集
 
-    private func saveCSVToFile() {
+    private func saveCSVToFile(filtered: Bool) {
         let panel = NSSavePanel()
-        panel.title = L("导出训练历史 CSV")
+        panel.title = L(filtered ? "导出筛选后子集 CSV" : "导出训练历史 CSV")
         panel.allowedContentTypes = [.commaSeparatedText]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyyMMdd_HHmm"
-        panel.nameFieldStringValue = "训练历史_\(dateFmt.string(from: Date())).csv"
+        panel.nameFieldStringValue = filtered
+            ? "训练历史_筛选_\(dateFmt.string(from: Date())).csv"
+            : "训练历史_\(dateFmt.string(from: Date())).csv"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let data = TrainingSessionCSVExporter.exportData(viewModel.log)
+        let logForExport: TrainingSessionLog = filtered
+            ? buildFilteredLog()
+            : viewModel.log
+        let data = TrainingSessionCSVExporter.exportData(logForExport)
         try? data.write(to: url, options: .atomic)
+    }
+
+    /// v16.72 · 应用当前 filter/search 构建子集 log（仅含匹配 session · 评分缓存自然带上）
+    private func buildFilteredLog() -> TrainingSessionLog {
+        var sub = TrainingSessionLog()
+        for s in viewModel.log.sessions where sessionMatchesFilters(s) {
+            sub.addSession(s)
+        }
+        return sub
     }
 
     // MARK: - v16.24 · CSV 导入（跨设备同步 / 备份恢复）

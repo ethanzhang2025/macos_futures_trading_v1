@@ -539,6 +539,11 @@ struct TrainingScoreSheet: View {
                         .font(.system(size: 10))
                         .foregroundColor(.orange)
                 }
+                // v16.129 · 满分 100 加 🏆（trader 完美维度即时鼓励）
+                if score == 100 {
+                    Text("🏆")
+                        .font(.system(size: 10))
+                }
                 // v16.56 · drilldown chevron · 展开本次具体计算
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9, weight: .semibold))

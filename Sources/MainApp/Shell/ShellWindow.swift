@@ -61,51 +61,19 @@ public struct ShellWindow: View {
         .padding(12)
     }
 
-    // MARK: - Pane 占位（Step 3 实装）
+    // MARK: - Pane 容器（Step 3 实装 · ChartScene 已嵌入 · 其他 view 占位）
 
+    @ViewBuilder
     private var paneContainerPlaceholder: some View {
-        VStack(spacing: 16) {
-            if let ws = shellVM.activeWorkspace {
-                Text("🚧 Step 3 实装：PaneContainer 嵌入 28 view")
-                    .font(.title3).foregroundColor(.secondary)
-                Divider().frame(width: 240)
-                VStack(spacing: 6) {
-                    Text("当前 Workspace：\(ws.name)")
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(.accentColor)
-                    Text("布局：\(ws.paneLayout.emoji) \(ws.paneLayout.displayName)")
-                        .font(.system(size: 12, design: .monospaced))
-                    Text("Panes：")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.secondary)
-                    ForEach(ws.panes) { pane in
-                        HStack(spacing: 6) {
-                            Text(pane.kind.emoji)
-                            Text(pane.kind.displayName)
-                                .font(.system(size: 11))
-                            if let sym = pane.symbol {
-                                Text("· \(sym)")
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                            }
-                            if let period = pane.periodRaw {
-                                Text("· \(period)")
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                            }
-                            if let color = pane.groupColor {
-                                Circle()
-                                    .fill(color.color)
-                                    .frame(width: 8, height: 8)
-                            }
-                        }
-                    }
-                }
-            } else {
+        if let ws = shellVM.activeWorkspace {
+            PaneContainer(workspace: ws)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            VStack {
                 Text("无 active workspace · 点 + 新建").foregroundColor(.secondary)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - 底部交易区占位（Step 7 实装）

@@ -301,6 +301,9 @@ struct TrainingHistoryPanel: View {
             // v16.19 · 弱项加练推荐（≥ 3 次同形态训练 + 均分 < 70 → 一键启动加练）
             weakPatternRecommendRow
 
+            // v16.45 · 累积最常违反规则 chip（与 v16.41 ScoreSheet 单 session chip 配套 · 月度视角）
+            mostViolatedRulesRow
+
             // v15.23 batch144 · 本周目标进度（鼓励 trader 维持训练频率）
             weeklyGoalRow
         }
@@ -515,6 +518,45 @@ struct TrainingHistoryPanel: View {
                         }
                         .buttonStyle(.plain)
                         .tooltip("一键加练 \(b.pattern.displayName) · 当前均分 \(b.avg)（\(b.count) 次）")
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    /// v16.45 · 累积最常违反规则 chip · 全部 sessions 聚合 · count 降序 · 顶 3 个
+    /// 与 v16.41 ScoreSheet 单 session chip 配套 · 月度视角看累积最弱规则
+    private var mostViolatedRulesRow: some View {
+        let allViolations = viewModel.log.sessions.flatMap { $0.violations }
+        let grouped = Dictionary(grouping: allViolations, by: { $0.ruleKind })
+            .map { (kind: $0.key, count: $0.value.count) }
+            .sorted { $0.count > $1.count }
+        return Group {
+            if grouped.isEmpty {
+                EmptyView()
+            } else {
+                HStack(spacing: 6) {
+                    Text("📛 累积")
+                        .font(.system(size: 10))
+                        .foregroundColor(.red)
+                        .frame(width: 38, alignment: .leading)
+                    ForEach(Array(grouped.prefix(3).enumerated()), id: \.offset) { idx, item in
+                        let isWorst = (idx == 0)
+                        HStack(spacing: 3) {
+                            Text(item.kind.displayName)
+                                .font(.system(size: 10))
+                            Text("×\(item.count)")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background((isWorst ? Color.red : Color.secondary).opacity(0.12))
+                        .foregroundColor(isWorst ? .red : .primary)
+                        .cornerRadius(4)
+                        .tooltip(isWorst
+                                 ? "累积最常违反 · \(item.kind.displayName) 共 \(item.count) 次（全部历史）· 改进焦点"
+                                 : "\(item.kind.displayName) 累积违反 \(item.count) 次")
                     }
                     Spacer()
                 }

@@ -1350,6 +1350,47 @@ struct TrainingHistoryPanel: View {
         .padding(.vertical, 3)
         .background(Color.secondary.opacity(0.06))
         .cornerRadius(4)
+        // v16.202 · 右键复制本月摘要 markdown（trader 月度 IM 分享）
+        .contextMenu {
+            Button {
+                copyMonthSummaryMarkdown(yearMonthKey: key, count: count)
+            } label: {
+                Label("复制 \(year) 年 \(month) 月摘要 markdown", systemImage: "doc.on.doc")
+            }
+        }
+    }
+
+    /// v16.202 · 复制某月摘要 markdown（场景 / 总分 / 5 维 dots / pnl%）
+    private func copyMonthSummaryMarkdown(yearMonthKey: String, count: Int) {
+        let cal = Calendar(identifier: .gregorian)
+        let monthSessions = viewModel.log.sessions.filter { monthKey($0) == yearMonthKey }
+            .sorted { $0.endedAt > $1.endedAt }
+        var md = "【📅 \(yearMonthKey) · \(count) 次训练】\n\n"
+        let scores = monthSessions.compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+        let avg = scores.isEmpty ? 0 : scores.reduce(0, +) / scores.count
+        md += "- 平均分：\(avg)\n"
+        // 时长
+        let totalMins = monthSessions.map { $0.durationMinutes }.reduce(0, +)
+        md += "- 累计时长：\(String(format: "%.1f h", Double(totalMins) / 60.0))\n"
+        // 训练日数
+        let days = Set(monthSessions.map { cal.startOfDay(for: $0.endedAt) }).count
+        md += "- 训练日数：\(days) 天\n\n"
+        // 表格
+        md += "| 日期 | 场景 | 总分 |\n|------|------|------|\n"
+        let fmt = DateFormatter()
+        fmt.dateFormat = "MM-dd"
+        for s in monthSessions.prefix(10) {
+            let date = fmt.string(from: s.endedAt)
+            let scenario = s.scenarioName.isEmpty ? "未命名" : s.scenarioName
+            let score = viewModel.log.score(for: s.id)?.totalScore ?? 0
+            md += "| \(date) | \(scenario) | \(score) |\n"
+        }
+        if monthSessions.count > 10 {
+            md += "| ... | （+\(monthSessions.count - 10) 行省略） | |\n"
+        }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(md, forType: .string)
     }
 
     /// v16.58 · 检查 session 是否被当前 filter/search 覆盖

@@ -432,13 +432,22 @@ struct TrainingControlBar: View {
     }
 
     /// v16.79/v16.80 · 连续训练天数 streak chip · 算法提到 TrainingSessionLog.consecutiveTrainingDays
+    /// v16.83 · milestone emoji 升级：🔥 (≥2) → 🔥🔥 (≥7) → 🚀 (≥14) → 🏆 (≥30)
     /// ≥ 2 才显示（1 天不算 streak · 避免噪音）
     @ViewBuilder
     private var consecutiveDaysChip: some View {
         let streak = viewModel.log.consecutiveTrainingDays()
         if streak >= 2 {
+            let (emoji, hint): (String, String) = {
+                switch streak {
+                case 30...:  return ("🏆", "月级习惯（≥30 天）")
+                case 14...:  return ("🚀", "两周习惯（≥14 天）")
+                case 7...:   return ("🔥🔥", "周级习惯（≥7 天）")
+                default:     return ("🔥", "起步阶段（2-6 天）")
+                }
+            }()
             HStack(spacing: 2) {
-                Text("🔥")
+                Text(emoji)
                     .font(.system(size: 11))
                 Text("连训 \(streak) 天")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -448,7 +457,7 @@ struct TrainingControlBar: View {
             .padding(.vertical, 2)
             .background(Color.red.opacity(0.10))
             .cornerRadius(3)
-            .tooltip("连续 \(streak) 天每天 ≥ 1 次训练 · 保持习惯！")
+            .tooltip("连续 \(streak) 天每天 ≥ 1 次训练 · \(hint) · 继续保持！")
         }
     }
 

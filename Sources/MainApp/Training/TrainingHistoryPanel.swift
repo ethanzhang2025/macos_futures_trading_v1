@@ -932,6 +932,14 @@ struct TrainingHistoryPanel: View {
                         }
                         .buttonStyle(.plain)
                         .tooltip(buildWeakPatternTooltip(pattern: b.pattern, avg: b.avg, count: b.count))
+                        // v16.190 · 右键复制弱项加练详情 markdown（trader 月度回顾/分享）
+                        .contextMenu {
+                            Button {
+                                copyPatternDetailMarkdown(pattern: b.pattern, avg: b.avg, count: b.count, isWeak: true)
+                            } label: {
+                                Label("复制弱项详情 markdown", systemImage: "doc.on.doc")
+                            }
+                        }
                     }
                     Spacer()
                 }
@@ -985,11 +993,41 @@ struct TrainingHistoryPanel: View {
                         }
                         .buttonStyle(.plain)
                         .tooltip(buildStrongPatternTooltip(pattern: b.pattern, avg: b.avg, count: b.count))
+                        // v16.190 · 右键复制强项详情 markdown
+                        .contextMenu {
+                            Button {
+                                copyPatternDetailMarkdown(pattern: b.pattern, avg: b.avg, count: b.count, isWeak: false)
+                            } label: {
+                                Label("复制强项详情 markdown", systemImage: "doc.on.doc")
+                            }
+                        }
                     }
                     Spacer()
                 }
             }
         }
+    }
+
+    /// v16.190 · 复制弱/强项详情 markdown（含 emoji 头 + 最近 3 次分数列表）
+    private func copyPatternDetailMarkdown(pattern: TrainingScenarioPattern,
+                                            avg: Int, count: Int, isWeak: Bool) {
+        let sessions = viewModel.log.sessions
+            .filter { $0.scenarioPattern == pattern }
+            .sorted { $0.endedAt > $1.endedAt }
+            .prefix(3)
+        var md = isWeak
+            ? "【⚠️ 弱项 · \(pattern.emoji) \(pattern.displayName) · 均 \(avg) 分 / \(count) 次】\n"
+            : "【🏆 强项 · \(pattern.emoji) \(pattern.displayName) · 均 \(avg) 分 / \(count) 次】\n"
+        md += "\n最近 3 次：\n"
+        let fmt = DateFormatter()
+        fmt.dateFormat = "MM-dd"
+        for s in sessions {
+            let score = viewModel.log.score(for: s.id)?.totalScore ?? 0
+            md += "- \(fmt.string(from: s.endedAt)) · \(score) 分\n"
+        }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(md, forType: .string)
     }
 
     /// v16.45 · 累积最常违反规则 chip · 全部 sessions 聚合 · count 降序 · 顶 3 个

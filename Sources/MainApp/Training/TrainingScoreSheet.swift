@@ -123,14 +123,24 @@ struct TrainingScoreSheet: View {
                 .keyboardShortcut("c", modifiers: [.command, .option])
                 .tooltip("复制 1 行 emoji 摘要（⌘⌥C · 朋友圈/IM 一行分享 · 比 markdown 简短）")
                 // v15.23 batch146 · 截图为 PNG 分享（朋友圈晒分）
-                Button {
-                    copyScreenshotToPasteboard()
-                    flashFeedback("✓ 已截图 PNG · 粘贴到微信/朋友圈")
+                // v16.120 · Menu 形式：复制剪贴板 / 保存文件二选一（与雷达图 v16.103 同模式）
+                Menu {
+                    Button {
+                        copyScreenshotToPasteboard()
+                        flashFeedback("✓ 已截图 PNG · 粘贴到微信/朋友圈")
+                    } label: {
+                        Label("复制到剪贴板（⌘⇧C）", systemImage: "doc.on.clipboard")
+                    }
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+                    Button {
+                        saveScreenshotToFile()
+                    } label: {
+                        Label("保存为 PNG 文件…", systemImage: "square.and.arrow.down")
+                    }
                 } label: {
                     Label("截图分享", systemImage: "camera")
                 }
-                .keyboardShortcut("c", modifiers: [.command, .shift])
-                .tooltip("评分卡截图为 PNG（⌘⇧C · 粘贴到微信/朋友圈）")
+                .tooltip("评分卡截图 PNG · ⌘⇧C 复制 / 保存为文件")
                 // v16.87 · 独立 5 维雷达图 PNG（朋友圈分享单 session 形状）
                 // v16.103 · Menu 形式：复制到剪贴板 / 保存到文件二选一
                 if score.subScores != nil {
@@ -948,6 +958,47 @@ struct TrainingScoreSheet: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setData(png, forType: .png)
+    }
+
+    /// v16.120 · 保存完整评分卡截图 PNG 到文件（trader 长期归档）
+    private func saveScreenshotToFile() {
+        let shareCard = VStack(alignment: .leading, spacing: 14) {
+            header
+            Divider()
+            scoreCard
+            if let sub = score.subScores {
+                Divider()
+                subScoresSection(sub)
+            }
+            Divider()
+            summaryBlock
+        }
+        .padding(20)
+        .frame(width: 540)
+        .background(Color(NSColor.windowBackgroundColor))
+        let renderer = ImageRenderer(content: shareCard)
+        renderer.scale = 2
+        guard let nsImage = renderer.nsImage,
+              let tiff = nsImage.tiffRepresentation,
+              let bmp = NSBitmapImageRep(data: tiff),
+              let png = bmp.representation(using: .png, properties: [:]) else {
+            Toast.errorBody("导出失败", "评分卡渲染失败")
+            return
+        }
+        let panel = NSSavePanel()
+        panel.title = "保存评分卡 PNG"
+        panel.allowedContentTypes = [.png]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        let scenarioPart = session.scenarioName.isEmpty ? "训练" : session.scenarioName
+        panel.nameFieldStringValue = "评分卡_\(scenarioPart)_\(score.totalScore)分_\(dateFmt.string(from: Date())).png"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try png.write(to: url, options: .atomic)
+            flashFeedback("✓ 已保存 \(url.lastPathComponent)")
+        } catch {
+            Toast.error("保存失败", error)
+        }
     }
 }
 

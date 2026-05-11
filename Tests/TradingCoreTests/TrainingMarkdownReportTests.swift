@@ -456,4 +456,40 @@ struct TrainingMarkdownReportTests {
         let md = TrainingMarkdownReport.generate(TrainingSessionLog())
         #expect(!md.contains("训练时长分布"))
     }
+
+    @Test("v16.118 · 过半短时 → 建议 ≥ 15 分专注")
+    func durationSuggestionShortHeavy() {
+        var log = TrainingSessionLog()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        // 3 个 5 分钟（短）+ 1 个 20 分钟（中）→ 75% 短
+        for _ in 0..<3 {
+            log.addSession(TrainingSession(
+                startedAt: t0, endedAt: t0.addingTimeInterval(300),
+                initialBalance: 100_000, finalBalance: 100_000))
+        }
+        log.addSession(TrainingSession(
+            startedAt: t0, endedAt: t0.addingTimeInterval(1200),
+            initialBalance: 100_000, finalBalance: 100_000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("可能过于试探"))
+        #expect(md.contains("建议至少 15 分钟"))
+    }
+
+    @Test("v16.118 · 过半长时 → 建议拆短")
+    func durationSuggestionLongHeavy() {
+        var log = TrainingSessionLog()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        // 3 个 60 分钟（长）+ 1 个 20 分钟（中）→ 75% 长
+        for _ in 0..<3 {
+            log.addSession(TrainingSession(
+                startedAt: t0, endedAt: t0.addingTimeInterval(3600),
+                initialBalance: 100_000, finalBalance: 100_000))
+        }
+        log.addSession(TrainingSession(
+            startedAt: t0, endedAt: t0.addingTimeInterval(1200),
+            initialBalance: 100_000, finalBalance: 100_000))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("单次过长可能效率递减"))
+        #expect(md.contains("建议拆短"))
+    }
 }

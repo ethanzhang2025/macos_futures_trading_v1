@@ -1200,6 +1200,14 @@ struct TrainingHistoryPanel: View {
                                 } label: {
                                     Label("复制单次分析（markdown）", systemImage: "doc.on.doc")
                                 }
+                                // v16.155 · 导出 5 维雷达 PNG（仅 v2 subScores 非 nil 时显示）
+                                if score.subScores != nil {
+                                    Button {
+                                        exportSessionRadarPNG(session: session, score: score)
+                                    } label: {
+                                        Label("导出 5 维雷达 PNG", systemImage: "scope")
+                                    }
+                                }
                             }
                             Divider()
                             Button("删除", role: .destructive) {
@@ -1384,6 +1392,70 @@ struct TrainingHistoryPanel: View {
             }
         }
         .tooltip(tip)
+    }
+
+    /// v16.155 · 单 session 5 维雷达图 PNG 导出（context menu 触发 · 不必打开 ScoreSheet）
+    /// 复用 v16.155 共享 FiveDimRadarChart view + ImageRenderer · 简化 share card
+    @MainActor
+    private func exportSessionRadarPNG(session: TrainingSession, score: TrainingScore) {
+        guard let sub = score.subScores else { return }
+        let card = VStack(alignment: .center, spacing: 12) {
+            VStack(spacing: 4) {
+                Text(session.scenarioName.isEmpty ? "训练评分" : session.scenarioName)
+                    .font(.title3.bold())
+                Text("\(score.grade.emoji) \(score.totalScore)/100 · \(score.grade.displayName) 级")
+                    .font(.caption.bold())
+                    .foregroundColor(gradeColor(score.grade))
+            }
+            FiveDimRadarChart(sub: sub)
+                .frame(width: 260, height: 260)
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(sub.ordered, id: \.dimension) { entry in
+                    HStack(spacing: 6) {
+                        Text(entry.dimension.emoji).font(.system(size: 12))
+                        Text(entry.dimension.displayName)
+                            .font(.system(size: 11))
+                            .frame(width: 50, alignment: .leading)
+                        Text("\(entry.score)")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(subDotColor(entry.score))
+                        if entry.dimension == sub.weakest {
+                            Text("← 最弱")
+                                .font(.system(size: 10))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+            }
+            .frame(width: 200, alignment: .leading)
+        }
+        .padding(20)
+        .frame(width: 360)
+        .background(Color(NSColor.windowBackgroundColor))
+
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = 2
+        guard let nsImage = renderer.nsImage,
+              let tiff = nsImage.tiffRepresentation,
+              let bmp = NSBitmapImageRep(data: tiff),
+              let png = bmp.representation(using: .png, properties: [:]) else {
+            Toast.errorBody("导出失败", "雷达图渲染失败")
+            return
+        }
+        let panel = NSSavePanel()
+        panel.title = "保存 5 维雷达图 PNG"
+        panel.allowedContentTypes = [.png]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        let scenarioPart = session.scenarioName.isEmpty ? "训练" : session.scenarioName
+        panel.nameFieldStringValue = "雷达_\(scenarioPart)_\(score.totalScore)分_\(dateFmt.string(from: Date())).png"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try png.write(to: url, options: .atomic)
+            Toast.info("导出成功", "已保存 \(url.lastPathComponent)")
+        } catch {
+            Toast.error("保存失败", error)
+        }
     }
 
     /// v16.150 · 5 维 dot 颜色（与 ScoreSheet subScoreColor 同阶梯 · 视觉一致）

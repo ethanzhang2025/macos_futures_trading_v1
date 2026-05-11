@@ -121,6 +121,9 @@ public enum TrainingMarkdownReport {
         // v16.118 · 训练时长分布（短/中/长 · trader 看专注时长习惯）
         md += durationDistributionMarkdown(sessions: sessions)
 
+        // v16.164 · 最近 30 天训练日历 mini sparkline（emoji 方块 · trader 看习惯密度）
+        md += recentTrainingCalendarMarkdown(sessions: sessions, generatedAt: generatedAt)
+
         // 最近训练（filtered sessions desc by endedAt · 取前 recentLimit）
         md += "## 最近训练\n\n"
         let recent = sessions
@@ -200,6 +203,59 @@ public enum TrainingMarkdownReport {
             md += "| \(dim.emoji) \(dim.displayName) | \(avg)\(marker) |\n"
         }
         md += "\n"
+        return md
+    }
+
+    /// v16.164 · 最近 30 天训练日历 mini sparkline · GitHub contributions 风
+    /// emoji 方块按当日训练次数：⬜ 0 / 🟦 1 / 🟩 2 / 🟧 3 / 🟥 ≥ 4
+    /// 输出 5 行 × 7 day（最右下角 = 今天 · 从 30 天前补齐对齐周一）
+    private static func recentTrainingCalendarMarkdown(sessions: [TrainingSession],
+                                                        generatedAt: Date) -> String {
+        guard !sessions.isEmpty else { return "" }
+        let cal = Calendar(identifier: .gregorian)
+        let today = cal.startOfDay(for: generatedAt)
+        // 算每日 session 计数（最近 30 天）
+        var dayCounts: [Date: Int] = [:]
+        for offset in 0..<30 {
+            guard let d = cal.date(byAdding: .day, value: -offset, to: today) else { continue }
+            dayCounts[d] = 0
+        }
+        for s in sessions {
+            let day = cal.startOfDay(for: s.endedAt)
+            if let _ = dayCounts[day] {
+                dayCounts[day, default: 0] += 1
+            }
+        }
+        // 排成 5 行 × 7 列（最近 35 天 · 不足补 ⬛ 占位）
+        let cellEmoji: (Int) -> String = { n in
+            switch n {
+            case 0: return "⬜"
+            case 1: return "🟦"
+            case 2: return "🟩"
+            case 3: return "🟧"
+            default: return "🟥"
+            }
+        }
+        var md = "## 最近 30 天训练习惯（emoji 日历）\n\n"
+        md += "图例：⬜ 0 次 / 🟦 1 次 / 🟩 2 次 / 🟧 3 次 / 🟥 ≥ 4 次\n\n```\n"
+        // 5 行 × 7 day · 第 5 行最右是今天 · 从 i=29 倒序往左排
+        for row in 0..<5 {
+            var line = ""
+            for col in 0..<7 {
+                let offset = (4 - row) * 7 + (6 - col)   // 0 = 今天 · 最大 34
+                if offset >= 30 {
+                    line += "⬛"
+                } else if let d = cal.date(byAdding: .day, value: -offset, to: today) {
+                    line += cellEmoji(dayCounts[d] ?? 0)
+                } else {
+                    line += "⬛"
+                }
+            }
+            md += line + "\n"
+        }
+        md += "```\n\n"
+        let trainedDays = dayCounts.values.filter { $0 > 0 }.count
+        md += "- 30 天内训练 \(trainedDays) 天 · 占比 \(trainedDays * 100 / 30)%\n\n"
         return md
     }
 

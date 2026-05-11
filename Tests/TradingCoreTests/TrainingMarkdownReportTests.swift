@@ -431,6 +431,26 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("本月最强"))
     }
 
+    // MARK: - v16.164 · 最近 30 天训练日历 emoji sparkline
+
+    @Test("v16.164 · 含 session 输出 30 天 emoji 日历章节")
+    func recentTrainingCalendarSection() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "s1", pnl: 100))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(md.contains("最近 30 天训练习惯"))
+        #expect(md.contains("emoji 日历"))
+        #expect(md.contains("⬜"))
+        #expect(md.contains("🟦"))   // 至少 1 次训练 → 蓝方块
+        #expect(md.contains("30 天内训练"))
+    }
+
+    @Test("v16.164 · 空 log 不输出 emoji 日历章节")
+    func recentTrainingCalendarEmptyLog() {
+        let md = TrainingMarkdownReport.generate(TrainingSessionLog())
+        #expect(!md.contains("emoji 日历"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

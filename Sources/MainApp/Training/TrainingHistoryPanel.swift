@@ -468,9 +468,16 @@ struct TrainingHistoryPanel: View {
                         }
                         return base
                     }()
-                    statLine("\(milestone) 累计",
-                             value: value,
-                             color: hours >= 50 ? .purple : .accentColor)
+                    // v16.157 · 点击切月 filter（trader 看本月时长贡献来源）
+                    Button {
+                        filterPeriod = .month
+                    } label: {
+                        statLine("\(milestone) 累计",
+                                 value: value,
+                                 color: hours >= 50 ? .purple : .accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .tooltip("\(milestone) 累计训练 \(String(format: "%.1f h", hours)) · 点击 filter 本月查看时长来源")
                 }
                 // v16.80 · 连训天数（与 ControlBar 🔥 chip 同算法 · ≥ 2 才显示）
                 // v16.84 · 同步 milestone emoji 升级（与 ControlBar v16.83 一致）

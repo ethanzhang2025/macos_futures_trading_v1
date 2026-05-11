@@ -33,6 +33,8 @@ struct TrainingScoreSheet: View {
     @State private var emojiScale: CGFloat = 0.5
     /// v16.56 · 5 维主分点击展开 drilldown · nil = 全部折叠 · 单选模式
     @State private var expandedDim: TrainingSubScores.Dimension? = nil
+    /// v16.147 · 改进 plan 5 步行动展开（默认折叠保持密度）
+    @State private var showPlan: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -647,19 +649,68 @@ struct TrainingScoreSheet: View {
     }
 
     private func weaknessTip(_ sub: TrainingSubScores) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("💡")
-                .font(.system(size: 14))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("改进建议（最弱：\(sub.weakest.emoji) \(sub.weakest.displayName)）")
-                    .font(.system(size: 11, weight: .medium))
+        let weakScore = sub.ordered.first { $0.dimension == sub.weakest }?.score ?? 0
+        let plan = TrainingScorer.improvementPlan(for: sub.weakest, score: weakScore)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 8) {
+                Text("💡")
+                    .font(.system(size: 14))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("改进建议（最弱：\(sub.weakest.emoji) \(sub.weakest.displayName)）")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.orange)
+                    Text(sub.weakness)
+                        .font(.system(size: 11))
+                        .foregroundColor(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                // v16.147 · 5 步行动 plan 展开/收起 chevron
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { showPlan.toggle() }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text("📋 5 步")
+                            .font(.system(size: 10, weight: .medium))
+                        Image(systemName: showPlan ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
                     .foregroundColor(.orange)
-                Text(sub.weakness)
-                    .font(.system(size: 11))
-                    .foregroundColor(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .buttonStyle(.plain)
+                .tooltip(showPlan ? "收起 5 步行动建议" : "展开 5 步具体行动建议")
             }
-            Spacer()
+            // v16.147 · 5 步行动 plan numbered list（默认折叠 · 展开后 trader 可右键复制全部）
+            if showPlan {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(plan.enumerated()), id: \.offset) { idx, step in
+                        HStack(alignment: .top, spacing: 6) {
+                            Text("\(idx + 1).")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.orange)
+                                .frame(width: 16, alignment: .trailing)
+                            Text(step)
+                                .font(.system(size: 11))
+                                .foregroundColor(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.leading, 22)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .contextMenu {
+                    Button {
+                        let header = "【💡 改进 plan · \(sub.weakest.emoji) \(sub.weakest.displayName) \(weakScore) 分】"
+                        let body = plan.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString("\(header)\n\(body)", forType: .string)
+                        flashFeedback("✓ 已复制 5 步改进 plan")
+                    } label: {
+                        Label("复制 5 步行动 plan", systemImage: "doc.on.doc")
+                    }
+                }
+            }
         }
         .padding(8)
         .background(Color.orange.opacity(0.08))

@@ -391,4 +391,39 @@ struct TrainingSubScoresTests {
         // pnl v1 ×2 必须等于 sub.pnl
         #expect(b.pnlV1 * 2 == sub.pnl)
     }
+
+    // MARK: - v16.147 · improvementPlan 5 步行动建议
+
+    @Test("improvementPlan · 5 维全部返回 5 步行动")
+    func test_improvementPlan_allDimsHave5Steps() {
+        for dim in TrainingSubScores.Dimension.allCases {
+            let plan = TrainingScorer.improvementPlan(for: dim, score: 30)
+            #expect(plan.count == 5, "\(dim) 应返回 5 步")
+            #expect(plan.allSatisfy { !$0.isEmpty }, "\(dim) 行动建议不应为空")
+        }
+    }
+
+    @Test("improvementPlan · pnl 维度建议含信号 / 止盈关键词")
+    func test_improvementPlan_pnlKeywords() {
+        let plan = TrainingScorer.improvementPlan(for: .pnl, score: 20)
+        let joined = plan.joined(separator: "\n")
+        #expect(joined.contains("信号"))
+        #expect(joined.contains("止盈"))
+    }
+
+    @Test("improvementPlan · discipline 维度建议含止损 / 计划关键词")
+    func test_improvementPlan_disciplineKeywords() {
+        let plan = TrainingScorer.improvementPlan(for: .discipline, score: 25)
+        let joined = plan.joined(separator: "\n")
+        #expect(joined.contains("止损"))
+        #expect(joined.contains("计划"))
+    }
+
+    @Test("improvementPlan · risk 维度建议含 1% 仓位硬上限")
+    func test_improvementPlan_riskHardCap() {
+        let plan = TrainingScorer.improvementPlan(for: .risk, score: 10)
+        let joined = plan.joined(separator: "\n")
+        #expect(joined.contains("1%"))
+        #expect(joined.contains("仓位"))
+    }
 }

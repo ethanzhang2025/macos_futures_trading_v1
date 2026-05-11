@@ -326,6 +326,11 @@ public struct FormulaEditorWindow: View {
                     .frame(width: 28)
                     .tooltip("排序选项 + 仅显示输出变量过滤")
                     Button("关闭") { showOutlineSheet = false }.keyboardShortcut(.cancelAction)
+                    // v16.171 · ⌘W 关闭 sheet（macOS 标准 · 与 ESC 互补）
+                    Button("") { showOutlineSheet = false }
+                        .keyboardShortcut("w", modifiers: [.command])
+                        .opacity(0)
+                        .frame(width: 0, height: 0)
                 }
                 .padding(12)
                 // batch139 · 搜索框

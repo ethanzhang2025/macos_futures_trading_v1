@@ -1664,6 +1664,15 @@ public struct FormulaEditorWindow: View {
             ("变量名疑似 typo (v16.109)", "🔧 修复 → 跳转 + 复制 builtin 名 · ≥ 5 字符 + 距离 1"),
             ("行内波浪线 (v16.92)", "整行 dot · error 红 / warning 橙 · trader 写时即看 · v16.107 可关闭"),
         ]),
+        ("🔇 Lint 噪音控制（v16.152 / v16.154 / v16.158 / v16.160 / v16.171 / v16.173）", [
+            ("齿轮 Menu severity (v16.152)", "Toggle error / warning 全局开关 · 持久化 @AppStorage"),
+            ("chip 切 severity (v16.154)", "outline section 🔴 / 🟡 chip 直接点击 toggle · 与 Menu 共享 state"),
+            ("右键 hide kind (v16.158)", "lint 行右键 → 本会话隐藏「未使用变量」类 · 不持久化"),
+            ("已隐藏 chip 行 (v16.158)", "顶部「已隐藏：[kind ⤺]」· 点击 chip 单独恢复"),
+            ("全部恢复 (v16.160)", "≥ 2 已隐藏时显示「全部恢复」button · 一键清空"),
+            ("仅看 error (v16.173)", "一键隐藏全部 warning 类 · 聚焦紧急"),
+            ("⌘W 关闭 sheet (v16.171)", "outline sheet macOS 标准 ⌘W · 与 ESC 互补"),
+        ]),
     ]
 
     // MARK: - v16.158 · kind 中文标签（context menu / 已隐藏 chip 共用）

@@ -400,12 +400,16 @@ struct TrainingHistoryPanel: View {
                              color: st.isWinning ? .red : .blue)
                 }
                 // v16.49 · 累计训练时长（鼓励高频 · 与 v15.23 batch144 weeklyGoalRow 互补）
+                // v16.108 · 加平均每次时长（trader 看专注度 · 太短 = 试探 / 太长 = 拖延）
                 let totalMinutes = viewModel.log.sessions.map { $0.durationMinutes }.reduce(0, +)
                 if totalMinutes > 0 {
+                    let n = max(1, viewModel.log.sessionCount)
+                    let avgMin = totalMinutes / n
+                    let value = totalMinutes >= 60
+                                ? String(format: "%.1f h · 均 %d 分/次", Double(totalMinutes) / 60.0, avgMin)
+                                : "\(totalMinutes) min · 均 \(avgMin) 分/次"
                     statLine("⏱ 累计",
-                             value: totalMinutes >= 60
-                                    ? String(format: "%.1f h", Double(totalMinutes) / 60.0)
-                                    : "\(totalMinutes) min",
+                             value: value,
                              color: .accentColor)
                 }
                 // v16.80 · 连训天数（与 ControlBar 🔥 chip 同算法 · ≥ 2 才显示）

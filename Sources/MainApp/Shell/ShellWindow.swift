@@ -28,6 +28,8 @@ public struct ShellWindow: View {
                 paneContainerPlaceholder
                 Divider()
                 BottomTradingBar()
+                Divider()
+                ShellStatusBar()
             }
             .frame(minWidth: 1000, minHeight: 700)
             .background(ShellKeyboardShortcuts())

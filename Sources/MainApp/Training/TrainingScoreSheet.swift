@@ -560,6 +560,7 @@ struct TrainingScoreSheet: View {
             .tooltip(dimensionFormulaHint(dimension))
 
             // v16.56 · 展开行：本次具体数据计算（与公式 hint 配套 · hover 学公式 / 点击看本次数据）
+            // v16.131 · 右键复制本维度详情（trader 单维度分析分享）
             if isExpanded {
                 Text(dimensionBreakdownText(dimension))
                     .font(.system(size: 10, design: .monospaced))
@@ -572,6 +573,17 @@ struct TrainingScoreSheet: View {
                     .cornerRadius(4)
                     .fixedSize(horizontal: false, vertical: true)
                     .transition(.opacity.combined(with: .move(edge: .top)))
+                    .contextMenu {
+                        Button {
+                            let text = "【\(dimension.emoji) \(dimension.displayName) · 本次 \(score) 分】\n\(dimensionBreakdownText(dimension))"
+                            let pb = NSPasteboard.general
+                            pb.clearContents()
+                            pb.setString(text, forType: .string)
+                            flashFeedback("✓ 已复制 \(dimension.displayName) drilldown")
+                        } label: {
+                            Label("复制本维度详情", systemImage: "doc.on.doc")
+                        }
+                    }
             }
         }
     }

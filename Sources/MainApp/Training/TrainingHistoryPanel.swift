@@ -456,6 +456,9 @@ struct TrainingHistoryPanel: View {
             // v16.19 · 弱项加练推荐（≥ 3 次同形态训练 + 均分 < 70 → 一键启动加练）
             weakPatternRecommendRow
 
+            // v16.114 · 最强形态展示（≥ 3 次 + 均分 ≥ 80 · 鼓励 + trader 自信形态）
+            strongPatternShowcaseRow
+
             // v16.45 · 累积最常违反规则 chip（与 v16.41 ScoreSheet 单 session chip 配套 · 月度视角）
             mostViolatedRulesRow
 
@@ -777,6 +780,53 @@ struct TrainingHistoryPanel: View {
                         }
                         .buttonStyle(.plain)
                         .tooltip("一键加练 \(b.pattern.displayName) · 当前均分 \(b.avg)（\(b.count) 次）")
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    /// v16.114 · 最强形态展示（与 v16.19 弱项加练互补 · 鼓励 trader 自信形态）
+    /// 条件：≥ 3 次同形态 + 均分 ≥ 80 · 降序均分排列 · 顶 3 个
+    private var strongPatternShowcaseRow: some View {
+        struct StrongBucket { let pattern: TrainingScenarioPattern; let avg: Int; let count: Int }
+        var buckets: [StrongBucket] = []
+        let grouped = Dictionary(grouping: viewModel.log.sessions.filter { $0.scenarioPattern != nil },
+                                 by: { $0.scenarioPattern! })
+        for (pat, sessions) in grouped {
+            guard sessions.count >= 3 else { continue }
+            let scores = sessions.compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+            guard !scores.isEmpty else { continue }
+            let avg = scores.reduce(0, +) / scores.count
+            if avg >= 80 {
+                buckets.append(StrongBucket(pattern: pat, avg: avg, count: sessions.count))
+            }
+        }
+        buckets.sort { $0.avg > $1.avg }
+        return Group {
+            if buckets.isEmpty {
+                EmptyView()
+            } else {
+                HStack(spacing: 6) {
+                    Text("🏆 强项")
+                        .font(.system(size: 10))
+                        .foregroundColor(.green)
+                        .frame(width: 38, alignment: .leading)
+                    ForEach(buckets.prefix(3), id: \.pattern) { b in
+                        HStack(spacing: 3) {
+                            Text(b.pattern.emoji)
+                            Text(b.pattern.displayName)
+                                .font(.system(size: 10))
+                            Text("\(b.avg)")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundColor(b.avg >= 90 ? .purple : .green)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.10))
+                        .cornerRadius(4)
+                        .tooltip("\(b.pattern.displayName) · 均分 \(b.avg)（\(b.count) 次）· 你的强项！")
                     }
                     Spacer()
                 }

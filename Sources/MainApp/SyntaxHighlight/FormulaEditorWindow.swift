@@ -89,6 +89,8 @@ public struct FormulaEditorWindow: View {
     /// v16.152 · lint outline section 按 severity 过滤（默认全开 · trader noise 控制）
     @AppStorage("viewState.v1.formulaEditor.showLintErrors") private var showLintErrors: Bool = true
     @AppStorage("viewState.v1.formulaEditor.showLintWarnings") private var showLintWarnings: Bool = true
+    /// v16.158 · 本会话隐藏指定 kind 的 lint（不持久化 · trader 临时关掉某类噪音）
+    @State private var sessionHiddenLintKinds: Set<MaiLangLintWarning.Kind> = []
     /// v15.23 batch109 · minimap 宽度 4 档（80 窄 / 100 中 / 120 宽 / 160 超宽 · 默认 100 · 持久化）
     @AppStorage("viewState.v1.formulaEditor.minimapWidth") private var minimapWidth: Double = 100
     /// v15.23 batch106 · 主编辑器当前可视行（1-based · minimap viewport 高亮 + 滚动同步）
@@ -278,10 +280,11 @@ public struct FormulaEditorWindow: View {
             let searchFilteredLints = q.isEmpty ? allLintWarns
                           : allLintWarns.filter { $0.message.lowercased().contains(q) }
             // v16.152 · severity 过滤（齿轮 Menu toggle 控制 · 默认全开 · trader noise 控制）
+            // v16.158 · kind 过滤（每条 contextMenu 隐藏 · 本会话有效 · 不持久化）
             let lintWarns = searchFilteredLints.filter {
                 ($0.severity == .error && showLintErrors)
                 || ($0.severity == .warning && showLintWarnings)
-            }
+            }.filter { !sessionHiddenLintKinds.contains($0.kind) }
             let deps = MaiLangDependencies.analyze(sourceText)
             let depByName: [String: MaiLangVarDependency] = Dictionary(
                 uniqueKeysWithValues: deps.map { ($0.name.uppercased(), $0) })
@@ -457,6 +460,29 @@ public struct FormulaEditorWindow: View {
                                         Spacer()
                                     }
                                 }
+                                // v16.158 · 已隐藏 kinds 恢复 chip 行（trader 一键恢复某类）
+                                if !sessionHiddenLintKinds.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Text("已隐藏：").font(.system(size: 10)).foregroundColor(.secondary)
+                                        ForEach(Array(sessionHiddenLintKinds), id: \.self) { kind in
+                                            Button {
+                                                sessionHiddenLintKinds.remove(kind)
+                                            } label: {
+                                                HStack(spacing: 2) {
+                                                    Text(lintKindLabel(kind))
+                                                        .font(.system(size: 10))
+                                                    Image(systemName: "arrow.uturn.backward.circle")
+                                                        .font(.system(size: 9))
+                                                }
+                                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                                .background(RoundedRectangle(cornerRadius: 4)
+                                                    .fill(Color.secondary.opacity(0.15)))
+                                            }
+                                            .buttonStyle(.plain)
+                                            .tooltip("恢复显示 \(lintKindLabel(kind)) 类")
+                                        }
+                                    }
+                                }
                                 ForEach(Array(sortedLints.enumerated()), id: \.offset) { _, warn in
                                     HStack {
                                         Text("\(warn.line)").font(.caption.monospacedDigit())
@@ -479,6 +505,16 @@ public struct FormulaEditorWindow: View {
                                             statusMessage = "跳转到第 \(warn.line) 行 · \(warn.message)"
                                         }
                                         .buttonStyle(.borderless)
+                                    }
+                                    // v16.158 · 右键隐藏此 kind 类（本会话 · 不持久化）
+                                    .contextMenu {
+                                        Button {
+                                            sessionHiddenLintKinds.insert(warn.kind)
+                                            statusMessage = "已隐藏 \(lintKindLabel(warn.kind)) 类 lint（本会话）"
+                                        } label: {
+                                            Label("本会话隐藏「\(lintKindLabel(warn.kind))」类",
+                                                   systemImage: "eye.slash")
+                                        }
                                     }
                                 }
                             }
@@ -1591,6 +1627,19 @@ public struct FormulaEditorWindow: View {
             ("行内波浪线 (v16.92)", "整行 dot · error 红 / warning 橙 · trader 写时即看 · v16.107 可关闭"),
         ]),
     ]
+
+    // MARK: - v16.158 · kind 中文标签（context menu / 已隐藏 chip 共用）
+
+    private func lintKindLabel(_ kind: MaiLangLintWarning.Kind) -> String {
+        switch kind {
+        case .unusedVariable:        return "未使用变量"
+        case .duplicateDefinition:   return "重复定义"
+        case .missingColorAttribute: return "缺 COLOR 属性"
+        case .undefinedVariable:     return "未定义引用"
+        case .argCountMismatch:      return "参数数量不符"
+        case .suspiciousVariableName: return "疑似 typo 变量"
+        }
+    }
 
     // MARK: - v16.154 · severity 过滤 chip（outline section · 直接点击 toggle）
 

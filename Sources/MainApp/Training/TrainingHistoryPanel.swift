@@ -1222,6 +1222,13 @@ struct TrainingHistoryPanel: View {
             .onChange(of: viewModel.recentlyAddedSessionID) { newID in
                 handleRecentlyAdded(newID, proxy: proxy)
             }
+            // v16.151 · ControlBar today vs yesterday chip 点击 → set filterPeriod = .today + 清旗
+            .onChange(of: viewModel.pendingHistoryFilterToToday) { newVal in
+                if newVal {
+                    filterPeriod = .today
+                    DispatchQueue.main.async { viewModel.pendingHistoryFilterToToday = false }
+                }
+            }
         }
     }
 

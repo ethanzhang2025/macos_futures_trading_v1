@@ -469,15 +469,22 @@ struct TrainingControlBar: View {
                 if delta < 0 { return ("arrow.down.right", .green) }
                 return ("equal", .secondary)
             }()
-            HStack(spacing: 1) {
-                Image(systemName: icon)
-                    .font(.system(size: 9))
-                    .foregroundColor(color)
-                Text("vs 昨 \(delta >= 0 ? "+" : "")\(delta)")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
+            // v16.151 · 点击跳 history tab + filter today（与 streak chip 同模式）
+            Button {
+                viewModel.pendingHistoryFilterToToday = true
+                viewModel.pendingJumpToHistoryTab = true
+            } label: {
+                HStack(spacing: 1) {
+                    Image(systemName: icon)
+                        .font(.system(size: 9))
+                        .foregroundColor(color)
+                    Text("vs 昨 \(delta >= 0 ? "+" : "")\(delta)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
             }
-            .tooltip("今日 \(todayCount) 次 vs 昨日 \(yesterdayCount) 次")
+            .buttonStyle(.plain)
+            .tooltip("今日 \(todayCount) 次 vs 昨日 \(yesterdayCount) 次 · 点击查看今日训练")
         }
     }
 

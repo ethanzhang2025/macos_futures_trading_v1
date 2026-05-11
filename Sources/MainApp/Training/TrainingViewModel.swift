@@ -48,6 +48,10 @@ final class TrainingViewModel: ObservableObject {
     /// 与 pendingJumpToRulesTab 同模式 · TrainingWindow 监听切 tab + 清回 false
     @Published var pendingJumpToHistoryTab: Bool = false
 
+    /// v16.151 · ControlBar today vs yesterday chip 点击 → 跳 history panel + filter today
+    /// 配合 pendingJumpToHistoryTab · HistoryPanel 监听设 filterPeriod = .today
+    @Published var pendingHistoryFilterToToday: Bool = false
+
     /// 训练结束后弹 sheet 用 · endSession 写入 · 关闭 sheet 清空
     @Published var lastFinishedSession: TrainingSession? = nil
     @Published var lastFinishedScore: TrainingScore? = nil

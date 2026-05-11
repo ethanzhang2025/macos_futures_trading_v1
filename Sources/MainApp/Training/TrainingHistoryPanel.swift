@@ -450,9 +450,24 @@ struct TrainingHistoryPanel: View {
                         default:       return "⏱"
                         }
                     }()
-                    let value = totalMinutes >= 60
-                                ? String(format: "%.1f h · 均 %d 分/次", hours, avgMin)
-                                : "\(totalMinutes) min · 均 \(avgMin) 分/次"
+                    // v16.145 · 接近下一 milestone（剩 ≤ 5h）显示 "再 Xh 达成 N"
+                    let nextMilestone: Double? = {
+                        if hours < 10 { return 10 }
+                        if hours < 50 { return 50 }
+                        if hours < 100 { return 100 }
+                        if hours < 500 { return 500 }
+                        if hours < 1000 { return 1000 }
+                        return nil
+                    }()
+                    let value: String = {
+                        let base = totalMinutes >= 60
+                                    ? String(format: "%.1f h · 均 %d 分/次", hours, avgMin)
+                                    : "\(totalMinutes) min · 均 \(avgMin) 分/次"
+                        if let next = nextMilestone, next - hours <= 5 {
+                            return base + String(format: " · 距 %.0fh 还差 %.1fh", next, next - hours)
+                        }
+                        return base
+                    }()
                     statLine("\(milestone) 累计",
                              value: value,
                              color: hours >= 50 ? .purple : .accentColor)

@@ -752,9 +752,16 @@ struct TrainingHistoryPanel: View {
                 ]
                 let worstAvg = stats.min(by: { $0.avg < $1.avg })?.avg ?? 0
                 // v16.133 · 全部 5 维 ≥ 80 → 完美状态 ✨（trader 全面均衡）
+                // v16.134 · 全 ≥ 90 → 🌟 大师级（更高阶）
                 let allBalanced = stats.allSatisfy { $0.avg >= 80 }
+                let allMaster = stats.allSatisfy { $0.avg >= 90 }
+                let labelEmoji: String = {
+                    if allMaster { return "🌟" }
+                    if allBalanced { return "✨" }
+                    return "🔬"
+                }()
                 HStack(spacing: 6) {
-                    Text(allBalanced ? "✨ 五维" : "🔬 五维")
+                    Text("\(labelEmoji) 五维")
                         .font(.system(size: 10))
                         .foregroundColor(allBalanced ? .purple : .secondary)
                         .frame(width: 38, alignment: .leading)

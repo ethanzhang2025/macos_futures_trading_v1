@@ -333,6 +333,8 @@ struct TrainingRulesPanel: View {
                 }
             }
             Spacer()
+            // v16.130 · 历史违规次数 badge（trader 看哪条规则违反最多 · 优先调阈值）
+            violationCountBadge(for: rule.kind)
             Button {
                 editing = rule
             } label: {
@@ -343,6 +345,33 @@ struct TrainingRulesPanel: View {
         }
         .opacity(rule.enabled ? 1.0 : 0.5)
         .padding(.vertical, 4)
+    }
+
+    /// v16.130 · 该 rule kind 的历史违规次数 badge
+    /// 0 不显示 · 1 灰 · 2-4 橙 · 5+ 红 · trader 一眼看痛点规则
+    @ViewBuilder
+    private func violationCountBadge(for kind: DisciplineRuleKind) -> some View {
+        let count = viewModel.log.sessions
+            .flatMap { $0.violations }
+            .filter { $0.ruleKind == kind }
+            .count
+        if count > 0 {
+            let color: Color = {
+                switch count {
+                case 5...:  return .red
+                case 2...:  return .orange
+                default:    return .secondary
+                }
+            }()
+            Text("⚠️ \(count)")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundColor(color)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(color.opacity(0.12))
+                .cornerRadius(3)
+                .tooltip("历史违反该规则 \(count) 次")
+        }
     }
 
     private func formatThreshold(_ value: Decimal) -> String {

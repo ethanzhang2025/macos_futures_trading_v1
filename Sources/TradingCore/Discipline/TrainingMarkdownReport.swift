@@ -153,6 +153,9 @@ public enum TrainingMarkdownReport {
         // v16.164 · 最近 30 天训练日历 mini sparkline（emoji 方块 · trader 看习惯密度）
         md += recentTrainingCalendarMarkdown(sessions: sessions, generatedAt: generatedAt)
 
+        // v16.191 · 近 14 天每日平均分 sparkline（与 v16.164 次数日历不同视角）
+        md += dailyAverageScoreSparklineMarkdown(sessions: sessions, log: log, generatedAt: generatedAt)
+
         // v16.170 · 每周分布表（周一-周日 训练次数 · trader 看哪天最活跃）
         md += weekdayDistributionMarkdown(sessions: sessions)
 
@@ -313,6 +316,55 @@ public enum TrainingMarkdownReport {
         }
         md += "- 💡 复盘建议：对照本月最强 session 找差异 · 找出可复制的成功模式\n"
         md += "\n"
+        return md
+    }
+
+    /// v16.191 · 近 14 天每日平均分 sparkline · emoji bar 5 级 · 与 v16.176 总分趋势不同维度
+    /// 那个是按 session 排 · 这个是按日期排 · 同日多 session 取均
+    private static func dailyAverageScoreSparklineMarkdown(sessions: [TrainingSession],
+                                                            log: TrainingSessionLog,
+                                                            generatedAt: Date) -> String {
+        let cal = Calendar(identifier: .gregorian)
+        let today = cal.startOfDay(for: generatedAt)
+        var dailyAvg: [Date: Int] = [:]
+        // 初始化 14 天 + 0 占位
+        for offset in 0..<14 {
+            if let d = cal.date(byAdding: .day, value: -offset, to: today) {
+                dailyAvg[d] = 0
+            }
+        }
+        // 聚合：按日 group sessions · 取每天的 score 均值
+        var dailyScores: [Date: [Int]] = [:]
+        for s in sessions {
+            let day = cal.startOfDay(for: s.endedAt)
+            guard dailyAvg[day] != nil, let score = log.score(for: s.id)?.totalScore else { continue }
+            dailyScores[day, default: []].append(score)
+        }
+        for (day, scores) in dailyScores {
+            dailyAvg[day] = scores.reduce(0, +) / max(1, scores.count)
+        }
+        let nonZero = dailyAvg.values.filter { $0 > 0 }
+        guard nonZero.count >= 3 else { return "" }   // < 3 天数据无趋势可言
+        let barEmoji: (Int) -> String = { s in
+            switch s {
+            case 80...:  return "█"
+            case 60...:  return "▇"
+            case 40...:  return "▅"
+            case 20...:  return "▃"
+            case 1...:   return "▁"
+            default:     return "·"   // 0 = 无训练
+            }
+        }
+        var md = "## 近 14 天每日平均分\n\n"
+        md += "```\n"
+        for offset in (0..<14).reversed() {
+            if let d = cal.date(byAdding: .day, value: -offset, to: today) {
+                md += barEmoji(dailyAvg[d] ?? 0)
+            }
+        }
+        md += "\n```\n\n"
+        let avg = nonZero.reduce(0, +) / nonZero.count
+        md += "- 训练 \(nonZero.count) 天 · 每日均分 \(avg)（仅含训练日）· · = 无训练\n\n"
         return md
     }
 

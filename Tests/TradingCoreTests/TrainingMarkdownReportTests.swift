@@ -660,6 +660,33 @@ struct TrainingMarkdownReportTests {
         #expect(!md.contains("## 最常违反规则"))
     }
 
+    // MARK: - v16.191 · 近 14 天每日平均分 sparkline
+
+    @Test("v16.191 · ≥ 3 天训练数据 输出每日平均分 sparkline")
+    func dailyAvgScoreSparkline() {
+        var log = TrainingSessionLog()
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        for offset in 0..<3 {
+            if let d = cal.date(byAdding: .day, value: -offset, to: now) {
+                log.addSession(TrainingSession(
+                    startedAt: d, endedAt: d.addingTimeInterval(60),
+                    initialBalance: 100_000, finalBalance: 102_000))
+            }
+        }
+        let md = TrainingMarkdownReport.generate(log, generatedAt: now)
+        #expect(md.contains("近 14 天每日平均分"))
+        #expect(md.contains("训练 3 天"))
+    }
+
+    @Test("v16.191 · < 3 天数据不输出 sparkline")
+    func dailyAvgScoreInsufficientData() {
+        var log = TrainingSessionLog()
+        log.addSession(makeSession(scenarioName: "x", pnl: 100))
+        let md = TrainingMarkdownReport.generate(log)
+        #expect(!md.contains("## 近 14 天每日"))
+    }
+
     // MARK: - v16.86/91 · streak overview
 
     @Test("v16.91 · 当前 ≥ 历史最长 → 新纪录提示")

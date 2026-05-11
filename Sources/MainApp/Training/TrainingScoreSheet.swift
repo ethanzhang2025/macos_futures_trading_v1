@@ -225,8 +225,24 @@ struct TrainingScoreSheet: View {
                         .keyboardShortcut(KeyEquivalent(Character("\(idx + 1)")), modifiers: [])
                         .opacity(0)
                 }
+                // v16.175 · ⌘⌥P 快捷复制 5 步改进 plan markdown（与 contextMenu 互补）
+                Button("") { copyImprovementPlan(sub: sub) }
+                    .keyboardShortcut("p", modifiers: [.command, .option])
+                    .opacity(0)
             }
         }
+    }
+
+    /// v16.175 · 复制 5 步改进 plan markdown 到剪贴板（与 weaknessTip contextMenu 同源 · 加快捷键入口）
+    private func copyImprovementPlan(sub: TrainingSubScores) {
+        let weakScore = sub.ordered.first { $0.dimension == sub.weakest }?.score ?? 0
+        let plan = TrainingScorer.improvementPlan(for: sub.weakest, score: weakScore)
+        let header = "【💡 改进 plan · \(sub.weakest.emoji) \(sub.weakest.displayName) \(weakScore) 分】"
+        let body = plan.enumerated().map { "\(stepNumberEmoji($0.offset + 1)) \($0.element)" }.joined(separator: "\n")
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString("\(header)\n\(body)", forType: .string)
+        flashFeedback("✓ 已复制 5 步改进 plan（⌘⌥P）")
     }
 
     /// v16.168 · 数字键直跳指定维度（已展开同维度 → 切换折叠 · 否则切换到该维度）

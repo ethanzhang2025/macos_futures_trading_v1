@@ -11,11 +11,12 @@ private func point(_ bar: Int, _ price: Int) -> DrawingPoint {
 
 @Suite("Drawing 创建与类型契约")
 struct DrawingFactoryTests {
-    @Test("18 种 factory 类型正确（v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 补齐）")
+    @Test("19 种 factory 类型正确（v17.14 箭头 · v17.15 价格标签 补齐）")
     func factoryTypes() {
         #expect(Drawing.trendLine(from: point(0, 100), to: point(10, 110)).type == .trendLine)
         #expect(Drawing.horizontalLine(price: 100).type == .horizontalLine)
         #expect(Drawing.verticalLine(barIndex: 5).type == .verticalLine)
+        #expect(Drawing.priceLabel(price: Decimal(100), label: "支撑").type == .priceLabel)
         #expect(Drawing.ray(from: point(0, 100), to: point(10, 110)).type == .ray)
         #expect(Drawing.arrow(from: point(0, 100), to: point(10, 110)).type == .arrow)
         #expect(Drawing.rectangle(from: point(0, 100), to: point(10, 110)).type == .rectangle)
@@ -50,11 +51,12 @@ struct DrawingFactoryTests {
         #expect(pentagon?.extraPoints?.count == 4)
     }
 
-    @Test("pointsNeeded 契约（18 类全覆盖 · v17.14 补齐 · 1/2/3/0 点）")
+    @Test("pointsNeeded 契约（19 类全覆盖 · v17.15 补齐 · 1/2/3/0 点）")
     func pointsNeededContract() {
-        // 1 点（v17.8 加 verticalLine）
+        // 1 点（v17.8 加 verticalLine · v17.15 加 priceLabel）
         #expect(DrawingType.horizontalLine.pointsNeeded == 1)
         #expect(DrawingType.verticalLine.pointsNeeded == 1)
+        #expect(DrawingType.priceLabel.pointsNeeded == 1)
         #expect(DrawingType.text.pointsNeeded == 1)
         // 2 点（v1 + v13.13/14 + v15.87/88/89/90 + v17.10 ray + v17.11 channel + v17.14 arrow）
         #expect(DrawingType.trendLine.pointsNeeded == 2)
@@ -76,13 +78,14 @@ struct DrawingFactoryTests {
         #expect(DrawingType.polygon.pointsNeeded == 0)
 
         // 全覆盖防漏 · 加新 case 但忘记加 pointsNeeded 时此测试会失败
-        let coveredCount = 3 + 13 + 1 + 1  // 1 点 3 + 2 点 13 + 3 点 1 + 0 点 1
+        let coveredCount = 4 + 13 + 1 + 1  // 1 点 4 + 2 点 13 + 3 点 1 + 0 点 1
         #expect(coveredCount == DrawingType.allCases.count)
 
         // needsTwoPoints 兼容入口（pointsNeeded == 2）
         #expect(DrawingType.trendLine.needsTwoPoints)
         #expect(!DrawingType.horizontalLine.needsTwoPoints)
         #expect(!DrawingType.verticalLine.needsTwoPoints)
+        #expect(!DrawingType.priceLabel.needsTwoPoints)
         #expect(!DrawingType.text.needsTwoPoints)
         #expect(!DrawingType.pitchfork.needsTwoPoints)  // 3 点 · 不是 2
         #expect(!DrawingType.polygon.needsTwoPoints)    // 0 动态 · 不是 2
@@ -104,12 +107,13 @@ struct DrawingFactoryTests {
 
 @Suite("Drawing Codable 往返")
 struct DrawingCodableTests {
-    @Test("18 种序列化 + 反序列化等价（v17.8 verticalLine · v17.10 ray · v17.11 channel · v17.14 arrow 补齐）")
+    @Test("19 种序列化 + 反序列化等价（v17.14 arrow · v17.15 priceLabel 补齐）")
     func roundTrip() throws {
         let drawings: [Drawing] = [
             Drawing.trendLine(from: point(0, 100), to: point(10, 120)),
             Drawing.horizontalLine(price: Decimal(string: "3550.5")!),
             Drawing.verticalLine(barIndex: 7, price: Decimal(string: "3550")!),
+            Drawing.priceLabel(price: Decimal(string: "3540.0")!, label: "关键支撑"),
             Drawing.ray(from: point(0, 100), to: point(10, 120)),
             Drawing.arrow(from: point(2, 100), to: point(12, 130)),
             Drawing.rectangle(from: point(2, 95), to: point(8, 115)),

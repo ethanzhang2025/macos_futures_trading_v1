@@ -4,11 +4,12 @@
 
 import Foundation
 
-/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 · v15.89 江恩扇形 · v15.90 斐波那契时间区 · v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 = 18 种
+/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 · v15.89 江恩扇形 · v15.90 斐波那契时间区 · v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 · v17.15 价格标签 = 19 种
 public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case trendLine          // 趋势线（两点）
     case horizontalLine     // 水平线（单点价格）
     case verticalLine       // 垂直线（单点 · 时间锚点 · 横跨全价格 · v17.8 A3.4）
+    case priceLabel         // 价格标签（v17.15 A5.3 · 单点 · 水平虚线 + 右侧醒目价格 chip · 关键支撑/阻力快速标）
     case ray                // 射线（两点定方向 · 从 start 经 end 延伸到画布边界 · v17.10 A3.2）
     case arrow              // 箭头（v17.14 A5.2 · 两点定方向 · start → end + 实心三角箭头头 · 信号标记）
     case rectangle          // 矩形（对角两点）
@@ -28,7 +29,7 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     /// 完成画线所需的点数 · v13.31 polygon 用 0 表示动态（用户主动触发完成）
     public var pointsNeeded: Int {
         switch self {
-        case .horizontalLine, .verticalLine, .text: return 1
+        case .horizontalLine, .verticalLine, .priceLabel, .text: return 1
         case .trendLine, .ray, .arrow, .rectangle, .parallelChannel, .channel, .fibonacci, .fibonacciFan, .ellipse, .ruler, .priceZone, .gannFan, .fibonacciTimeZone: return 2
         case .pitchfork: return 3
         case .polygon: return 0  // 0 = 动态点数 · 用户点 N 次后主动触发完成
@@ -164,6 +165,11 @@ extension Drawing {
     /// 箭头（v17.14 A5.2 · 两点定方向 · 末端三角箭头头 · 信号标记 / 复盘标注）
     public static func arrow(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
         Drawing(type: .arrow, startPoint: start, endPoint: end)
+    }
+
+    /// 价格标签（v17.15 A5.3 · 单点 · 水平虚线 + 右侧填充 chip 显示价格 · 可选文字 label）
+    public static func priceLabel(price: Decimal, barIndex: Int = 0, label: String? = nil) -> Drawing {
+        Drawing(type: .priceLabel, startPoint: DrawingPoint(barIndex: barIndex, price: price), text: label)
     }
 
     /// 矩形：对角两点定一矩形（顶点未规定顺序，几何辅助会归一化）

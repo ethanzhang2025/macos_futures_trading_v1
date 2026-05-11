@@ -2,8 +2,8 @@
 //
 // 职责：
 //   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedIDs
-//   - 用 SwiftUI Canvas 绘制 18 种画线类型（v17.14 后）：
-//     trendLine / horizontalLine / verticalLine / ray / arrow / rectangle / parallelChannel / channel / fibonacci / text /
+//   - 用 SwiftUI Canvas 绘制 19 种画线类型（v17.15 后）：
+//     trendLine / horizontalLine / verticalLine / priceLabel / ray / arrow / rectangle / parallelChannel / channel / fibonacci / text /
 //     ellipse / ruler / pitchfork / polygon /
 //     fibonacciFan / priceZone / gannFan / fibonacciTimeZone
 //   - 选中态高亮（线宽 +1.0 · 色彩饱和度提高）· v13.9 升级支持多选
@@ -121,6 +121,7 @@ public struct DrawingsOverlayView: View {
         case .trendLine:        drawTrendLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .horizontalLine:   drawHorizontalLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .verticalLine:     drawVerticalLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .priceLabel:       drawPriceLabel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .ray:              drawRay(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .arrow:            drawArrow(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .rectangle:        drawRectangle(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
@@ -172,6 +173,33 @@ public struct DrawingsOverlayView: View {
         path.move(to: CGPoint(x: x, y: 0))
         path.addLine(to: CGPoint(x: x, y: size.height))
         ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+    }
+
+    /// v17.15 A5.3 · 价格标签（水平虚线 + 右侧填充 chip 显示价格 · 可选用户 label）
+    /// 比 horizontalLine 视觉更醒目（chip 填充背景）· trader 一眼可见关键支撑/阻力价位
+    private func drawPriceLabel(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        let y = yForPrice(d.startPoint.price, size: size)
+        // 水平细虚线（视觉比 horizontalLine 弱 · 强调右侧 chip）
+        let lineDash: [CGFloat] = dash.isEmpty ? [3, 3] : dash
+        var line = Path()
+        line.move(to: CGPoint(x: 0, y: y))
+        line.addLine(to: CGPoint(x: size.width, y: y))
+        ctx.stroke(line, with: .color(color.opacity(0.65 * opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: lineDash))
+        // chip 文字（价格 + 可选 label）· 估算宽度：每字 7pt + 8pt padding
+        let priceStr = formatPrice(d.startPoint.price)
+        let chipText: String = {
+            if let label = d.text, !label.isEmpty { return "\(label) \(priceStr)" }
+            return priceStr
+        }()
+        let textWidth = CGFloat(chipText.count) * 7 + 16
+        let chipHeight: CGFloat = 18
+        let chipRect = CGRect(x: size.width - textWidth - 4, y: y - chipHeight / 2, width: textWidth, height: chipHeight)
+        let bg = Path(roundedRect: chipRect, cornerRadius: 3)
+        ctx.fill(bg, with: .color(color.opacity(opacity)))
+        let text = Text(chipText)
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .foregroundColor(.white)
+        ctx.draw(text, at: CGPoint(x: chipRect.midX, y: chipRect.midY))
     }
 
     /// v17.14 A5.2 · 箭头（start → end 线段 + 末端实心三角头 · 信号标记 / 复盘标注）
@@ -558,6 +586,7 @@ public struct DrawingsOverlayView: View {
         case .trendLine:       return Color(red: 1.00, green: 0.78, blue: 0.18)  // 黄
         case .horizontalLine:  return Color(red: 0.30, green: 0.78, blue: 1.00)  // 蓝
         case .verticalLine:    return Color(red: 0.30, green: 0.78, blue: 1.00)  // 蓝（v17.8 · 与 horizontalLine 同色 · 概念对称）
+        case .priceLabel:      return Color(red: 0.20, green: 0.60, blue: 0.95)  // 深蓝（v17.15 · chip 填充醒目）
         case .ray:             return Color(red: 0.72, green: 0.93, blue: 0.30)  // 嫩绿（v17.10 · 与 trendLine 黄区分）
         case .arrow:           return Color(red: 1.00, green: 0.45, blue: 0.20)  // 橙红（v17.14 · 信号醒目 · 与 fibonacci 橙区分）
         case .rectangle:       return Color(red: 0.63, green: 0.42, blue: 0.83)  // 紫

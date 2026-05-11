@@ -81,6 +81,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .trendLine:       return "趋势线"
     case .horizontalLine:  return "水平线"
     case .verticalLine:    return "垂直线"
+    case .priceLabel:      return "价格标签"
     case .ray:             return "射线"
     case .arrow:           return "箭头"
     case .rectangle:       return "矩形"
@@ -918,6 +919,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "arrow.up.forward", tool: .arrow, help: "箭头（双点定方向 · 末端三角头 · 信号标记 / 复盘标注）")
             drawingToolButton(icon: "minus", tool: .horizontalLine, help: "水平线（一点）")
             drawingToolButton(icon: "arrow.up.and.down", tool: .verticalLine, help: "垂直线（一点 · 时间锚点 · 横跨全价格）")
+            drawingToolButton(icon: "tag", tool: .priceLabel, help: "价格标签（一点 · 水平虚线 + 醒目价格 chip · 关键支撑/阻力快速标）")
             drawingToolButton(icon: "rectangle", tool: .rectangle, help: "矩形（双点对角）")
             drawingToolButton(icon: "lines.measurement.horizontal", tool: .parallelChannel, help: "平行通道（双点 · 默认 +1.0 偏移）")
             drawingToolButton(icon: "chart.line.uptrend.xyaxis", tool: .channel, help: "通道线（双点定 bar 范围 · 内部线性回归 + ±1σ 平行 · 自动等距）")
@@ -3948,6 +3950,11 @@ struct ChartContentView: View {
             let y = screenPoint(drawing.startPoint).y
             return abs(p.y - y)
 
+        case .priceLabel:
+            // v17.15 A5.3 · 价格标签 hit test · 同水平线（距离 = |p.y - y|）· chip 区域也算命中
+            let y = screenPoint(drawing.startPoint).y
+            return abs(p.y - y)
+
         case .verticalLine:
             // v17.8 A3.4 · 垂直线 hit test · 距离 = |p.x - x|
             let x = screenPoint(drawing.startPoint).x
@@ -4295,6 +4302,17 @@ struct ChartContentView: View {
             if tool == .horizontalLine {
                 let drawing = Drawing(
                     type: .horizontalLine,
+                    startPoint: point,
+                    strokeColorHex: Self.hexString(from: currentStrokeColor),
+                    strokeWidth: currentStrokeWidth,
+                    strokeOpacity: Self.alphaComponent(from: currentStrokeColor)
+                )
+                addUserDrawing(drawing)
+                activeDrawingTool = nil
+            } else if tool == .priceLabel {
+                // v17.15 A5.3 · 价格标签 · 单击即完成（不弹 NSAlert · trader 快速标记）
+                let drawing = Drawing(
+                    type: .priceLabel,
                     startPoint: point,
                     strokeColorHex: Self.hexString(from: currentStrokeColor),
                     strokeWidth: currentStrokeWidth,

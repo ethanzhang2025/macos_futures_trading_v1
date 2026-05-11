@@ -298,6 +298,15 @@ struct TrainingHistoryPanel: View {
                              value: "\(st.count) 次",
                              color: st.isWinning ? .red : .blue)
                 }
+                // v16.49 · 累计训练时长（鼓励高频 · 与 v15.23 batch144 weeklyGoalRow 互补）
+                let totalMinutes = viewModel.log.sessions.map { $0.durationMinutes }.reduce(0, +)
+                if totalMinutes > 0 {
+                    statLine("⏱ 累计",
+                             value: totalMinutes >= 60
+                                    ? String(format: "%.1f h", Double(totalMinutes) / 60.0)
+                                    : "\(totalMinutes) min",
+                             color: .accentColor)
+                }
             }
 
             distributionBar

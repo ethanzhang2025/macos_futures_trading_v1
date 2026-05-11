@@ -538,6 +538,8 @@ struct TrainingHistoryPanel: View {
                 .tint(achieved ? .green : .accentColor)
             // v15.23 batch154 · vs 上周对比（次数 / 平均分 deltas）
             weeklyComparisonChip(thisWeekStart: weekStart, thisWeekCount: thisWeekCount)
+            // v16.67 · vs 上月对比 chip（trader 长期反馈 · 与 weeklyComparisonChip 同模式）
+            monthlyComparisonChip()
             Spacer()
             Menu {
                 ForEach([3, 5, 7, 10, 15], id: \.self) { n in
@@ -580,6 +582,39 @@ struct TrainingHistoryPanel: View {
                     .foregroundColor(.secondary)
             }
             .tooltip("本周 \(thisWeekCount) 次（平均 \(thisWeekAvg) 分） vs 上周 \(lastWeekSessions.count) 次（平均 \(lastWeekAvg) 分）")
+        }
+    }
+
+    /// v16.67 · 本月 vs 上月对比 chip（trader 长期反馈 · 与 weeklyComparisonChip 同模式）
+    /// 仅当上月有数据时显示 · 月历日历起始（dateInterval of .month）
+    @ViewBuilder
+    private func monthlyComparisonChip() -> some View {
+        let cal = Calendar(identifier: .gregorian)
+        guard let thisMonthStart = cal.dateInterval(of: .month, for: Date())?.start,
+              let lastMonthStart = cal.date(byAdding: .month, value: -1, to: thisMonthStart) else {
+            EmptyView()
+            return
+        }
+        let lastMonthSessions = viewModel.log.sessions.filter {
+            $0.startedAt >= lastMonthStart && $0.startedAt < thisMonthStart
+        }
+        if !lastMonthSessions.isEmpty {
+            let thisMonthSessions = viewModel.log.sessions.filter { $0.startedAt >= thisMonthStart }
+            let countDelta = thisMonthSessions.count - lastMonthSessions.count
+            let lastMonthAvg = lastMonthSessions.compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+                .reduce(0, +) / max(1, lastMonthSessions.count)
+            let thisMonthScores = thisMonthSessions.compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+            let thisMonthAvg = thisMonthScores.isEmpty ? 0 : thisMonthScores.reduce(0, +) / thisMonthScores.count
+            let scoreDelta = thisMonthAvg - lastMonthAvg
+            HStack(spacing: 2) {
+                Image(systemName: countDelta >= 0 ? "arrow.up.right" : "arrow.down.right")
+                    .font(.system(size: 9))
+                    .foregroundColor(countDelta >= 0 ? .red : .green)
+                Text("vs 上月 \(countDelta >= 0 ? "+" : "")\(countDelta)次 \(scoreDelta >= 0 ? "+" : "")\(scoreDelta)分")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .tooltip("本月 \(thisMonthSessions.count) 次（平均 \(thisMonthAvg) 分） vs 上月 \(lastMonthSessions.count) 次（平均 \(lastMonthAvg) 分）")
         }
     }
 

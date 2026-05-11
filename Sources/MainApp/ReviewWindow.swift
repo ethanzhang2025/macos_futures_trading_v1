@@ -125,7 +125,7 @@ struct ReviewWindow: View {
             ("跳主图 button (batch205)", "选中合约后 → 在主图查看（chart.line 图标 · 仅 filter 时显示）"),
             ("Toast 反馈", "切换后顶部提示新区间数据量"),
         ]),
-        ("📊 14 张图（v16.38 含心理风险洞察）", [
+        ("📊 15 张图（v16.47 含 Setup × Pattern 矩阵）", [
             ("月度盈亏", "按月聚合 · 总 PnL 趋势"),
             ("分布直方", "PnL 桶 · 盈/亏笔数对比"),
             ("胜率曲线", "累积胜率 · 终值"),
@@ -140,6 +140,7 @@ struct ReviewWindow: View {
             ("时长×盈亏（v15.23 第 12）", "散点图 · 多绿空蓝"),
             ("策略矩阵（v15.99 第 13）", "setup 标签 group by · 个性化策略盈亏归因 · 含 (未标) 桶"),
             ("心理风险洞察（v16.38 第 14）", "最弱心理 emoji + 出现次数 + 中文改进建议（与第 10 张分布图互补）"),
+            ("Setup × Pattern 矩阵（v16.47 第 15）", "v16.21 文本表升级到视觉化 · 4 象限着色 · 双弱标红 · trader 一眼看缺口"),
         ]),
         ("🔍 全屏放大", [
             ("点击 chartCard", "全屏放大查看（trader 专注分析）"),
@@ -150,7 +151,7 @@ struct ReviewWindow: View {
         ("📝 报告导出（v15.23 batch196）", [
             ("⌘E", "导出本月 markdown 月报"),
             ("⌘⌥E", "导出最近 7 天周报（与月报互补 · trader 周复盘节奏）"),
-            ("⌘⇧E", "导出全部 14 张 chartCard PNG 到目录"),
+            ("⌘⇧E", "导出全部 15 张 chartCard PNG 到目录"),
         ]),
     ]
 
@@ -375,7 +376,195 @@ struct ReviewWindow: View {
             .init(title: L("心理风险洞察"),
                   subtitle: weakestPsychSubtitle(s.psychTagCounts),
                   content: AnyView(psychInsightView(s.psychTagCounts))),
+            // v16.47 · 第 15 图 · setup × pattern 热力矩阵（v16.21 文本表升级 · 4 象限着色一眼看缺口）
+            .init(title: L("Setup × Pattern 矩阵"),
+                  subtitle: setupPatternMatrixSubtitle(s),
+                  content: AnyView(setupPatternHeatmapView(s))),
         ]
+    }
+
+    // MARK: - v16.47 · setup × pattern 热力矩阵（v16.21 markdown 文本表的 UI 升级）
+
+    private struct CrossRow: Identifiable {
+        let id = UUID()
+        let setupName: String
+        let realWinRate: Double
+        let tradeCount: Int
+        let matchedPattern: TrainingScenarioPattern?
+        let trainCount: Int
+        let trainAvg: Int
+        let quadrant: CrossQuadrant
+    }
+
+    private enum CrossQuadrant {
+        case bothStrong, realOnly, trainOnly, bothWeak, noTrain
+        var emoji: String {
+            switch self {
+            case .bothStrong: return "✅"
+            case .realOnly:   return "🟡"
+            case .trainOnly:  return "🟠"
+            case .bothWeak:   return "🔴"
+            case .noTrain:    return "🟦"
+            }
+        }
+        var color: Color {
+            switch self {
+            case .bothStrong: return .green
+            case .realOnly:   return .yellow
+            case .trainOnly:  return .orange
+            case .bothWeak:   return .red
+            case .noTrain:    return .blue
+            }
+        }
+        var label: String {
+            switch self {
+            case .bothStrong: return "双强"
+            case .realOnly:   return "实盘强 训练弱"
+            case .trainOnly:  return "训练好 实盘差"
+            case .bothWeak:   return "双弱"
+            case .noTrain:    return "无训练"
+            }
+        }
+    }
+
+    /// 计算 setup × pattern 关联行（与 v16.21 generateSetupPatternCrossReference 同算法）
+    private func computeCrossRows(_ s: ReviewSummary) -> [CrossRow] {
+        let labeled = s.setupMatrix.cells.filter { !$0.setup.isEmpty && $0.setup != "(未标)" }
+        guard !labeled.isEmpty else { return [] }
+        let log = TrainingLogPersistence.load()
+        // 训练 pattern 桶（全部 sessions · ReviewWindow 不区间 · 视图整体）
+        struct PatBucket { var count = 0; var totalScore = 0 }
+        var byPattern: [TrainingScenarioPattern: PatBucket] = [:]
+        for ses in log.sessions {
+            guard let p = ses.scenarioPattern,
+                  let total = log.score(for: ses.id)?.totalScore else { continue }
+            var b = byPattern[p] ?? PatBucket()
+            b.count += 1; b.totalScore += total
+            byPattern[p] = b
+        }
+        return labeled.map { cell in
+            let matched = TrainingMarkdownReport.matchPattern(setupName: cell.setup)
+            let bucket = matched.flatMap { byPattern[$0] }
+            let trainCount = bucket?.count ?? 0
+            let trainAvg = trainCount > 0 ? (bucket!.totalScore / trainCount) : 0
+            let quadrant: CrossQuadrant
+            if trainCount == 0 {
+                quadrant = .noTrain
+            } else {
+                let realStrong = cell.winRate >= 0.55
+                let trainStrong = trainAvg >= 70
+                switch (realStrong, trainStrong) {
+                case (true, true):   quadrant = .bothStrong
+                case (true, false):  quadrant = .realOnly
+                case (false, true):  quadrant = .trainOnly
+                case (false, false): quadrant = .bothWeak
+                }
+            }
+            return CrossRow(
+                setupName: cell.setup,
+                realWinRate: cell.winRate,
+                tradeCount: cell.tradeCount,
+                matchedPattern: matched,
+                trainCount: trainCount,
+                trainAvg: trainAvg,
+                quadrant: quadrant
+            )
+        }
+    }
+
+    private func setupPatternMatrixSubtitle(_ s: ReviewSummary) -> String {
+        let rows = computeCrossRows(s)
+        guard !rows.isEmpty else { return "无具名 setup · 先在交易日志打 setup 标签" }
+        let bothWeak = rows.filter { $0.quadrant == .bothWeak }.count
+        return bothWeak > 0
+            ? "\(rows.count) setup · 🔴 双弱 \(bothWeak) 个 · 优先改进"
+            : "\(rows.count) setup · 4 象限分布"
+    }
+
+    @ViewBuilder
+    private func setupPatternHeatmapView(_ s: ReviewSummary) -> some View {
+        let rows = computeCrossRows(s)
+        if rows.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: "tag.slash")
+                    .font(.system(size: 32))
+                    .foregroundColor(.secondary)
+                Text("无具名 setup")
+                    .font(.headline)
+                Text("先在 ⌘J 交易日志窗给开仓 trade 打 setup 标签 · 训练时也选对应 pattern")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding()
+        } else {
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach(rows) { row in
+                        crossRowView(row)
+                    }
+                }
+                .padding(6)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func crossRowView(_ row: CrossRow) -> some View {
+        HStack(spacing: 6) {
+            Text(row.quadrant.emoji)
+                .font(.system(size: 14))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(row.setupName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                if let p = row.matchedPattern {
+                    Text("\(p.emoji) \(p.displayName)")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("—")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("实 \(Int((row.realWinRate * 100).rounded()))% · \(row.tradeCount) 笔")
+                    .font(.system(size: 10, design: .monospaced))
+                if row.trainCount > 0 {
+                    Text("练 \(row.trainAvg) 分 · \(row.trainCount) 次")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("练 — · 0 次")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(row.quadrant.color.opacity(0.15))
+        .overlay(
+            Rectangle()
+                .frame(width: 3)
+                .foregroundColor(row.quadrant.color),
+            alignment: .leading
+        )
+        .cornerRadius(4)
+        .tooltip("\(row.quadrant.emoji) \(row.quadrant.label) · \(crossAdviceLabel(row.quadrant))")
+    }
+
+    private func crossAdviceLabel(_ q: CrossQuadrant) -> String {
+        switch q {
+        case .bothStrong: return "保持节奏"
+        case .realOnly:   return "抽空补练"
+        case .trainOnly:  return "复盘执行偏差"
+        case .bothWeak:   return "优先加练 + 减仓"
+        case .noTrain:    return "建议加练"
+        }
     }
 
     // MARK: - v16.38 · 心理风险洞察（第 14 张卡 · 最弱心理 + 中文 advice）
@@ -587,7 +776,7 @@ struct ReviewWindow: View {
                     .tooltip("生成最近 7 天 Markdown 周报告（⌘⌥E · trader 周复盘节奏）")
                     .keyboardShortcut("e", modifiers: [.command, .option])
                 Button("导出全部图…") { exportAllChartCards(s) }
-                    .tooltip("一键导出全部 14 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v16.38 加心理风险洞察）")
+                    .tooltip("一键导出全部 15 张 chartCard 为 PNG 到选定目录 · 月底归档（⌘⇧E · v16.47 加 Setup × Pattern 矩阵）")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 // v16.39 · 月报含 base64 PNG 图（trader 邮件粘贴可见图但 markdown 大）
                 Toggle("月报含图", isOn: $exportReportWithCharts)
@@ -641,6 +830,7 @@ struct ReviewWindow: View {
             ("时长×盈亏", AnyView(holdingPnLScatter(s.closedPositions))),
             ("策略矩阵", AnyView(setupMatrixView(s.setupMatrix))),   // v15.99
             ("心理风险洞察", AnyView(psychInsightView(s.psychTagCounts))),  // v16.38
+            ("Setup × Pattern 矩阵", AnyView(setupPatternHeatmapView(s))),  // v16.47
         ]
 
         var failedCount = 0

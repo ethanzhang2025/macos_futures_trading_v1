@@ -311,7 +311,8 @@ public enum TrainingMarkdownReport {
 
     /// 包含匹配：setup 名是否含 pattern displayName 子串（大小写不敏感）
     /// 多 pattern 命中时取最长 displayName（更精确 · "假突破" > "突破"）
-    static func matchPattern(setupName: String) -> TrainingScenarioPattern? {
+    /// v16.47 · 改 public · 让 ReviewWindow setupPatternHeatmapView 复用同算法
+    public static func matchPattern(setupName: String) -> TrainingScenarioPattern? {
         let needle = setupName.lowercased()
         let matched = TrainingScenarioPattern.allCases.filter {
             needle.contains($0.displayName.lowercased())

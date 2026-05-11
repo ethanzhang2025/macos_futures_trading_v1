@@ -112,6 +112,9 @@ struct WorkspaceTabBar: View {
                 renamingID = ws.id
                 renamingText = ws.name
             }
+            Button("复制 Workspace") {
+                shellVM.duplicateWorkspace(ws.id)
+            }
             if visibleWorkspaces.count > 1 {
                 Button("关闭") {
                     shellVM.closeWorkspace(ws.id)

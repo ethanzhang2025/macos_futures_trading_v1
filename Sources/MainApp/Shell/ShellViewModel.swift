@@ -180,6 +180,23 @@ public final class ShellViewModel: ObservableObject {
 
     // MARK: - v17.20 Pane 右键 actions
 
+    /// 复制 Workspace（panes + layout 全复制 · name = "原名 副本"·新 UUID · 紧跟原 ws 之后插入并激活）
+    public func duplicateWorkspace(_ id: UUID) {
+        guard let idx = workspaces.firstIndex(where: { $0.id == id }) else { return }
+        var copy = workspaces[idx]
+        copy.id = UUID()
+        copy.name = "\(copy.name) 副本"
+        copy.panes = copy.panes.map { p in
+            var np = p
+            np.id = UUID()
+            return np
+        }
+        copy.lastUsedAt = Date()
+        workspaces.insert(copy, at: idx + 1)
+        activeWorkspaceID = copy.id
+        persistWorkspaces()
+    }
+
     /// 切换 Pane 类型（保留 symbol / period / group · 仅改 kind）
     public func changePaneKind(paneID: UUID, to kind: PaneKind) {
         guard let wsIdx = workspaceIndexContainingPane(paneID),

@@ -399,6 +399,7 @@ public struct FormulaEditorWindow: View {
                                 return $0.line < $1.line
                             }
                             let errorCount = sortedLints.filter { $0.severity == .error }.count
+                            let unusedLines = sortedLints.filter { $0.kind == .unusedVariable }.map { $0.line }
                             Section(header: HStack {
                                 Text("⚠ Lint 警告").font(.headline).foregroundColor(.orange)
                                 if errorCount > 0 {
@@ -406,6 +407,19 @@ public struct FormulaEditorWindow: View {
                                         .font(.caption).foregroundColor(.secondary)
                                 } else {
                                     Text("(\(sortedLints.count))").font(.caption).foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                // v16.113 · 批量删除全部 unused（≥ 2 才显示 · 单条用单 Menu）
+                                if unusedLines.count >= 2 {
+                                    Button {
+                                        quickFixDeleteLinesBatch(unusedLines)
+                                        statusMessage = "已删除 \(unusedLines.count) 条未用变量定义"
+                                    } label: {
+                                        Label("一键删除 \(unusedLines.count) 条未用", systemImage: "trash.fill")
+                                            .font(.system(size: 11))
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .tooltip("批量删除所有 unusedVariable 警告对应的行")
                                 }
                             }) {
                                 ForEach(Array(sortedLints.enumerated()), id: \.offset) { _, warn in
@@ -1718,6 +1732,17 @@ public struct FormulaEditorWindow: View {
         var lines = sourceText.components(separatedBy: "\n")
         guard lineNumber >= 1, lineNumber <= lines.count else { return }
         lines.remove(at: lineNumber - 1)
+        sourceText = lines.joined(separator: "\n")
+    }
+
+    /// v16.113 · 批量删除多行（从后往前避免行号偏移）
+    private func quickFixDeleteLinesBatch(_ lineNumbers: [Int]) {
+        var lines = sourceText.components(separatedBy: "\n")
+        // 倒序删除（从大到小）避免索引偏移
+        for ln in lineNumbers.sorted(by: >) {
+            guard ln >= 1, ln <= lines.count else { continue }
+            lines.remove(at: ln - 1)
+        }
         sourceText = lines.joined(separator: "\n")
     }
 

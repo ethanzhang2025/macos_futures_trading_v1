@@ -83,6 +83,7 @@ struct TrainingControlBar: View {
                     .foregroundColor(violationColor)
             } else {
                 // v15.23 batch147 · idle 时显示今日已练（次数 + 总时长）替代单一 idleHint
+                // v16.76 · 加最近 7 天活动 mini bar（trader 看连续训练习惯 · 类 GitHub contributions）
                 let today = todayTally
                 if today.count > 0 {
                     HStack(spacing: 6) {
@@ -92,11 +93,15 @@ struct TrainingControlBar: View {
                         Text("今日已练 \(today.count) 次 · \(today.minutes) 分")
                             .font(.caption.monospacedDigit())
                             .foregroundColor(.secondary)
+                        sevenDayMiniBar
                     }
                 } else {
-                    Text(idleHint)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        Text(idleHint)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        sevenDayMiniBar
+                    }
                 }
             }
 
@@ -421,6 +426,39 @@ struct TrainingControlBar: View {
             return "先启用至少 1 条纪律规则才能开始训练"
         }
         return "已启用 \(viewModel.book.enabledRules.count) 条规则 · 准备就绪"
+    }
+
+    /// v16.76 · 最近 7 天活动 mini bar（类 GitHub contributions · trader 看连训习惯）
+    /// 高度按当天 session 数比例 · 今天柱 accent 色 · 其他 secondary
+    private var sevenDayMiniBar: some View {
+        let cal = Calendar(identifier: .gregorian)
+        let today = cal.startOfDay(for: Date())
+        // 倒序 6..0 → 7 天前到今天
+        let days: [(date: Date, count: Int)] = (0...6).reversed().map { offset in
+            let day = cal.date(byAdding: .day, value: -offset, to: today) ?? today
+            let nextDay = cal.date(byAdding: .day, value: 1, to: day) ?? day
+            let count = viewModel.log.sessions.filter {
+                $0.startedAt >= day && $0.startedAt < nextDay
+            }.count
+            return (day, count)
+        }
+        let maxCount = max(1, days.map(\.count).max() ?? 1)
+        let totalWeek = days.map(\.count).reduce(0, +)
+        return HStack(alignment: .bottom, spacing: 1) {
+            ForEach(0..<days.count, id: \.self) { i in
+                let d = days[i]
+                let isToday = i == days.count - 1
+                let h = max(2, CGFloat(d.count) / CGFloat(maxCount) * 14)
+                Rectangle()
+                    .fill(d.count == 0
+                          ? Color.secondary.opacity(0.18)
+                          : (isToday ? Color.accentColor : Color.secondary.opacity(0.55)))
+                    .frame(width: 4, height: h)
+                    .cornerRadius(1)
+            }
+        }
+        .frame(height: 14)
+        .tooltip("最近 7 天训练：共 \(totalWeek) 次（今日 \(days.last?.count ?? 0) 次 · 最近 7 天最高 \(maxCount) 次/天）")
     }
 }
 

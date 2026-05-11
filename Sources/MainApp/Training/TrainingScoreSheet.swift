@@ -259,23 +259,25 @@ struct TrainingScoreSheet: View {
         }
     }
 
-    /// 按方向切换当前展开的维度 · nil → 第一/最后 · 越界 → 关闭（nil）
+    /// 按方向切换当前展开的维度 · nil → 第一/最后
     /// v16.85 · 切换时短暂提示 trader 当前在第 N/5 维
+    /// v16.186 · 越界改 wraparound（5 → 1 / 1 → 5）· trader 循环切不必再关再开
     private func stepDrilldown(by delta: Int) {
         guard let sub = score.subScores else { return }
         let dims = sub.ordered.map(\.dimension)
-        let newDim: TrainingSubScores.Dimension?
+        guard !dims.isEmpty else { return }
+        let newDim: TrainingSubScores.Dimension
         if let cur = expandedDim, let idx = dims.firstIndex(of: cur) {
-            let next = idx + delta
-            newDim = (next < 0 || next >= dims.count) ? nil : dims[next]
+            let next = (idx + delta + dims.count) % dims.count   // wrap
+            newDim = dims[next]
         } else {
-            newDim = delta > 0 ? dims.first : dims.last
+            newDim = delta > 0 ? dims.first! : dims.last!
         }
         withAnimation(.easeInOut(duration: 0.15)) {
             expandedDim = newDim
         }
-        if let d = newDim, let pos = dims.firstIndex(of: d) {
-            flashFeedback("📊 \(d.emoji) \(d.displayName) (\(pos + 1)/\(dims.count))")
+        if let pos = dims.firstIndex(of: newDim) {
+            flashFeedback("📊 \(newDim.emoji) \(newDim.displayName) (\(pos + 1)/\(dims.count))")
         }
     }
 

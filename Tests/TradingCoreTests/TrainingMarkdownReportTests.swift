@@ -499,7 +499,7 @@ struct TrainingMarkdownReportTests {
     @Test("v16.170 · 空 log 不输出每周分布表")
     func weekdayDistributionEmptyLog() {
         let md = TrainingMarkdownReport.generate(TrainingSessionLog())
-        #expect(!md.contains("每周分布"))
+        #expect(!md.contains("## 每周分布"))   // v16.186 TOC 含锚点 · 改 ## 精确匹配
     }
 
     // MARK: - v16.172 · 单笔盈利冠军
@@ -567,7 +567,8 @@ struct TrainingMarkdownReportTests {
         var log = TrainingSessionLog()
         log.addSession(makeSession(scenarioName: "s1", pnl: 1000))
         let md = TrainingMarkdownReport.generate(log)
-        #expect(!md.contains("总分趋势"))
+        // v16.186 TOC 含"[总分趋势]" 锚点 · 用 sparkline 独有内容 "起始" 反向检查（TOC 不含此词）
+        #expect(!md.contains("起始"))
     }
 
     // MARK: - v16.180 · markdown footer
@@ -607,7 +608,7 @@ struct TrainingMarkdownReportTests {
         var log = TrainingSessionLog()
         log.addSession(makeSession(scenarioName: "本月唯一", pnl: 1000))
         let md = TrainingMarkdownReport.generate(log)
-        #expect(!md.contains("本月 vs 上月"))
+        #expect(!md.contains("## 本月 vs 上月"))   // v16.186 TOC 含锚点 · 改 ## 精确匹配
     }
 
     // MARK: - v16.185 · 最佳训练时段
@@ -626,7 +627,7 @@ struct TrainingMarkdownReportTests {
     @Test("v16.185 · 空 log 不输出最佳时段表")
     func hourOfDayEmpty() {
         let md = TrainingMarkdownReport.generate(TrainingSessionLog())
-        #expect(!md.contains("最佳训练时段"))
+        #expect(!md.contains("## 最佳训练时段"))   // v16.186 TOC 含锚点 · 改 ## 精确匹配
     }
 
     // MARK: - v16.86/91 · streak overview

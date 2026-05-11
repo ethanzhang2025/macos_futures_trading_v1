@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 · v15.89 江恩扇形 · v15.90 斐波那契时间区 · v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 · v17.17 斐波弧 = 21 种
+/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 · v15.89 江恩扇形 · v15.90 斐波那契时间区 · v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 · v17.17 斐波弧 · v17.18 斐波通道 = 22 种
 public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case trendLine          // 趋势线（两点）
     case horizontalLine     // 水平线（单点价格）
@@ -18,6 +18,7 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case fibonacci          // 斐波那契回调（两点定 0/100%）
     case fibonacciExtension // 斐波扩展（v17.16 A4.1 · 两点定 0/100% · 外推到 1.272/1.414/1.618/2/2.618 · 突破后目标位）
     case fibonacciArc       // 斐波弧（v17.17 A4.3 · 两点定圆心 + 半径 · 3 fib 比例的半圆弧 38.2%/50%/61.8%）
+    case fibonacciChannel   // 斐波通道（v17.18 A4.5 · 两点主轴 + offset 副线 · 内部 7 fib 比例平行线）
     case text               // 文字标注（单点位置）
     case ellipse            // 椭圆（两点定外接矩形对角 · v13.13）
     case ruler              // 测量工具（两点 · 渲染显示价格差/百分比/bar 数 · v13.14）
@@ -32,7 +33,7 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     public var pointsNeeded: Int {
         switch self {
         case .horizontalLine, .verticalLine, .priceLabel, .text: return 1
-        case .trendLine, .ray, .arrow, .rectangle, .parallelChannel, .channel, .fibonacci, .fibonacciExtension, .fibonacciArc, .fibonacciFan, .ellipse, .ruler, .priceZone, .gannFan, .fibonacciTimeZone: return 2
+        case .trendLine, .ray, .arrow, .rectangle, .parallelChannel, .channel, .fibonacci, .fibonacciExtension, .fibonacciArc, .fibonacciChannel, .fibonacciFan, .ellipse, .ruler, .priceZone, .gannFan, .fibonacciTimeZone: return 2
         case .pitchfork: return 3
         case .polygon: return 0  // 0 = 动态点数 · 用户点 N 次后主动触发完成
         }
@@ -197,6 +198,11 @@ extension Drawing {
     /// 斐波弧（v17.17 A4.3 · 两点定圆心 + 半径 · 3 个 fib 半径的半圆弧）
     public static func fibonacciArc(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
         Drawing(type: .fibonacciArc, startPoint: start, endPoint: end)
+    }
+
+    /// 斐波通道（v17.18 A4.5 · 两点主轴 + offset 定副线 · 内部按 7 fib 比例分平行线）
+    public static func fibonacciChannel(from start: DrawingPoint, to end: DrawingPoint, offset: Decimal) -> Drawing {
+        Drawing(type: .fibonacciChannel, startPoint: start, endPoint: end, channelOffset: offset)
     }
 
     /// 文字标注

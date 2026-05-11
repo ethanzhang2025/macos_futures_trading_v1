@@ -90,6 +90,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .fibonacci:       return "斐波那契"
     case .fibonacciExtension: return "斐波扩展"
     case .fibonacciArc:    return "斐波弧"
+    case .fibonacciChannel: return "斐波通道"
     case .text:            return "文字标注"
     case .ellipse:         return "椭圆"
     case .ruler:           return "测量工具"
@@ -928,6 +929,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
             drawingToolButton(icon: "arrow.up.right.and.arrow.down.left.rectangle", tool: .fibonacciExtension, help: "斐波扩展（双点 · 突破后目标位 1.272/1.414/1.618/2/2.618）")
             drawingToolButton(icon: "arc", tool: .fibonacciArc, help: "斐波弧（双点定圆心+半径 · 38.2/50/61.8 半圆弧 · 时间+价格 fib）")
+            drawingToolButton(icon: "rectangle.split.3x1", tool: .fibonacciChannel, help: "斐波通道（双点主轴 + 默认 offset · 内部 7 fib 比例平行线分层）")
             drawingToolButton(icon: "wand.and.rays", tool: .fibonacciFan, help: "斐波那契扇形（双点 · 38.2/50/61.8 三射线）")
             drawingToolButton(icon: "rectangle.split.1x2", tool: .priceZone, help: "价格区域（双点 · 上下价格全图横跨 · 关键支撑/阻力带）")
             drawingToolButton(icon: "fanblades", tool: .gannFan, help: "江恩扇形（双点定 1×1 · 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）")
@@ -4069,6 +4071,19 @@ struct ChartContentView: View {
             }
             return minD
 
+        case .fibonacciChannel:
+            // v17.18 A4.5 · 斐波通道 hit test · 7 条 fib 比例平行线段最小距离
+            guard let end = drawing.endPoint, let offset = drawing.channelOffset else { return .infinity }
+            let s = drawing.startPoint
+            var minD: CGFloat = .infinity
+            for ratio in FibonacciLevels.standard {
+                let priceShift = offset * ratio
+                let lineS = screenPoint(DrawingPoint(barIndex: s.barIndex, price: s.price + priceShift))
+                let lineE = screenPoint(DrawingPoint(barIndex: end.barIndex, price: end.price + priceShift))
+                minD = min(minD, Self.pointToSegmentDistance(p, lineS, lineE))
+            }
+            return minD
+
         case .text:
             let pt = screenPoint(drawing.startPoint)
             return hypot(p.x - pt.x, p.y - pt.y)
@@ -4218,6 +4233,9 @@ struct ChartContentView: View {
             return Drawing.fibonacciExtension(from: firstPoint, to: hoverPoint)
         case .fibonacciArc:
             return Drawing.fibonacciArc(from: firstPoint, to: hoverPoint)
+        case .fibonacciChannel:
+            let offset = (currentPriceRange.upperBound - currentPriceRange.lowerBound) * Decimal(string: "0.05")!
+            return Drawing.fibonacciChannel(from: firstPoint, to: hoverPoint, offset: offset)
         case .fibonacciFan:
             return Drawing.fibonacciFan(from: firstPoint, to: hoverPoint)
         case .priceZone:
@@ -4312,7 +4330,7 @@ struct ChartContentView: View {
             if let firstPoint = pendingDrawingPoint {
                 // 第二点：完成画线
                 let endPoint: DrawingPoint? = point
-                let channelOffset: Decimal? = (tool == .parallelChannel)
+                let channelOffset: Decimal? = (tool == .parallelChannel || tool == .fibonacciChannel)
                     ? (currentPriceRange.upperBound - currentPriceRange.lowerBound) * Decimal(string: "0.05")!
                     : nil
                 let drawing = Drawing(

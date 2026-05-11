@@ -2,8 +2,8 @@
 //
 // 职责：
 //   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedIDs
-//   - 用 SwiftUI Canvas 绘制 21 种画线类型（v17.17 后）：
-//     trendLine / horizontalLine / verticalLine / priceLabel / ray / arrow / rectangle / parallelChannel / channel / fibonacci / fibonacciExtension / fibonacciArc / text /
+//   - 用 SwiftUI Canvas 绘制 22 种画线类型（v17.18 后）：
+//     trendLine / horizontalLine / verticalLine / priceLabel / ray / arrow / rectangle / parallelChannel / channel / fibonacci / fibonacciExtension / fibonacciArc / fibonacciChannel / text /
 //     ellipse / ruler / pitchfork / polygon /
 //     fibonacciFan / priceZone / gannFan / fibonacciTimeZone
 //   - 选中态高亮（线宽 +1.0 · 色彩饱和度提高）· v13.9 升级支持多选
@@ -130,6 +130,7 @@ public struct DrawingsOverlayView: View {
         case .fibonacci:        drawFibonacci(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacciExtension: drawFibonacciExtension(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacciArc:     drawFibonacciArc(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .fibonacciChannel: drawFibonacciChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .text:             drawText(drawing, ctx, size, baseColor, opacity)
         case .ellipse:          drawEllipse(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .ruler:            drawRuler(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
@@ -326,6 +327,34 @@ public struct DrawingsOverlayView: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(color)
             ctx.draw(text, at: CGPoint(x: 4, y: y - 8))
+        }
+    }
+
+    /// v17.18 A4.5 · 斐波通道 · 两点主轴 + offset 副线 · 内部 7 fib 比例平行线（含 0% 主线 / 100% 副线 + 5 内层）
+    private func drawFibonacciChannel(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint, let offset = d.channelOffset else { return }
+        let levels = FibonacciLevels.standard
+        for (i, ratio) in levels.enumerated() {
+            let priceShift = offset * ratio
+            let lineS = CGPoint(x: xForBar(d.startPoint.barIndex, size: size),
+                                y: yForPrice(d.startPoint.price + priceShift, size: size))
+            let lineE = CGPoint(x: xForBar(end.barIndex, size: size),
+                                y: yForPrice(end.price + priceShift, size: size))
+            // 0% 和 100% 主轴 + 副线实线（端点）· 中间 fib 虚线
+            let isEdge = (ratio == 0 || ratio == 1)
+            let lineDash: [CGFloat] = isEdge ? dash : (dash.isEmpty ? [3, 2] : dash)
+            let lineOpacity: Double = isEdge ? opacity : 0.65 * opacity
+            let strokeWidth: CGFloat = isEdge ? width : width * 0.7
+            var path = Path()
+            path.move(to: lineS); path.addLine(to: lineE)
+            ctx.stroke(path, with: .color(color.opacity(lineOpacity)), style: StrokeStyle(lineWidth: strokeWidth, dash: lineDash))
+            // 右端 ratio 标签
+            let pct = NSDecimalNumber(decimal: ratio).doubleValue * 100
+            let label = Text(String(format: "%.1f%%", pct))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(color)
+            ctx.draw(label, at: CGPoint(x: lineE.x - 24, y: lineE.y - 8))
+            _ = i
         }
     }
 
@@ -656,6 +685,7 @@ public struct DrawingsOverlayView: View {
         case .fibonacci:       return Color(red: 1.00, green: 0.55, blue: 0.18)  // 橙
         case .fibonacciExtension: return Color(red: 0.95, green: 0.78, blue: 0.30)  // 金黄（v17.16 · 与 fibonacci 橙互补 · 同语义不同方向）
         case .fibonacciArc:    return Color(red: 1.00, green: 0.70, blue: 0.35)     // 杏橙（v17.17 · fib 系族同色调 · 偏暖）
+        case .fibonacciChannel: return Color(red: 0.95, green: 0.45, blue: 0.55)    // 桃红（v17.18 · fib 系族 · 与 parallelChannel 红/橙系区分）
         case .text:            return .white
         case .ellipse:         return Color(red: 0.18, green: 0.83, blue: 0.74)  // 青（v13.13）
         case .ruler:           return Color(red: 0.96, green: 0.69, blue: 0.18)  // 金（v13.14）

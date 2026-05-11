@@ -254,4 +254,52 @@ struct MaiLangLintTests {
         let s = MaiLangLint.closestKnownName("MAX", in: known)
         #expect(s == "MAA")
     }
+
+    // MARK: - v16.98 · argCountMismatch 规则
+
+    @Test("v16.98 · MA(CLOSE) 漏第 2 参 → 警告")
+    func argCountMismatch_missing() {
+        let src = "OUT:MA(CLOSE),COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let mismatch = warns.filter { $0.kind == .argCountMismatch }
+        #expect(mismatch.count == 1)
+        #expect(mismatch[0].message.contains("MA"))
+        #expect(mismatch[0].message.contains("预期 2"))
+        #expect(mismatch[0].message.contains("实际 1"))
+    }
+
+    @Test("v16.98 · MA(CLOSE, 5, 7) 多 1 参 → 警告")
+    func argCountMismatch_extra() {
+        let src = "OUT:MA(CLOSE,5,7),COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let mismatch = warns.filter { $0.kind == .argCountMismatch }
+        #expect(mismatch.count == 1)
+        #expect(mismatch[0].message.contains("预期 2"))
+        #expect(mismatch[0].message.contains("实际 3"))
+    }
+
+    @Test("v16.98 · MA(CLOSE, 5) 正确参数 → 不警告")
+    func argCountMismatch_correct() {
+        let src = "OUT:MA(CLOSE,5),COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let mismatch = warns.filter { $0.kind == .argCountMismatch }
+        #expect(mismatch.isEmpty)
+    }
+
+    @Test("v16.98 · 0-arg CLOSE 直接引用（无括号）→ 不警告")
+    func argCountMismatch_zeroArgReference() {
+        let src = "OUT:CLOSE,COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let mismatch = warns.filter { $0.kind == .argCountMismatch }
+        #expect(mismatch.isEmpty)
+    }
+
+    @Test("v16.98 · 嵌套函数调用 commas 不混淆")
+    func argCountMismatch_nested() {
+        // MA(EMA(CLOSE, 3), 5) · 外层 commas = 1 → 2 参（正确）· 内层 commas = 1 → 2 参（正确）
+        let src = "OUT:MA(EMA(CLOSE,3),5),COLORRED;"
+        let warns = MaiLangLint.analyze(src)
+        let mismatch = warns.filter { $0.kind == .argCountMismatch }
+        #expect(mismatch.isEmpty)
+    }
 }

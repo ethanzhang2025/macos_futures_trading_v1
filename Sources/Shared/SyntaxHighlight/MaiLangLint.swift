@@ -24,12 +24,14 @@ public struct MaiLangLintWarning: Sendable, Equatable {
         case duplicateDefinition   // 同名变量被定义两次及以上（可能是 typo · 后续覆盖前定义）
         case missingColorAttribute // 输出变量未指定 COLORxxx 属性（默认色不醒目）
         case undefinedVariable     // v16.66 · 引用了未定义的标识符（非保留字 · 非已声明变量 · 可能 typo）
+        case argCountMismatch      // v16.98 · builtin 函数调用参数数量与签名不符（MA(CLOSE) 漏第 2 参数）
 
-        /// v16.74 · 默认严重度（undefined 是 error · 其他是 warning）
+        /// v16.74 · 默认严重度（undefined/duplicate/argCount 是 error · 其他是 warning）
         public var defaultSeverity: Severity {
             switch self {
             case .undefinedVariable: return .error
             case .duplicateDefinition: return .error
+            case .argCountMismatch: return .error
             case .unusedVariable, .missingColorAttribute: return .warning
             }
         }
@@ -130,6 +132,60 @@ public enum MaiLangLint {
             }
             return ans + 1
         }
+        // v16.98 规则 5：builtin 函数调用参数数量检查（MA(CLOSE) 漏第 2 参数 → 警告）
+        // 跳过：next token != "(" 的引用形式（如 CLOSE / OPEN / HIGH 等 0-arg "globals" 直接引用）
+        // 跳过：括号不平衡（编译器会报错 · lint 不重复）
+        for (i, t) in tokens.enumerated() where t.kind == .builtinFunc {
+            let name = t.text.uppercased()
+            guard let sig = MaiLangFunctionSignatures.all[name] else { continue }
+            let expected = sig.parameters.count
+            // 找 t 之后的下一个非注释/非 error token
+            var openIdx: Int? = nil
+            var k = i + 1
+            while k < tokens.count {
+                let tk = tokens[k]
+                if tk.kind == .comment || tk.kind == .error { k += 1; continue }
+                openIdx = (tk.kind == .operatorPunct && tk.text == "(") ? k : nil
+                break
+            }
+            guard let oi = openIdx else { continue }   // 无括号 = 引用形式 · 不检查
+            // 配对找 ")" + 数 top-level commas
+            var depth = 1
+            var commas = 0
+            var sawNonWhitespaceContent = false
+            var j = oi + 1
+            while j < tokens.count && depth > 0 {
+                let tk = tokens[j]
+                if tk.kind == .comment { j += 1; continue }
+                if tk.kind == .operatorPunct {
+                    switch tk.text {
+                    case "(":
+                        depth += 1
+                        sawNonWhitespaceContent = true
+                    case ")":
+                        depth -= 1
+                        if depth > 0 { sawNonWhitespaceContent = true }
+                    case "," where depth == 1:
+                        commas += 1
+                        sawNonWhitespaceContent = true
+                    default:
+                        sawNonWhitespaceContent = true
+                    }
+                } else {
+                    sawNonWhitespaceContent = true
+                }
+                j += 1
+            }
+            guard depth == 0 else { continue }   // 括号不平衡 · 编译器报错 · lint 跳过
+            let actual = sawNonWhitespaceContent ? commas + 1 : 0
+            if actual != expected {
+                warnings.append(MaiLangLintWarning(
+                    line: lineOf(t.range.location),
+                    kind: .argCountMismatch,
+                    message: "\(name) 参数数量不符（预期 \(expected) · 实际 \(actual) · 签名：\(sig.formatted)）"))
+            }
+        }
+
         var reported: Set<String> = []
         // v16.93 · 已知名集合（builtin + 已定义）· 用于 typo 建议
         let knownNames: Set<String> = MaiLangSyntaxHighlighter.allCompletionCandidates.reduce(into: definedNames) {

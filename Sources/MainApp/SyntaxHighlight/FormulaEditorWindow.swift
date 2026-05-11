@@ -1516,11 +1516,13 @@ public struct FormulaEditorWindow: View {
             ("⌫", "在配对中按删除 → 同时删两侧（如 (|) → 删空）"),
             ("智能大写", "完整保留字 + 空格/逗号/括号 → 自动转大写"),
         ]),
-        ("⚠ Lint 警告 + Quick Fix（v16.60 / v16.66）", [
+        ("⚠ Lint 警告 + Quick Fix（v16.60 / v16.66 / v16.98）", [
             ("未使用变量", "🔧 修复 → 删除该行"),
             ("重复定义", "🔧 修复 → 跳到首次定义 / 删除该重复行"),
             ("输出未指定颜色", "🔧 修复 → 插入颜色属性（COLORRED/GREEN/BLUE 等 6 选）"),
-            ("未定义标识符 (v16.66)", "🔧 修复 → 跳转检查拼写（typo 检测 · 仅 ASCII）"),
+            ("未定义标识符 (v16.66)", "🔧 修复 → 跳转 · v16.93 typo 建议 + v16.97 一键复制建议名"),
+            ("函数参数数量不符 (v16.98)", "🔧 修复 → 跳转 + 复制正确签名模板"),
+            ("行内波浪线 (v16.92)", "整行 dot · error 红 / warning 橙 · trader 写时即看"),
         ]),
     ]
 
@@ -1585,6 +1587,25 @@ public struct FormulaEditorWindow: View {
                         Label("复制建议 \(suggestion)", systemImage: "doc.on.doc")
                     }
                 }
+            case .argCountMismatch:
+                // v16.98 · 参数数量不符 · 跳转 + 复制正确签名模板
+                Button {
+                    pendingGotoLine = warn.line
+                    showOutlineSheet = false
+                    statusMessage = "跳到第 \(warn.line) 行 · \(warn.message)"
+                } label: {
+                    Label("跳转检查参数", systemImage: "magnifyingglass")
+                }
+                if let template = parseArgSignatureTemplate(from: warn.message) {
+                    Button {
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(template, forType: .string)
+                        statusMessage = "已复制签名模板：\(template)"
+                    } label: {
+                        Label("复制签名模板", systemImage: "doc.on.doc")
+                    }
+                }
             }
         } label: {
             Label("修复", systemImage: "wand.and.stars")
@@ -1607,6 +1628,15 @@ public struct FormulaEditorWindow: View {
     /// v16.97 · 从 v16.93 typo 建议 message "可能是 `X`?" 提取 X
     private func parseTypoSuggestion(from message: String) -> String? {
         guard let regex = try? NSRegularExpression(pattern: #"可能是 `([A-Z_][A-Z0-9_]*)`"#) else { return nil }
+        let ns = message as NSString
+        guard let match = regex.firstMatch(in: message, range: NSRange(location: 0, length: ns.length)),
+              match.numberOfRanges >= 2 else { return nil }
+        return ns.substring(with: match.range(at: 1))
+    }
+
+    /// v16.98 · 从 argCountMismatch message 提取签名模板（"签名：MA(序列, 周期 N)" → "MA(序列, 周期 N)"）
+    private func parseArgSignatureTemplate(from message: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"签名：([^）]+\))"#) else { return nil }
         let ns = message as NSString
         guard let match = regex.firstMatch(in: message, range: NSRange(location: 0, length: ns.length)),
               match.numberOfRanges >= 2 else { return nil }

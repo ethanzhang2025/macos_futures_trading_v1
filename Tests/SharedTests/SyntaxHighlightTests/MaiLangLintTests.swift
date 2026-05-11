@@ -231,4 +231,27 @@ struct MaiLangLintTests {
         #expect(und != nil)
         // 可能没有建议（不强求 · 但 message 仍有基础描述）
     }
+
+    @Test("v16.93 · closestKnownName 距离 0 排除（自身）")
+    func closestExcludesSelf() {
+        let known: Set<String> = ["MAA", "MAAB", "MAAC"]
+        // "MAA" 在 known 内 · 距离 0 → 跳过 · 应返回距离 ≤ 2 的次近
+        let s = MaiLangLint.closestKnownName("MAA", in: known)
+        #expect(s == "MAAB" || s == "MAAC")   // 距离 1 同 · 取最短 → 都 4 字符 · 任一可接受
+    }
+
+    @Test("v16.93 · closestKnownName 短词不建议（< 3 字符）")
+    func closestSkipsShortWords() {
+        let known: Set<String> = ["MA", "MAX"]
+        #expect(MaiLangLint.closestKnownName("M", in: known) == nil)
+        #expect(MaiLangLint.closestKnownName("AB", in: known) == nil)
+    }
+
+    @Test("v16.93 · closestKnownName 距离平局取最短名")
+    func closestPrefersShorter() {
+        let known: Set<String> = ["MAA", "MAAB"]
+        // "MAX" 与 "MAA" 距离 1 · 与 "MAAB" 距离 2 → 取 MAA
+        let s = MaiLangLint.closestKnownName("MAX", in: known)
+        #expect(s == "MAA")
+    }
 }

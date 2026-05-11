@@ -967,6 +967,15 @@ struct TrainingHistoryPanel: View {
                         }
                         .contextMenu {
                             Button("查看评分") { selectedSessionID = session.id }
+                            // v16.112 · 一键再练该形态（与 ScoreSheet 再练同形态 同效 · 不必打开 sheet）
+                            if let pattern = session.scenarioPattern {
+                                Button {
+                                    viewModel.pendingRetrainPattern = pattern
+                                } label: {
+                                    Label("再练同形态 \(pattern.emoji) \(pattern.displayName)",
+                                          systemImage: "arrow.clockwise")
+                                }
+                            }
                             // v15.23 batch158 · 单 session 分享（复用 batch133 + batch146）
                             if let score = viewModel.log.score(for: session.id) {
                                 Divider()

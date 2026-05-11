@@ -281,6 +281,8 @@ struct ChartScene: View {
     @Environment(\.alertEvaluator) private var alertEvaluator
     @Environment(\.simulatedTradingEngine) private var simulatedTradingEngine
     @Environment(\.openWindow) private var openWindow
+    /// v17.6 · Shell 嵌入模式（隐藏顶部 toolbar · 由 Shell 顶部统一管理）
+    @Environment(\.isHostedInShell) private var isHostedInShell
 
     /// 回放 player 的 UI 镜像（cursor + state + speed 派生于 player · 通过 observe() 同步）
     private struct ReplaySnapshot: Equatable {
@@ -298,7 +300,10 @@ struct ChartScene: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
+            // v17.6 · Shell 嵌入模式隐藏顶部 toolbar（由 Shell PrimaryTabBar + Pane Header 统一管理）
+            if !isHostedInShell {
+                toolbar
+            }
             mainContent
             if chartMode == .replay {
                 replayControlBar

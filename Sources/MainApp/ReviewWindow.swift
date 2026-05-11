@@ -44,6 +44,8 @@ struct ReviewWindow: View {
 
     /// v15.23 batch205 · 跨窗口跳主图
     @Environment(\.openWindow) private var openWindow
+    /// v17.6 · Shell 嵌入模式（隐藏 header · 由 Shell PrimaryTabBar 统一管理）
+    @Environment(\.isHostedInShell) private var isHostedInShell
 
     private struct ZoomedCard: Identifiable {
         var id: String { title }
@@ -330,8 +332,11 @@ struct ReviewWindow: View {
     @ViewBuilder
     private func content(_ s: ReviewSummary) -> some View {
         VStack(spacing: 0) {
-            header(s)
-            Divider()
+            // v17.6 · Shell 嵌入模式隐藏 header（标题/导出按钮 · 由 Shell PrimaryTabBar 统一管理）
+            if !isHostedInShell {
+                header(s)
+                Divider()
+            }
             // v16.69 · 15 张图分类导航 chip bar（trader 长 grid 快速定位 · 接 v16.47）
             chartNavigationBar(s)
             Divider()

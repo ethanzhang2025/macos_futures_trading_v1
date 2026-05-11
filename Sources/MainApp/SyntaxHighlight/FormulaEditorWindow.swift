@@ -461,6 +461,7 @@ public struct FormulaEditorWindow: View {
                                     }
                                 }
                                 // v16.158 · 已隐藏 kinds 恢复 chip 行（trader 一键恢复某类）
+                                // v16.160 · ≥ 2 时加 "全部恢复" button（一键清空隐藏集）
                                 if !sessionHiddenLintKinds.isEmpty {
                                     HStack(spacing: 4) {
                                         Text("已隐藏：").font(.system(size: 10)).foregroundColor(.secondary)
@@ -480,6 +481,23 @@ public struct FormulaEditorWindow: View {
                                             }
                                             .buttonStyle(.plain)
                                             .tooltip("恢复显示 \(lintKindLabel(kind)) 类")
+                                        }
+                                        if sessionHiddenLintKinds.count >= 2 {
+                                            Button {
+                                                let n = sessionHiddenLintKinds.count
+                                                sessionHiddenLintKinds.removeAll()
+                                                statusMessage = "已恢复 \(n) 类隐藏 lint"
+                                            } label: {
+                                                Text("全部恢复")
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                                    .background(RoundedRectangle(cornerRadius: 4)
+                                                        .strokeBorder(Color.accentColor.opacity(0.6),
+                                                                       lineWidth: 1))
+                                                    .foregroundColor(.accentColor)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .tooltip("一键恢复全部 \(sessionHiddenLintKinds.count) 类隐藏的 lint")
                                         }
                                     }
                                 }

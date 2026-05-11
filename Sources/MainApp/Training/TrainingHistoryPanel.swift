@@ -1609,6 +1609,7 @@ struct TrainingHistoryPanel: View {
     }
 
     /// v16.179 · session row grade emoji tooltip · 总分 + 5 维 + violations 速览
+    /// v16.209 · 加 vs 本月均 delta（trader 一眼看本次相对水平）
     private func gradeEmojiTooltip(session: TrainingSession, score: TrainingScore?) -> String {
         guard let sc = score else { return "❔ 未评分" }
         var parts: [String] = []
@@ -1623,6 +1624,20 @@ struct TrainingHistoryPanel: View {
             parts.append("⚠️ \(errors) error / \(warns) warning")
         } else {
             parts.append("✓ 0 违规")
+        }
+        // v16.209 · vs 本月均（仅本月 ≥ 2 session 才显示对比）
+        let cal = Calendar(identifier: .gregorian)
+        if let monthInterval = cal.dateInterval(of: .month, for: session.endedAt) {
+            let monthSessions = viewModel.log.sessions.filter {
+                $0.endedAt >= monthInterval.start && $0.endedAt < monthInterval.end
+            }
+            let monthScores = monthSessions.compactMap { viewModel.log.score(for: $0.id)?.totalScore }
+            if monthScores.count >= 2 {
+                let avg = monthScores.reduce(0, +) / monthScores.count
+                let delta = sc.totalScore - avg
+                let trend = delta > 0 ? "↑" : (delta < 0 ? "↓" : "=")
+                parts.append("vs 本月均 \(avg)：\(trend) \(delta >= 0 ? "+" : "")\(delta)")
+            }
         }
         return parts.joined(separator: "\n")
     }

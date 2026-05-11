@@ -54,6 +54,8 @@ struct TrainingRulesPanel: View {
             Text("\(viewModel.book.rules.count) 条 · 启用 \(viewModel.book.enabledRules.count)")
                 .font(.caption)
                 .foregroundColor(.secondary)
+            // v16.44 · 当前模板 chip（与 v16.43 模板对比 · 不匹配显示"自定义"）
+            currentTemplateChip
             Spacer()
             Button {
                 showAdd = true
@@ -91,6 +93,30 @@ struct TrainingRulesPanel: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    /// v16.44 · 当前规则集匹配的模板（与 v16.43 4 套对比 · 不匹配 → "自定义"）
+    @ViewBuilder
+    private var currentTemplateChip: some View {
+        let label = currentTemplateName
+        Text(label)
+            .font(.system(size: 10, weight: .medium))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.accentColor.opacity(0.15))
+            .foregroundColor(.accentColor)
+            .clipShape(Capsule())
+            .tooltip("当前规则集对应的模板（v16.43 · 4 套预设 · 修改后变 \"自定义\"）")
+    }
+
+    private var currentTemplateName: String {
+        let book = viewModel.book
+        if book == .defaultRecommended      { return "🎯 保守短线" }
+        if book == .aggressiveIntraday      { return "⚡ 激进日内" }
+        if book == .swingHolding            { return "📈 波段持仓" }
+        if book == .minimal                 { return "🌱 极简纪律" }
+        if book.rules.isEmpty               { return "（空）" }
+        return "✏️ 自定义"
     }
 
     // MARK: - 空态

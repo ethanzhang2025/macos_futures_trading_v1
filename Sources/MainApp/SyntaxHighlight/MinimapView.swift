@@ -32,6 +32,8 @@ public struct MinimapView: View {
     let highlightedToken: String?
     /// v15.23 batch111 · lint 警告行（1-based · 橙色横条 · 与 errorLine 红色区分）· trader 一眼看 dead code
     let warningLines: [Int]
+    /// v16.77 · lint 严重 error 行（undefined/duplicate · 1-based · 红色横条 · 与编译错误同色但比 warning 更醒目）
+    let lintErrorLines: [Int]
     /// 用户点击/拖到第 N 行（1-based）回调 · 主编辑器据此 scroll-only 跳转（不动光标）
     let onClickLine: (Int) -> Void
     /// v15.23 batch113 · 双击第 N 行回调（goto + 移光标 + 抢 firstResponder · IDE 双击=进入编辑）· nil = 不响应
@@ -44,6 +46,7 @@ public struct MinimapView: View {
                 errorLine: Int? = nil,
                 highlightedToken: String? = nil,
                 warningLines: [Int] = [],
+                lintErrorLines: [Int] = [],
                 onClickLine: @escaping (Int) -> Void,
                 onDoubleClickLine: ((Int) -> Void)? = nil) {
         self.text = text
@@ -56,6 +59,7 @@ public struct MinimapView: View {
         self.errorLine = errorLine
         self.highlightedToken = highlightedToken
         self.warningLines = warningLines
+        self.lintErrorLines = lintErrorLines
         self.onClickLine = onClickLine
         self.onDoubleClickLine = onDoubleClickLine
     }
@@ -265,6 +269,15 @@ public struct MinimapView: View {
             // 左侧 2pt 浓橙 indicator · 与红条左条对称
             let leftBar = CGRect(x: 0, y: y, width: 2.0, height: max(lineH, 1.8))
             ctx.fill(Path(leftBar), with: .color(Color.orange))
+        }
+
+        // v16.77 · lint error 行红色横条（紧急 lint · undefined/duplicate · 优先级介于 warning 和 compile error 之间）
+        for el in lintErrorLines where el >= 1 && el <= totalLines {
+            let y = CGFloat(el - 1) * lineH
+            let rect = CGRect(x: 0, y: y, width: size.width, height: max(lineH, 1.9))
+            ctx.fill(Path(rect), with: .color(Color.red.opacity(0.45)))
+            let leftBar = CGRect(x: 0, y: y, width: 2.0, height: max(lineH, 1.9))
+            ctx.fill(Path(leftBar), with: .color(Color.red.opacity(0.85)))
         }
 
         // batch108 编译错误行红色横条（最高优先级覆盖 · trader 编译失败一眼定位）

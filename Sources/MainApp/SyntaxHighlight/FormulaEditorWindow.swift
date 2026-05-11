@@ -189,7 +189,8 @@ public struct FormulaEditorWindow: View {
                                 selectionEndLine: selRange?.1,
                                 errorLine: errorMarker?.line,
                                 highlightedToken: currentTokenText,
-                                warningLines: warns.map { $0.line },
+                                warningLines: warns.filter { $0.severity == .warning }.map { $0.line },
+                                lintErrorLines: warns.filter { $0.severity == .error }.map { $0.line },
                                 onClickLine: { line in pendingScrollToLine = line },
                                 onDoubleClickLine: { line in pendingGotoLine = line })
                         .frame(width: CGFloat(minimapWidth))
@@ -1487,7 +1488,7 @@ public struct FormulaEditorWindow: View {
             ("⌘L", "跳转到指定行（输入行号）"),
             ("点击行号", "选中整行（左侧 gutter）"),
             ("⌘⇧M", "切换 minimap 缩略图（v15.23 · 拖动 scroll-only · 双击 goto + 移光标 · 4 档宽度）"),
-            ("minimap 标记", "🟧未用变量/重复定义 · 🟥编译错误 · 🟨当前 token 全文同名引用"),
+            ("minimap 标记", "🟧未用变量/缺颜色 · 🟥编译错误 · 🟥紧急 lint (undefined/重复定义 · v16.77) · 🟨当前 token 引用"),
             ("status bar", "实时显示光标位置 行:列 · ⚠ 警告数（点击跳第一个）"),
         ]),
         ("🔍 查找", [

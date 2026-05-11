@@ -694,6 +694,8 @@ struct ReviewWindow: View {
         md += "\n" + TrainingMarkdownReport.generateSetupPatternCrossReference(
             log, setups: setupSlices(from: s.setupMatrix), start: weekStart, end: now
         )
+        // v16.40 · 心理洞察纯文本章节（任意月报都拼 · 与 v16.38 卡片配套）
+        md += psychInsightMarkdown(s.psychTagCounts)
         // v16.39 · 关键图表 base64 PNG（按 toolbar Toggle 开关）
         md += keyChartsMarkdownIfEnabled(s)
         do {
@@ -746,6 +748,8 @@ struct ReviewWindow: View {
         md += "\n" + TrainingMarkdownReport.generateSetupPatternCrossReference(
             log, setups: setupSlices(from: s.setupMatrix), start: monthStart, end: monthEnd
         )
+        // v16.40 · 心理洞察纯文本章节（任意月报都拼 · 与 v16.38 卡片配套）
+        md += psychInsightMarkdown(s.psychTagCounts)
         // v16.39 · 关键图表 base64 PNG（按 toolbar Toggle 开关）
         md += keyChartsMarkdownIfEnabled(s)
         do {
@@ -846,6 +850,27 @@ struct ReviewWindow: View {
         guard let pngData = PNGRenderer.render(exportable, width: 720, height: 480) else { return nil }
         let base64 = pngData.base64EncodedString()
         return "### \(title)\n\n![\(title)](data:image/png;base64,\(base64))\n"
+    }
+
+    /// v16.40 · 心理洞察纯文本章节（最弱心理 + advice · 任意月报都拼 · 不依赖 base64 PNG flag）
+    private func psychInsightMarkdown(_ counts: [(tag: EmotionAutoTagger.Tag, count: Int)]) -> String {
+        var md = "\n## 心理风险洞察（v16.38 · 月度最弱心理 + 改进建议）\n\n"
+        guard let w = counts.filter({ $0.count > 0 }).max(by: { $0.count < $1.count }) else {
+            md += "✅ **无负面心理标签** · 保持纪律 · 心态稳定。\n"
+            return md
+        }
+        md += "**最弱心理**：\(psychEmoji(w.tag)) \(w.tag.displayName) · 出现 **\(w.count)** 次（月度最高频负面）\n\n"
+        md += "**💡 改进建议**：\(psychAdvice(w.tag))\n\n"
+        // 全量分布表（trader 看其他次高频）
+        let sorted = counts.filter { $0.count > 0 }.sorted { $0.count > $1.count }
+        if sorted.count > 1 {
+            md += "**完整分布**：\n\n"
+            md += "| 心理标签 | 次数 |\n|---|---|\n"
+            for item in sorted {
+                md += "| \(psychEmoji(item.tag)) \(item.tag.displayName) | \(item.count) |\n"
+            }
+        }
+        return md
     }
 
     /// 月报/周报关键 3 图 markdown（按 flag 开 · 默认 nil 不嵌入）

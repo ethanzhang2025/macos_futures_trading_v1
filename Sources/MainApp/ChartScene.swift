@@ -81,6 +81,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .trendLine:       return "趋势线"
     case .horizontalLine:  return "水平线"
     case .verticalLine:    return "垂直线"
+    case .ray:             return "射线"
     case .rectangle:       return "矩形"
     case .parallelChannel: return "平行通道"
     case .fibonacci:       return "斐波那契"
@@ -893,7 +894,9 @@ struct ChartScene: View {
         HStack(spacing: 4) {
             drawingToolButton(icon: "cursorarrow", tool: nil, help: "浏览（取消画线工具）")
             drawingToolButton(icon: "line.diagonal", tool: .trendLine, help: "趋势线（双点）")
+            drawingToolButton(icon: "arrow.up.right", tool: .ray, help: "射线（双点定方向 · 从 start 延伸到画布边界）")
             drawingToolButton(icon: "minus", tool: .horizontalLine, help: "水平线（一点）")
+            drawingToolButton(icon: "arrow.up.and.down", tool: .verticalLine, help: "垂直线（一点 · 时间锚点 · 横跨全价格）")
             drawingToolButton(icon: "rectangle", tool: .rectangle, help: "矩形（双点对角）")
             drawingToolButton(icon: "lines.measurement.horizontal", tool: .parallelChannel, help: "平行通道（双点 · 默认 +1.0 偏移）")
             drawingToolButton(icon: "function", tool: .fibonacci, help: "斐波那契回调（双点）")
@@ -3911,6 +3914,18 @@ struct ChartContentView: View {
             let x = screenPoint(drawing.startPoint).x
             return abs(p.x - x)
 
+        case .ray:
+            // v17.10 A3.2 · 射线 hit test · 从 start 经 end 延伸到画布边界 · 复用 pitchforkExtensionScale
+            guard let end = drawing.endPoint else { return .infinity }
+            let a = screenPoint(drawing.startPoint)
+            let b = screenPoint(end)
+            let dx = b.x - a.x
+            let dy = b.y - a.y
+            guard abs(dx) > 0.0001 || abs(dy) > 0.0001 else { return .infinity }
+            let t = DrawingsOverlayView.pitchforkExtensionScale(a: a, dx: dx, dy: dy, size: size)
+            let rayEnd = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
+            return Self.pointToSegmentDistance(p, a, rayEnd)
+
         case .rectangle:
             guard let end = drawing.endPoint else { return .infinity }
             let s = screenPoint(drawing.startPoint)
@@ -4105,6 +4120,8 @@ struct ChartContentView: View {
             return Drawing.rectangle(from: firstPoint, to: hoverPoint)
         case .trendLine:
             return Drawing.trendLine(from: firstPoint, to: hoverPoint)
+        case .ray:
+            return Drawing.ray(from: firstPoint, to: hoverPoint)
         case .ellipse:
             return Drawing.ellipse(from: firstPoint, to: hoverPoint)
         case .ruler:

@@ -2,8 +2,8 @@
 //
 // 职责：
 //   - 接收 [Drawing] + bars + viewport + priceRange + 可选 selectedIDs
-//   - 用 SwiftUI Canvas 绘制 14 种画线类型（v15.90 后）：
-//     trendLine / horizontalLine / rectangle / parallelChannel / fibonacci / text /
+//   - 用 SwiftUI Canvas 绘制 16 种画线类型（v17.10 后）：
+//     trendLine / horizontalLine / verticalLine / ray / rectangle / parallelChannel / fibonacci / text /
 //     ellipse / ruler / pitchfork / polygon /
 //     fibonacciFan / priceZone / gannFan / fibonacciTimeZone
 //   - 选中态高亮（线宽 +1.0 · 色彩饱和度提高）· v13.9 升级支持多选
@@ -121,6 +121,7 @@ public struct DrawingsOverlayView: View {
         case .trendLine:        drawTrendLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .horizontalLine:   drawHorizontalLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .verticalLine:     drawVerticalLine(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .ray:              drawRay(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .rectangle:        drawRectangle(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .parallelChannel:  drawParallelChannel(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .fibonacci:        drawFibonacci(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
@@ -168,6 +169,21 @@ public struct DrawingsOverlayView: View {
         var path = Path()
         path.move(to: CGPoint(x: x, y: 0))
         path.addLine(to: CGPoint(x: x, y: size.height))
+        ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+    }
+
+    /// v17.10 A3.2 · 射线（两点定方向 · 从 start 出发经 end 延伸到画布边界 · 复用 pitchforkExtensionScale）
+    private func drawRay(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let a = CGPoint(x: xForBar(d.startPoint.barIndex, size: size), y: yForPrice(d.startPoint.price, size: size))
+        let b = CGPoint(x: xForBar(end.barIndex, size: size), y: yForPrice(end.price, size: size))
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        guard abs(dx) > 0.0001 || abs(dy) > 0.0001 else { return }
+        let t = Self.pitchforkExtensionScale(a: a, dx: dx, dy: dy, size: size)
+        var path = Path()
+        path.move(to: a)
+        path.addLine(to: CGPoint(x: a.x + t * dx, y: a.y + t * dy))
         ctx.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
     }
 
@@ -472,6 +488,7 @@ public struct DrawingsOverlayView: View {
         case .trendLine:       return Color(red: 1.00, green: 0.78, blue: 0.18)  // 黄
         case .horizontalLine:  return Color(red: 0.30, green: 0.78, blue: 1.00)  // 蓝
         case .verticalLine:    return Color(red: 0.30, green: 0.78, blue: 1.00)  // 蓝（v17.8 · 与 horizontalLine 同色 · 概念对称）
+        case .ray:             return Color(red: 0.72, green: 0.93, blue: 0.30)  // 嫩绿（v17.10 · 与 trendLine 黄区分）
         case .rectangle:       return Color(red: 0.63, green: 0.42, blue: 0.83)  // 紫
         case .parallelChannel: return Color(red: 0.96, green: 0.27, blue: 0.27)  // 红
         case .fibonacci:       return Color(red: 1.00, green: 0.55, blue: 0.18)  // 橙

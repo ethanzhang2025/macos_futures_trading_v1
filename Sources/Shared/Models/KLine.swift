@@ -149,3 +149,46 @@ public struct KLine: Sendable, Codable, Equatable {
         return (high - low) / open * 100
     }
 }
+
+// MARK: - Heikin Ashi 变换（v17.13 A1.1）
+
+extension KLine {
+    /// 把原始 OHLC K 线变换为 Heikin Ashi（平均 K 线）· trader 看趋势更稳的图表类型
+    /// 公式：
+    ///   HA_close[i] = (open + high + low + close) / 4
+    ///   HA_open[0]  = (open[0] + close[0]) / 2
+    ///   HA_open[i]  = (HA_open[i-1] + HA_close[i-1]) / 2 · for i > 0
+    ///   HA_high[i]  = max(high, HA_open, HA_close)
+    ///   HA_low[i]   = min(low, HA_open, HA_close)
+    /// volume / openInterest / turnover 保持原值（HA 只重塑价格 4 值 · 体量数据不变）
+    public static func heikinAshi(from bars: [KLine]) -> [KLine] {
+        guard !bars.isEmpty else { return [] }
+        var result: [KLine] = []
+        result.reserveCapacity(bars.count)
+        let four = Decimal(4)
+        let two = Decimal(2)
+        var prevHAOpen: Decimal = (bars[0].open + bars[0].close) / two
+        var prevHAClose: Decimal = (bars[0].open + bars[0].high + bars[0].low + bars[0].close) / four
+        for (i, bar) in bars.enumerated() {
+            let haClose = (bar.open + bar.high + bar.low + bar.close) / four
+            let haOpen: Decimal = (i == 0) ? (bar.open + bar.close) / two : (prevHAOpen + prevHAClose) / two
+            let haHigh = max(bar.high, max(haOpen, haClose))
+            let haLow  = min(bar.low,  min(haOpen, haClose))
+            result.append(KLine(
+                instrumentID: bar.instrumentID,
+                period: bar.period,
+                openTime: bar.openTime,
+                open: haOpen,
+                high: haHigh,
+                low: haLow,
+                close: haClose,
+                volume: bar.volume,
+                openInterest: bar.openInterest,
+                turnover: bar.turnover
+            ))
+            prevHAOpen = haOpen
+            prevHAClose = haClose
+        }
+        return result
+    }
+}

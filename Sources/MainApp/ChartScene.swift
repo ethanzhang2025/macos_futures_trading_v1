@@ -217,6 +217,9 @@ struct ChartScene: View {
     /// v15.8 主图主题（深色 / 浅色）· UserDefaults 全局共享
     @State private var chartTheme: ChartTheme = .dark
     @State private var isChartThemeLoaded: Bool = false
+    /// v17.13 A1.1 · 主图图表类型（candlestick / heikinAshi）· UserDefaults 全局共享
+    @State private var chartType: ChartType = .candlestick
+    @State private var isChartTypeLoaded: Bool = false
     /// v15.14 HUD 自定义字段（OHLC / 涨跌 / 成交量 / 持仓量 / 时间 / 调试）· UserDefaults 全局共享
     @State private var hudFields: HUDFieldsBook = .default
     @State private var isHUDFieldsLoaded: Bool = false
@@ -457,6 +460,13 @@ struct ChartScene: View {
                 }
                 isChartThemeLoaded = true
             }
+            // v17.13 A1.1 图表类型加载
+            if !isChartTypeLoaded {
+                if let type = ChartTypeStore.load() {
+                    chartType = type
+                }
+                isChartTypeLoaded = true
+            }
             // v15.14 HUD 字段加载（独立守卫 · UserDefaults 不存在 fallback default 仅 .debug）
             if !isHUDFieldsLoaded {
                 if let book = HUDFieldsStore.load() {
@@ -516,6 +526,11 @@ struct ChartScene: View {
             guard isChartThemeLoaded else { return }
             ChartThemeStore.save(newValue)
         }
+        .onChange(of: chartType) { newValue in
+            // v17.13 A1.1 图表类型持久化（切换时 displayBars 自动重算 · SwiftUI Binding 重渲染）
+            guard isChartTypeLoaded else { return }
+            ChartTypeStore.save(newValue)
+        }
         .onChange(of: hudFields) { newValue in
             // v15.14 HUD 字段持久化（独立守卫 · UserDefaults JSON）
             guard isHUDFieldsLoaded else { return }
@@ -574,6 +589,9 @@ struct ChartScene: View {
     private func syncFromUserDefaults() {
         if isChartThemeLoaded, let theme = ChartThemeStore.load(), theme != chartTheme {
             chartTheme = theme
+        }
+        if isChartTypeLoaded, let type = ChartTypeStore.load(), type != chartType {
+            chartType = type
         }
         if isHUDFieldsLoaded, let book = HUDFieldsStore.load(), book != hudFields {
             hudFields = book
@@ -1507,6 +1525,16 @@ struct ChartScene: View {
             .buttonStyle(.borderless)
             .tooltip("切换 \(chartTheme == .dark ? "浅色" : "深色") 主题")
 
+            // v17.13 A1.1 · 图表类型切换（K 线 / Heikin Ashi）
+            Picker("", selection: $chartType) {
+                ForEach(ChartType.allCases) { t in
+                    Label(t.displayName, systemImage: t.icon).tag(t)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 110)
+            .tooltip("图表类型（Heikin Ashi 平均 K 线 · 看趋势更稳）")
+
             // v15.14 · HUD 字段自定义按钮（OHLC / 涨跌 / 成交量 / 持仓量 / 时间 / 调试 全可选）
             Button {
                 showHUDFieldsSheet = true
@@ -1546,6 +1574,7 @@ struct ChartScene: View {
                 onEditSubSlot: { slot in editingSubSlot = slot },
                 onClearSubSlot: { slot in subParamsOverrides[slot] = nil },  // v15.17 · 父级清除 override
                 chartTheme: chartTheme,
+                chartType: chartType,
                 hudFields: hudFields,
                 drawings: $drawings,
                 activeDrawingTool: $activeDrawingTool,
@@ -2080,6 +2109,8 @@ struct ChartContentView: View {
     let onClearSubSlot: (Int) -> Void
     /// v15.8 主图主题（深色 / 浅色）· 影响背景 / 文字 / 网格 / candle 配色
     let chartTheme: ChartTheme
+    /// v17.13 A1.1 图表类型（candlestick / heikinAshi · 仅 candle 渲染层使用 · HUD/hover/indicator 仍用原始 bars）
+    let chartType: ChartType
     /// v15.14 HUD 自定义字段（按 fields 渲染各可选项）
     let hudFields: HUDFieldsBook
     /// v13.0 WP-42 画线状态（绑定 ChartScene · 父子双向同步）
@@ -2169,6 +2200,7 @@ struct ChartContentView: View {
         onEditSubSlot: @escaping (Int) -> Void,
         onClearSubSlot: @escaping (Int) -> Void,
         chartTheme: ChartTheme,
+        chartType: ChartType,
         hudFields: HUDFieldsBook,
         drawings: Binding<[Drawing]>,
         activeDrawingTool: Binding<DrawingType?>,
@@ -2195,6 +2227,7 @@ struct ChartContentView: View {
         self.onEditSubSlot = onEditSubSlot
         self.onClearSubSlot = onClearSubSlot
         self.chartTheme = chartTheme
+        self.chartType = chartType
         self.hudFields = hudFields
         self._drawings = drawings
         self._activeDrawingTool = activeDrawingTool
@@ -2470,10 +2503,12 @@ struct ChartContentView: View {
 
     /// 主图区（K 线 + 网格 + 十字光标 + indicators + HUD · gesture 挂这里）
     var chartMainArea: some View {
-        ZStack(alignment: .topLeading) {
+        // v17.13 A1.1 · Heikin Ashi 仅替换 candle 渲染层的 bars · HUD/hover/indicators 仍用原始 bars
+        let displayBars: [KLine] = (chartType == .heikinAshi) ? KLine.heikinAshi(from: bars) : bars
+        return ZStack(alignment: .topLeading) {
             KLineMetalView(
                 renderer: renderer,
-                input: KLineRenderInput(bars: bars, indicators: indicators, viewport: viewport),
+                input: KLineRenderInput(bars: displayBars, indicators: indicators, viewport: viewport),
                 clearColor: chartTheme.metalClearColor
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)

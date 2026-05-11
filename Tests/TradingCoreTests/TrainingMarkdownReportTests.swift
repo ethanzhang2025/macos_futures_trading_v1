@@ -389,7 +389,7 @@ struct TrainingMarkdownReportTests {
     @Test("v16.63 · 空 log 不输出五维平均章节")
     func fiveDimAverageEmptyLog() {
         let md = TrainingMarkdownReport.generate(TrainingSessionLog())
-        #expect(!md.contains("五维平均"))
+        #expect(!md.contains("## 五维平均"))   // v16.169 后 TOC 含"[五维平均]" 字符串 · 改 ## 精确匹配
     }
 
     // MARK: - v16.153 · 月报最弱维度 5 步改进 plan 章节
@@ -410,7 +410,7 @@ struct TrainingMarkdownReportTests {
     @Test("v16.153 · 空 log 不输出改进 plan 章节（无 v2 subScores）")
     func monthlyImprovementPlanEmptyLog() {
         let md = TrainingMarkdownReport.generate(TrainingSessionLog())
-        #expect(!md.contains("改进 plan"))
+        #expect(!md.contains("## 改进 plan"))   // v16.169 后 TOC 含"[改进 plan]" · 改 ## 精确匹配
     }
 
     // MARK: - v16.161 · 月报最强 session 引用
@@ -428,7 +428,7 @@ struct TrainingMarkdownReportTests {
     @Test("v16.161 · 空 log 不输出本月最强章节")
     func monthlyBestSessionEmptyLog() {
         let md = TrainingMarkdownReport.generate(TrainingSessionLog())
-        #expect(!md.contains("本月最强"))
+        #expect(!md.contains("## 本月最强"))   // v16.169 TOC 含"[本月最强 / 最弱]" · 改 ## 精确
     }
 
     // MARK: - v16.164 · 最近 30 天训练日历 emoji sparkline
@@ -611,7 +611,7 @@ struct TrainingMarkdownReportTests {
     @Test("v16.118 · 空 log 不输出时长分布章节")
     func durationDistributionEmptyLog() {
         let md = TrainingMarkdownReport.generate(TrainingSessionLog())
-        #expect(!md.contains("训练时长分布"))
+        #expect(!md.contains("## 训练时长分布"))   // v16.169 TOC 含"[训练时长分布]" · 改 ## 精确
     }
 
     @Test("v16.118 · 过半短时 → 建议 ≥ 15 分专注")

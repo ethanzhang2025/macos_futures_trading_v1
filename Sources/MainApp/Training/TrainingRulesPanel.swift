@@ -62,7 +62,26 @@ struct TrainingRulesPanel: View {
             }
             .tooltip("添加新规则")
             Menu {
-                Button("一键导入 5 条推荐") { viewModel.importRecommended() }
+                // v16.43 · trader 风格规则模板（4 套预设 · 与 9 形态训练场景互补）
+                Section("📋 规则模板（覆盖当前规则集）") {
+                    Button("🎯 保守短线（默认推荐 · 5 条）") {
+                        viewModel.applyRuleTemplate(.defaultRecommended)
+                    }
+                    .tooltip("止损 2% / 日内 60 分钟 / 加仓≤3 / 单日亏损 5000 / 单日交易 20 笔")
+                    Button("⚡ 激进日内（高频抢反弹 · 5 条）") {
+                        viewModel.applyRuleTemplate(.aggressiveIntraday)
+                    }
+                    .tooltip("止损 3% / 持仓 30 分钟 / 加仓≤5 / 单日亏损 8000 / 单日交易 50 笔")
+                    Button("📈 波段持仓（隔夜 OK · 5 条）") {
+                        viewModel.applyRuleTemplate(.swingHolding)
+                    }
+                    .tooltip("止损 5% / 持仓 3 天 / 加仓≤2 / 单日亏损 10000 / 单日交易 5 笔")
+                    Button("🌱 极简纪律（入门 · 仅 2 条核心）") {
+                        viewModel.applyRuleTemplate(.minimal)
+                    }
+                    .tooltip("止损 2% + 单日亏损 5000 · 不被规则淹没")
+                }
+                Divider()
                 Button("清空所有规则", role: .destructive) { viewModel.clearRules() }
             } label: {
                 Image(systemName: "ellipsis.circle")

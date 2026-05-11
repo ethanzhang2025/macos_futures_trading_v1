@@ -90,6 +90,11 @@ final class TrainingViewModel: ObservableObject {
         book = .defaultRecommended
     }
 
+    /// v16.43 · 直接覆盖整个 book（trader 切换风格模板用）
+    func applyRuleTemplate(_ template: DisciplineBook) {
+        book = template
+    }
+
     /// 清空所有规则
     func clearRules() {
         book = DisciplineBook()

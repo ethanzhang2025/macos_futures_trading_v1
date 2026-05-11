@@ -80,4 +80,36 @@ public struct DisciplineBook: Sendable, Equatable, Codable {
             DisciplineRule(kind: .maxDailyTrades,    threshold: 20,   note: "单日交易不超 20 笔"),
         ])
     }
+
+    // MARK: - v16.43 · trader 风格规则模板（4 套预设 · 与训练 9 形态场景互补）
+
+    /// 激进日内（高频抢反弹 · 容忍更大止损 + 更多加仓）
+    public static var aggressiveIntraday: DisciplineBook {
+        DisciplineBook(rules: [
+            DisciplineRule(kind: .stopLossPercent,   threshold: 3.0,  note: "单笔止损 3%（容忍波动）"),
+            DisciplineRule(kind: .maxHoldingMinutes, threshold: 30,   note: "持仓 30 分钟（高频）"),
+            DisciplineRule(kind: .maxAddPositions,   threshold: 5,    note: "加仓不超 5 次（金字塔）"),
+            DisciplineRule(kind: .dailyMaxLoss,      threshold: 8000, note: "单日亏损不超 8000 元"),
+            DisciplineRule(kind: .maxDailyTrades,    threshold: 50,   note: "单日交易不超 50 笔（高频）"),
+        ])
+    }
+
+    /// 波段持仓（隔夜 OK · 长持 · 严格止损）
+    public static var swingHolding: DisciplineBook {
+        DisciplineBook(rules: [
+            DisciplineRule(kind: .stopLossPercent,   threshold: 5.0,   note: "单笔止损 5%（波段空间）"),
+            DisciplineRule(kind: .maxHoldingMinutes, threshold: 4320,  note: "持仓上限 3 天（4320 分钟）"),
+            DisciplineRule(kind: .maxAddPositions,   threshold: 2,     note: "加仓不超 2 次（轻仓）"),
+            DisciplineRule(kind: .dailyMaxLoss,      threshold: 10000, note: "单日亏损不超 10000 元"),
+            DisciplineRule(kind: .maxDailyTrades,    threshold: 5,     note: "单日交易不超 5 笔（波段精选）"),
+        ])
+    }
+
+    /// 极简纪律（trader 入门 · 仅 2 条核心 · 不被规则淹没）
+    public static var minimal: DisciplineBook {
+        DisciplineBook(rules: [
+            DisciplineRule(kind: .stopLossPercent, threshold: 2.0,  note: "单笔止损 2%（核心）"),
+            DisciplineRule(kind: .dailyMaxLoss,    threshold: 5000, note: "单日亏损不超 5000 元（核心）"),
+        ])
+    }
 }

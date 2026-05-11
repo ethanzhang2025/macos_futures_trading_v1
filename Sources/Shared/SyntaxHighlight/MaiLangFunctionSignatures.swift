@@ -471,6 +471,32 @@ public enum MaiLangFunctionSignatures {
         // 回测系统 2
         sig("EQUITY",         ["收益率序列"],    "资金曲线（1 + 累乘收益率）",              .统计),
         sig("MAR",            ["收益序列", "周期 N"], "MAR 比率（年化收益 / 最大回撤）",     .统计),
+        // v16.36 · 第 10 批 20 个 · 100% 覆盖率收尾 · BuiltinFunction 注册表全签
+        // 计数 / 频次 5
+        sig("FREQRATIO",      ["序列", "目标值", "周期 N"], "N 周期内目标值出现频率（命中数 / N）",  .统计),
+        sig("ZEROCOUNT",      ["序列", "周期 N"], "N 周期内值为 0 的次数",                    .统计),
+        sig("STREAK",         ["条件"],          "当前连续成立次数（中断归 0）",            .统计),
+        sig("GAINS",          ["周期 N"],        "N 周期内盈利日数",                         .统计),
+        sig("LOSSES",         ["周期 N"],        "N 周期内亏损日数",                         .统计),
+        // 引用 / 索引 4
+        sig("INDEXED",        ["序列", "索引 N"], "按相对索引 N 取值（0=当前 / N=N 前）",   .引用),
+        sig("REFV",           ["序列", "偏移序列"], "向前引用变量偏移（每根 K 偏移可变）",  .引用),
+        sig("INVERT",         ["X"],            "倒数（1/X · X=0 → nil 防崩）",            .数学),
+        sig("RANGEMID",       ["周期 N"],        "N 周期区间中点 ((HHV + LLV) / 2)",        .统计),
+        // 信号 / 突破 5
+        sig("NCROSSUP",       ["序列", "阈值", "周期 N"], "N 周期内上穿阈值次数",          .逻辑),
+        sig("NCROSSDN",       ["序列", "阈值", "周期 N"], "N 周期内下穿阈值次数",          .逻辑),
+        sig("STARCU",         ["短周期 N", "长周期 M"], "Stochastic 上交叉（K 上穿 D · 短长 K%）", .逻辑),
+        sig("STARCL",         ["短周期 N", "长周期 M"], "Stochastic 下交叉（K 下穿 D）",   .逻辑),
+        sig("TIMEINRANGE",    ["序列", "下限", "上限", "周期 N"], "N 周期内 X 落 [lo, hi] 的次数", .统计),
+        // 价量 / 行情 4
+        sig("HADIR",          [],                "Heikin-Ashi 方向（1=阳 / -1=阴 / 0=平）", .价量),
+        sig("REDRATIO",       ["周期 N"],        "N 周期内阴线占比（0-1）",                 .统计),
+        sig("VOLR",           ["周期 N"],        "量比（当前量 / N 周期均量）",             .价量),
+        sig("VOSC",           ["短周期 N1", "长周期 N2"], "成交量振荡（VolOsc · 短 EMA - 长 EMA / 长 EMA）", .价量),
+        // 仓位 / 实战 2
+        sig("PULLBACK",       ["周期 N", "回调 pct%"], "N 周期内回调 pct% 触发（trader 进场信号）", .逻辑),
+        sig("MARTINGALE",     ["连亏数", "基础仓位"], "马丁格尔加仓（每亏一次×2 · 风险高慎用）", .高级),
     ]
 
     /// v15.22 batch35 · 模糊搜索（name + summary 均不区分大小写 · 中文 summary 不受影响 · 空 query → 返回全部）

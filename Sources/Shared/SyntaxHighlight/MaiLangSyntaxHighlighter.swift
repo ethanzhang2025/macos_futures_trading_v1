@@ -160,6 +160,12 @@ public enum MaiLangSyntaxHighlighter {
         "MAXIDX", "MAXSTREAK",
         "AC", "MARKETFI",
         "EQUITY", "MAR",
+        // v16.36 · 第 10 批 20 个 · 100% 覆盖率收尾（计数 + 索引 + 信号 + 价量 + 仓位）
+        "FREQRATIO", "ZEROCOUNT", "STREAK", "GAINS", "LOSSES",
+        "INDEXED", "REFV", "INVERT", "RANGEMID",
+        "NCROSSUP", "NCROSSDN", "STARCU", "STARCL", "TIMEINRANGE",
+        "HADIR", "REDRATIO", "VOLR", "VOSC",
+        "PULLBACK", "MARTINGALE",
     ]
 
     /// 绘图属性关键字（与 IndicatorCore.Lexer drawAttributes 同步）

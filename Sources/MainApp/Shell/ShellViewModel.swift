@@ -479,6 +479,20 @@ public final class ShellViewModel: ObservableObject {
         return true
     }
 
+    /// v17.87 · Workspace tab 拖拽到 local 位置（同 PrimaryTab 内 remove+insert · trader 拖拽预期）
+    public func moveWorkspace(_ id: UUID, toLocalIndex targetLocalIdx: Int) {
+        guard let srcAbsIdx = workspaces.firstIndex(where: { $0.id == id }) else { return }
+        let ws = workspaces[srcAbsIdx]
+        let neighbors = workspaces.indices.filter { workspaces[$0].primaryTab == ws.primaryTab }
+        let clamped = max(0, min(neighbors.count - 1, targetLocalIdx))
+        guard let srcLocalIdx = neighbors.firstIndex(of: srcAbsIdx), srcLocalIdx != clamped else { return }
+        let dstAbsIdx = neighbors[clamped]
+        let preset = workspaces.remove(at: srcAbsIdx)
+        let adjustedDstAbs = (srcAbsIdx < dstAbsIdx) ? (dstAbsIdx - 1) : dstAbsIdx
+        workspaces.insert(preset, at: adjustedDstAbs)
+        persistWorkspaces()
+    }
+
     /// v17.74 · Workspace tab 排序（仅在同 PrimaryTab 内移动 · 跨 tab 移动不影响视觉顺序）
     /// direction: -1 左移 / +1 右移
     public func moveWorkspace(_ id: UUID, by direction: Int) {

@@ -20,8 +20,8 @@ struct WorkspaceTabBar: View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
-                    ForEach(visibleWorkspaces) { ws in
-                        workspaceTab(ws)
+                    ForEach(Array(visibleWorkspaces.enumerated()), id: \.element.id) { index, ws in
+                        workspaceTab(ws, at: index)
                     }
                     newTabButton
                 }
@@ -62,7 +62,7 @@ struct WorkspaceTabBar: View {
     }
 
     @ViewBuilder
-    private func workspaceTab(_ ws: Workspace) -> some View {
+    private func workspaceTab(_ ws: Workspace, at index: Int) -> some View {
         let isActive = (shellVM.activeWorkspaceID == ws.id)
         HStack(spacing: 4) {
             if renamingID == ws.id {
@@ -141,6 +141,21 @@ struct WorkspaceTabBar: View {
             Divider()
             Text("Pane 布局：\(ws.paneLayout.emoji) \(ws.paneLayout.displayName) · \(ws.panes.count) Pane")
         }
+        // v17.87 · 拖拽排序（升级 v17.74 右键 ← → · 与 WatchlistWindow / WorkspacePreset 同模式）
+        .draggable(WorkspaceTabRef(id: ws.id)) {
+            HStack(spacing: 4) {
+                Image(systemName: "rectangle.stack").font(.system(size: 11))
+                Text(ws.name).font(.system(size: 11, weight: .semibold))
+            }
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(Color.accentColor.opacity(0.18))
+            .cornerRadius(4)
+        }
+        .dropDestination(for: WorkspaceTabRef.self) { refs, _ in
+            guard let ref = refs.first, ref.id != ws.id else { return false }
+            shellVM.moveWorkspace(ref.id, toLocalIndex: index)
+            return true
+        }
     }
 
     // MARK: - v17.62 · 导入 / 导出（NSSavePanel / NSOpenPanel · macOS 原生）
@@ -211,6 +226,14 @@ struct WorkspaceTabBar: View {
             shellVM.renameWorkspace(id, to: trimmed)
         }
         renamingID = nil
+    }
+}
+
+// v17.87 · Transferable 拖拽载荷
+private struct WorkspaceTabRef: Codable, Hashable, Transferable {
+    let id: UUID
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
     }
 }
 

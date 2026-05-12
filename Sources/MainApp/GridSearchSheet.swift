@@ -18,6 +18,11 @@ struct GridSearchSheet: View {
     let bars: [BarData]
     let signalLineName: String
     let initialEquity: Double
+    /// v17.50 · 批量保存到历史时的元数据快照（与主窗口当前配置一致）
+    let trajectoryRaw: String
+    let commission: Double
+    let slippage: Double
+    let allowShort: Bool
     @Binding var isPresented: Bool
     /// 双击行回填到主公式的 callback（参数：替换后的实际公式文本）
     var onApplyFormula: (String) -> Void
@@ -81,11 +86,55 @@ struct GridSearchSheet: View {
                 Text("\(outcomes.count) 组 · \(String(format: "%.2fs", elapsedSeconds))")
                     .font(.caption.monospaced())
                     .foregroundColor(.secondary)
+                // v17.50 · 批量保存到历史（trader 月报回看完整参数遍历）
+                Button {
+                    saveAllToHistory()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "tray.and.arrow.down.fill").font(.caption)
+                        Text("全部保存（\(outcomes.count)）").font(.caption)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .help("把所有 \(outcomes.count) 组扫描结果保存到历史 · 月报可对比")
             }
             Button("关闭") { isPresented = false }
                 .keyboardShortcut(.cancelAction)
         }
         .padding(12)
+    }
+
+    /// v17.50 · 把所有 outcomes 批量转 BacktestHistoryEntry 并 append（trader 一键存档整批扫描）
+    private func saveAllToHistory() {
+        for o in outcomes {
+            // signalLineName 用 grid 内含的（外部传入的同 BacktestWindow 主窗口）
+            // 但参数信息塞进 signalLineName 后缀 · 让 trader 月报区分（不动 BacktestHistoryEntry schema）
+            let paramsSuffix = o.params
+                .sorted { $0.key < $1.key }
+                .map { "\($0.key)=\(NSDecimalNumber(decimal: $0.value).stringValue)" }
+                .joined(separator: ",")
+            let labeledSignal = "\(signalLineName)·[\(paramsSuffix)]"
+            let entry = BacktestHistoryEntry(
+                id: UUID(),
+                createdAt: Date(),
+                signalLineName: labeledSignal,
+                trajectoryRaw: trajectoryRaw,
+                barCount: o.result.equityCurve.count,
+                initialEquity: o.result.initialEquity,
+                endingPnL: o.result.endingPnL,
+                maxDrawdown: o.result.maxDrawdown,
+                sharpe: o.result.sharpe,
+                sortino: o.result.sortino,
+                calmar: o.result.calmar,
+                winRate: o.result.winRate,
+                expectancy: o.result.expectancy,
+                tradeCount: o.result.trades.count,
+                commission: Decimal(commission),
+                slippage: Decimal(slippage),
+                allowShort: allowShort
+            )
+            BacktestHistoryStore.append(entry)
+        }
     }
 
     private var configPanel: some View {

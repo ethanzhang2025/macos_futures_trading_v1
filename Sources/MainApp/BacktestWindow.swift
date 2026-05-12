@@ -81,6 +81,10 @@ public struct BacktestWindow: View {
                 bars: bars,
                 signalLineName: signalLineName,
                 initialEquity: initialEquity,
+                trajectoryRaw: trajectoryRaw,
+                commission: commission,
+                slippage: slippage,
+                allowShort: allowShort,
                 isPresented: $showGridSearchSheet,
                 onApplyFormula: { filledFormula in
                     sourceText = filledFormula

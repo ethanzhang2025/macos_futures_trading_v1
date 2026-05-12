@@ -130,6 +130,7 @@ struct AlertWindow: View {
 
     /// v15.23 batch193 · 帮助面板（⌘⇧? · 主窗口 UX 一致补完）
     @State private var showHelpSheet: Bool = false
+    @State private var showSoundPickerSheet: Bool = false   // v17.86 · 🔈 预警声音选择器
 
     @Environment(\.storeManager) private var storeManager
     @Environment(\.analytics) private var analytics
@@ -235,6 +236,10 @@ struct AlertWindow: View {
         }
         // v15.23 batch193 · 帮助面板（⌘⇧? · 主窗口 UX 一致补完）
         .sheet(isPresented: $showHelpSheet) { helpSheet }
+        // v17.86 · 🔈 预警声音选择器（接续 v17.82 SoundChannel · 14 sound + 试听）
+        .sheet(isPresented: $showSoundPickerSheet) {
+            AlertSoundPickerSheet(isPresented: $showSoundPickerSheet)
+        }
         .background(
             Group {
                 Button("") { showHelpSheet = true }
@@ -378,6 +383,15 @@ struct AlertWindow: View {
             .keyboardShortcut("e", modifiers: [.command])
             .tooltip("导出预警配置 CSV（含 BOM Excel 友好 · 8 字段 · ⌘E）")
             .disabled(alerts.isEmpty)
+
+            // v17.86 · 🔈 预警声音选择器
+            Button {
+                showSoundPickerSheet = true
+            } label: {
+                Image(systemName: "speaker.wave.2.fill")
+            }
+            .buttonStyle(.borderless)
+            .tooltip("预警声音（14 选 · 试听 + 保存 · 下次预警生效）")
         }
         .padding(.horizontal, 16)
         .frame(height: 48)

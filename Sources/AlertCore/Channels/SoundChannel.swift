@@ -17,17 +17,28 @@ public actor SoundChannel: NotificationChannel {
 
     public nonisolated let kind: NotificationChannelKind = .sound
 
+    /// v17.86 · macOS 内置 14 sound（trader 可在 AlertSoundPickerSheet 选）
+    public static let availableSounds: [String] = [
+        "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero",
+        "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"
+    ]
+
+    /// v17.86 · UserDefaults 持久化 key（trader 设置后跨 App 重启保留）
+    public static let userDefaultsKey: String = "alertCenter.v1.soundName"
+
     private let soundName: String
     private let logger: @Sendable (String) -> Void
 
     /// - Parameters:
-    ///   - soundName: macOS 内置 sound 名（Basso / Blow / Bottle / Frog / Funk / Glass / Hero /
-    ///                Morse / Ping / Pop / Purr / Sosumi / Submarine / Tink）· 默认 Funk
+    ///   - soundName: macOS 内置 sound 名（默认 nil = 读 UserDefaults · 兜底 Funk）
     public init(
-        soundName: String = "Funk",
+        soundName: String? = nil,
         logger: @escaping @Sendable (String) -> Void = { _ in }
     ) {
-        self.soundName = soundName
+        let resolved = soundName
+            ?? UserDefaults.standard.string(forKey: SoundChannel.userDefaultsKey)
+            ?? "Funk"
+        self.soundName = resolved
         self.logger = logger
     }
 

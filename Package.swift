@@ -124,6 +124,13 @@ let package = Package(
             path: "Sources/MainApp",
             resources: [.process("Resources")]
         ),
+        // v17.124 · MainApp 单测 target（P2-1 ChartTheme mode-aware PnL func 单测）
+        // Linux 端 source 整体 #if os(macOS) 守卫 · target 空跑 · macOS 实跑
+        .testTarget(
+            name: "MainAppTests",
+            dependencies: ["MainApp", "Shared"],
+            path: "Tests/MainAppTests"
+        ),
 
         // MARK: - Tools · 命令行验证工具（非生产代码，CI 可跳过）
         // SinaTickDemo · WP-31a 真网络回归（拉 RB0/IF0/AU0/CU0 实时报价 30s）

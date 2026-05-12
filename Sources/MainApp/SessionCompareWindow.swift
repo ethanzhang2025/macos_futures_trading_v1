@@ -26,6 +26,8 @@ struct SessionCompareWindow: View {
     @State private var compareMode: CompareMode = .nightVsDay
     @State private var sortField: SortField = .difference
     @State private var sortDescending: Bool = true
+    /// v17.97 · 主图切到某合约时高亮该行（不修改 sort/mode · 仅指引）
+    @State private var highlightedID: String?
     @Environment(\.openWindow) private var openWindow
 
     enum CompareMode: String, CaseIterable, Identifiable {
@@ -145,6 +147,10 @@ struct SessionCompareWindow: View {
             sectorSummary
         }
         .frame(minWidth: 1080, minHeight: 720)
+        // v17.97 · inbound · 主图切到某合约 · 高亮该行（保持当前 sort/mode · 仅指引）
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
+            if let id = note.object as? String { highlightedID = id }
+        }
     }
 
     // MARK: - Toolbar
@@ -329,6 +335,7 @@ struct SessionCompareWindow: View {
             }
             .padding(.horizontal, 12)
             .frame(height: 26)
+            .background(highlightedID == inst.id ? Color.accentColor.opacity(0.12) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

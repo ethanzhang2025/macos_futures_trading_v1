@@ -90,6 +90,15 @@ struct CalendarSpreadWindow: View {
         .frame(minWidth: 980, minHeight: 720)
         .task(id: selectedPairID) { reload() }
         .onChange(of: rollingWindow) { _ in recomputeRollingZ() }
+        // v17.97 · inbound · 主图切到某合约 · 自动切到含该月份的跨期对（当前已含则不切）
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
+            guard let id = note.object as? String else { return }
+            if selectedPair.nearMonthID == id || selectedPair.farMonthID == id { return }
+            if let match = CalendarSpreadPresets.all.first(where: { $0.nearMonthID == id || $0.farMonthID == id }),
+               match.id != selectedPairID {
+                selectedPairID = match.id
+            }
+        }
     }
 
     // MARK: - Toolbar

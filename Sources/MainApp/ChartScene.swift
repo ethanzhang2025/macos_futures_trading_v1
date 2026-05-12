@@ -1564,15 +1564,15 @@ struct ChartScene: View {
             .buttonStyle(.borderless)
             .tooltip("切换 \(chartTheme == .dark ? "浅色" : "深色") 主题")
 
-            // v17.13 A1.1 · 图表类型切换（K 线 / Heikin Ashi）
+            // v17.13 A1.1 / v17.52-55 A1.2-5 · 图表类型切换（11 种 · TradingView 对齐 A1）
             Picker("", selection: $chartType) {
                 ForEach(ChartType.allCases) { t in
                     Label(t.displayName, systemImage: t.icon).tag(t)
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 110)
-            .tooltip("图表类型（Heikin Ashi 平均 K 线 · 看趋势更稳）")
+            .frame(width: 130)
+            .tooltip("图表类型（K 线 / Heikin Ashi / Renko / 折线 / 面积 / Baseline / Hollow / Bars OHLC / P&F / Kagi）")
 
             // v15.14 · HUD 字段自定义按钮（OHLC / 涨跌 / 成交量 / 持仓量 / 时间 / 调试 全可选）
             Button {
@@ -2543,14 +2543,36 @@ struct ChartContentView: View {
     /// 主图区（K 线 + 网格 + 十字光标 + indicators + HUD · gesture 挂这里）
     var chartMainArea: some View {
         // v17.13 A1.1 · Heikin Ashi 仅替换 candle 渲染层的 bars · HUD/hover/indicators 仍用原始 bars
-        let displayBars: [KLine] = (chartType == .heikinAshi) ? KLine.heikinAshi(from: bars) : bars
+        // v17.52 A1.2 · Renko 走同一套数据变换路径 · Metal candle 渲染复用
+        // v17.53-55 A1.3-5 · Line/Area/Baseline/Hollow/Bars/P&F/Kagi 走 SwiftUI Canvas overlay · 隐藏 Metal candle
+        let displayBars: [KLine] = {
+            switch chartType {
+            case .heikinAshi: return KLine.heikinAshi(from: bars)
+            case .renko:      return KLine.renko(from: bars, brickSize: KLine.defaultRenkoBrickSize(for: bars))
+            default:          return bars
+            }
+        }()
+        let useCandleRenderer = chartType.usesCandleRenderer
         return ZStack(alignment: .topLeading) {
-            KLineMetalView(
-                renderer: renderer,
-                input: KLineRenderInput(bars: displayBars, indicators: indicators, viewport: viewport),
-                clearColor: chartTheme.metalClearColor
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if useCandleRenderer {
+                KLineMetalView(
+                    renderer: renderer,
+                    input: KLineRenderInput(bars: displayBars, indicators: indicators, viewport: viewport),
+                    clearColor: chartTheme.metalClearColor
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // v17.53-55 · 非 candle 渲染层（line/area/baseline/hollow/barsOHLC/P&F/Kagi）
+                AlternativeChartCanvas(
+                    bars: bars,
+                    viewport: viewport,
+                    priceRange: currentPriceRange,
+                    chartType: chartType,
+                    theme: chartTheme
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(chartTheme.background)
+            }
             // 视觉迭代第 1 项：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐
             KLineGridView()
             // v15.33 WP-40 P1 · session/day 分界竖线（夜盘日盘衔接 / 跨交易日 / 周末）

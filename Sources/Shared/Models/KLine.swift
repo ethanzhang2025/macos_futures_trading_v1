@@ -150,6 +150,64 @@ public struct KLine: Sendable, Codable, Equatable {
     }
 }
 
+// MARK: - Renko 砖块图变换（v17.52 A1.2）
+
+extension KLine {
+    /// 把原始 OHLC K 线变换为 Renko 砖块序列 · TradingView 对齐 A1.2
+    /// 算法（经典 close-based Renko · brickSize 价格阈值）：
+    ///   anchor 起始 = bars[0].close
+    ///   遍历每根原 bar：
+    ///     while close - anchor >= brickSize  → 输出阳砖 (open=anchor, close=anchor+brickSize) · anchor 上移
+    ///     while anchor - close >= brickSize  → 输出阴砖 (open=anchor, close=anchor-brickSize) · anchor 下移
+    /// 每砖 open/close 严格相距 brickSize（high/low 与 open/close 一致 · 经典砖块视觉）
+    /// volume/openInterest/turnover 取触发 bar 原值（不分摊 · 视觉信息保留）
+    /// openTime 跟随触发 bar（多砖可共享时间 · 时间轴不严格 · 与 TradingView 一致）
+    public static func renko(from bars: [KLine], brickSize: Decimal) -> [KLine] {
+        guard !bars.isEmpty, brickSize > 0 else { return [] }
+        var result: [KLine] = []
+        result.reserveCapacity(bars.count)
+        var anchor: Decimal = bars[0].close
+        for bar in bars {
+            while bar.close - anchor >= brickSize {
+                let open = anchor
+                let close = anchor + brickSize
+                result.append(KLine(
+                    instrumentID: bar.instrumentID,
+                    period: bar.period,
+                    openTime: bar.openTime,
+                    open: open, high: close, low: open, close: close,
+                    volume: bar.volume,
+                    openInterest: bar.openInterest,
+                    turnover: bar.turnover
+                ))
+                anchor = close
+            }
+            while anchor - bar.close >= brickSize {
+                let open = anchor
+                let close = anchor - brickSize
+                result.append(KLine(
+                    instrumentID: bar.instrumentID,
+                    period: bar.period,
+                    openTime: bar.openTime,
+                    open: open, high: open, low: close, close: close,
+                    volume: bar.volume,
+                    openInterest: bar.openInterest,
+                    turnover: bar.turnover
+                ))
+                anchor = close
+            }
+        }
+        return result
+    }
+
+    /// 默认 brickSize 启发式：first close × 0.5%（中性 trader 习惯 · UI 配置交给 ChartScene）
+    public static func defaultRenkoBrickSize(for bars: [KLine]) -> Decimal {
+        guard let first = bars.first else { return 1 }
+        let raw = first.close * Decimal(string: "0.005")!
+        return raw > 0 ? raw : 1
+    }
+}
+
 // MARK: - Heikin Ashi 变换（v17.13 A1.1）
 
 extension KLine {

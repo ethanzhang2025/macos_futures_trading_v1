@@ -100,6 +100,8 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .priceZone:       return "价格区域"
     case .gannFan:           return "江恩扇形"
     case .fibonacciTimeZone: return "斐波那契时间区"
+    case .gannAngle:         return "江恩 1×1 角度线"
+    case .gannSquare:        return "江恩九方"
     }
 }
 
@@ -991,6 +993,8 @@ struct ChartScene: View {
             drawingToolButton(icon: "wand.and.rays", tool: .fibonacciFan, help: "斐波那契扇形（双点 · 38.2/50/61.8 三射线）")
             drawingToolButton(icon: "calendar.badge.clock", tool: .fibonacciTimeZone, help: "斐波那契时间区（双点定 1 fib 间隔 · 8 条垂直线 F1/F2/F3/F5/F8/F13/F21/F34）")
             drawingToolButton(icon: "fanblades", tool: .gannFan, help: "江恩扇形（双点定 1×1 · 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）")
+            drawingToolButton(icon: "arrow.up.right.square", tool: .gannAngle, help: "江恩 1×1 角度线（双点定 1×1 单位 · 单角度射线 · gannFan 简洁单线版）")
+            drawingToolButton(icon: "square.grid.3x3", tool: .gannSquare, help: "江恩九方（双点定对角 · 内部 3×3 网格均分 · time × price 等分分析）")
             toolGroupDivider
             // 第 4 组：测量 / Pitchfork / 多边形
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
@@ -1319,6 +1323,8 @@ struct ChartScene: View {
         case .fibonacci:        return .channel
         case .fibonacciFan:     return .channel
         case .gannFan:          return .channel
+        case .gannAngle:        return .channel
+        case .gannSquare:       return .keyLevel
         case .fibonacciTimeZone:return .channel
         case .priceZone:        return .keyLevel
         case .text:             return .annotation
@@ -4476,6 +4482,44 @@ struct ChartContentView: View {
                 minD = min(minD, abs(p.x - x))
             }
             return minD
+
+        case .gannAngle:
+            // v17.126 · 江恩 1×1 单角度射线 · 从 start 经 end 方向延伸 · 点到射线段最小距离
+            guard let end = drawing.endPoint else { return .infinity }
+            let a = screenPoint(drawing.startPoint)
+            let b = screenPoint(end)
+            let dx = b.x - a.x
+            let dy = b.y - a.y
+            guard abs(dx) > 0.0001 || abs(dy) > 0.0001 else { return .infinity }
+            let t = DrawingsOverlayView.pitchforkExtensionScale(a: a, dx: dx, dy: dy, size: size)
+            let rayEnd = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
+            return Self.pointToSegmentDistance(p, a, rayEnd)
+
+        case .gannSquare:
+            // v17.126 · 江恩九方 · 矩形 + 内部 3×3 网格 · 任意一条线最近距离
+            guard let end = drawing.endPoint else { return .infinity }
+            let a = screenPoint(drawing.startPoint)
+            let b = screenPoint(end)
+            let xMin = min(a.x, b.x), xMax = max(a.x, b.x)
+            let yMin = min(a.y, b.y), yMax = max(a.y, b.y)
+            var minD: CGFloat = .infinity
+            // 矩形 4 边
+            let corners = [(xMin, yMin), (xMax, yMin), (xMax, yMax), (xMin, yMax)]
+            for i in 0..<4 {
+                let s = CGPoint(x: corners[i].0, y: corners[i].1)
+                let e = CGPoint(x: corners[(i + 1) % 4].0, y: corners[(i + 1) % 4].1)
+                minD = min(minD, Self.pointToSegmentDistance(p, s, e))
+            }
+            // 内部 2 横 + 2 竖（1/3, 2/3 处）
+            let xs = [xMin + (xMax - xMin) / 3, xMin + (xMax - xMin) * 2 / 3]
+            let ys = [yMin + (yMax - yMin) / 3, yMin + (yMax - yMin) * 2 / 3]
+            for x in xs {
+                minD = min(minD, Self.pointToSegmentDistance(p, CGPoint(x: x, y: yMin), CGPoint(x: x, y: yMax)))
+            }
+            for y in ys {
+                minD = min(minD, Self.pointToSegmentDistance(p, CGPoint(x: xMin, y: y), CGPoint(x: xMax, y: y)))
+            }
+            return minD
         }
     }
 
@@ -4518,6 +4562,10 @@ struct ChartContentView: View {
             return Drawing.priceZone(from: firstPoint, to: hoverPoint)
         case .gannFan:
             return Drawing.gannFan(from: firstPoint, to: hoverPoint)
+        case .gannAngle:
+            return Drawing.gannAngle(from: firstPoint, to: hoverPoint)
+        case .gannSquare:
+            return Drawing.gannSquare(from: firstPoint, to: hoverPoint)
         case .fibonacciTimeZone:
             return Drawing.fibonacciTimeZone(from: firstPoint, to: hoverPoint)
         case .rectangle:

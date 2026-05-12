@@ -107,7 +107,8 @@ public struct KLineCrosshairView: View {
                         volumeRatio: info.volumeRatio,
                         backgroundColor: tooltipBackground,
                         primaryText: tooltipPrimaryText,
-                        secondaryText: tooltipSecondaryText
+                        secondaryText: tooltipSecondaryText,
+                        priceDigits: priceDigits
                     )
                     .position(tooltipPosition(at: pt, in: geom.size))
                 }
@@ -241,6 +242,8 @@ private struct OHLCTooltip: View {
     let backgroundColor: Color
     let primaryText: Color
     let secondaryText: Color
+    /// v17.100 · 价格小数位（由父级 KLineCrosshairView 透传）
+    let priceDigits: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -248,10 +251,10 @@ private struct OHLCTooltip: View {
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(secondaryText)
             Divider().background(secondaryText.opacity(0.3))
-            row(label: "开", value: bar.open, color: primaryText)
-            row(label: "高", value: bar.high, color: .red)
-            row(label: "低", value: bar.low, color: .green)
-            row(label: "收", value: bar.close, color: bar.close >= bar.open ? .red : .green)
+            priceRow(label: "开", value: bar.open, color: primaryText)
+            priceRow(label: "高", value: bar.high, color: .red)
+            priceRow(label: "低", value: bar.low, color: .green)
+            priceRow(label: "收", value: bar.close, color: bar.close >= bar.open ? .red : .green)
             row(label: "量", value: Decimal(bar.volume), color: secondaryText)
             // v15.20 batch67 · 量比 + 持仓量（trader 看放缩量 / OI 趋势）
             if let ratio = volumeRatio {
@@ -269,7 +272,7 @@ private struct OHLCTooltip: View {
                 pctRow(label: "振幅", value: amplPct, color: .yellow)
             }
             Divider().background(secondaryText.opacity(0.3))
-            row(label: "价位", value: cursorPrice, color: .yellow)
+            priceRow(label: "价位", value: cursorPrice, color: .yellow)
         }
         .padding(8)
         .frame(width: 210, alignment: .leading)
@@ -293,6 +296,12 @@ private struct OHLCTooltip: View {
                 .foregroundColor(color)
             Spacer()
         }
+    }
+
+    /// v17.100 · 价格 row（按 priceDigits 强制位数 · OHLC + 价位用）
+    private func priceRow(label: String, value: Decimal, color: Color) -> some View {
+        let text = String(format: "%.\(priceDigits)f", NSDecimalNumber(decimal: value).doubleValue)
+        return rawTextRow(label: label, text: text, color: color)
     }
 
     private func pctRow(label: String, value: Decimal, color: Color) -> some View {

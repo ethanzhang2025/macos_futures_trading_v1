@@ -96,6 +96,13 @@ struct MultiChartCellView: View {
         "\(state.instrumentID)|\(state.period.rawValue)"
     }
 
+    /// v17.100 · 本 cell 价格小数位（auto = 跟合约 priceTick）· 多图 cell 各自合约各自精度
+    private var priceDigitsForCell: Int {
+        let mode = ChartSettingsStore.loadPricePrecision()
+        if let d = mode.digits { return d }
+        return ChineseFuturesProducts.priceTickDigits(forInstrumentID: state.instrumentID) ?? 2
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             cellToolbar
@@ -114,7 +121,8 @@ struct MultiChartCellView: View {
                 showLimitLines: state.showLimitLines,
                 showVWAP: state.showVWAP,
                 showFibonacci: state.showFibonacci,
-                showPivotPoints: state.showPivotPoints
+                showPivotPoints: state.showPivotPoints,
+                priceDigits: priceDigitsForCell
             )
         }
         .background(Color(NSColor.windowBackgroundColor))

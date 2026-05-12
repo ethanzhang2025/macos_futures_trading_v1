@@ -49,6 +49,8 @@ struct MultiChartCellCanvas: View {
     let showFibonacci: Bool
     /// v15.23 batch149 · Pivot Points（5 线 R2/R1/PP/S1/S2 · 短线支撑/压力 · 默认关）
     let showPivotPoints: Bool
+    /// v17.100 · 价格小数位（按合约 priceTick + PricePrecisionMode · 默认 2 保旧兼容）
+    let priceDigits: Int
 
     init(bars: [KLine], showVolume: Bool,
          hoveredIndex: Int? = nil,
@@ -63,7 +65,8 @@ struct MultiChartCellCanvas: View {
          showLimitLines: Bool = false,
          showVWAP: Bool = false,
          showFibonacci: Bool = false,
-         showPivotPoints: Bool = false) {
+         showPivotPoints: Bool = false,
+         priceDigits: Int = 2) {
         self.bars = bars
         self.showVolume = showVolume
         self.hoveredIndex = hoveredIndex
@@ -79,6 +82,7 @@ struct MultiChartCellCanvas: View {
         self.showVWAP = showVWAP
         self.showFibonacci = showFibonacci
         self.showPivotPoints = showPivotPoints
+        self.priceDigits = priceDigits
     }
 
     var body: some View {
@@ -199,7 +203,7 @@ struct MultiChartCellCanvas: View {
                         ctx.stroke(hLine, with: .color(.accentColor.opacity(0.55)),
                                    style: StrokeStyle(lineWidth: 0.6, dash: [3, 3]))
                         // 右侧 close 价格标签（高亮 · 强调精确价格）
-                        let priceLbl = Text(String(format: "%.2f", close))
+                        let priceLbl = Text(String(format: "%.\(priceDigits)f", close))
                             .font(.system(size: 9, design: .monospaced))
                             .foregroundColor(.white)
                         let resolvedP = ctx.resolve(priceLbl)
@@ -217,7 +221,7 @@ struct MultiChartCellCanvas: View {
                                  anchor: .center)
                     }
                     // 顶部小标签：bar index + close
-                    let label = "[\(hidx + 1)] \(String(format: "%.2f", close))"
+                    let label = "[\(hidx + 1)] \(String(format: "%.\(priceDigits)f", close))"
                     let labelText = Text(label)
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundColor(.white)
@@ -383,7 +387,7 @@ struct MultiChartCellCanvas: View {
                 (minLow, priceRect.maxY - 8),
             ]
             for (price, y) in pricePts {
-                let txt = Text(String(format: "%.2f", price))
+                let txt = Text(String(format: "%.\(priceDigits)f", price))
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.secondary.opacity(0.9))
                 let resolved = ctx.resolve(txt)
@@ -575,7 +579,7 @@ struct MultiChartCellCanvas: View {
         // H 标记（在最高点上方 6px · 红色）
         let hX = rect.minX + (CGFloat(maxIdx) + 0.5) * rect.width / CGFloat(n)
         let hY = yFor(maxHigh) + 8  // 注意 +y 是向下（顶部最低 y），最高点在 yFor(maxHigh)，标签在它上方就是 -y
-        let hLbl = Text("H \(String(format: "%.2f", maxHigh))")
+        let hLbl = Text("H \(String(format: "%.\(priceDigits)f", maxHigh))")
             .font(.system(size: 8, design: .monospaced))
             .foregroundColor(.red.opacity(0.85))
         ctx.draw(hLbl, at: CGPoint(x: max(rect.minX + 30, min(rect.maxX - 30, hX)),
@@ -584,7 +588,7 @@ struct MultiChartCellCanvas: View {
         _ = hY
         // L 标记（在最低点下方）
         let lX = rect.minX + (CGFloat(minIdx) + 0.5) * rect.width / CGFloat(n)
-        let lLbl = Text("L \(String(format: "%.2f", minLow))")
+        let lLbl = Text("L \(String(format: "%.\(priceDigits)f", minLow))")
             .font(.system(size: 8, design: .monospaced))
             .foregroundColor(.green.opacity(0.85))
         ctx.draw(lLbl, at: CGPoint(x: max(rect.minX + 30, min(rect.maxX - 30, lX)),
@@ -646,7 +650,7 @@ struct MultiChartCellCanvas: View {
             ctx.stroke(line, with: .color(color),
                        style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
             // 左下角标签：比例 + 价格
-            let txt = Text("\(label)% \(String(format: "%.2f", price))")
+            let txt = Text("\(label)% \(String(format: "%.\(priceDigits)f", price))")
                 .font(.system(size: 8, design: .monospaced))
                 .foregroundColor(color.opacity(2))
             ctx.draw(txt, at: CGPoint(x: rect.minX + 38, y: y - 5),
@@ -695,7 +699,7 @@ struct MultiChartCellCanvas: View {
             ctx.stroke(line, with: .color(color),
                        style: StrokeStyle(lineWidth: 0.6, dash: [4, 2]))
             // 右上方标签 "R2 3520.5"
-            let txt = Text("\(label) \(String(format: "%.2f", price))")
+            let txt = Text("\(label) \(String(format: "%.\(priceDigits)f", price))")
                 .font(.system(size: 8, design: .monospaced))
                 .foregroundColor(color.opacity(2))
             ctx.draw(txt, at: CGPoint(x: rect.maxX - 4, y: y - 5),
@@ -760,8 +764,8 @@ struct MultiChartCellCanvas: View {
         }
         // 仅当涨跌停在可视区间附近时画（±20% buffer · 远超出范围则隐藏避免溢出）
         for (price, color, label) in [
-            (upperLimit, Color.red.opacity(0.4), "涨停 \(String(format: "%.2f", upperLimit))"),
-            (lowerLimit, Color.green.opacity(0.4), "跌停 \(String(format: "%.2f", lowerLimit))"),
+            (upperLimit, Color.red.opacity(0.4), "涨停 \(String(format: "%.\(priceDigits)f", upperLimit))"),
+            (lowerLimit, Color.green.opacity(0.4), "跌停 \(String(format: "%.\(priceDigits)f", lowerLimit))"),
         ] {
             guard price >= minLow - priceRange * 0.2,
                   price <= maxHigh + priceRange * 0.2 else { continue }
@@ -832,7 +836,7 @@ struct MultiChartCellCanvas: View {
             line.addLine(to: CGPoint(x: rect.maxX, y: yClamped))
             ctx.stroke(line, with: .color(.orange.opacity(0.5)),
                        style: StrokeStyle(lineWidth: 0.6, dash: [4, 3]))
-            let lbl = Text(String(format: "%.2f", price))
+            let lbl = Text(String(format: "%.\(priceDigits)f", price))
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(.orange.opacity(0.85))
             ctx.draw(lbl, at: CGPoint(x: rect.minX + 24, y: yClamped - 6),
@@ -893,7 +897,7 @@ struct MultiChartCellCanvas: View {
             let y = yFor(lastATR)
             let dot = CGRect(x: x - 2, y: y - 2, width: 4, height: 4)
             ctx.fill(Path(ellipseIn: dot), with: .color(.orange))
-            let lbl = Text(String(format: "%.2f", lastATR))
+            let lbl = Text(String(format: "%.\(priceDigits)f", lastATR))
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(.orange.opacity(0.9))
             ctx.draw(lbl, at: CGPoint(x: rect.maxX - 18, y: rect.minY + 6),

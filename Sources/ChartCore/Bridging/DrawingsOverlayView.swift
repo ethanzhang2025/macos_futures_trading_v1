@@ -31,6 +31,8 @@ public struct DrawingsOverlayView: View {
     public let pendingDrawing: Drawing?
     /// v15.10 .text 类型缺省色（无 strokeColorHex 时跟主图主题切换）· 默认 .white 保旧调用兼容
     public let textDefaultColor: Color
+    /// v17.100 · 价格小数位（PricePrecisionMode + 合约 priceTick · 默认 2 保旧兼容）
+    public let priceDigits: Int
 
     public init(
         bars: [KLine],
@@ -39,7 +41,8 @@ public struct DrawingsOverlayView: View {
         drawings: [Drawing],
         selectedIDs: Set<UUID> = [],
         pendingDrawing: Drawing? = nil,
-        textDefaultColor: Color = .white
+        textDefaultColor: Color = .white,
+        priceDigits: Int = 2
     ) {
         self.bars = bars
         self.viewport = viewport
@@ -48,6 +51,7 @@ public struct DrawingsOverlayView: View {
         self.selectedIDs = selectedIDs
         self.pendingDrawing = pendingDrawing
         self.textDefaultColor = textDefaultColor
+        self.priceDigits = priceDigits
     }
 
     /// v13.0~v13.7 单选兼容入口（保留以减少调用方改动 · 内部转 Set）
@@ -58,7 +62,8 @@ public struct DrawingsOverlayView: View {
         drawings: [Drawing],
         selectedID: UUID?,
         pendingDrawing: Drawing? = nil,
-        textDefaultColor: Color = .white
+        textDefaultColor: Color = .white,
+        priceDigits: Int = 2
     ) {
         self.init(
             bars: bars,
@@ -67,7 +72,8 @@ public struct DrawingsOverlayView: View {
             drawings: drawings,
             selectedIDs: selectedID.map { [$0] } ?? [],
             pendingDrawing: pendingDrawing,
-            textDefaultColor: textDefaultColor
+            textDefaultColor: textDefaultColor,
+            priceDigits: priceDigits
         )
     }
 
@@ -596,7 +602,7 @@ public struct DrawingsOverlayView: View {
         let priceDiff = endPrice - startPrice
         let pct = startPrice > 0 ? priceDiff / startPrice * 100 : 0
         let bars = end.barIndex - d.startPoint.barIndex
-        let label = String(format: "%+.2f (%+.2f%%) · %d bar", priceDiff, pct, bars)
+        let label = String(format: "%+.\(priceDigits)f (%+.2f%%) · %d bar", priceDiff, pct, bars)
         let mid = CGPoint(x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 - 10)
         let text = Text(label)
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
@@ -724,7 +730,7 @@ public struct DrawingsOverlayView: View {
     }
 
     private func formatPrice(_ p: Decimal) -> String {
-        String(format: "%.2f", NSDecimalNumber(decimal: p).doubleValue)
+        String(format: "%.\(priceDigits)f", NSDecimalNumber(decimal: p).doubleValue)
     }
 }
 

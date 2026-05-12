@@ -2680,7 +2680,8 @@ struct ChartContentView: View {
                     drawings: drawings,
                     selectedIDs: selectedDrawingIDs,
                     pendingDrawing: pendingPreviewDrawing,
-                    textDefaultColor: chartTheme.textPrimary
+                    textDefaultColor: chartTheme.textPrimary,
+                    priceDigits: effectivePriceDigits
                 )
             }
             // v13.34 HUD 显示在 4 角之一（用户偏好 · UserDefaults 持久化）· 默认左上

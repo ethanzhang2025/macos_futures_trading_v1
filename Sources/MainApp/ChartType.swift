@@ -85,4 +85,37 @@ enum ChartTypeStore {
     }
 }
 
+// MARK: - v17.60 · A1.2/A1.5 算法参数（trader 可调 · UserDefaults 持久化）
+
+/// Renko / P&F / Kagi 三种算法图表的参数（百分比基于 first close）
+struct ChartTypeOptions: Codable, Equatable {
+    /// Renko brickSize 百分比（默认 0.5%）
+    var renkoBrickPercent: Double = 0.5
+    /// P&F boxSize 百分比（默认 0.5%）
+    var pnfBoxPercent: Double = 0.5
+    /// P&F 反转 boxes 数（默认 3 · 经典）
+    var pnfReversalBoxes: Int = 3
+    /// Kagi 反转百分比（默认 1.0%）
+    var kagiReversalPercent: Double = 1.0
+
+    static let `default` = ChartTypeOptions()
+}
+
+enum ChartTypeOptionsStore {
+    static let key = "chartType.options.v1"
+
+    static func load(defaults: UserDefaults = .standard) -> ChartTypeOptions {
+        guard let data = defaults.data(forKey: key),
+              let opts = try? JSONDecoder().decode(ChartTypeOptions.self, from: data)
+        else { return .default }
+        return opts
+    }
+
+    static func save(_ opts: ChartTypeOptions, defaults: UserDefaults = .standard) {
+        if let data = try? JSONEncoder().encode(opts) {
+            defaults.set(data, forKey: key)
+        }
+    }
+}
+
 #endif

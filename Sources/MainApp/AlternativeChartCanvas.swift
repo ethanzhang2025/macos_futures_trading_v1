@@ -24,6 +24,8 @@ struct AlternativeChartCanvas: View {
     let priceRange: ClosedRange<Decimal>
     let chartType: ChartType
     let theme: ChartTheme
+    /// v17.60 · Renko / P&F / Kagi 算法参数（trader 可调 · 默认 hardcoded）
+    var options: ChartTypeOptions = .default
 
     var body: some View {
         Canvas { ctx, size in
@@ -202,11 +204,12 @@ struct AlternativeChartCanvas: View {
 
     private func drawPointFigure(ctx: GraphicsContext, slice: [KLine], size: CGSize) {
         guard let firstClose = slice.first?.close, firstClose > 0 else { return }
-        let boxSizeD = firstClose * Decimal(string: "0.005")!
+        let pctD = Decimal(options.pnfBoxPercent) / 100
+        let boxSizeD = firstClose * pctD
         guard boxSizeD > 0 else { return }
         let boxSize = (boxSizeD as NSDecimalNumber).doubleValue
         let base = (firstClose as NSDecimalNumber).doubleValue
-        let reversal = 3
+        let reversal = max(1, options.pnfReversalBoxes)
 
         func boxFor(_ p: Decimal) -> Int {
             let d = (p as NSDecimalNumber).doubleValue
@@ -281,7 +284,8 @@ struct AlternativeChartCanvas: View {
         yFor: (Decimal) -> CGFloat
     ) {
         guard let firstClose = slice.first?.close, firstClose > 0 else { return }
-        let reversalD = firstClose * Decimal(string: "0.01")!
+        let pctD = Decimal(options.kagiReversalPercent) / 100
+        let reversalD = firstClose * pctD
         guard reversalD > 0 else { return }
         let reversal = (reversalD as NSDecimalNumber).doubleValue
         var segs: [KagiSeg] = [KagiSeg(price: slice[0].close, dir: 0)]

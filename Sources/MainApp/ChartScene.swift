@@ -225,6 +225,9 @@ struct ChartScene: View {
     /// v17.13 A1.1 · 主图图表类型（candlestick / heikinAshi）· UserDefaults 全局共享
     @State private var chartType: ChartType = .candlestick
     @State private var isChartTypeLoaded: Bool = false
+    /// v17.60 · Renko / P&F / Kagi 算法参数（trader 可调 · ⚙️ sheet 编辑）
+    @State private var chartTypeOptions: ChartTypeOptions = ChartTypeOptionsStore.load()
+    @State private var showChartTypeOptionsSheet: Bool = false
     /// v15.14 HUD 自定义字段（OHLC / 涨跌 / 成交量 / 持仓量 / 时间 / 调试）· UserDefaults 全局共享
     @State private var hudFields: HUDFieldsBook = .default
     @State private var isHUDFieldsLoaded: Bool = false
@@ -294,6 +297,10 @@ struct ChartScene: View {
     @Environment(\.openWindow) private var openWindow
     /// v17.6 · Shell 嵌入模式（隐藏顶部 toolbar · 由 Shell 顶部统一管理）
     @Environment(\.isHostedInShell) private var isHostedInShell
+    /// v17.58 · 跨周期十字光标同步 · Shell 注入的 Pane 身份 + reporter
+    @Environment(\.shellHostedPaneID) private var shellPaneID
+    @Environment(\.shellCrosshairReporter) private var shellCrosshairReporter
+    @Environment(\.shellExternalCrosshair) private var shellExternalCrosshair
 
     /// 回放 player 的 UI 镜像（cursor + state + speed 派生于 player · 通过 observe() 同步）
     private struct ReplaySnapshot: Equatable {
@@ -543,6 +550,14 @@ struct ChartScene: View {
         }
         .sheet(isPresented: $showHUDFieldsSheet) {
             HUDFieldsSheet(book: $hudFields)
+        }
+        // v17.60 · Renko / P&F / Kagi 算法参数 sheet
+        .sheet(isPresented: $showChartTypeOptionsSheet) {
+            ChartTypeOptionsSheet(
+                isPresented: $showChartTypeOptionsSheet,
+                chartType: chartType,
+                onApply: { chartTypeOptions = $0 }
+            )
         }
         .sheet(item: Binding(
             get: { editingSubSlot.map { SubSlotIdentified(slot: $0) } },
@@ -1574,6 +1589,18 @@ struct ChartScene: View {
             .frame(width: 130)
             .tooltip("图表类型（K 线 / Heikin Ashi / Renko / 折线 / 面积 / Baseline / Hollow / Bars OHLC / P&F / Kagi）")
 
+            // v17.60 · 算法参数 ⚙️ 按钮（仅 renko / pnf / kagi 显示）
+            if chartType == .renko || chartType == .pointFigure || chartType == .kagi {
+                Button {
+                    showChartTypeOptionsSheet = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                .tooltip("\(chartType.displayName) 算法参数（brickSize / boxSize / reversal）")
+            }
+
             // v15.14 · HUD 字段自定义按钮（OHLC / 涨跌 / 成交量 / 持仓量 / 时间 / 调试 全可选）
             Button {
                 showHUDFieldsSheet = true
@@ -2545,10 +2572,16 @@ struct ChartContentView: View {
         // v17.13 A1.1 · Heikin Ashi 仅替换 candle 渲染层的 bars · HUD/hover/indicators 仍用原始 bars
         // v17.52 A1.2 · Renko 走同一套数据变换路径 · Metal candle 渲染复用
         // v17.53-55 A1.3-5 · Line/Area/Baseline/Hollow/Bars/P&F/Kagi 走 SwiftUI Canvas overlay · 隐藏 Metal candle
+        // v17.60 · brickSize / boxSize / reversal 走 chartTypeOptions（trader 可调）
         let displayBars: [KLine] = {
             switch chartType {
             case .heikinAshi: return KLine.heikinAshi(from: bars)
-            case .renko:      return KLine.renko(from: bars, brickSize: KLine.defaultRenkoBrickSize(for: bars))
+            case .renko:
+                let firstClose = bars.first?.close ?? 0
+                let percent = Decimal(chartTypeOptions.renkoBrickPercent) / 100
+                let brickSize = firstClose * percent
+                let safeBrick = brickSize > 0 ? brickSize : KLine.defaultRenkoBrickSize(for: bars)
+                return KLine.renko(from: bars, brickSize: safeBrick)
             default:          return bars
             }
         }()
@@ -2568,7 +2601,8 @@ struct ChartContentView: View {
                     viewport: viewport,
                     priceRange: currentPriceRange,
                     chartType: chartType,
-                    theme: chartTheme
+                    theme: chartTheme,
+                    options: chartTypeOptions
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(chartTheme.background)
@@ -2672,13 +2706,22 @@ struct ChartContentView: View {
             }
         )
         // 主图始终跟踪 hover 价格 · 右键"在此价位创建预警…"读这个值 · drawingClickCaptureLayer 不再重复写
+        // v17.58 · 嵌入 Shell 时 publish crosshair 给 group sibling（跨周期光标同步）
         .onContinuousHover { phase in
             switch phase {
             case .active(let location):
                 guard chartMainAreaSize.width > 0 else { return }
-                hoverDataPoint = screenToDataPoint(location, in: chartMainAreaSize)
+                let dp = screenToDataPoint(location, in: chartMainAreaSize)
+                hoverDataPoint = dp
+                if let id = shellPaneID, let reporter = shellCrosshairReporter,
+                   let dp = dp, dp.barIndex >= 0, dp.barIndex < bars.count {
+                    reporter(id, bars[dp.barIndex].openTime)
+                }
             case .ended:
                 hoverDataPoint = nil
+                if let id = shellPaneID, let reporter = shellCrosshairReporter {
+                    reporter(id, nil)
+                }
             }
         }
         .background(

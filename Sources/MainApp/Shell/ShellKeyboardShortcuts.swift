@@ -1,6 +1,13 @@
-// MainApp · Shell · v17.0 PoC Step 8
-// Shell 全局快捷键 · ⌘ 体系（v17.0）+ F 键（v17.1 加）
+// MainApp · Shell · v17.0 PoC Step 8 + v17.57 F 键体系
+// Shell 全局快捷键 · ⌘ 体系（v17.0）+ F 键文华兼容（v17.57）
 // 用 invisible Button + keyboardShortcut（与训练 sheet 同模式）
+//
+// F 键映射（v17.0 设计 §6.2）：
+//   F6  → 跳焦自选 sidebar
+//   F8  → 当前 Pane 周期循环（同 group 联动）
+//   F10 → 合约资料 sheet
+//   F12 → 画线工具 hint（实际工具在 Pane toolbar）
+//   空格 → 模拟下单浮层（Stage A 占位）
 
 #if canImport(SwiftUI) && os(macOS)
 import SwiftUI
@@ -51,6 +58,13 @@ struct ShellKeyboardShortcuts: View {
             .keyboardShortcut("b", modifiers: [.command, .shift])
             .opacity(0)
 
+            // v17.61 · ⌘⌥I 切 右辅助 Inspector 显隐
+            Button("") {
+                shellVM.layout.inspectorVisible.toggle()
+            }
+            .keyboardShortcut("i", modifiers: [.command, .option])
+            .opacity(0)
+
             // v17.5 · Esc 退出 Pane 最大化（文华 Esc 风格）
             Button("") { shellVM.exitMaximize() }
                 .keyboardShortcut(.escape, modifiers: [])
@@ -67,6 +81,24 @@ struct ShellKeyboardShortcuts: View {
             workspaceShortcut(idx: 6, key: "7")
             workspaceShortcut(idx: 7, key: "8")
             workspaceShortcut(idx: 8, key: "9")
+
+            // v17.57 · F 键体系（文华 trader 兼容 · v17.0 P0.4）
+            Button("") { shellVM.focusSidebar() }
+                .keyboardShortcut(.f6, modifiers: [])
+                .opacity(0)
+            Button("") { shellVM.cyclePeriodOnActivePane() }
+                .keyboardShortcut(.f8, modifiers: [])
+                .opacity(0)
+            Button("") { shellVM.openInstrumentInfo() }
+                .keyboardShortcut(.f10, modifiers: [])
+                .opacity(0)
+            Button("") { shellVM.hintDrawingTool() }
+                .keyboardShortcut(.f12, modifiers: [])
+                .opacity(0)
+            // 空格唤起下单浮层（v17.57 占位 · Stage A 不接 CTP）
+            Button("") { shellVM.openQuickOrder() }
+                .keyboardShortcut(.space, modifiers: [])
+                .opacity(0)
         }
     }
 

@@ -21,4 +21,39 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - v17.58 · 跨周期十字光标同步 Environment 注入（v17.0 P1.2）
+//
+// PaneHost 注入 paneID + crosshairReporter + externalCrosshair
+// ChartScene 嵌入时通过 Environment 调用 reporter（不直接依赖 ShellViewModel）
+
+public struct ShellHostedPaneIDKey: EnvironmentKey {
+    public static let defaultValue: UUID? = nil
+}
+
+public struct ShellCrosshairReporterKey: EnvironmentKey {
+    public static let defaultValue: ((UUID, Date?) -> Void)? = nil
+}
+
+public struct ShellExternalCrosshairKey: EnvironmentKey {
+    public static let defaultValue: Date? = nil
+}
+
+extension EnvironmentValues {
+    /// 当前 Pane 的 UUID（仅嵌入 Shell 时非 nil）
+    public var shellHostedPaneID: UUID? {
+        get { self[ShellHostedPaneIDKey.self] }
+        set { self[ShellHostedPaneIDKey.self] = newValue }
+    }
+    /// hover 时 publish 给 Shell 的 closure（paneID + Date · Date=nil 表示 hover 离开）
+    public var shellCrosshairReporter: ((UUID, Date?) -> Void)? {
+        get { self[ShellCrosshairReporterKey.self] }
+        set { self[ShellCrosshairReporterKey.self] = newValue }
+    }
+    /// 同 group 兄弟广播的 crosshair 时间（ChartScene v18+ 据此画十字）
+    public var shellExternalCrosshair: Date? {
+        get { self[ShellExternalCrosshairKey.self] }
+        set { self[ShellExternalCrosshairKey.self] = newValue }
+    }
+}
+
 #endif

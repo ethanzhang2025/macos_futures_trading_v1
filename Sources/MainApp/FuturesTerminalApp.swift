@@ -136,6 +136,10 @@ struct FuturesTerminalApp: App {
     /// Banner 周期刷新 driver（v15.18 · 5min poll · 后端可热推送 / 撤回）
     private let bannerRefreshDriver: BannerRefreshDriver?
 
+    /// v17.59 · ShellViewModel 提到 App 级（@StateObject）· 让 detached Pane 多屏共享同一 instance
+    /// 跨窗口 group 联动 / Workspace 列表 / 持仓 / 等 state 全部共享
+    @StateObject private var shellVM = ShellViewModel()
+
     init() {
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
         // 菜单栏不切换 · ⌘N / ⌘L / ⌘, 全部落到 Terminal 上。
@@ -314,6 +318,7 @@ struct FuturesTerminalApp: App {
         // 老 28 个 WindowGroup 保留作为"分离窗口"模式
         WindowGroup("主工作台", id: "shell") {
             ShellWindow()
+                .environmentObject(shellVM)   // v17.59 · 共享 App 级 ShellViewModel
                 .environment(\.storeManager, storeManager)
                 .environment(\.analytics, analytics)
                 .environment(\.alertEvaluator, alertEvaluator)
@@ -549,6 +554,21 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1280, height: 800)
+
+        // v17.59 · 分离 Pane 多屏支持（Tab Detach NSWindow · v17.0 设计 §11）
+        // openWindow(id: "detachedPane", value: paneID.uuidString) 触发
+        // 通过 paneID 反查 ShellViewModel 找 PaneConfig · 共享同一 ShellViewModel 实例（环境注入）
+        // 注意：每个 detached 窗口持有独立 PaneBody · 但 group 联动通过 shellVM 跨窗口同步
+        WindowGroup("分离 Pane", id: "detachedPane", for: String.self) { $paneIDStr in
+            DetachedPaneWindow(paneIDString: paneIDStr)
+                .environmentObject(shellVM)   // v17.59 · 共享同一 ShellViewModel · 跨窗口 group 联动
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
+                .environment(\.alertEvaluator, alertEvaluator)
+                .environment(\.simulatedTradingEngine, simulatedTradingEngine)
+                .environment(\.bannerService, bannerService)
+        }
+        .defaultSize(width: 1100, height: 700)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {

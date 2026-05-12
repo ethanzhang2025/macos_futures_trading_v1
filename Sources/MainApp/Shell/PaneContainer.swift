@@ -83,15 +83,28 @@ struct PaneContainer: View {
 
 struct PaneHost: View {
     let config: PaneConfig
+    @EnvironmentObject var shellVM: ShellViewModel
 
     var body: some View {
         VStack(spacing: 0) {
             PaneHeader(config: config)
             PaneBody(config: config)
                 .environment(\.isHostedInShell, true)
+                // v17.58 · 跨周期十字光标同步 Environment 注入
+                .environment(\.shellHostedPaneID, config.id)
+                .environment(\.shellCrosshairReporter, { [weak shellVM] paneID, date in
+                    shellVM?.setPaneCrosshair(paneID: paneID, unixTime: date?.timeIntervalSince1970)
+                })
+                .environment(\.shellExternalCrosshair, externalCrosshair)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    /// 同 group 兄弟广播的 crosshair（自己也持有 group 时 · 取 binding；非自己产生的）
+    private var externalCrosshair: Date? {
+        // 仅当 Pane 有 group 时才接收外部光标（无 group 不联动）
+        shellVM.effectiveCrosshair(for: config)
     }
 }
 
@@ -100,6 +113,7 @@ struct PaneHost: View {
 struct PaneHeader: View {
     let config: PaneConfig
     @EnvironmentObject var shellVM: ShellViewModel
+    @Environment(\.openWindow) private var openWindow
     @State private var editingSymbol: Bool = false
     @State private var symbolText: String = ""
 
@@ -136,6 +150,18 @@ struct PaneHeader: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
             }
+            // v17.58 · 同 group 兄弟广播的 crosshair badge（"🎯 14:35:22"）
+            if let groupCrosshair = shellVM.effectiveCrosshair(for: config),
+               config.groupColor != nil {
+                Text("🎯 \(Self.crosshairTimeFormatter.string(from: groupCrosshair))")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.accentColor.opacity(0.7))
+                    .cornerRadius(3)
+                    .help("同 \(config.groupColor!.displayName) 联动光标 · Alt+V 跨周期同步")
+            }
             Spacer()
             groupColorPicker
             // v17.5 · 最大化 / 退出最大化
@@ -152,15 +178,16 @@ struct PaneHeader: View {
             .help(shellVM.maximizedPaneID == config.id
                   ? "退出最大化（Esc）"
                   : "最大化此 Pane（双击 header）")
+            // v17.59 · 分离 Pane 为独立 NSWindow · 仍受 shellVM group 联动控制
             Button {
-                // 分离窗口（v17.x 实装 NSWindow 桥接）
+                openWindow(id: "detachedPane", value: config.id.uuidString)
             } label: {
                 Image(systemName: "arrow.up.right.square")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("分离独立窗口（v17.x 实装）")
+            .help("分离为独立窗口（多屏支持 · 仍受 group 联动）")
         }
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
@@ -247,6 +274,13 @@ struct PaneHeader: View {
         }
         editingSymbol = false
     }
+
+    /// v17.58 · 跨周期 crosshair badge 时间格式（HH:mm:ss）
+    private static let crosshairTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
 }
 
 // MARK: - PaneBody · 按 PaneKind 实例化 view（v17.0 Step 5 · 全 20 类接入）

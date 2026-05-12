@@ -61,6 +61,104 @@ public final class ShellViewModel: ObservableObject {
         maximizedPaneID = nil
     }
 
+    // MARK: - v17.57 · F 键体系（文华 trader 兼容 · v17.0 P0.4）
+
+    /// F 键触发的瞬态 toast（ShellWindow overlay 显示 ~1.5s 自动消失）
+    @Published public var fKeyToast: String? = nil
+
+    /// F6 / sidebar focus trigger（每按一次 += 1 · ShellSidebar 监听）
+    @Published public var sidebarFocusTrigger: Int = 0
+
+    /// F10 合约资料 sheet（v1 显示当前 active pane symbol · v2 接 InstrumentDashboardWindow 详情）
+    @Published public var showInstrumentInfoSheet: Bool = false
+
+    /// 空格快捷下单浮层（v1 占位 · Stage A 不接 CTP · v2 接 SimulatedTradingEngine 浮窗）
+    @Published public var showQuickOrderSheet: Bool = false
+
+    /// F6 · 聚焦左 sidebar 自选 section
+    public func focusSidebar() {
+        sidebarFocusTrigger &+= 1
+        flashToast("F6 · 跳焦自选")
+    }
+
+    /// F8 · 当前 active workspace 第一 Pane（或 maximized）周期循环
+    public func cyclePeriodOnActivePane() {
+        guard let wsIdx = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else { return }
+        let paneIdx: Int
+        if let mid = maximizedPaneID,
+           let pi = workspaces[wsIdx].panes.firstIndex(where: { $0.id == mid }) {
+            paneIdx = pi
+        } else if let pi = workspaces[wsIdx].panes.indices.first {
+            paneIdx = pi
+        } else { return }
+        let cycle = Self.fKeyPeriodCycle
+        let cur = workspaces[wsIdx].panes[paneIdx].periodRaw ?? "1m"
+        let next = cycle[((cycle.firstIndex(of: cur) ?? -1) + 1) % cycle.count]
+        workspaces[wsIdx].panes[paneIdx].periodRaw = next
+        // 广播到同组（彩色 group 联动 · 跨 workspace）
+        if let color = workspaces[wsIdx].panes[paneIdx].groupColor {
+            groupBindings[color]?.periodRaw = next
+            for wIdx in workspaces.indices {
+                for pIdx in workspaces[wIdx].panes.indices
+                    where workspaces[wIdx].panes[pIdx].groupColor == color {
+                    workspaces[wIdx].panes[pIdx].periodRaw = next
+                }
+            }
+        }
+        persistWorkspaces()
+        flashToast("F8 · 周期 → \(Self.periodDisplayName(next))")
+    }
+
+    /// F10 · 显示当前 Pane 合约资料 sheet
+    public func openInstrumentInfo() {
+        showInstrumentInfoSheet = true
+        flashToast("F10 · 合约资料")
+    }
+
+    /// F12 · 画线工具 hint（实际工具在 Chart 工具栏 / 右键菜单）
+    public func hintDrawingTool() {
+        flashToast("F12 · 画线工具在 Pane 顶部工具栏 / 右键菜单")
+    }
+
+    /// 空格 · 唤起下单浮层（Stage A 占位 · 后续接 SimulatedTradingEngine）
+    public func openQuickOrder() {
+        showQuickOrderSheet = true
+        flashToast("空格 · 模拟下单浮层")
+    }
+
+    private static let fKeyPeriodCycle: [String] = [
+        "1m", "5m", "15m", "30m", "1h", "4h", "D", "W", "M"
+    ]
+
+    private static func periodDisplayName(_ raw: String) -> String {
+        switch raw {
+        case "1m": return "1 分"
+        case "3m": return "3 分"
+        case "5m": return "5 分"
+        case "15m": return "15 分"
+        case "30m": return "30 分"
+        case "1h": return "1 时"
+        case "2h": return "2 时"
+        case "4h": return "4 时"
+        case "D":  return "日线"
+        case "W":  return "周线"
+        case "M":  return "月线"
+        default:   return raw
+        }
+    }
+
+    /// 瞬态 toast helper（1.5s 后自动清空 · 多次按只显示最新）
+    private var toastClearTask: Task<Void, Never>?
+    private func flashToast(_ s: String) {
+        fKeyToast = s
+        toastClearTask?.cancel()
+        toastClearTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { self?.fKeyToast = nil }
+        }
+    }
+
     // MARK: - 初始化
 
     public init() {
@@ -179,6 +277,36 @@ public final class ShellViewModel: ObservableObject {
             return binding.symbol
         }
         return config.symbol
+    }
+
+    // MARK: - v17.58 · 跨周期十字光标同步（v17.0 P1.2 · Alt+V 升级）
+    //
+    // ChartScene 嵌入 Shell · hover 时通过 Environment closure 上报 paneID + Date
+    // → ShellVM 写入 groupBindings[color].crosshairUnixTime → 同 group 所有 Pane 收到广播
+    // → 兄弟 Pane 在 PaneHeader 显示"🎯 联动光标 HH:MM:SS"badge
+    // → ChartScene v18+ 接 effectiveCrosshair(for:) 直接画十字（深度集成）
+
+    /// 设置某 Pane 的 crosshair（仅当 Pane 有 group color 时生效 · 广播到同组）
+    public func setPaneCrosshair(paneID: UUID, unixTime: Double?) {
+        guard let wsIdx = workspaceIndexContainingPane(paneID),
+              let pane = workspaces[wsIdx].panes.first(where: { $0.id == paneID }),
+              let color = pane.groupColor else { return }
+        if var binding = groupBindings[color] {
+            binding.crosshairUnixTime = unixTime
+            groupBindings[color] = binding
+        }
+    }
+
+    /// 清除某 Pane 的 crosshair（hover 离开 · 同上广播）
+    public func clearPaneCrosshair(paneID: UUID) {
+        setPaneCrosshair(paneID: paneID, unixTime: nil)
+    }
+
+    /// 获取 Pane 当前应显示的 crosshair（同 group 兄弟广播的时间）
+    public func effectiveCrosshair(for config: PaneConfig) -> Date? {
+        guard let c = config.groupColor,
+              let ts = groupBindings[c]?.crosshairUnixTime else { return nil }
+        return Date(timeIntervalSince1970: ts)
     }
 
     // MARK: - v17.20 Pane 右键 actions

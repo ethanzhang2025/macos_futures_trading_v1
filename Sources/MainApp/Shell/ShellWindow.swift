@@ -9,7 +9,9 @@ import SwiftUI
 
 public struct ShellWindow: View {
 
-    @StateObject private var shellVM = ShellViewModel()
+    /// v17.59 · ShellViewModel 提到 App 级 @StateObject · 此处 EnvironmentObject 接收
+    /// 让 detached Pane 多屏共享同一 instance（跨窗口 group 联动）
+    @EnvironmentObject private var shellVM: ShellViewModel
 
     public init() {}
 
@@ -20,26 +22,56 @@ public struct ShellWindow: View {
                 .frame(minWidth: ShellMetrics.sidebarWidth,
                        idealWidth: ShellMetrics.sidebarWidth)
         } detail: {
-            // 主区
-            VStack(spacing: 0) {
-                PrimaryTabBar()
-                WorkspaceTabBar()
-                Divider()
-                paneContainerPlaceholder
-                Divider()
-                BottomTradingBar()
-                Divider()
-                ShellStatusBar()
+            // v17.61 · 主区 + 右辅助 Inspector（HSplitView · 可折叠 ⌘⌥I）
+            HSplitView {
+                VStack(spacing: 0) {
+                    PrimaryTabBar()
+                    WorkspaceTabBar()
+                    Divider()
+                    paneContainerPlaceholder
+                    Divider()
+                    BottomTradingBar()
+                    Divider()
+                    ShellStatusBar()
+                }
+                .frame(minWidth: 800, minHeight: 700)
+                if shellVM.layout.inspectorVisible {
+                    ShellInspector()
+                }
             }
-            .frame(minWidth: 1000, minHeight: 700)
             .background(ShellKeyboardShortcuts())
         }
         .navigationTitle("中国期货 Mac 工作台 · v17.0 PoC")
-        .environmentObject(shellVM)
         .sheet(isPresented: $shellVM.showCommandPalette) {
             ShellCommandPalette(isPresented: $shellVM.showCommandPalette)
                 .environmentObject(shellVM)
         }
+        // v17.57 · F10 合约资料 sheet
+        .sheet(isPresented: $shellVM.showInstrumentInfoSheet) {
+            ShellInstrumentInfoSheet(isPresented: $shellVM.showInstrumentInfoSheet)
+                .environmentObject(shellVM)
+        }
+        // v17.57 · 空格快捷下单浮层（Stage A 占位）
+        .sheet(isPresented: $shellVM.showQuickOrderSheet) {
+            ShellQuickOrderSheet(isPresented: $shellVM.showQuickOrderSheet)
+                .environmentObject(shellVM)
+        }
+        // v17.57 · F 键 toast overlay（瞬态 1.5s）
+        .overlay(alignment: .top) {
+            if let toast = shellVM.fKeyToast {
+                Text(toast)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.78))
+                    .cornerRadius(10)
+                    .padding(.top, 56)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .id(toast)  // 同内容刷新动画
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: shellVM.fKeyToast)
         .followingChartTheme()  // v17.12 A2.1 · Shell 跟随主图主题（dark/light · UserDefaults chartTheme.v1）
     }
 

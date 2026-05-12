@@ -282,13 +282,34 @@ struct ShellCommandPalette: View {
             ))
         }
 
-        // v17.68 · Inspector 切换
+        // v17.68 · Inspector 切换 · v17.78 + BottomBar / Sidebar 折叠
         list.append(PaletteCommand(
             title: shellVM.layout.inspectorVisible ? "隐藏右辅助 Inspector" : "显示右辅助 Inspector",
             subtitle: "⌘⌥I · 盘口 5 档 / 分时 mini / Tick 流 / 异动池",
             emoji: "🧭",
             category: .action,
             action: { shellVM.toggleInspector() }
+        ))
+        list.append(PaletteCommand(
+            title: shellVM.layout.bottomBarCollapsed ? "展开 BottomBar" : "折叠 BottomBar",
+            subtitle: "底部交易区 120pt ↔ 24pt tab bar",
+            emoji: "⬇️",
+            category: .action,
+            action: { shellVM.toggleBottomBar() }
+        ))
+        list.append(PaletteCommand(
+            title: shellVM.layout.sidebarCollapsed ? "展开 Sidebar" : "折叠 Sidebar",
+            subtitle: "左 Sidebar 240pt ↔ 60pt 图标条",
+            emoji: "⬅️",
+            category: .action,
+            action: { shellVM.toggleSidebar() }
+        ))
+        list.append(PaletteCommand(
+            title: "➕ 新建空白 Workspace",
+            subtitle: "当前 PrimaryTab 内追加 1-Pane single 布局",
+            emoji: "➕",
+            category: .action,
+            action: { shellVM.newWorkspace() }
         ))
         // Sidebar 自定义入口暂走右键菜单（@State 在 ShellSidebar 内 · 命令面板入口 v17.69+ 评估）
 

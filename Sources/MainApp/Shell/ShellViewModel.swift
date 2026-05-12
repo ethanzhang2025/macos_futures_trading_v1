@@ -499,6 +499,16 @@ public final class ShellViewModel: ObservableObject {
         layout.inspectorVisible.toggle()
     }
 
+    /// v17.78 · 切换 BottomBar 折叠（命令面板 · ⌘B 同效）
+    public func toggleBottomBar() {
+        layout.bottomBarCollapsed.toggle()
+    }
+
+    /// v17.78 · 切换 Sidebar 折叠（命令面板 · 与 NavigationSplitView 内建一致）
+    public func toggleSidebar() {
+        layout.sidebarCollapsed.toggle()
+    }
+
     /// 重置 Pane 配置（清 symbol / period / group · 保留 kind）· 用于"恢复初始状态"
     public func resetPaneConfig(paneID: UUID) {
         guard let wsIdx = workspaceIndexContainingPane(paneID),

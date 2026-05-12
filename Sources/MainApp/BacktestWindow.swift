@@ -15,6 +15,7 @@
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
+import AppKit
 import Foundation
 import IndicatorCore
 
@@ -262,6 +263,11 @@ public struct BacktestWindow: View {
                 Text("历史 \(entries.count)").font(.headline)
                 Spacer()
                 if !entries.isEmpty {
+                    Button { exportHistoryCSV(entries) } label: {
+                        Image(systemName: "square.and.arrow.up").font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("导出所有历史为 CSV · UTF-8 BOM + Excel 兼容")
                     Button {
                         BacktestHistoryStore.clear()
                         historyRevision &+= 1
@@ -731,6 +737,20 @@ public struct BacktestWindow: View {
     }
 
     // MARK: - 历史保存（D5 cross-ref 入口）
+
+    /// v17.49 · 导出历史 CSV（NSSavePanel · UTF-8 BOM · Excel 兼容）
+    @MainActor
+    private func exportHistoryCSV(_ entries: [BacktestHistoryEntry]) {
+        let panel = NSSavePanel()
+        panel.title = "导出公式回测历史"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd_HHmm"
+        panel.nameFieldStringValue = "backtest_history_\(dateFmt.string(from: Date())).csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data = BacktestHistoryCSVExporter.exportData(entries)
+        try? data.write(to: url, options: .atomic)
+    }
 
     private func saveCurrentToHistory() {
         guard let r = result else { return }

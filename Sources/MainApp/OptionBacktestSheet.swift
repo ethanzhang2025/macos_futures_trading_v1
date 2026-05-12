@@ -39,6 +39,9 @@ struct OptionBacktestSheet: View {
     /// v17.107 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
 
+    /// v17.117 · 用户字号偏好
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
+
     // v17.107 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
     private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
@@ -95,6 +98,9 @@ struct OptionBacktestSheet: View {
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            // v17.117 · 字号偏好
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -376,10 +382,10 @@ struct OptionBacktestSheet: View {
         let spotDiff = info.spotPrice - entry
         return VStack(alignment: .leading, spacing: 4) {
             Text(dateText)
-                .font(ChartTheme.fontValue)
+                .font(ChartTheme.fontValue(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipSecondary)
             Text("第 \(info.index + 1) / \(holdingDays) 天")
-                .font(ChartTheme.fontSubvalue)
+                .font(ChartTheme.fontSubvalue(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipMuted)
             Divider().background(ChartTheme.tooltipDivider)
             backtestRow("总 PnL", String(format: "%+.2f", info.totalPnL), color: pnlColor)
@@ -407,11 +413,11 @@ struct OptionBacktestSheet: View {
     private func backtestRow(_ label: String, _ value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(ChartTheme.fontLabel)
+                .font(ChartTheme.fontLabel(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipLabel)
                 .frame(width: 50, alignment: .leading)
             Text(value)
-                .font(ChartTheme.fontValue)
+                .font(ChartTheme.fontValue(size: chartFontSize))
                 .foregroundColor(color)
             Spacer()
         }
@@ -500,14 +506,14 @@ struct OptionBacktestSheet: View {
             let v = viewMin + Double(i) * (viewMax - viewMin) / 4.0
             let y = yFor(v)
             let label = Text(String(format: "%+.1f", v))
-                .font(ChartTheme.fontHint)
+                .font(ChartTheme.fontHint(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipMuted)
             ctx.draw(label, at: CGPoint(x: rect.maxX - 6, y: y), anchor: .trailing)
         }
 
         // 顶部标题
         let title = Text("PnL 曲线（绿盈 · 红亏 · 0 线虚 · ● 极值点）")
-            .font(ChartTheme.fontSubvalue)
+            .font(ChartTheme.fontSubvalue(size: chartFontSize))
             .foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: rect.minX + 8, y: rect.minY + 8), anchor: .topLeading)
     }
@@ -558,7 +564,7 @@ struct OptionBacktestSheet: View {
 
         // 标题
         let title = Text("标的价（cyan: 入场 · 橙: strikes）")
-            .font(ChartTheme.fontSubvalue)
+            .font(ChartTheme.fontSubvalue(size: chartFontSize))
             .foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: rect.minX + 8, y: rect.minY + 6), anchor: .topLeading)
     }

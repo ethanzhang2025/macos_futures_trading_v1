@@ -44,6 +44,9 @@ struct OptionWindow: View {
     /// v17.107 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
 
+    /// v17.117 · 用户字号偏好（跟 ChartScene/Settings 同步 · HUD/Tooltip 字号 swap 用）
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
+
     // v17.107 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
     private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
@@ -148,6 +151,9 @@ struct OptionWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            // v17.117 · 字号偏好
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
         // v15.36 · Phase 6.4 · 回测 sheet
         .sheet(isPresented: $backtestSheetPresented) {
@@ -558,16 +564,16 @@ struct OptionWindow: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(String(format: "spot %.2f", info.spotPrice))
-                    .font(ChartTheme.fontValueBold)
+                    .font(ChartTheme.fontValueBold(size: chartFontSize))
                     .foregroundColor(ChartTheme.chartLine)
                 if isAtSpot {
                     Text("≈现价")
-                        .font(ChartTheme.fontHint)
+                        .font(ChartTheme.fontHint(size: chartFontSize))
                         .foregroundColor(ChartTheme.chartLine.opacity(0.7))
                 }
             }
             Text("点 #\(info.index + 1) / \(analysis.curve.count)")
-                .font(ChartTheme.fontSubvalue)
+                .font(ChartTheme.fontSubvalue(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipMuted)
             Divider().background(ChartTheme.tooltipDivider)
             optionTooltipRow("PnL", String(format: "%+.2f", info.pnl), color: pnlColor)
@@ -578,16 +584,16 @@ struct OptionWindow: View {
             Divider().background(ChartTheme.tooltipDivider)
             HStack {
                 Text("Leg")
-                    .font(ChartTheme.fontLabel)
+                    .font(ChartTheme.fontLabel(size: chartFontSize))
                     .foregroundColor(ChartTheme.tooltipLabel)
                     .frame(width: 32, alignment: .leading)
                 Text(legSummary)
-                    .font(ChartTheme.fontSubvalue)
+                    .font(ChartTheme.fontSubvalue(size: chartFontSize))
                     .foregroundColor(ChartTheme.tooltipSecondary)
                 Spacer()
             }
             Text("✓=ITM · ·=OTM · +=买 · -=卖")
-                .font(ChartTheme.fontHint)
+                .font(ChartTheme.fontHint(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipDimmed)
         }
         .padding(ChartTheme.tooltipPadding)
@@ -601,11 +607,11 @@ struct OptionWindow: View {
     private func optionTooltipRow(_ label: String, _ value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(ChartTheme.fontLabel)
+                .font(ChartTheme.fontLabel(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipLabel)
                 .frame(width: 50, alignment: .leading)
             Text(value)
-                .font(ChartTheme.fontValue)
+                .font(ChartTheme.fontValue(size: chartFontSize))
                 .foregroundColor(color)
             Spacer()
         }
@@ -784,7 +790,7 @@ struct OptionWindow: View {
     private func drawIVSmile(ctx: GraphicsContext, size: CGSize) {
         guard let slice = selectedSlice, !slice.rows.isEmpty else {
             let text = Text("无期权链 · IV smile 不可用")
-                .font(ChartTheme.fontSubvalue).foregroundColor(.secondary)
+                .font(ChartTheme.fontSubvalue(size: chartFontSize)).foregroundColor(.secondary)
             ctx.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2), anchor: .center)
             return
         }
@@ -864,7 +870,7 @@ struct OptionWindow: View {
         default: skewLabel = "陡笑"
         }
         let title = Text("📈 IV smile（cyan=call · orange=put · skew=\(String(format: "%.1f", ivSmileSkew)) \(skewLabel)）")
-            .font(ChartTheme.fontSubvalue).foregroundColor(.secondary)
+            .font(ChartTheme.fontSubvalue(size: chartFontSize)).foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }
 
@@ -914,16 +920,16 @@ struct OptionWindow: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(String(format: "K %.0f", info.strike))
-                    .font(ChartTheme.fontValueBold)
+                    .font(ChartTheme.fontValueBold(size: chartFontSize))
                     .foregroundColor(ChartTheme.tooltipPrimary)
                 if isATM {
                     Text("ATM")
-                        .font(ChartTheme.fontHint)
+                        .font(ChartTheme.fontHint(size: chartFontSize))
                         .foregroundColor(ChartTheme.chartLine)
                 }
             }
             Text(moneyness)
-                .font(ChartTheme.fontSubvalue)
+                .font(ChartTheme.fontSubvalue(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipMuted)
             Divider().background(ChartTheme.tooltipDivider)
             optionTooltipRow("call IV", String(format: "%.1f%%", info.callIV * 100), color: ChartTheme.chartLine)

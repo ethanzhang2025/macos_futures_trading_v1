@@ -30,6 +30,9 @@ struct SectorWindow: View {
     /// v17.108 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
 
+    /// v17.117 · 用户字号偏好
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
+
     // v17.108 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
     private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
@@ -89,6 +92,9 @@ struct SectorWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            // v17.117 · 字号偏好
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -144,7 +150,7 @@ struct SectorWindow: View {
                 Text(sec.displayName).font(.callout)
                 if let s = stats {
                     Text(String(format: "%+.1f%%", s.avgChangePct))
-                        .font(ChartTheme.fontHint)
+                        .font(ChartTheme.fontHint(size: chartFontSize))
                         .foregroundColor(s.avgChangePct >= 0 ? chartLoss : chartProfit)
                 }
             }
@@ -373,7 +379,7 @@ struct SectorWindow: View {
                     Text(stats.sector.displayName).font(.system(size: 10, weight: .semibold))
                 }
                 Text(String(format: "%+.2f%% · %d涨/%d跌", stats.avgChangePct, stats.gainers, stats.losers))
-                    .font(ChartTheme.fontHint)
+                    .font(ChartTheme.fontHint(size: chartFontSize))
                     .foregroundColor(color)
             }
             .padding(.horizontal, 8).padding(.vertical, 4)

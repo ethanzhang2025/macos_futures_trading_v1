@@ -29,6 +29,9 @@ struct InstrumentDashboardWindow: View {
     /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
 
+    /// v17.117 · 用户字号偏好
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
+
     // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
     private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
@@ -128,6 +131,9 @@ struct InstrumentDashboardWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            // v17.117 · 字号偏好
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -337,7 +343,7 @@ struct InstrumentDashboardWindow: View {
 
         // 标题
         let title = Text("📈 mock 价格曲线（200 日 · v2 接 CTP 真历史 K 线）")
-            .font(ChartTheme.fontSubvalue).foregroundColor(.secondary)
+            .font(ChartTheme.fontSubvalue(size: chartFontSize)).foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }
 

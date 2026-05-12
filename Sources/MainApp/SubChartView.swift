@@ -252,12 +252,10 @@ struct SubChartView: View {
         }
     }
 
-    // MARK: - v17.71 · 外部光标 bar 定位（跨周期共振 · 与 KLineCrosshairView.externalBarX 同算法）
+    // MARK: - v17.71 · 外部光标 bar 定位（跨周期共振 · v17.76 改调 ChartHitTester 跨 module 统一）
 
     private func externalBarX(time: Date, in size: CGSize) -> CGFloat? {
-        guard !bars.isEmpty,
-              let idx = bars.lastIndex(where: { $0.openTime <= time }) else { return nil }
-        return ChartHitTester.xPosition(forBarIndex: idx, width: size.width, viewport: viewport)
+        ChartHitTester.xPosition(forTime: time, in: bars, width: size.width, viewport: viewport)
     }
 
     /// 触发重算的复合 key（bars 增量 + 切副图 + 改参数都要重算）

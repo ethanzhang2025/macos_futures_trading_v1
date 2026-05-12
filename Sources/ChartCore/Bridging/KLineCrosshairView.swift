@@ -193,11 +193,9 @@ public struct KLineCrosshairView: View {
 
     // MARK: - v18 · 外部光标（同 group 兄弟广播 · 跨周期共振）
 
-    /// externalTime → 像素 x · 找最后一根 openTime ≤ externalTime 的 bar · 不在 viewport 可视区返 nil
+    /// v17.76 · 改调 ChartHitTester.xPosition(forTime:in:width:viewport:) · 跨 module 统一映射
     private func externalBarX(time: Date, in size: CGSize) -> CGFloat? {
-        guard !bars.isEmpty,
-              let idx = bars.lastIndex(where: { $0.openTime <= time }) else { return nil }
-        return ChartHitTester.xPosition(forBarIndex: idx, width: size.width, viewport: viewport)
+        ChartHitTester.xPosition(forTime: time, in: bars, width: size.width, viewport: viewport)
     }
 
     /// 外部光标竖线（仅时间维度 · 浅蓝虚线 · 与本地黄白虚线区分）

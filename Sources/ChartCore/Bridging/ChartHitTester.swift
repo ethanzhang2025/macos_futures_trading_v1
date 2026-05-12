@@ -17,6 +17,7 @@
 // 跨平台：Foundation + CoreGraphics（Linux 端 SwiftPM 自动 stub CGFloat/CGPoint · 可参编）
 
 import Foundation
+import Shared
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif
@@ -79,6 +80,17 @@ public enum ChartHitTester {
         guard barCount > 0, barIndex >= 0, barIndex < barCount else { return nil }
         let xRatio = (CGFloat(barIndex) + 0.5) / CGFloat(barCount)
         return xRatio * width
+    }
+
+    /// v17.76 · 时间 → 像素 x（跨周期共振光标定位 · 主图 KLineCrosshairView + 副图 SubChartView 共用）
+    /// 找最后一根 openTime ≤ time 的 bar · 走 viewport.xPosition 转 x（不在 viewport 可见区返 nil）
+    public static func xPosition(
+        forTime time: Date, in bars: [KLine],
+        width: CGFloat, viewport: RenderViewport
+    ) -> CGFloat? {
+        guard !bars.isEmpty,
+              let idx = bars.lastIndex(where: { $0.openTime <= time }) else { return nil }
+        return xPosition(forBarIndex: idx, width: width, viewport: viewport)
     }
 
     // MARK: - 像素 y → 价格（屏幕坐标系 · y=0 顶）

@@ -85,6 +85,11 @@ struct WatchlistWindow: View {
     /// v17.132 · 标签筛选 · CSV string · 空 = 不筛选 · 多标签 OR 关系（含任一即匹配） · 跨重启保留
     @AppStorage("viewState.v1.watchlist.tagFilterRaw") private var tagFilterRaw: String = ""
 
+    /// v17.134 · 合约别名 store · trader 自定义名（"豆粕 0509" 替代 m2509）· UserDefaults 持久化
+    private let aliasStore = InstrumentAliasStore()
+    /// v17.134 · 待编辑别名的合约
+    @State private var pendingAliasInstrumentID: NoteEditTarget?
+
     /// v17.42 C1 · 列可见性（持仓量 / 成交量 / 价差%）· 右键 📋 显示列 toggle · UserDefaults 跨窗口同步
     @State private var visibleColumns: Set<WatchlistColumn> = WatchlistColumnPreferences.load()
 
@@ -320,6 +325,16 @@ struct WatchlistWindow: View {
             ) { newTags in
                 tagStore.setTags(newTags, for: target.id)
                 flagsRevision += 1   // 复用 tick 触发 row 重渲
+            }
+        }
+        // v17.134 · 别名编辑 sheet
+        .sheet(item: $pendingAliasInstrumentID) { target in
+            AliasEditSheet(
+                instrumentID: target.id,
+                initialAlias: aliasStore.alias(for: target.id) ?? ""
+            ) { newAlias in
+                aliasStore.setAlias(newAlias, for: target.id)
+                flagsRevision += 1
             }
         }
         .confirmationDialog(
@@ -1323,6 +1338,8 @@ struct WatchlistWindow: View {
         // v17.133 · 当前合约置顶状态（per-group · 仅在分组视图生效 · 聚合视图按全局排序）
         let isPinned = book.isPinned(id, in: groupID)
         let pinCount = book.group(id: groupID)?.pinnedInstrumentIDs?.count ?? 0
+        // v17.134 · 当前合约别名（持久化 InstrumentAliasStore · trader 自定义可读名）
+        let alias = aliasStore.alias(for: id)
         return HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.5))
@@ -1341,9 +1358,13 @@ struct WatchlistWindow: View {
                         .font(.system(size: 11 + chartFontSize.sizeDelta))
                         .tooltip(flag.displayName)
                 }
-                Text(id)
-                    .font(.system(.body, design: .monospaced))
+                // v17.134 · 别名替代 ID 显示（trader 自定义中文名优先 · tooltip 给原 ID）
+                Text(alias ?? id)
+                    .font(.system(.body, design: alias == nil ? .monospaced : .default))
                     .fontWeight(.medium)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .tooltip(alias.map { "\($0)（\(id)）" } ?? id)
                 // v17.129 · 备注 📝 小标识 · hover tooltip 显完整内容
                 if let n = note {
                     Image(systemName: "note.text")
@@ -1477,6 +1498,16 @@ struct WatchlistWindow: View {
             } else {
                 Button("📌 置顶（已满 \(Watchlist.maxPinnedPerGroup)/\(Watchlist.maxPinnedPerGroup) · 先取消其他）") {}
                     .disabled(true)
+            }
+            // v17.134 · 别名（trader 自定义可读名 · "豆粕 0509" 替代 m2509）
+            Button(alias == nil ? "✏️ 设别名" : "✏️ 编辑别名") {
+                pendingAliasInstrumentID = NoteEditTarget(id: id)
+            }
+            if alias != nil {
+                Button("✏️ 清除别名") {
+                    aliasStore.setAlias(nil, for: id)
+                    flagsRevision += 1
+                }
             }
             // v17.42 C1 · 列自定义（toggle 持仓 / 成交量 / 价差% · UserDefaults 跨窗口同步）
             columnVisibilityMenu()
@@ -1641,15 +1672,18 @@ struct WatchlistWindow: View {
         panel.nameFieldStringValue = "自选_\(group.name)_\(dateFmt.string(from: Date())).csv"
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        var rows: [String] = ["合约,最新价,涨跌幅,持仓量,旗标,备注"]
+        // v17.134 · CSV 加 别名 / 标签 列（trader 复盘材料完整化）
+        var rows: [String] = ["合约,别名,最新价,涨跌幅,持仓量,旗标,标签,备注"]
         for id in group.instrumentIDs {
+            let alias = (aliasStore.alias(for: id) ?? "").replacingOccurrences(of: "\"", with: "\"\"")
             let price = priceText(for: id)
             let change = changePctText(for: id)
             let oi = openInterestText(for: id)
             let flag = flagStore.flag(for: id).displayName
+            let tags = tagStore.tags(for: id).joined(separator: " ")
             let note = (noteStore.note(for: id) ?? "").replacingOccurrences(of: "\"", with: "\"\"")
-            // CSV 字段含 , 或 " 需双引号包裹 · 备注可能含逗号
-            rows.append("\(id),\(price),\(change),\(oi),\(flag),\"\(note)\"")
+            // CSV 字段含 , 或 " 需双引号包裹 · 备注 / 别名可能含逗号
+            rows.append("\(id),\"\(alias)\",\(price),\(change),\(oi),\(flag),\(tags),\"\(note)\"")
         }
         let csv = rows.joined(separator: "\n")
         let bom = Data([0xEF, 0xBB, 0xBF])  // UTF-8 BOM · 让 Excel 正确识别中文
@@ -2545,6 +2579,56 @@ private struct FlowSuggestionsView: View {
             }
         }
         .frame(height: 32)
+    }
+}
+
+// MARK: - Sheet · 合约别名编辑（v17.134 · trader 自定义可读名 · 全局持久化 InstrumentAliasStore）
+
+private struct AliasEditSheet: View {
+
+    let instrumentID: String
+    let initialAlias: String
+    let onSubmit: (String?) -> Void   // nil / 空 → 清除
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var aliasText: String
+
+    init(instrumentID: String, initialAlias: String, onSubmit: @escaping (String?) -> Void) {
+        self.instrumentID = instrumentID
+        self.initialAlias = initialAlias
+        self.onSubmit = onSubmit
+        self._aliasText = State(initialValue: initialAlias)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("✏️ \(instrumentID) 别名").font(.title2).bold()
+            Text("trader 自定义可读名 · 在自选列表替代 ID 显示（如 \"豆粕 0509\" → m2509） · 上限 \(InstrumentAliasStore.maxAliasLength) 字 · 留空将清除")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField("如：豆粕 0509 / 螺纹主力 / 沪深 300", text: $aliasText)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { submit() }
+
+            HStack {
+                Text("\(aliasText.trimmingCharacters(in: .whitespacesAndNewlines).count) / \(InstrumentAliasStore.maxAliasLength)")
+                    .font(.caption2).foregroundColor(.secondary)
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") { submit() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 460, height: 200)
+    }
+
+    private func submit() {
+        onSubmit(aliasText)
+        dismiss()
     }
 }
 

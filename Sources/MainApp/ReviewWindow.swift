@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 import Shared
 import JournalCore
 import TradingCore
+import IndicatorCore   // v17.39 D5 · BacktestMarkdownReport
 
 struct ReviewWindow: View {
 
@@ -1056,6 +1057,11 @@ struct ReviewWindow: View {
         // v16.21 · setup ↔ pattern cross-reference
         md += "\n" + TrainingMarkdownReport.generateSetupPatternCrossReference(
             log, setups: setupSlices(from: s.setupMatrix), start: monthStart, end: monthEnd
+        )
+        // v17.39 D5 · 公式回测 annex（BacktestHistoryStore · 与训练 annex 对位）
+        let backtestLog = BacktestHistoryStore.load()
+        md += BacktestMarkdownReport.generateMonthlyAnnex(
+            backtestLog, start: monthStart, end: monthEnd
         )
         // v16.40 · 心理洞察纯文本章节（任意月报都拼 · 与 v16.38 卡片配套）
         md += psychInsightMarkdown(s.psychTagCounts)

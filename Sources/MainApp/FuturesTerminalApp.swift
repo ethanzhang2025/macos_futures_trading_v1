@@ -358,6 +358,7 @@ struct FuturesTerminalApp: App {
                 OpenSessionCompareButton()      // v15.52 · WP-行情 时段对比 ⌘⌥T
                 OpenAnomalyMonitorButton()      // v15.54 · WP-行情 异常品种监控 ⌘⌥A
                 OpenSpreadAlertButton()         // v15.55 · WP-套利 价差 alert ⌘⌥W
+                OpenBacktestButton()            // v17.39 · D3 公式回测窗口 ⌘⌥K
             }
             CommandMenu("视图") {
                 Text("周期切换：⌘1=1分 / ⌘2=5分 / ⌘3=15分 / ⌘4=30分 / ⌘5=60分 / ⌘6=日（K 线窗口聚焦时生效）")
@@ -541,6 +542,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1280, height: 760)
+
+        // v17.39 · D3 公式回测窗口（⌘⌥K · MA 双均线 demo · 6 指标 HUD + equity 曲线 + trades 表）
+        WindowGroup("公式回测", id: "backtest") {
+            BacktestWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 1280, height: 800)
 
         // 偏好设置（Cmd+, 自动绑定 · macOS 标准）
         Settings {
@@ -760,6 +768,15 @@ private struct OpenSpreadAlertButton: View {
     var body: some View {
         Button("价差套利 alert（⌘⌥W）") { openWindow(id: "spreadAlert") }
             .keyboardShortcut("w", modifiers: [.command, .option])
+    }
+}
+
+/// v17.39 · D3 公式回测入口（⌘⌥K · SimpleBacktestEngine + mock 标的轨迹）
+private struct OpenBacktestButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("公式回测（⌘⌥K）") { openWindow(id: "backtest") }
+            .keyboardShortcut("k", modifiers: [.command, .option])
     }
 }
 

@@ -44,7 +44,8 @@ public struct BacktestWindow: View {
     @State private var historyRevision: Int = 0   // 触发 history 列表刷新
     @State private var showGridSearchSheet: Bool = false   // v17.44 D4 UI · 参数扫描
     @State private var showMonteCarloSheet: Bool = false   // v17.51 D2 v2.4 · 鲁棒性测试
-    @State private var lastParsedFormula: Formula?         // v17.51 · 缓存上次成功 parse 的 formula（给 Monte Carlo sheet 用）
+    @State private var showMultiAssetSheet: Bool = false   // v17.83 D4 v3 · 多品种多周期
+    @State private var lastParsedFormula: Formula?         // v17.51 · 缓存上次成功 parse 的 formula（给 Monte Carlo / Multi-Asset sheet 用）
 
     // MARK: - 标的轨迹
 
@@ -105,6 +106,20 @@ public struct BacktestWindow: View {
                     allowShort: allowShort,
                     barsForSeed: { seed in makeBarsForSeed(seed: seed) },
                     isPresented: $showMonteCarloSheet
+                )
+            }
+        }
+        .sheet(isPresented: $showMultiAssetSheet) {
+            if let formula = lastParsedFormula {
+                MultiAssetBacktestSheet(
+                    formula: formula,
+                    signalLineName: signalLineName,
+                    initialEquity: initialEquity,
+                    commission: commission,
+                    slippage: slippage,
+                    allowShort: allowShort,
+                    barsForSeed: { seed in makeBarsForSeed(seed: seed) },
+                    isPresented: $showMultiAssetSheet
                 )
             }
         }
@@ -264,6 +279,22 @@ public struct BacktestWindow: View {
                 }
                 .buttonStyle(.bordered)
                 .help("跑同公式 × N 个 seed · 看 PnL 分布判稳定性 vs lucky")
+
+                // v17.83 D4 v3 · 多品种 / 多周期组合（需公式已 parse 成功）
+                Button {
+                    if let formula = parseFormulaForMonteCarlo() {
+                        lastParsedFormula = formula
+                        showMultiAssetSheet = true
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "square.grid.3x3.fill")
+                        Text("多品种多周期").font(.callout)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .help("同公式扫 5 标的 × 4 周期矩阵 · 看跨品种跨周期鲁棒性")
 
                 if let err = errorMessage {
                     Text(err)

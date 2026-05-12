@@ -20,10 +20,9 @@ public struct KLineAxisView: View {
         case price  // 纵向 · 右侧 · 价格标签
     }
 
-    /// 标签数量（视觉密度 · 5 是文华/国信主流 · 默认值 · 可由调用方覆盖）
+    /// 标签数量（视觉密度 · 5 是文华/国信主流 · 默认值 · 可由调用方覆盖 init labelCount）
+    /// v17.116 · sparse/dense 数值（3/7）已下放到 Shared/GridDensity.preferredAxisLabelCount · 不再硬编码到 ChartCore
     public static let labelCount = 5
-    public static let labelCountSparse = 3   // v17.114 · GridDensity.sparse
-    public static let labelCountDense = 7    // v17.114 · GridDensity.dense
     /// 同日内：仅 HH:mm（v15.33 session-aware · 跨日时智能切到 fullFormatter）
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()

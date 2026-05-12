@@ -11,17 +11,23 @@ import SwiftUI
 
 public struct KLineGridView: View {
 
-    /// 与 KLineAxisView.labelCount 一致 · 视觉对齐
+    /// 与 KLineAxisView.labelCount 一致 · 视觉对齐 · 默认 5（与 axis 默认值同步）
     public static let lineCount = 5
 
-    public init() {}
+    /// v17.116 · 实例 lineCount（与 KLineAxisView labelCount 一致 · 跟 GridDensity 偏好同步）
+    /// 老 caller `KLineGridView()` 用默认 5 保兼容 · 新 caller 传 `lineCount: gridDensity.preferredAxisLabelCount`
+    public let lineCount: Int
+
+    public init(lineCount: Int = KLineGridView.lineCount) {
+        self.lineCount = lineCount
+    }
 
     public var body: some View {
         GeometryReader { geom in
             ZStack {
-                // 横线（5 条 · 价格刻度对齐）
-                ForEach(0..<Self.lineCount, id: \.self) { i in
-                    let t = CGFloat(i) / CGFloat(max(1, Self.lineCount - 1))
+                // 横线（lineCount 条 · 价格刻度对齐）
+                ForEach(0..<lineCount, id: \.self) { i in
+                    let t = CGFloat(i) / CGFloat(max(1, lineCount - 1))
                     Path { p in
                         let y = t * geom.size.height
                         p.move(to: CGPoint(x: 0, y: y))
@@ -29,9 +35,9 @@ public struct KLineGridView: View {
                     }
                     .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                 }
-                // 竖线（5 条 · 时间刻度对齐）
-                ForEach(0..<Self.lineCount, id: \.self) { i in
-                    let t = CGFloat(i) / CGFloat(max(1, Self.lineCount - 1))
+                // 竖线（lineCount 条 · 时间刻度对齐）
+                ForEach(0..<lineCount, id: \.self) { i in
+                    let t = CGFloat(i) / CGFloat(max(1, lineCount - 1))
                     Path { p in
                         let x = t * geom.size.width
                         p.move(to: CGPoint(x: x, y: 0))

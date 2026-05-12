@@ -2226,7 +2226,7 @@ struct ChartContentView: View {
     let chartFontSize: ChartFontSize
     /// v17.113 · HUD 半透明档（subtle / normal / strong）· 由 ChartScene 父级注入
     let hudOpacityMode: HUDOpacityMode
-    /// v17.114 · 网格密度档（sparse / medium / dense · 影响 KLineAxisView labelCount 3/5/7）· 由 ChartScene 父级注入
+    /// v17.114 / v17.116 · 网格密度档（sparse / medium / dense · 影响 KLineAxisView 标签 + KLineGridView 背景网格 3/5/7）· 由 ChartScene 父级注入
     let gridDensity: GridDensity
     /// v17.13 A1.1 图表类型（candlestick / heikinAshi · 仅 candle 渲染层使用 · HUD/hover/indicator 仍用原始 bars）
     let chartType: ChartType
@@ -2684,8 +2684,8 @@ struct ChartContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(chartTheme.background)
             }
-            // 视觉迭代第 1 项：5×5 半透明网格 · 与右价格轴 / 底时间轴对齐
-            KLineGridView()
+            // 视觉迭代第 1 项：半透明网格 · 与右价格轴 / 底时间轴对齐 · v17.116 跟 GridDensity 偏好（3/5/7）
+            KLineGridView(lineCount: axisLabelCount)
             // v15.33 WP-40 P1 · session/day 分界竖线（夜盘日盘衔接 / 跨交易日 / 周末）
             KLineSessionDividerView(
                 bars: bars, viewport: viewport, gaps: sessionGaps
@@ -3399,14 +3399,9 @@ struct ChartContentView: View {
         return ChineseFuturesProducts.priceTickDigits(forInstrumentID: instrumentLabel) ?? 2
     }
 
-    /// v17.114 · KLineAxisView labelCount（跟 GridDensity 偏好 · sparse 3 / medium 5 / dense 7）
-    private var axisLabelCount: Int {
-        switch gridDensity {
-        case .sparse: return KLineAxisView.labelCountSparse
-        case .medium: return KLineAxisView.labelCount
-        case .dense:  return KLineAxisView.labelCountDense
-        }
-    }
+    /// v17.114 / v17.116 · KLineAxisView labelCount + KLineGridView lineCount（跟 GridDensity 偏好）
+    /// 数值映射下放到 Shared/GridDensity.preferredAxisLabelCount · 这里只 forward
+    private var axisLabelCount: Int { gridDensity.preferredAxisLabelCount }
 
     private func formatPrice(_ p: Decimal) -> String {
         String(format: "%.\(effectivePriceDigits)f", NSDecimalNumber(decimal: p).doubleValue)

@@ -131,6 +131,15 @@ public enum GridDensity: String, CaseIterable, Sendable {
         case .dense:  return 0.7
         }
     }
+
+    /// v17.116 · KLineAxisView/KLineGridView 主刻度 + 网格线数（视觉对齐 · 标准 5）
+    public var preferredAxisLabelCount: Int {
+        switch self {
+        case .sparse: return 3
+        case .medium: return 5
+        case .dense:  return 7
+        }
+    }
 }
 
 /// v17.111 · 副图默认占比（启动 / 重置时主图: 副图区高度比例 · 用户拖分割条仍可临时调）

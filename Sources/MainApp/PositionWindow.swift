@@ -28,6 +28,8 @@ struct PositionWindow: View {
 
     /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+    /// v17.120 · 用户字号档（跟 ChartScene/Settings 同步）
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
 
     // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
@@ -128,9 +130,12 @@ struct PositionWindow: View {
             }
         }
         // v17.109 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        // v17.120 · 同步字号档
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -253,19 +258,19 @@ struct PositionWindow: View {
         } label: {
             HStack(spacing: 0) {
                 Text(inst.id)
-                    .font(.system(size: 12, design: .monospaced).bold())
+                    .font(.system(size: 12 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(.primary)
                     .frame(width: 70, alignment: .leading)
                 Text(inst.name)
-                    .font(.system(size: 12))
+                    .font(.system(size: 12 + chartFontSize.sizeDelta))
                     .foregroundColor(.secondary)
                     .frame(width: 90, alignment: .leading)
                 Text(String(format: "%+.2f%%", inst.changePct))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(changeColor)
                     .frame(width: 65, alignment: .trailing)
                 Text(String(format: "%.0fK", inst.openInterestK))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 80, alignment: .trailing)
                 bullBearBar(bullRatio: row.bullRatio, bearRatio: row.bearRatio,
@@ -273,11 +278,11 @@ struct PositionWindow: View {
                     .frame(width: 320, height: 22)
                 Text(String(format: "%.0f / %.0f",
                             row.bullRatio * 100, row.bearRatio * 100))
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 80, alignment: .center)
                 Text(String(format: "%+.0fK", row.netOI))
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(netColor)
                     .frame(width: 80, alignment: .trailing)
                 // v15.82 · combo 徽章
@@ -297,8 +302,8 @@ struct PositionWindow: View {
     private func comboBadge(for inst: SectorInstrument) -> some View {
         if let c = comboMap[inst.id] {
             HStack(spacing: 2) {
-                Image(systemName: "sparkles").font(.system(size: 9))
-                Text("\(c.kindCount)/5").font(.system(size: 10, design: .monospaced).bold())
+                Image(systemName: "sparkles").font(.system(size: 9 + chartFontSize.sizeDelta))
+                Text("\(c.kindCount)/5").font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced).bold())
             }
             .foregroundColor(.white)
             .padding(.horizontal, 5).padding(.vertical, 1)
@@ -360,12 +365,12 @@ struct PositionWindow: View {
                 // OI 数值（左多 · 右空）
                 HStack {
                     Text(String(format: "%.0fK", bullOI))
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: 9 + chartFontSize.sizeDelta, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.leading, 6)
                     Spacer()
                     Text(String(format: "%.0fK", bearOI))
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: 9 + chartFontSize.sizeDelta, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.trailing, 6)
                 }

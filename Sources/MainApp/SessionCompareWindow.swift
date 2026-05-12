@@ -32,6 +32,8 @@ struct SessionCompareWindow: View {
 
     /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+    /// v17.120 · 用户字号档（跟 ChartScene/Settings 同步）
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
 
     // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
@@ -159,9 +161,12 @@ struct SessionCompareWindow: View {
             if let id = note.object as? String { highlightedID = id }
         }
         // v17.109 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        // v17.120 · 同步字号档
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -312,35 +317,35 @@ struct SessionCompareWindow: View {
         } label: {
             HStack(spacing: 0) {
                 Text(inst.id)
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .frame(width: 70, alignment: .leading)
                 Text(inst.name)
-                    .font(.system(size: 11))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta))
                     .foregroundColor(.secondary)
                     .frame(width: 90, alignment: .leading)
                     .lineLimit(1)
                 HStack(spacing: 3) {
-                    Image(systemName: inst.sector.icon).font(.system(size: 9))
-                    Text(inst.sector.displayName).font(.system(size: 10))
+                    Image(systemName: inst.sector.icon).font(.system(size: 9 + chartFontSize.sizeDelta))
+                    Text(inst.sector.displayName).font(.system(size: 10 + chartFontSize.sizeDelta))
                 }
                 .foregroundColor(.secondary)
                 .frame(width: 70, alignment: .leading)
                 Text(String(format: "%+.2f%%", row.sessionA))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(aColor)
                     .frame(width: 80, alignment: .trailing)
                 Text(String(format: "%+.2f%%", row.sessionB))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(bColor)
                     .frame(width: 80, alignment: .trailing)
                 sessionBar(row: row, maxAbs: maxAbs)
                     .frame(width: 280, height: 22)
                 Text(String(format: "%+.2f%%", row.difference))
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(diffColor)
                     .frame(width: 80, alignment: .trailing)
                 Text(String(format: "%+.2f%%", inst.changePct))
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(totalColor)
                     .frame(width: 70, alignment: .trailing)
                 Spacer()
@@ -420,22 +425,22 @@ struct SessionCompareWindow: View {
                              : (diff < 0 ? chartProfit : .secondary)
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
-                Image(systemName: sector.icon).font(.system(size: 9))
-                Text(sector.displayName).font(.system(size: 10, weight: .semibold))
+                Image(systemName: sector.icon).font(.system(size: 9 + chartFontSize.sizeDelta))
+                Text(sector.displayName).font(.system(size: 10 + chartFontSize.sizeDelta, weight: .semibold))
             }
             HStack(spacing: 6) {
                 Text("\(compareMode.sessionALabel)\(String(format: "%+.1f", avgA))%")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: 9 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(avgA >= 0 ? chartLoss : chartProfit)
                 Text("→")
-                    .font(.system(size: 9))
+                    .font(.system(size: 9 + chartFontSize.sizeDelta))
                     .foregroundColor(.secondary)
                 Text("\(compareMode.sessionBLabel)\(String(format: "%+.1f", avgB))%")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: 9 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(avgB >= 0 ? chartLoss : chartProfit)
             }
             Text(String(format: "差 %+.2f%%", diff))
-                .font(.system(size: 9, design: .monospaced).bold())
+                .font(.system(size: 9 + chartFontSize.sizeDelta, design: .monospaced).bold())
                 .foregroundColor(diffColor)
         }
         .padding(.horizontal, 8).padding(.vertical, 4)

@@ -12,6 +12,8 @@ public struct ShellWindow: View {
     /// v17.59 · ShellViewModel 提到 App 级 @StateObject · 此处 EnvironmentObject 接收
     /// 让 detached Pane 多屏共享同一 instance（跨窗口 group 联动）
     @EnvironmentObject private var shellVM: ShellViewModel
+    /// v17.66 · 启动恢复 detached NSWindow（每个 paneID openWindow 一次）
+    @Environment(\.openWindow) private var openWindow
 
     public init() {}
 
@@ -73,6 +75,19 @@ public struct ShellWindow: View {
         }
         .animation(.easeInOut(duration: 0.2), value: shellVM.fKeyToast)
         .followingChartTheme()  // v17.12 A2.1 · Shell 跟随主图主题（dark/light · UserDefaults chartTheme.v1）
+        // v17.66 · App 进程启动后第一次 Shell render · 自动 openWindow 恢复重启前 detached 的 Pane
+        // 用 hasRestoredDetachedWindows 防多 ShellWindow 实例重复触发
+        .onAppear {
+            guard !shellVM.hasRestoredDetachedWindows else { return }
+            shellVM.hasRestoredDetachedWindows = true
+            for id in shellVM.validDetachedPaneIDsForRestore() {
+                openWindow(id: "detachedPane", value: id.uuidString)
+            }
+        }
+        // v17.66 · 监听 App 退出 · 设 flag 让 detached window 的 .onDisappear 跳过清空 list（保留下次恢复）
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            shellVM.isApplicationTerminating = true
+        }
     }
 
     // MARK: - Pane 容器（Step 3 ✅ · ChartScene 真实嵌入 · Step 5 全 18 view 接入）

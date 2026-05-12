@@ -159,6 +159,47 @@ public final class ShellViewModel: ObservableObject {
         }
     }
 
+    // MARK: - v17.66 · Tab Detach 持久化（重启恢复 detached NSWindow）
+
+    /// 已分离为独立 NSWindow 的 Pane ID 字符串列表（UserDefaults 持久化）
+    /// onAppear 时由 ShellWindow restore · markPaneDetached / markPaneAttached 维护
+    public var detachedPaneIDStrings: [String] = [] {
+        didSet { persistDetachedPaneIDs() }
+    }
+
+    /// App 进程内是否已恢复过 detached 窗口（防多 ShellWindow 重复 openWindow）
+    public var hasRestoredDetachedWindows: Bool = false
+
+    /// App 是否正在退出（NSApplication.willTerminateNotification 触发）
+    /// 退出时 detached window 全部 .onDisappear 会误清空 detachedPaneIDStrings · 此 flag 用于跳过
+    public var isApplicationTerminating: Bool = false
+
+    /// 标记 Pane 为已分离（PaneHeader 📤 按钮触发）
+    public func markPaneDetached(paneID: UUID) {
+        let s = paneID.uuidString
+        guard !detachedPaneIDStrings.contains(s) else { return }
+        detachedPaneIDStrings.append(s)
+    }
+
+    /// 标记 Pane 为已合并回 Shell（DetachedPaneWindow .onDisappear 触发 · 覆盖 ⌘W / X / 合并按钮 各种关窗路径）
+    /// App 退出时跳过（detached window 集体 .onDisappear 会误清空 · 下次启动需要保留 list 恢复）
+    public func markPaneAttached(paneID: UUID) {
+        guard !isApplicationTerminating else { return }
+        let s = paneID.uuidString
+        detachedPaneIDStrings.removeAll { $0 == s }
+    }
+
+    /// restore 时筛除已不存在的 paneID（用户可能在重启前删除 pane）· 返回有效 paneID 列表
+    public func validDetachedPaneIDsForRestore() -> [UUID] {
+        let allPaneIDs = Set(workspaces.flatMap { $0.panes.map(\.id) })
+        let valid = detachedPaneIDStrings.compactMap { UUID(uuidString: $0) }.filter { allPaneIDs.contains($0) }
+        let validStrings = Set(valid.map(\.uuidString))
+        if validStrings.count != detachedPaneIDStrings.count {
+            detachedPaneIDStrings = detachedPaneIDStrings.filter { validStrings.contains($0) }
+        }
+        return valid
+    }
+
     // MARK: - 初始化
 
     public init() {
@@ -416,6 +457,7 @@ public final class ShellViewModel: ObservableObject {
     private static let kActiveID = "shell.v1.activeWorkspaceID"
     private static let kPrimaryTab = "shell.v1.primaryTab"
     private static let kLayout = "shell.v1.layout"
+    private static let kDetachedPaneIDs = "shell.v1.detachedPaneIDs"
 
     private func loadFromStorage() {
         let ud = UserDefaults.standard
@@ -451,6 +493,10 @@ public final class ShellViewModel: ObservableObject {
         if let arr = ud.stringArray(forKey: "shell.v1.recentPaletteCommands") {
             recentPaletteCommands = arr
         }
+        // v17.66 · detached paneID 列表（重启恢复 detached NSWindow）
+        if let arr = ud.stringArray(forKey: Self.kDetachedPaneIDs) {
+            detachedPaneIDStrings = arr
+        }
     }
 
     private func persistWorkspaces() {
@@ -471,6 +517,10 @@ public final class ShellViewModel: ObservableObject {
         if let data = try? JSONEncoder().encode(layout) {
             UserDefaults.standard.set(data, forKey: Self.kLayout)
         }
+    }
+
+    private func persistDetachedPaneIDs() {
+        UserDefaults.standard.set(detachedPaneIDStrings, forKey: Self.kDetachedPaneIDs)
     }
 }
 

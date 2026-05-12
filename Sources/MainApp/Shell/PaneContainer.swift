@@ -179,7 +179,9 @@ struct PaneHeader: View {
                   ? "退出最大化（Esc）"
                   : "最大化此 Pane（双击 header）")
             // v17.59 · 分离 Pane 为独立 NSWindow · 仍受 shellVM group 联动控制
+            // v17.66 · 持久化：mark detached 写 UserDefaults · 下次启动 ShellWindow.onAppear 自动恢复
             Button {
+                shellVM.markPaneDetached(paneID: config.id)
                 openWindow(id: "detachedPane", value: config.id.uuidString)
             } label: {
                 Image(systemName: "arrow.up.right.square")
@@ -187,7 +189,7 @@ struct PaneHeader: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("分离为独立窗口（多屏支持 · 仍受 group 联动）")
+            .help("分离为独立窗口（多屏支持 · 仍受 group 联动 · 重启自动恢复）")
         }
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {

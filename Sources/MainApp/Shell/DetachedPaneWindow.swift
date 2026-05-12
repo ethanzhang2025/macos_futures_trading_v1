@@ -37,6 +37,10 @@ struct DetachedPaneWindow: View {
             }
             .frame(minWidth: 800, minHeight: 500)
             .followingChartTheme()
+            // v17.66 · 关窗即合并回 Shell · 覆盖 ⌘W / X / 合并按钮 各种路径 · 同步清 UserDefaults
+            .onDisappear {
+                shellVM.markPaneAttached(paneID: id)
+            }
         } else {
             VStack(spacing: 8) {
                 Text("📤 分离 Pane 已不存在")
@@ -47,6 +51,11 @@ struct DetachedPaneWindow: View {
             }
             .padding(40)
             .frame(minWidth: 480, minHeight: 200)
+            .onDisappear {
+                if let str = paneIDString, let id = UUID(uuidString: str) {
+                    shellVM.markPaneAttached(paneID: id)
+                }
+            }
         }
     }
 

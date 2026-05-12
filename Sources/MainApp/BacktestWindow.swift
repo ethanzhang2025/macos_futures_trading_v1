@@ -43,6 +43,8 @@ public struct BacktestWindow: View {
     @State private var hoverPoint: CGPoint?
     @State private var historyRevision: Int = 0   // 触发 history 列表刷新
     @State private var showGridSearchSheet: Bool = false   // v17.44 D4 UI · 参数扫描
+    @State private var showMonteCarloSheet: Bool = false   // v17.51 D2 v2.4 · 鲁棒性测试
+    @State private var lastParsedFormula: Formula?         // v17.51 · 缓存上次成功 parse 的 formula（给 Monte Carlo sheet 用）
 
     // MARK: - 标的轨迹
 
@@ -91,6 +93,20 @@ public struct BacktestWindow: View {
                     runBacktest()
                 }
             )
+        }
+        .sheet(isPresented: $showMonteCarloSheet) {
+            if let formula = lastParsedFormula {
+                MonteCarloSheet(
+                    formula: formula,
+                    signalLineName: signalLineName,
+                    initialEquity: initialEquity,
+                    commission: commission,
+                    slippage: slippage,
+                    allowShort: allowShort,
+                    barsForSeed: { seed in makeBarsForSeed(seed: seed) },
+                    isPresented: $showMonteCarloSheet
+                )
+            }
         }
     }
 
@@ -232,6 +248,22 @@ public struct BacktestWindow: View {
                 }
                 .buttonStyle(.bordered)
                 .help("批量跑公式参数组合（笛卡尔积）· 按 metric 排序找最优")
+
+                // v17.51 D2 v2.4 · 鲁棒性测试入口（需公式已 parse 成功）
+                Button {
+                    if let formula = parseFormulaForMonteCarlo() {
+                        lastParsedFormula = formula
+                        showMonteCarloSheet = true
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "die.face.5.fill")
+                        Text("鲁棒性测试").font(.callout)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .help("跑同公式 × N 个 seed · 看 PnL 分布判稳定性 vs lucky")
 
                 if let err = errorMessage {
                     Text(err)
@@ -701,8 +733,13 @@ public struct BacktestWindow: View {
     }
 
     private func makeBars() -> [BarData] {
+        makeBarsForSeed(seed: rngSeedStored)
+    }
+
+    /// v17.51 · 按 seed 生成 mock K 线（MonteCarloSheet 复用 · 解耦 RNG seed 来源）
+    fileprivate func makeBarsForSeed(seed: Int) -> [BarData] {
         let mode = TrajectoryMode(rawValue: trajectoryRaw) ?? .randomWalk
-        var rng = SeededRNG(seed: UInt64(max(1, rngSeedStored)))
+        var rng = SeededRNG(seed: UInt64(max(1, seed)))
         let dailyVol = volatility / sqrt(252.0)
         let drift: Double
         switch mode {
@@ -741,6 +778,19 @@ public struct BacktestWindow: View {
     }
 
     // MARK: - 历史保存（D5 cross-ref 入口）
+
+    /// v17.51 · 尝试 parse 主公式（鲁棒性测试入口前的预检 · 失败设置 errorMessage）
+    private func parseFormulaForMonteCarlo() -> Formula? {
+        do {
+            var lexer = Lexer(source: sourceText)
+            let tokens = try lexer.tokenize()
+            var parser = Parser(tokens: tokens)
+            return try parser.parse()
+        } catch {
+            errorMessage = "公式 parse 失败：\(error)"
+            return nil
+        }
+    }
 
     /// v17.49 · 导出历史 CSV（NSSavePanel · UTF-8 BOM · Excel 兼容）
     @MainActor

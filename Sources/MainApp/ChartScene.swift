@@ -2295,6 +2295,8 @@ struct ChartContentView: View {
     }()
     /// v13.20 拖分割条时的起始高度 · onChanged 累加 translation 算新高度
     @State var dragStartSubHeight: CGFloat?
+    /// v17.118 P1-2 · 用户是否拖过分割条 · false 时副图默认高跟 SubChartDefaultRatio 偏好实时同步；true 后走 subChartHeight.v1 持久化
+    @State private var hasUserDraggedSubHeight: Bool = (UserDefaults.standard.object(forKey: ChartContentView.subChartHeightKey) != nil)
     /// v13.10 anchor 拖动目标 · onChanged 第一次落 · 释放清空
     @State var anchorDragTarget: AnchorDragTarget?
     /// v13.10 拖动状态 · 距离 ≥ 4 像素 + anchor 命中后置 true · 释放时 false 视为 tap
@@ -2412,6 +2414,7 @@ struct ChartContentView: View {
                         if dragStartSubHeight == nil {
                             dragStartSubHeight = subChartTotalHeight
                         }
+                        hasUserDraggedSubHeight = true   // v17.118 · 用户首次拖即锁定 · 后续走 subChartHeight.v1 持久化
                         let base = dragStartSubHeight ?? subChartTotalHeight
                         let delta = -value.translation.height  // 向上拖 = 副图变高
                         let newHeight = base + delta
@@ -2507,7 +2510,19 @@ struct ChartContentView: View {
         }
         .onChange(of: subChartTotalHeight) { newValue in
             // v15.x · 副图高度 onChange 持久化（用户拖分割条改高度即时存）
+            // v17.118 P1-2 · 仅拖动产生才持久化 · sync-driven 默认值跟随偏好不写盘
+            guard hasUserDraggedSubHeight else { return }
             UserDefaults.standard.set(Double(newValue), forKey: ChartContentView.subChartHeightKey)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            // v17.118 P1-2 · 用户未拖过分割条时 · SubChartDefaultRatio 偏好变更实时重算副图默认高
+            guard !hasUserDraggedSubHeight else { return }
+            let ratio = ChartSettingsStore.loadSubChartDefaultRatio().ratio / SubChartDefaultRatio.normal.ratio
+            let scaled = SubChart.defaultHeight * ratio
+            let clamped = max(SubChart.minHeight, min(SubChart.maxHeight, scaled))
+            if abs(clamped - subChartTotalHeight) > 0.5 {
+                subChartTotalHeight = clamped
+            }
         }
         .onDisappear {
             // v15.16 hotfix #11：强制 flush 节流尾巴 · 防最后 1s 内拖动后停手切合约 viewport 不写盘

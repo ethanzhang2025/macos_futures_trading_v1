@@ -28,6 +28,13 @@ struct HeatmapWindow: View {
     @State private var showComboMarkers: Bool = true
     @Environment(\.openWindow) private var openWindow
 
+    /// v17.108 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.108 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+
     /// v15.76 · 全市场 combo 异常映射 by instrumentID（每帧重新计算 · ~1ms）
     /// 兼容 SectorPresets ID 格式（"RB0" 直接命中 · 与 SectorInstrument.id 一致）
     private var comboMap: [String: ComboAnomaly] {
@@ -79,6 +86,11 @@ struct HeatmapWindow: View {
             // v15.53 · 联动：切合约时高亮该 cell（保持原 sortMode · 不切板块）
             if let id = note.object as? String { highlightedID = id }
         }
+        // v17.108 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
+        }
     }
 
     // MARK: - Toolbar
@@ -115,11 +127,11 @@ struct HeatmapWindow: View {
             let comboCount = comboMap.count
             HStack(spacing: 18) {
                 Text("\(total.count) 品种").font(.caption.monospaced()).foregroundColor(.secondary)
-                Text("\(gainers) 涨").font(.caption.monospaced()).foregroundColor(ChartTheme.chartLoss)
-                Text("\(losers) 跌").font(.caption.monospaced()).foregroundColor(ChartTheme.chartProfit)
+                Text("\(gainers) 涨").font(.caption.monospaced()).foregroundColor(chartLoss)
+                Text("\(losers) 跌").font(.caption.monospaced()).foregroundColor(chartProfit)
                 Text(String(format: "均 %+.2f%%", avg))
                     .font(.caption.monospaced())
-                    .foregroundColor(avg >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                    .foregroundColor(avg >= 0 ? chartLoss : chartProfit)
                 if comboCount > 0 {
                     Label("\(comboCount) Combo", systemImage: "sparkles")
                         .font(.caption.monospaced())
@@ -163,8 +175,8 @@ struct HeatmapWindow: View {
 
     private func sectorSection(sector: Sector, instruments: [SectorInstrument]) -> some View {
         let stats = SectorStatisticsCalculator.compute(instruments, sector: sector)
-        let color: Color = stats.avgChangePct > 0.3 ? ChartTheme.chartLoss
-                         : (stats.avgChangePct < -0.3 ? ChartTheme.chartProfit : .secondary)
+        let color: Color = stats.avgChangePct > 0.3 ? chartLoss
+                         : (stats.avgChangePct < -0.3 ? chartProfit : .secondary)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: sector.icon).font(.caption.bold())
@@ -191,9 +203,9 @@ struct HeatmapWindow: View {
         let intensity = min(abs(inst.changePct) / 4.0, 1.0)
         let bgColor: Color
         if inst.changePct > 0.05 {
-            bgColor = ChartTheme.chartLoss.opacity(0.20 + 0.55 * intensity)
+            bgColor = chartLoss.opacity(0.20 + 0.55 * intensity)
         } else if inst.changePct < -0.05 {
-            bgColor = ChartTheme.chartProfit.opacity(0.20 + 0.55 * intensity)
+            bgColor = chartProfit.opacity(0.20 + 0.55 * intensity)
         } else {
             bgColor = Color.gray.opacity(0.15)
         }
@@ -202,7 +214,7 @@ struct HeatmapWindow: View {
         // v15.76 · combo 异常标记
         let combo = showComboMarkers ? comboMap[inst.id] : nil
         let comboColor: Color? = combo.map { c in
-            if c.kindCount >= 5 { return ChartTheme.chartLoss }
+            if c.kindCount >= 5 { return chartLoss }
             if c.kindCount == 4 { return .orange }
             return .yellow
         }
@@ -262,7 +274,7 @@ struct HeatmapWindow: View {
     /// v15.76 · combo 边框颜色（combo > highlighted > hovered > 透明）
     private func comboBorderColor(combo: ComboAnomaly?, isHighlighted: Bool, isHovered: Bool) -> Color {
         if let c = combo {
-            if c.kindCount >= 5 { return ChartTheme.chartLoss }
+            if c.kindCount >= 5 { return chartLoss }
             if c.kindCount == 4 { return .orange }
             return .yellow
         }
@@ -295,9 +307,9 @@ struct HeatmapWindow: View {
                 ForEach([-4.0, -2.5, -1.0, -0.3, 0.3, 1.0, 2.5, 4.0], id: \.self) { pct in
                     let intensity = min(abs(pct) / 4.0, 1.0)
                     let bg: Color = pct > 0
-                        ? ChartTheme.chartLoss.opacity(0.20 + 0.55 * intensity)
+                        ? chartLoss.opacity(0.20 + 0.55 * intensity)
                         : (pct < 0
-                           ? ChartTheme.chartProfit.opacity(0.20 + 0.55 * intensity)
+                           ? chartProfit.opacity(0.20 + 0.55 * intensity)
                            : Color.gray.opacity(0.15))
                     Rectangle()
                         .fill(bg)

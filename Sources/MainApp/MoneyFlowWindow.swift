@@ -30,6 +30,13 @@ struct MoneyFlowWindow: View {
     @State private var viewMode: ViewMode = .ranking
     @Environment(\.openWindow) private var openWindow
 
+    /// v17.108 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.108 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+
     enum SectorFilter: Hashable, Identifiable {
         case all
         case sector(Sector)
@@ -111,6 +118,11 @@ struct MoneyFlowWindow: View {
                 sectorFilter = .sector(sec)
             }
         }
+        // v17.108 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
+        }
     }
 
     // MARK: - Toolbar
@@ -174,19 +186,19 @@ struct MoneyFlowWindow: View {
         let outflowCount = r.filter { $0.netInflow < 0 }.count
         return AnyView(HStack(spacing: 22) {
             statBlock("品种", "\(r.count)", color: .secondary)
-            statBlock("流入", "\(inflowCount)", color: ChartTheme.chartLoss)
-            statBlock("流出", "\(outflowCount)", color: ChartTheme.chartProfit)
+            statBlock("流入", "\(inflowCount)", color: chartLoss)
+            statBlock("流出", "\(outflowCount)", color: chartProfit)
             Divider().frame(height: 28)
-            statBlock("总流入", String(format: "+%.1fM", totalInflow), color: ChartTheme.chartLoss)
-            statBlock("总流出", String(format: "-%.1fM", totalOutflow), color: ChartTheme.chartProfit)
+            statBlock("总流入", String(format: "+%.1fM", totalInflow), color: chartLoss)
+            statBlock("总流出", String(format: "-%.1fM", totalOutflow), color: chartProfit)
             statBlock("净额",
                      String(format: "%+.1fM", netTotal),
-                     color: netTotal >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                     color: netTotal >= 0 ? chartLoss : chartProfit)
             Divider().frame(height: 28)
             statBlock("市场态势",
                      netTotal > 50 ? "资金流入" : (netTotal < -50 ? "资金流出" : "平衡"),
-                     color: netTotal > 50 ? ChartTheme.chartLoss
-                          : (netTotal < -50 ? ChartTheme.chartProfit : .secondary))
+                     color: netTotal > 50 ? chartLoss
+                          : (netTotal < -50 ? chartProfit : .secondary))
             Spacer()
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
@@ -213,10 +225,10 @@ struct MoneyFlowWindow: View {
         )
         return HStack(spacing: 0) {
             rankingColumn(title: "🔴 净流入 TOP \(topN)", rows: topInflow,
-                          color: ChartTheme.chartLoss, maxAbs: maxAbs)
+                          color: chartLoss, maxAbs: maxAbs)
             Divider()
             rankingColumn(title: "🟢 净流出 TOP \(topN)", rows: topOutflow,
-                          color: ChartTheme.chartProfit, maxAbs: maxAbs)
+                          color: chartProfit, maxAbs: maxAbs)
         }
     }
 
@@ -263,7 +275,7 @@ struct MoneyFlowWindow: View {
                     .frame(width: 80, alignment: .leading)
                 Text(String(format: "%+.2f%%", inst.changePct))
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(inst.changePct >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                    .foregroundColor(inst.changePct >= 0 ? chartLoss : chartProfit)
                     .frame(width: 56, alignment: .trailing)
                 // bar
                 GeometryReader { geom in
@@ -309,7 +321,7 @@ struct MoneyFlowWindow: View {
     }
 
     private func comboBadgeColor(_ c: ComboAnomaly) -> Color {
-        if c.kindCount >= 5 { return ChartTheme.chartLoss }
+        if c.kindCount >= 5 { return chartLoss }
         if c.kindCount == 4 { return .orange }
         return .yellow
     }
@@ -351,7 +363,7 @@ struct MoneyFlowWindow: View {
     private func sectorBreakdownRow(sector: Sector, value: Double, maxAbs: Double,
                                     bySectorMap: [Sector: Double]) -> some View {
         let isPositive = value >= 0
-        let color: Color = isPositive ? ChartTheme.chartLoss : ChartTheme.chartProfit
+        let color: Color = isPositive ? chartLoss : chartProfit
         let barRatio = min(abs(value) / maxAbs, 1.0)
         let count = SectorPresets.instruments(in: sector).count
         return Button {
@@ -392,8 +404,8 @@ struct MoneyFlowWindow: View {
 
     private var legendBar: some View {
         HStack(spacing: 18) {
-            legendItem(color: ChartTheme.chartLoss, text: "净流入（资金推涨）")
-            legendItem(color: ChartTheme.chartProfit, text: "净流出（资金抽离）")
+            legendItem(color: chartLoss, text: "净流入（资金推涨）")
+            legendItem(color: chartProfit, text: "净流出（资金抽离）")
             Text("· 流入 = OI × changePct × 0.5（mock 公式）· 单位 M=百万元")
                 .font(.caption2).foregroundColor(.secondary)
             Spacer()

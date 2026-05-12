@@ -27,6 +27,13 @@ struct SectorWindow: View {
     @State private var sortDescending: Bool = true
     @Environment(\.openWindow) private var openWindow
 
+    /// v17.108 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.108 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+
     enum SortField: String, CaseIterable, Identifiable {
         case changePct, lastPrice, openInterest, name
         var id: String { rawValue }
@@ -78,6 +85,11 @@ struct SectorWindow: View {
                 selectedSector = sec
             }
         }
+        // v17.108 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
+        }
     }
 
     // MARK: - 顶部板块 Tab + 排序
@@ -121,8 +133,8 @@ struct SectorWindow: View {
         let stats = allSectorStats.first { $0.sector == sec }
         let avgChange = stats?.avgChangePct ?? 0
         let bgTint: Color
-        if avgChange > 0.5 { bgTint = ChartTheme.chartLoss.opacity(isSelected ? 0.40 : 0.10) }   // 中国习惯涨红
-        else if avgChange < -0.5 { bgTint = ChartTheme.chartProfit.opacity(isSelected ? 0.40 : 0.10) }
+        if avgChange > 0.5 { bgTint = chartLoss.opacity(isSelected ? 0.40 : 0.10) }   // 中国习惯涨红
+        else if avgChange < -0.5 { bgTint = chartProfit.opacity(isSelected ? 0.40 : 0.10) }
         else { bgTint = Color.gray.opacity(isSelected ? 0.30 : 0.08) }
         return Button {
             selectedSector = sec
@@ -133,7 +145,7 @@ struct SectorWindow: View {
                 if let s = stats {
                     Text(String(format: "%+.1f%%", s.avgChangePct))
                         .font(ChartTheme.fontHint)
-                        .foregroundColor(s.avgChangePct >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                        .foregroundColor(s.avgChangePct >= 0 ? chartLoss : chartProfit)
                 }
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
@@ -149,14 +161,14 @@ struct SectorWindow: View {
         let s = statistics
         return HStack(spacing: 22) {
             statBlock("品种", "\(s.totalCount)", color: .secondary)
-            statBlock("涨", "\(s.gainers)", color: ChartTheme.chartLoss)
-            statBlock("跌", "\(s.losers)", color: ChartTheme.chartProfit)
+            statBlock("涨", "\(s.gainers)", color: chartLoss)
+            statBlock("跌", "\(s.losers)", color: chartProfit)
             if s.unchanged > 0 {
                 statBlock("平", "\(s.unchanged)", color: .secondary)
             }
             statBlock("均涨幅",
                      String(format: "%+.2f%%", s.avgChangePct),
-                     color: s.avgChangePct >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                     color: s.avgChangePct >= 0 ? chartLoss : chartProfit)
             Divider().frame(height: 28)
             // 多空偏向进度条
             bullBiasBar(bias: s.bullBias)
@@ -164,12 +176,12 @@ struct SectorWindow: View {
             if let strong = s.strongest {
                 statBlockWide("龙头",
                               "\(strong.name) \(String(format: "%+.2f%%", strong.changePct))",
-                              color: ChartTheme.chartLoss)
+                              color: chartLoss)
             }
             if let weak = s.weakest, weak.id != s.strongest?.id {
                 statBlockWide("弱势",
                               "\(weak.name) \(String(format: "%+.2f%%", weak.changePct))",
-                              color: ChartTheme.chartProfit)
+                              color: chartProfit)
             }
             Spacer()
             statBlock("总持仓", String(format: "%.0fK", s.totalOpenInterestK), color: .secondary)
@@ -197,7 +209,7 @@ struct SectorWindow: View {
     private func bullBiasBar(bias: Double) -> some View {
         // bias ∈ [-1, +1] · 红涨绿跌
         let pct = (bias + 1) / 2  // 转 [0, 1]
-        let color: Color = bias > 0 ? ChartTheme.chartLoss : (bias < 0 ? ChartTheme.chartProfit : .secondary)
+        let color: Color = bias > 0 ? chartLoss : (bias < 0 ? chartProfit : .secondary)
         return VStack(alignment: .leading, spacing: 2) {
             Text("多空偏向").font(.caption2).foregroundColor(.secondary)
             HStack(spacing: 6) {
@@ -246,8 +258,8 @@ struct SectorWindow: View {
 
     private func instrumentRow(_ inst: SectorInstrument) -> some View {
         let priceStr = formatPrice(inst.lastPrice)
-        let changeColor: Color = inst.changePct > 0 ? ChartTheme.chartLoss
-                              : (inst.changePct < 0 ? ChartTheme.chartProfit : .secondary)
+        let changeColor: Color = inst.changePct > 0 ? chartLoss
+                              : (inst.changePct < 0 ? chartProfit : .secondary)
         return Button {
             // v15.46 · 点击 → 主图切合约（与 ⌘⌥H 热力图同机制）
             openWindow(id: "chart")
@@ -305,7 +317,7 @@ struct SectorWindow: View {
     }
 
     private func comboBadgeColor(_ c: ComboAnomaly) -> Color {
-        if c.kindCount >= 5 { return ChartTheme.chartLoss }
+        if c.kindCount >= 5 { return chartLoss }
         if c.kindCount == 4 { return .orange }
         return .yellow
     }
@@ -323,8 +335,8 @@ struct SectorWindow: View {
     private func rowBackground(for inst: SectorInstrument) -> Color {
         // 涨跌幅 > 2% 强烈染色 · 1-2% 弱染色 · 内换行视觉强弱
         let intensity = min(abs(inst.changePct) / 5.0, 1.0)
-        if inst.changePct > 1 { return ChartTheme.chartLoss.opacity(0.06 * intensity) }
-        if inst.changePct < -1 { return ChartTheme.chartProfit.opacity(0.06 * intensity) }
+        if inst.changePct > 1 { return chartLoss.opacity(0.06 * intensity) }
+        if inst.changePct < -1 { return chartProfit.opacity(0.06 * intensity) }
         return Color.clear
     }
 
@@ -349,8 +361,8 @@ struct SectorWindow: View {
     }
 
     private func miniSectorChip(stats: SectorStatistics) -> some View {
-        let color: Color = stats.avgChangePct > 0.3 ? ChartTheme.chartLoss
-                         : (stats.avgChangePct < -0.3 ? ChartTheme.chartProfit : .secondary)
+        let color: Color = stats.avgChangePct > 0.3 ? chartLoss
+                         : (stats.avgChangePct < -0.3 ? chartProfit : .secondary)
         let isSelected = stats.sector == selectedSector
         return Button {
             selectedSector = stats.sector

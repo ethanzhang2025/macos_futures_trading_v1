@@ -129,11 +129,46 @@ struct WatchlistWindow: View {
     @State private var groupSearchText: String = ""
 
     /// 解析 sortField · raw 不合法 fallback .manual（写入用 setSortField）
+    /// v17.131 · 全局 sortField 作为聚合视图 / 未设组的 fallback · 单组优先读 group 自己的 sortFieldRaw
     private var sortField: WatchlistSortField {
         WatchlistSortField(rawValue: sortFieldRaw) ?? .manual
     }
     private func setSortField(_ field: WatchlistSortField) {
         sortFieldRaw = field.rawValue
+    }
+
+    /// v17.131 · 当前 group 的 sortField · 未设回落全局
+    private func effectiveSortField(for group: Watchlist) -> WatchlistSortField {
+        if let raw = group.sortFieldRaw, let f = WatchlistSortField(rawValue: raw) {
+            return f
+        }
+        return sortField
+    }
+
+    /// v17.131 · 当前 group 的 sortAscending · 未设回落全局
+    private func effectiveSortAscending(for group: Watchlist) -> Bool {
+        group.sortAscending ?? sortAscending
+    }
+
+    /// v17.131 · 写排序规则 · 单组视图写到 group · 聚合视图（无 selectedGroupID）写全局
+    private func applySortField(_ field: WatchlistSortField, ascending: Bool? = nil) {
+        if let id = selectedGroupID, book.group(id: id) != nil {
+            let raw = field == .manual ? nil : field.rawValue
+            let asc = field == .manual ? nil : (ascending ?? false)
+            book.setGroupSort(id: id, sortFieldRaw: raw, sortAscending: asc)
+        } else {
+            sortFieldRaw = field.rawValue
+            sortAscending = ascending ?? false
+        }
+    }
+
+    /// v17.131 · 切升降序（单组写 group · 聚合视图写全局）
+    private func toggleSortAscending() {
+        if let id = selectedGroupID, let g = book.group(id: id), g.sortFieldRaw != nil {
+            book.setGroupSort(id: id, sortFieldRaw: g.sortFieldRaw, sortAscending: !(g.sortAscending ?? false))
+        } else {
+            sortAscending.toggle()
+        }
     }
 
     @Environment(\.openWindow) private var openWindow
@@ -939,51 +974,58 @@ struct WatchlistWindow: View {
     }
 
     /// v15.38 V2 · 排序字段下拉菜单（除了 columns header 已可点击的 4 字段，加 3 个新字段入口）
+    /// v17.131 · 写入当前 group 自身的 sortFieldRaw（聚合视图回落全局）
     private var sortFieldMenu: some View {
-        Menu {
+        // 当前生效的 sortField/ascending（per-group · fallback 全局）
+        let currentGroup = selectedGroupID.flatMap { book.group(id: $0) }
+        let activeField: WatchlistSortField = currentGroup.map { effectiveSortField(for: $0) } ?? sortField
+        let activeAsc: Bool = currentGroup.map { effectiveSortAscending(for: $0) } ?? sortAscending
+        return Menu {
             ForEach(WatchlistSortField.allCases, id: \.self) { field in
                 Button {
-                    if sortField == field {
-                        sortAscending.toggle()
+                    if activeField == field {
+                        toggleSortAscending()
                     } else {
-                        setSortField(field)
-                        sortAscending = false
+                        applySortField(field, ascending: false)
                     }
                 } label: {
                     HStack {
                         Text(field.displayName)
-                        if sortField == field {
-                            Image(systemName: sortAscending ? "arrow.up" : "arrow.down")
+                        if activeField == field {
+                            Image(systemName: activeAsc ? "arrow.up" : "arrow.down")
                         }
                     }
                 }
             }
         } label: {
-            Label(sortField.displayName, systemImage: "arrow.up.arrow.down")
+            Label(activeField.displayName, systemImage: "arrow.up.arrow.down")
                 .font(.system(size: 11 + chartFontSize.sizeDelta))
         }
         .menuStyle(.borderlessButton)
         .frame(width: 90)
-        .tooltip("按字段排序：包含成交量 / 涨跌 / 振幅 等扩展字段")
+        .tooltip("v17.131 · 每组独立排序 · 切换不影响其他组")
     }
 
     /// v15.20 batch59 · 可点击表头单元格（同字段切升降序 · 异字段切到该字段降序起）
+    /// v17.131 · 写入当前 group（聚合视图回落全局）
     private func sortableHeaderCell(_ title: String, field: WatchlistSortField, width: CGFloat, alignment: Alignment) -> some View {
-        let isActive = sortField == field
-        let arrow = isActive ? (sortAscending ? "↑" : "↓") : ""
+        let currentGroup = selectedGroupID.flatMap { book.group(id: $0) }
+        let activeField: WatchlistSortField = currentGroup.map { effectiveSortField(for: $0) } ?? sortField
+        let activeAsc: Bool = currentGroup.map { effectiveSortAscending(for: $0) } ?? sortAscending
+        let isActive = activeField == field
+        let arrow = isActive ? (activeAsc ? "↑" : "↓") : ""
         return Text("\(title)\(arrow)")
             .frame(width: width, alignment: alignment)
             .foregroundColor(isActive ? .accentColor : .secondary)
             .contentShape(Rectangle())
             .onTapGesture {
                 if isActive {
-                    sortAscending.toggle()
+                    toggleSortAscending()
                 } else {
-                    setSortField(field)
-                    sortAscending = false   // 默认降序（涨幅榜从高到低）
+                    applySortField(field, ascending: false)   // 默认降序（涨幅榜从高到低）
                 }
             }
-            .tooltip("点击按\(title)排序 · 再点切升降序 · 拖拽行自动切回手动")
+            .tooltip("点击按\(title)排序 · 再点切升降序 · 拖拽行自动切回手动（v17.131 · 每组独立）")
     }
 
     /// v15.20 batch59 · 按 sortField + sortAscending 排序合约 ID（v15.38 V2 加 filter preset + 分组搜索）
@@ -996,16 +1038,21 @@ struct WatchlistWindow: View {
             changePctForID: currentChangePct,
             volumeForID: currentVolume
         )
+        // v17.131 · 每组独立排序（fallback 全局）
+        let f = effectiveSortField(for: group)
+        let a = effectiveSortAscending(for: group)
         return WatchlistSorter.sort(
             ids: filtered,
-            field: sortField,
-            ascending: sortAscending,
-            keyForID: keyForInstrument
+            field: f,
+            ascending: a,
+            keyForID: { keyForInstrument($0, field: f) }
         )
     }
 
     /// v15.20 batch59 · 数值字段 closure（v15.38 V2 扩展 volume/change/amplitude）
-    private func keyForInstrument(_ id: String) -> Double? {
+    /// v17.131 · field 改为参数（per-group 排序时由 sortedInstrumentIDs 传入）
+    private func keyForInstrument(_ id: String, field: WatchlistSortField? = nil) -> Double? {
+        let sortField = field ?? self.sortField
         switch sortField {
         case .lastPrice:
             return quotes[id].map { NSDecimalNumber(decimal: $0.lastPrice).doubleValue }
@@ -1507,7 +1554,10 @@ struct WatchlistWindow: View {
     private func moveInstrumentToSlot(_ ref: WatchlistInstrumentRef, targetGroupID: UUID, targetIndex: Int) -> Bool {
         defer { clearHover() }
         // v15.20 batch59 · 用户拖拽重排 → 自动切回 .manual（否则 sort 会立刻覆盖拖拽结果）
-        if sortField != .manual { setSortField(.manual) }
+        // v17.131 · 切回写到目标 group（per-group · 不再改全局）
+        if let g = book.group(id: targetGroupID), effectiveSortField(for: g) != .manual {
+            book.setGroupSort(id: targetGroupID, sortFieldRaw: nil, sortAscending: nil)
+        }
         if ref.sourceGroupID == targetGroupID {
             guard let group = book.group(id: targetGroupID),
                   let from = group.instrumentIDs.firstIndex(of: ref.instrumentID),

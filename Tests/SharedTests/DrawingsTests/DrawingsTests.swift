@@ -11,7 +11,7 @@ private func point(_ bar: Int, _ price: Int) -> DrawingPoint {
 
 @Suite("Drawing 创建与类型契约")
 struct DrawingFactoryTests {
-    @Test("22 种 factory 类型正确（v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 · v17.17 斐波弧 · v17.18 斐波通道 补齐）")
+    @Test("27 种 factory 类型正确（v17.126-128 加江恩 3 + 艾略特 2 · 22 → 27）")
     func factoryTypes() {
         #expect(Drawing.trendLine(from: point(0, 100), to: point(10, 110)).type == .trendLine)
         #expect(Drawing.horizontalLine(price: 100).type == .horizontalLine)
@@ -54,14 +54,14 @@ struct DrawingFactoryTests {
         #expect(pentagon?.extraPoints?.count == 4)
     }
 
-    @Test("pointsNeeded 契约（22 类全覆盖 · v17.18 补齐 · 1/2/3/0 点）")
+    @Test("pointsNeeded 契约（27 类全覆盖 · v17.128 加江恩 3 + 艾略特 2）")
     func pointsNeededContract() {
         // 1 点（v17.8 加 verticalLine · v17.15 加 priceLabel）
         #expect(DrawingType.horizontalLine.pointsNeeded == 1)
         #expect(DrawingType.verticalLine.pointsNeeded == 1)
         #expect(DrawingType.priceLabel.pointsNeeded == 1)
         #expect(DrawingType.text.pointsNeeded == 1)
-        // 2 点（v1 + v13.13/14 + v15.87/88/89/90 + v17.10 ray + v17.11 channel + v17.14 arrow）
+        // 2 点（v1 + v13.13/14 + v15.87/88/89/90 + v17.10 ray + v17.11 channel + v17.14 arrow + v17.126 江恩 angle/square + v17.127 江恩 box）
         #expect(DrawingType.trendLine.pointsNeeded == 2)
         #expect(DrawingType.ray.pointsNeeded == 2)
         #expect(DrawingType.arrow.pointsNeeded == 2)
@@ -78,13 +78,20 @@ struct DrawingFactoryTests {
         #expect(DrawingType.priceZone.pointsNeeded == 2)
         #expect(DrawingType.gannFan.pointsNeeded == 2)
         #expect(DrawingType.fibonacciTimeZone.pointsNeeded == 2)
+        #expect(DrawingType.gannAngle.pointsNeeded == 2)     // v17.126
+        #expect(DrawingType.gannSquare.pointsNeeded == 2)    // v17.126
+        #expect(DrawingType.gannBox.pointsNeeded == 2)       // v17.127
         // 3 点
         #expect(DrawingType.pitchfork.pointsNeeded == 3)
+        // 4 点（v17.128 · 艾略特 ABC 调整浪）
+        #expect(DrawingType.elliottCorrection.pointsNeeded == 4)
+        // 6 点（v17.128 · 艾略特 5 浪冲击波）
+        #expect(DrawingType.elliottImpulse.pointsNeeded == 6)
         // 0 = 动态点数（多边形 · 用户主动触发完成）
         #expect(DrawingType.polygon.pointsNeeded == 0)
 
         // 全覆盖防漏 · 加新 case 但忘记加 pointsNeeded 时此测试会失败
-        let coveredCount = 4 + 16 + 1 + 1  // 1 点 4 + 2 点 16 + 3 点 1 + 0 点 1
+        let coveredCount = 4 + 19 + 1 + 1 + 1 + 1  // 1 点 4 + 2 点 19 + 3 点 1 + 4 点 1 + 6 点 1 + 0 点 1
         #expect(coveredCount == DrawingType.allCases.count)
 
         // needsTwoPoints 兼容入口（pointsNeeded == 2）
@@ -113,7 +120,7 @@ struct DrawingFactoryTests {
 
 @Suite("Drawing Codable 往返")
 struct DrawingCodableTests {
-    @Test("22 种序列化 + 反序列化等价（v17.18 fibonacciChannel 补齐）")
+    @Test("27 种序列化 + 反序列化等价（v17.128 加江恩 3 + 艾略特 2）")
     func roundTrip() throws {
         let drawings: [Drawing] = [
             Drawing.trendLine(from: point(0, 100), to: point(10, 120)),
@@ -137,7 +144,20 @@ struct DrawingCodableTests {
             Drawing.fibonacciFan(from: point(0, 100), to: point(10, 200)),
             Drawing.priceZone(from: point(0, 110), to: point(0, 100)),
             Drawing.gannFan(from: point(0, 100), to: point(10, 200)),
-            Drawing.fibonacciTimeZone(from: point(0, 100), to: point(10, 100))
+            Drawing.fibonacciTimeZone(from: point(0, 100), to: point(10, 100)),
+            // v17.126
+            Drawing.gannAngle(from: point(0, 100), to: point(10, 110)),
+            Drawing.gannSquare(from: point(0, 100), to: point(10, 120)),
+            // v17.127
+            Drawing.gannBox(from: point(0, 100), to: point(10, 120)),
+            // v17.128 · 艾略特 5 浪 + ABC 浪
+            Drawing.elliottImpulse(points: [
+                point(0, 100), point(2, 110), point(4, 105),
+                point(6, 120), point(8, 115), point(10, 130)
+            ])!,
+            Drawing.elliottCorrection(points: [
+                point(10, 130), point(12, 120), point(14, 125), point(16, 115)
+            ])!
         ]
         #expect(drawings.count == DrawingType.allCases.count, "Codable 往返应覆盖全部 \(DrawingType.allCases.count) 种 DrawingType")
         let encoder = JSONEncoder()

@@ -22,6 +22,10 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
     public var deletedAt: Date?
     /// v17.36 C1 · 分组颜色索引（0~7 · nil = 默认 accent）· 向后兼容旧 JSON decodeIfPresent
     public var colorIndex: Int?
+    /// v17.131 · 分组独立排序字段 raw（nil = 用全局默认 .manual）· 向后兼容旧 JSON
+    public var sortFieldRaw: String?
+    /// v17.131 · 分组独立排序升降序（nil = 用全局默认 false 降序）· 向后兼容旧 JSON
+    public var sortAscending: Bool?
 
     public init(
         id: UUID = UUID(),
@@ -32,7 +36,9 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         updatedAt: Date = Date(),
         version: Int = 1,
         deletedAt: Date? = nil,
-        colorIndex: Int? = nil
+        colorIndex: Int? = nil,
+        sortFieldRaw: String? = nil,
+        sortAscending: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -43,6 +49,8 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         self.version = version
         self.deletedAt = deletedAt
         self.colorIndex = colorIndex
+        self.sortFieldRaw = sortFieldRaw
+        self.sortAscending = sortAscending
     }
 
     /// 空分组工厂
@@ -55,6 +63,7 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case id, name, sortIndex, instrumentIDs, createdAt, updatedAt, version, deletedAt
         case colorIndex
+        case sortFieldRaw, sortAscending   // v17.131
     }
 
     public init(from decoder: Decoder) throws {
@@ -68,6 +77,8 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         self.version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
         self.deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         self.colorIndex = try c.decodeIfPresent(Int.self, forKey: .colorIndex)
+        self.sortFieldRaw = try c.decodeIfPresent(String.self, forKey: .sortFieldRaw)
+        self.sortAscending = try c.decodeIfPresent(Bool.self, forKey: .sortAscending)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -81,6 +92,8 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         try c.encode(version, forKey: .version)
         try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
         try c.encodeIfPresent(colorIndex, forKey: .colorIndex)
+        try c.encodeIfPresent(sortFieldRaw, forKey: .sortFieldRaw)
+        try c.encodeIfPresent(sortAscending, forKey: .sortAscending)
     }
 }
 
@@ -132,6 +145,23 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
         guard let index = groups.firstIndex(where: { $0.id == id }) else { return false }
         guard groups[index].colorIndex != colorIndex else { return true }
         groups[index].colorIndex = colorIndex
+        groups[index].updatedAt = now
+        groups[index].version += 1
+        return true
+    }
+
+    /// v17.131 · 设置分组独立排序规则（每组独立 · 不同组可用不同字段/升降序）
+    /// - Parameters:
+    ///   - sortFieldRaw: WatchlistSortField rawValue · nil 恢复默认 .manual
+    ///   - sortAscending: 升降序 · nil 视为 false（降序）
+    /// - Returns: 是否成功（false 表示分组不存在）
+    @discardableResult
+    public mutating func setGroupSort(id: UUID, sortFieldRaw: String?, sortAscending: Bool?, now: Date = Date()) -> Bool {
+        guard let index = groups.firstIndex(where: { $0.id == id }) else { return false }
+        let changed = groups[index].sortFieldRaw != sortFieldRaw || groups[index].sortAscending != sortAscending
+        guard changed else { return true }
+        groups[index].sortFieldRaw = sortFieldRaw
+        groups[index].sortAscending = sortAscending
         groups[index].updatedAt = now
         groups[index].version += 1
         return true

@@ -193,12 +193,13 @@ public final class ShellViewModel: ObservableObject {
     }
 
     /// restore 时筛除已不存在的 paneID（用户可能在重启前删除 pane）· 返回有效 paneID 列表
+    /// v17.75 simplifier · valid.map(\.uuidString) 已是去脏后的最终字符串列表 · 直接赋值
     public func validDetachedPaneIDsForRestore() -> [UUID] {
         let allPaneIDs = Set(workspaces.flatMap { $0.panes.map(\.id) })
         let valid = detachedPaneIDStrings.compactMap { UUID(uuidString: $0) }.filter { allPaneIDs.contains($0) }
-        let validStrings = Set(valid.map(\.uuidString))
-        if validStrings.count != detachedPaneIDStrings.count {
-            detachedPaneIDStrings = detachedPaneIDStrings.filter { validStrings.contains($0) }
+        let cleaned = valid.map(\.uuidString)
+        if cleaned.count != detachedPaneIDStrings.count {
+            detachedPaneIDStrings = cleaned
         }
         return valid
     }
@@ -475,10 +476,10 @@ public final class ShellViewModel: ObservableObject {
     }
 
     /// v17.71 · 设定 Pane 周期（PaneHeader inline picker · 同 group 广播 · 与 cyclePeriodOnActivePane 共享广播逻辑）
+    /// v17.75 simplifier · 单边写路径：有 group 走广播分支（覆盖自己）· 无 group 才单点写
     public func setPanePeriod(paneID: UUID, periodRaw: String) {
         guard let wsIdx = workspaces.firstIndex(where: { ws in ws.panes.contains { $0.id == paneID } }),
               let paneIdx = workspaces[wsIdx].panes.firstIndex(where: { $0.id == paneID }) else { return }
-        workspaces[wsIdx].panes[paneIdx].periodRaw = periodRaw
         if let color = workspaces[wsIdx].panes[paneIdx].groupColor {
             groupBindings[color]?.periodRaw = periodRaw
             for wIdx in workspaces.indices {
@@ -487,6 +488,8 @@ public final class ShellViewModel: ObservableObject {
                     workspaces[wIdx].panes[pIdx].periodRaw = periodRaw
                 }
             }
+        } else {
+            workspaces[wsIdx].panes[paneIdx].periodRaw = periodRaw
         }
         persistWorkspaces()
     }

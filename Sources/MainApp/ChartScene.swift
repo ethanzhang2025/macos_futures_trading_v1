@@ -2666,10 +2666,26 @@ struct ChartContentView: View {
                 .keyboardShortcut("p", modifiers: [.command])
             Button("") { copyChartScreenshotToClipboard() }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+            // v17.138 · 时间范围预设 ⌘⌥1-6 = 1D/1W/1M/3M/6M/1Y（trader 复盘 / 回顾常用范围）
+            ForEach(Array(ChartTimeRangePreset.allCases.enumerated()), id: \.element) { idx, preset in
+                Button("") { applyTimeRangePreset(preset) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(idx + 1)")), modifiers: [.command, .option])
+            }
         }
         .frame(width: 0, height: 0)
         .opacity(0)
         .accessibilityHidden(true)
+    }
+
+    /// v17.138 · 切到指定时间范围 · viewport startIndex = bars.count - barCount · visibleCount = barCount · clamp 防越界
+    private func applyTimeRangePreset(_ preset: ChartTimeRangePreset) {
+        guard !bars.isEmpty, let period = bars.first?.period else { return }
+        inertiaTask?.cancel()
+        let want = preset.barCount(for: period)
+        let visibleCount = min(want, bars.count)
+        let startIndex = max(0, bars.count - visibleCount)
+        viewport = clamp(RenderViewport(startIndex: startIndex, visibleCount: visibleCount))
+        presentToggleNotice("时间范围：\(preset.displayName)（\(visibleCount) 根）")
     }
 
     /// v15.33 WP-40 P1 · session/day 缺口（基于 bars 时间戳差自动检测 · daily 周期返空）

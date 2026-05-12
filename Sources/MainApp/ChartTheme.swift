@@ -159,15 +159,51 @@ extension ChartTheme {
 
     // MARK: 涨跌 / 盈亏色（语义复用 candle）
 
-    /// 盈利（与中国习惯涨红一致 · 用 .green 是因为 PnL 上下文是国际惯例）
+    /// 盈利（默认 .green · 国际惯例 · 兼容老 caller · 新代码请用 chartProfitColor(mode:) 跟 CandleColorMode）
     static let chartProfit = Color.green
-    /// 亏损
+    /// 亏损（默认 .red · 国际惯例 · 兼容老 caller · 新代码请用 chartLossColor(mode:) 跟 CandleColorMode）
     static let chartLoss = Color.red
     /// 盈亏分段过渡（PnL 跨 0 段 · 黄）
     static let chartTransition = Color.yellow
-    /// 突出盈利（信号 entry/exit 等高亮）
+    /// 突出盈利（信号 entry/exit 等高亮 · 默认 · 新代码请用 chartProfitEmphasizedColor(mode:)）
     static let chartProfitEmphasized = Color.green.opacity(0.85)
     static let chartLossEmphasized = Color.red.opacity(0.85)
+
+    // v17.105 · PnL 盈亏色按 CandleColorMode swap（trader 视觉一致性）
+    //
+    // 历史问题：chartProfit/Loss 写死 green/red（国际惯例），与 K 线 candleUp/Down 不一致：
+    //   - 用户选「涨绿跌红」（greenUp · 国际）→ candle 涨绿 + PnL 涨绿 ✅ 一致
+    //   - 用户选「涨红跌绿」（redUp · 中国）  → candle 涨红 + PnL 还是涨绿 ❌ 不一致
+    //
+    // 修正：PnL 语义 = "赚 / 亏"，方向跟 K 线"涨 / 跌"一致更直觉。
+    //   - redUpGreenDown（中国）：profit=red（涨红=赚），loss=green
+    //   - greenUpRedDown（国际）：profit=green，loss=red
+
+    /// 盈利色（按 CandleColorMode swap · v17.105）
+    static func chartProfitColor(mode: CandleColorMode) -> Color {
+        switch mode {
+        case .redUpGreenDown: return Color.red       // 中国：涨红=赚=红
+        case .greenUpRedDown: return Color.green     // 国际：涨绿=赚=绿
+        }
+    }
+
+    /// 亏损色（按 CandleColorMode swap · v17.105）
+    static func chartLossColor(mode: CandleColorMode) -> Color {
+        switch mode {
+        case .redUpGreenDown: return Color.green     // 中国：跌绿=亏=绿
+        case .greenUpRedDown: return Color.red       // 国际：跌红=亏=红
+        }
+    }
+
+    /// 突出盈利色（hover/信号高亮用 · 0.85 alpha · v17.105）
+    static func chartProfitEmphasizedColor(mode: CandleColorMode) -> Color {
+        chartProfitColor(mode: mode).opacity(0.85)
+    }
+
+    /// 突出亏损色（hover/信号高亮用 · 0.85 alpha · v17.105）
+    static func chartLossEmphasizedColor(mode: CandleColorMode) -> Color {
+        chartLossColor(mode: mode).opacity(0.85)
+    }
 
     // MARK: tooltip 风格（hover 4 图 · 主图 KLineCrosshairView 同款）
 

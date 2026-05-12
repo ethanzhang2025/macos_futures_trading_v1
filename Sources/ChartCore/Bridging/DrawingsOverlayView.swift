@@ -148,6 +148,7 @@ public struct DrawingsOverlayView: View {
         case .fibonacciTimeZone:drawFibonacciTimeZone(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .gannAngle:        drawGannAngle(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .gannSquare:       drawGannSquare(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .gannBox:          drawGannBox(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         }
 
         if isSelected, !isPending {
@@ -497,6 +498,36 @@ public struct DrawingsOverlayView: View {
         ctx.draw(label, at: CGPoint(x: rayEnd.x - 14, y: rayEnd.y - 6))
     }
 
+    /// v17.127 · 江恩盒 · 两点定对角矩形 · 矩形 + 内部 5×5 等分网格（4 横 + 4 竖）+ 2 对角线 · 江恩派 time-price 分析核心框架
+    private func drawGannBox(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let a = CGPoint(x: xForBar(d.startPoint.barIndex, size: size), y: yForPrice(d.startPoint.price, size: size))
+        let b = CGPoint(x: xForBar(end.barIndex, size: size), y: yForPrice(end.price, size: size))
+        let xMin = min(a.x, b.x), xMax = max(a.x, b.x)
+        let yMin = min(a.y, b.y), yMax = max(a.y, b.y)
+        let rect = CGRect(x: xMin, y: yMin, width: xMax - xMin, height: yMax - yMin)
+        // 外框
+        ctx.stroke(Path(rect), with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+        // 内部 5×5 均分线（1/5 ~ 4/5）
+        var gridPath = Path()
+        for k in 1...4 {
+            let x = xMin + (xMax - xMin) * CGFloat(k) / 5
+            let y = yMin + (yMax - yMin) * CGFloat(k) / 5
+            gridPath.move(to: CGPoint(x: x, y: yMin))
+            gridPath.addLine(to: CGPoint(x: x, y: yMax))
+            gridPath.move(to: CGPoint(x: xMin, y: y))
+            gridPath.addLine(to: CGPoint(x: xMax, y: y))
+        }
+        ctx.stroke(gridPath, with: .color(color.opacity(0.45 * opacity)), style: StrokeStyle(lineWidth: width * 0.6, dash: dash))
+        // 2 对角线（trader 看 time × price 角度）
+        var diagPath = Path()
+        diagPath.move(to: CGPoint(x: xMin, y: yMin))
+        diagPath.addLine(to: CGPoint(x: xMax, y: yMax))
+        diagPath.move(to: CGPoint(x: xMin, y: yMax))
+        diagPath.addLine(to: CGPoint(x: xMax, y: yMin))
+        ctx.stroke(diagPath, with: .color(color.opacity(0.75 * opacity)), style: StrokeStyle(lineWidth: width * 0.8, dash: dash))
+    }
+
     /// v17.126 · 江恩九方 · 两点定对角矩形 · 矩形边 + 内部 2 横 + 2 竖（1/3, 2/3）= 3×3 网格 · time×price 均分
     private func drawGannSquare(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
         guard let end = d.endPoint else { return }
@@ -751,6 +782,7 @@ public struct DrawingsOverlayView: View {
         case .fibonacciTimeZone: return Color(red: 0.65, green: 0.55, blue: 0.95)  // 紫罗兰（v15.90 · 时间维度 fib）
         case .gannAngle:       return Color(red: 0.30, green: 0.75, blue: 0.95)  // 天蓝（v17.126 · 江恩系 · 较 gannFan 靛蓝更亮 · 单角度醒目）
         case .gannSquare:      return Color(red: 0.55, green: 0.70, blue: 0.85)  // 雾蓝（v17.126 · 江恩系 · 网格类用较冷低饱和度 · 不抢矩形/通道）
+        case .gannBox:         return Color(red: 0.45, green: 0.65, blue: 0.90)  // 钢蓝（v17.127 · 江恩系 · gannSquare 与 gannFan 之间 · 5×5 分析核心）
         }
     }
 

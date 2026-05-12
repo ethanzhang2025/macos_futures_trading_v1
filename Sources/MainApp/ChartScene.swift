@@ -102,6 +102,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .fibonacciTimeZone: return "斐波那契时间区"
     case .gannAngle:         return "江恩 1×1 角度线"
     case .gannSquare:        return "江恩九方"
+    case .gannBox:           return "江恩盒"
     }
 }
 
@@ -995,6 +996,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "fanblades", tool: .gannFan, help: "江恩扇形（双点定 1×1 · 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）")
             drawingToolButton(icon: "arrow.up.right.square", tool: .gannAngle, help: "江恩 1×1 角度线（双点定 1×1 单位 · 单角度射线 · gannFan 简洁单线版）")
             drawingToolButton(icon: "square.grid.3x3", tool: .gannSquare, help: "江恩九方（双点定对角 · 内部 3×3 网格均分 · time × price 等分分析）")
+            drawingToolButton(icon: "rectangle.grid.2x2", tool: .gannBox, help: "江恩盒（双点定对角 · 内部 5×5 time/price 等分 + 对角线 · 江恩派 time-price 分析框架）")
             toolGroupDivider
             // 第 4 组：测量 / Pitchfork / 多边形
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
@@ -1325,6 +1327,7 @@ struct ChartScene: View {
         case .gannFan:          return .channel
         case .gannAngle:        return .channel
         case .gannSquare:       return .keyLevel
+        case .gannBox:          return .keyLevel
         case .fibonacciTimeZone:return .channel
         case .priceZone:        return .keyLevel
         case .text:             return .annotation
@@ -4520,6 +4523,32 @@ struct ChartContentView: View {
                 minD = min(minD, Self.pointToSegmentDistance(p, CGPoint(x: xMin, y: y), CGPoint(x: xMax, y: y)))
             }
             return minD
+
+        case .gannBox:
+            // v17.127 · 江恩盒 · 矩形 + 内部 5×5 网格（4 横 + 4 竖）+ 对角线 · 任意一条线最近距离
+            guard let end = drawing.endPoint else { return .infinity }
+            let a = screenPoint(drawing.startPoint)
+            let b = screenPoint(end)
+            let xMin = min(a.x, b.x), xMax = max(a.x, b.x)
+            let yMin = min(a.y, b.y), yMax = max(a.y, b.y)
+            var minD: CGFloat = .infinity
+            // 矩形 4 边
+            let corners = [(xMin, yMin), (xMax, yMin), (xMax, yMax), (xMin, yMax)]
+            for i in 0..<4 {
+                let s = CGPoint(x: corners[i].0, y: corners[i].1)
+                let e = CGPoint(x: corners[(i + 1) % 4].0, y: corners[(i + 1) % 4].1)
+                minD = min(minD, Self.pointToSegmentDistance(p, s, e))
+            }
+            // 内部 4 横 + 4 竖（1/5, 2/5, 3/5, 4/5）+ 2 对角线
+            for k in 1...4 {
+                let x = xMin + (xMax - xMin) * CGFloat(k) / 5
+                let y = yMin + (yMax - yMin) * CGFloat(k) / 5
+                minD = min(minD, Self.pointToSegmentDistance(p, CGPoint(x: x, y: yMin), CGPoint(x: x, y: yMax)))
+                minD = min(minD, Self.pointToSegmentDistance(p, CGPoint(x: xMin, y: y), CGPoint(x: xMax, y: y)))
+            }
+            minD = min(minD, Self.pointToSegmentDistance(p, CGPoint(x: xMin, y: yMin), CGPoint(x: xMax, y: yMax)))
+            minD = min(minD, Self.pointToSegmentDistance(p, CGPoint(x: xMin, y: yMax), CGPoint(x: xMax, y: yMin)))
+            return minD
         }
     }
 
@@ -4566,6 +4595,8 @@ struct ChartContentView: View {
             return Drawing.gannAngle(from: firstPoint, to: hoverPoint)
         case .gannSquare:
             return Drawing.gannSquare(from: firstPoint, to: hoverPoint)
+        case .gannBox:
+            return Drawing.gannBox(from: firstPoint, to: hoverPoint)
         case .fibonacciTimeZone:
             return Drawing.fibonacciTimeZone(from: firstPoint, to: hoverPoint)
         case .rectangle:

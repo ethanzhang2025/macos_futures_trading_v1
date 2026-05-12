@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 · v15.89 江恩扇形 · v15.90 斐波那契时间区 · v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 · v17.17 斐波弧 · v17.18 斐波通道 · v17.126 江恩单角度线 / 江恩九方 = 24 种
+/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 · v15.89 江恩扇形 · v15.90 斐波那契时间区 · v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 · v17.17 斐波弧 · v17.18 斐波通道 · v17.126 江恩单角度线 / 江恩九方 · v17.127 江恩盒 = 25 种
 public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case trendLine          // 趋势线（两点）
     case horizontalLine     // 水平线（单点价格）
@@ -30,12 +30,13 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case fibonacciTimeZone  // 斐波那契时间区（v15.90 · 两点定 1 fib 时间间隔 · 8 条全图垂直线 F1/F2/F3/F5/F8/F13/F21/F34）
     case gannAngle          // 江恩 1×1 单角度线（v17.126 · 两点定 1×1 单位 · 仅画 1×1 主角度延伸射线 · 比 gannFan 简洁单线版）
     case gannSquare         // 江恩九方（v17.126 · 两点定对角矩形 · 内部 3×3 网格 = 2 条横线 + 2 条竖线均分）
+    case gannBox            // 江恩盒（v17.127 · 两点定对角矩形 · 内部时间 5 等分 + 价格 5 等分 + 对角线 = 时间×价格 5×5 框架 · 江恩派核心 time-price 分析框架）
 
     /// 完成画线所需的点数 · v13.31 polygon 用 0 表示动态（用户主动触发完成）
     public var pointsNeeded: Int {
         switch self {
         case .horizontalLine, .verticalLine, .priceLabel, .text: return 1
-        case .trendLine, .ray, .arrow, .rectangle, .parallelChannel, .channel, .fibonacci, .fibonacciExtension, .fibonacciArc, .fibonacciChannel, .fibonacciFan, .ellipse, .ruler, .priceZone, .gannFan, .fibonacciTimeZone, .gannAngle, .gannSquare: return 2
+        case .trendLine, .ray, .arrow, .rectangle, .parallelChannel, .channel, .fibonacci, .fibonacciExtension, .fibonacciArc, .fibonacciChannel, .fibonacciFan, .ellipse, .ruler, .priceZone, .gannFan, .fibonacciTimeZone, .gannAngle, .gannSquare, .gannBox: return 2
         case .pitchfork: return 3
         case .polygon: return 0  // 0 = 动态点数 · 用户点 N 次后主动触发完成
         }
@@ -266,5 +267,10 @@ extension Drawing {
     /// 江恩九方（v17.126 · 两点定对角矩形 · 内部 3×3 网格 = 2 条横 + 2 条竖均分线 · time × price 等分分析）
     public static func gannSquare(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
         Drawing(type: .gannSquare, startPoint: start, endPoint: end)
+    }
+
+    /// 江恩盒（v17.127 · 两点定对角矩形 · 内部 5×5 时间/价格等分 + 对角线 · 江恩派 time-price 分析框架）
+    public static func gannBox(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
+        Drawing(type: .gannBox, startPoint: start, endPoint: end)
     }
 }

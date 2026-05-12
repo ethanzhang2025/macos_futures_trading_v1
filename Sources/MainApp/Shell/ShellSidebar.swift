@@ -27,6 +27,12 @@ struct ShellSidebar: View {
     /// v17.70 · 预警历史最近 5 条（启动 + UserDefaults didChange 刷新）
     @State private var recentAlerts: [AlertHistoryEntry] = []
 
+    /// v17.88 · 异动 top 5 缓存（Timer 30s 刷新 · 显示扫描时间）
+    @State private var topAnomaliesCache: [AnomalyEvent] = []
+    @State private var lastAnomalyScanAt: Date = Date()
+    /// Timer publisher · 30s 一次触发 anomaly 重新扫描（trader 看"系统活着"）
+    private let anomalyTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
     var body: some View {
         List {
             ForEach(sidebarLayout.visibleSections, id: \.self) { sec in
@@ -64,6 +70,19 @@ struct ShellSidebar: View {
         .task {
             await refreshAlertsAsync()
         }
+        // v17.88 · 启动时扫一次 + Timer 30s tick
+        .onAppear {
+            refreshAnomalies()
+        }
+        .onReceive(anomalyTimer) { _ in
+            refreshAnomalies()
+        }
+    }
+
+    private func refreshAnomalies() {
+        let result = AnomalyDetector.scan()
+        topAnomaliesCache = Array(result.events.prefix(5))
+        lastAnomalyScanAt = Date()
     }
 
     @ViewBuilder
@@ -252,16 +271,11 @@ struct ShellSidebar: View {
         await MainActor.run { recentAlerts = top }
     }
 
-    // MARK: - 异动（v17.82 · 接 AnomalyDetector 真扫描 · top 5 severity desc · 点击切主图）
-
-    private var topAnomalies: [AnomalyEvent] {
-        let result = AnomalyDetector.scan()
-        return Array(result.events.prefix(5))
-    }
+    // MARK: - 异动（v17.82 · 接 AnomalyDetector 真扫描 · v17.88 Timer 30s 刷新）
 
     private var anomalySection: some View {
         Section {
-            let evts = topAnomalies
+            let evts = topAnomaliesCache
             if evts.isEmpty {
                 Text("无异常 · 全市场平稳").font(.caption).foregroundColor(.secondary)
             } else {
@@ -301,9 +315,26 @@ struct ShellSidebar: View {
                 }
             }
         } header: {
-            Label("异动 (\(topAnomalies.count))", systemImage: "exclamationmark.triangle.fill")
-                .foregroundColor(.orange)
+            HStack(spacing: 4) {
+                Label("异动 (\(topAnomaliesCache.count))", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                Spacer()
+                // v17.88 · 显示距离上次扫描的时间（trader 看"系统活着"）
+                Text(Self.anomalyTimeAgo(from: lastAnomalyScanAt))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
         }
+    }
+
+    /// 显示 "刚刚 / 30s 前 / 2m 前" · 与 Timer 30s tick 配套
+    private static func anomalyTimeAgo(from date: Date) -> String {
+        let seconds = Int(Date().timeIntervalSince(date))
+        if seconds < 5 { return "刚刚" }
+        if seconds < 60 { return "\(seconds)s 前" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m 前" }
+        return "\(minutes / 60)h 前"
     }
 
     private static func anomalyKindColor(_ k: AnomalyKind) -> Color {

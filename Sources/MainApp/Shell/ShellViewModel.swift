@@ -45,6 +45,9 @@ public final class ShellViewModel: ObservableObject {
     /// v17.29 · ⌘K 最近用过的命令 title 列表（LRU · 最多 5 个 · UserDefaults 持久化）
     @Published public var recentPaletteCommands: [String] = []
 
+    /// v17.81 · 用户自定义 Workspace 预设（trader 把当前 Workspace 存为可复用模板 · UserDefaults 持久化）
+    @Published public var userPresets: [UserWorkspacePreset] = []
+
     // MARK: - v17.5 · Pane 最大化（文华 Enter/Esc 二态切换 · 单 Pane 占满主区）
 
     @Published public var maximizedPaneID: UUID? = nil
@@ -233,6 +236,33 @@ public final class ShellViewModel: ObservableObject {
         primaryTab = ws.primaryTab
         activeWorkspaceID = ws.id
         persistWorkspaces()
+    }
+
+    /// v17.81 · 从用户自定义预设新建 Workspace（panes 全部重生 UUID 防冲突）
+    public func newWorkspace(from userPreset: UserWorkspacePreset) {
+        let ws = userPreset.toWorkspace()
+        workspaces.append(ws)
+        primaryTab = ws.primaryTab
+        activeWorkspaceID = ws.id
+        persistWorkspaces()
+    }
+
+    /// v17.81 · 把当前 active Workspace 保存为用户自定义预设
+    @discardableResult
+    public func saveActiveWorkspaceAsUserPreset(name: String, emoji: String) -> UserWorkspacePreset? {
+        guard let ws = activeWorkspace else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let preset = UserWorkspacePreset(from: ws, name: trimmed, emoji: emoji)
+        userPresets.append(preset)
+        persistUserPresets()
+        return preset
+    }
+
+    /// v17.81 · 删除用户自定义预设
+    public func deleteUserPreset(_ id: UUID) {
+        userPresets.removeAll { $0.id == id }
+        persistUserPresets()
     }
 
     public func closeWorkspace(_ id: UUID) {
@@ -530,6 +560,7 @@ public final class ShellViewModel: ObservableObject {
     private static let kPrimaryTab = "shell.v1.primaryTab"
     private static let kLayout = "shell.v1.layout"
     private static let kDetachedPaneIDs = "shell.v1.detachedPaneIDs"
+    private static let kUserPresets = "shell.v1.userPresets"
 
     private func loadFromStorage() {
         let ud = UserDefaults.standard
@@ -568,6 +599,17 @@ public final class ShellViewModel: ObservableObject {
         // v17.66 · detached paneID 列表（重启恢复 detached NSWindow）
         if let arr = ud.stringArray(forKey: Self.kDetachedPaneIDs) {
             detachedPaneIDStrings = arr
+        }
+        // v17.81 · 用户自定义 Workspace 预设
+        if let data = ud.data(forKey: Self.kUserPresets),
+           let arr = try? JSONDecoder().decode([UserWorkspacePreset].self, from: data) {
+            userPresets = arr
+        }
+    }
+
+    private func persistUserPresets() {
+        if let data = try? JSONEncoder().encode(userPresets) {
+            UserDefaults.standard.set(data, forKey: Self.kUserPresets)
         }
     }
 

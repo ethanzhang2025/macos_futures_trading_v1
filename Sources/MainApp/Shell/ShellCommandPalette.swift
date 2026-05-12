@@ -224,6 +224,16 @@ struct ShellCommandPalette: View {
                 action: { shellVM.newWorkspace(from: preset) }
             ))
         }
+        // v17.81 · trader 自定义预设（与内置并列搜索）
+        for preset in shellVM.userPresets {
+            list.append(PaletteCommand(
+                title: "新建我的预设：\(preset.name)",
+                subtitle: "\(preset.subtitle) · \(preset.primaryTab.displayName)",
+                emoji: preset.emoji,
+                category: .action,
+                action: { shellVM.newWorkspace(from: preset) }
+            ))
+        }
         list.append(PaletteCommand(
             title: "全部 Workspace 预设…",
             subtitle: "打开预设 picker sheet · 卡片视图浏览全部",
@@ -231,6 +241,16 @@ struct ShellCommandPalette: View {
             category: .action,
             action: { shellVM.showPresetPickerSheet = true }
         ))
+        // v17.81 · 一键打开"保存当前为预设" sheet（也走 PresetPickerSheet 内嵌入口）
+        if shellVM.activeWorkspace != nil {
+            list.append(PaletteCommand(
+                title: "💾 保存当前 Workspace 为预设…",
+                subtitle: "打开预设面板 · 命名后保存到「我的预设」",
+                emoji: "💾",
+                category: .action,
+                action: { shellVM.showPresetPickerSheet = true }
+            ))
+        }
 
         // v17.68 · Workspace 复制 / 删除
         if let ws = shellVM.activeWorkspace {

@@ -68,4 +68,84 @@ struct ChartSettingsStoreTests {
         #expect(ChartSettingsStore.loadCandleColorMode(defaults: d) == .redUpGreenDown)
         #expect(ChartSettingsStore.loadPricePrecision(defaults: d) == .auto)
     }
+
+    // MARK: - v17.111 · 4 新设置
+
+    @Test("v17.111 · 默认值（字号 medium · HUD normal · 网格 medium · 副图 normal）")
+    func v17111Defaults() {
+        let d = makeDefaults()
+        #expect(ChartSettingsStore.loadChartFontSize(defaults: d) == .medium)
+        #expect(ChartSettingsStore.loadHUDOpacityMode(defaults: d) == .normal)
+        #expect(ChartSettingsStore.loadGridDensity(defaults: d) == .medium)
+        #expect(ChartSettingsStore.loadSubChartDefaultRatio(defaults: d) == .normal)
+    }
+
+    @Test("v17.111 · save → load round-trip 全 4 项 × 全 case")
+    func v17111RoundTrip() {
+        for mode in ChartFontSize.allCases {
+            let d = makeDefaults()
+            ChartSettingsStore.saveChartFontSize(mode, defaults: d)
+            #expect(ChartSettingsStore.loadChartFontSize(defaults: d) == mode)
+        }
+        for mode in HUDOpacityMode.allCases {
+            let d = makeDefaults()
+            ChartSettingsStore.saveHUDOpacityMode(mode, defaults: d)
+            #expect(ChartSettingsStore.loadHUDOpacityMode(defaults: d) == mode)
+        }
+        for mode in GridDensity.allCases {
+            let d = makeDefaults()
+            ChartSettingsStore.saveGridDensity(mode, defaults: d)
+            #expect(ChartSettingsStore.loadGridDensity(defaults: d) == mode)
+        }
+        for mode in SubChartDefaultRatio.allCases {
+            let d = makeDefaults()
+            ChartSettingsStore.saveSubChartDefaultRatio(mode, defaults: d)
+            #expect(ChartSettingsStore.loadSubChartDefaultRatio(defaults: d) == mode)
+        }
+    }
+
+    @Test("v17.111 · ChartFontSize sizeDelta 数值（small=-1 / medium=0 / large=+1）")
+    func chartFontSizeSizeDelta() {
+        #expect(ChartFontSize.small.sizeDelta == -1)
+        #expect(ChartFontSize.medium.sizeDelta == 0)
+        #expect(ChartFontSize.large.sizeDelta == +1)
+    }
+
+    @Test("v17.111 · HUDOpacityMode alpha（subtle 0.40 / normal 0.60 / strong 0.80）· light 一档高")
+    func hudOpacityModeAlpha() {
+        #expect(HUDOpacityMode.subtle.darkAlpha == 0.40)
+        #expect(HUDOpacityMode.normal.darkAlpha == 0.60)
+        #expect(HUDOpacityMode.strong.darkAlpha == 0.80)
+        #expect(HUDOpacityMode.subtle.lightAlpha == 0.65)
+        #expect(HUDOpacityMode.normal.lightAlpha == 0.85)
+        #expect(HUDOpacityMode.strong.lightAlpha == 0.95)
+    }
+
+    @Test("v17.111 · GridDensity 倍率（sparse 1.5 / medium 1.0 / dense 0.7）")
+    func gridDensityStrideMultiplier() {
+        #expect(GridDensity.sparse.strideMultiplier == 1.5)
+        #expect(GridDensity.medium.strideMultiplier == 1.0)
+        #expect(GridDensity.dense.strideMultiplier == 0.7)
+    }
+
+    @Test("v17.111 · SubChartDefaultRatio ratio（slim 0.20 / normal 0.30 / tall 0.40）")
+    func subChartDefaultRatioValue() {
+        #expect(SubChartDefaultRatio.slim.ratio == 0.20)
+        #expect(SubChartDefaultRatio.normal.ratio == 0.30)
+        #expect(SubChartDefaultRatio.tall.ratio == 0.40)
+    }
+
+    @Test("v17.111 · resetAll 清空 6 个 key 全部回默认")
+    func resetAllClearsV17111Keys() {
+        let d = makeDefaults()
+        ChartSettingsStore.saveChartFontSize(.large, defaults: d)
+        ChartSettingsStore.saveHUDOpacityMode(.strong, defaults: d)
+        ChartSettingsStore.saveGridDensity(.dense, defaults: d)
+        ChartSettingsStore.saveSubChartDefaultRatio(.tall, defaults: d)
+        ChartSettingsStore.resetAll(defaults: d)
+        #expect(ChartSettingsStore.loadChartFontSize(defaults: d) == .medium)
+        #expect(ChartSettingsStore.loadHUDOpacityMode(defaults: d) == .normal)
+        #expect(ChartSettingsStore.loadGridDensity(defaults: d) == .medium)
+        #expect(ChartSettingsStore.loadSubChartDefaultRatio(defaults: d) == .normal)
+    }
 }

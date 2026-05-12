@@ -4,6 +4,7 @@
 
 #if canImport(SwiftUI) && os(macOS)
 import SwiftUI
+import Shared
 
 struct PaneContainer: View {
     let workspace: Workspace
@@ -144,7 +145,11 @@ struct PaneHeader: View {
                     }
                     .help("双击修改合约（同组 Pane 自动跟随）")
             }
-            if let period = config.periodRaw {
+            // v17.71 · PaneHeader 周期 inline 切换（仅 chart Pane · 点击展开分段 Menu · 同 group 广播）
+            if config.kind == .chart {
+                Text("·").foregroundColor(.secondary).font(.system(size: 11))
+                periodMenu
+            } else if let period = config.periodRaw {
                 Text("·").foregroundColor(.secondary).font(.system(size: 11))
                 Text(period)
                     .font(.system(size: 11, design: .monospaced))
@@ -200,6 +205,47 @@ struct PaneHeader: View {
         .padding(.vertical, 4)
         .frame(height: 24)
         .background(Color.secondary.opacity(0.08))
+    }
+
+    /// v17.71 · 周期 inline 切换 Menu（分钟/小时/日及以上 3 段 · 同 group 广播）
+    private var periodMenu: some View {
+        Menu {
+            Section("分钟") {
+                ForEach([KLinePeriod.minute1, .minute3, .minute5, .minute15, .minute30], id: \.self) { p in
+                    Button {
+                        shellVM.setPanePeriod(paneID: config.id, periodRaw: p.rawValue)
+                    } label: {
+                        Text("\(config.periodRaw == p.rawValue ? "✓ " : "  ")\(p.displayName)")
+                    }
+                }
+            }
+            Section("小时") {
+                ForEach([KLinePeriod.hour1, .hour2, .hour4], id: \.self) { p in
+                    Button {
+                        shellVM.setPanePeriod(paneID: config.id, periodRaw: p.rawValue)
+                    } label: {
+                        Text("\(config.periodRaw == p.rawValue ? "✓ " : "  ")\(p.displayName)")
+                    }
+                }
+            }
+            Section("日及以上") {
+                ForEach([KLinePeriod.daily, .weekly, .monthly, .quarterly, .semiAnnual, .annual], id: \.self) { p in
+                    Button {
+                        shellVM.setPanePeriod(paneID: config.id, periodRaw: p.rawValue)
+                    } label: {
+                        Text("\(config.periodRaw == p.rawValue ? "✓ " : "  ")\(p.displayName)")
+                    }
+                }
+            }
+        } label: {
+            Text(config.periodRaw ?? "周期")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("点击切换周期 · 同 group Pane 自动跟随")
     }
 
     /// v17.20 · Pane 右键菜单（更换 kind / 清 group / 重置 symbol / 最大化）

@@ -459,6 +459,23 @@ public final class ShellViewModel: ObservableObject {
         persistWorkspaces()
     }
 
+    /// v17.71 · 设定 Pane 周期（PaneHeader inline picker · 同 group 广播 · 与 cyclePeriodOnActivePane 共享广播逻辑）
+    public func setPanePeriod(paneID: UUID, periodRaw: String) {
+        guard let wsIdx = workspaces.firstIndex(where: { ws in ws.panes.contains { $0.id == paneID } }),
+              let paneIdx = workspaces[wsIdx].panes.firstIndex(where: { $0.id == paneID }) else { return }
+        workspaces[wsIdx].panes[paneIdx].periodRaw = periodRaw
+        if let color = workspaces[wsIdx].panes[paneIdx].groupColor {
+            groupBindings[color]?.periodRaw = periodRaw
+            for wIdx in workspaces.indices {
+                for pIdx in workspaces[wIdx].panes.indices
+                    where workspaces[wIdx].panes[pIdx].groupColor == color {
+                    workspaces[wIdx].panes[pIdx].periodRaw = periodRaw
+                }
+            }
+        }
+        persistWorkspaces()
+    }
+
     /// v17.68 · 切换 Inspector 显隐（命令面板 + ⌘⌥I 快捷键 二入口）
     public func toggleInspector() {
         layout.inspectorVisible.toggle()

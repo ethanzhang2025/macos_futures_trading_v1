@@ -31,6 +31,8 @@ struct SpreadAlertWindow: View {
     /// v15.75 · 用户自定义价差对（持久化 UserDefaults）
     @State private var customPairs: [SpreadPair] = []
     @State private var showAddCustomSheet: Bool = false
+    /// v17.101 · inbound watchlistInstrumentSelected · 高亮所有含该腿的价差行
+    @State private var highlightedInstrumentID: String?
     @Environment(\.openWindow) private var openWindow
     @Environment(\.alertEvaluator) private var alertEvaluator
     @Environment(\.storeManager) private var storeManager
@@ -98,6 +100,10 @@ struct SpreadAlertWindow: View {
         }
         .animation(.easeInOut(duration: 0.18), value: addedAlertToast)
         .frame(minWidth: 1180, minHeight: 720)
+        // v17.101 · inbound · 主图切到某合约 · 高亮所有含该腿的价差行（不切 filter · 仅视觉指引）
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
+            if let id = note.object as? String { highlightedInstrumentID = id }
+        }
         .task {
             // v15.75 · 启动加载用户自定义价差对（UserDefaults · 同步即可 · 数据量小）
             customPairs = SpreadCustomPairStore.load()
@@ -431,11 +437,27 @@ struct SpreadAlertWindow: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// v17.101 · 该 event 的 spread pair 是否含 highlightedInstrumentID
+    /// 跨品种 → SpreadPresets + customPairs（leg1/leg2 instrumentID）· 跨期 → CalendarSpreadPresets（nearMonthID/farMonthID）
+    private func isHighlighted(_ evt: SpreadAlertEvent) -> Bool {
+        guard let target = highlightedInstrumentID else { return false }
+        switch evt.kind {
+        case .crossInstrument:
+            let pool: [SpreadPair] = SpreadPresets.all + customPairs
+            guard let pair = pool.first(where: { $0.id == evt.spreadID }) else { return false }
+            return pair.leg1.instrumentID == target || pair.leg2.instrumentID == target
+        case .calendar:
+            guard let pair = CalendarSpreadPresets.byID[evt.spreadID] else { return false }
+            return pair.nearMonthID == target || pair.farMonthID == target
+        }
+    }
+
     private func eventRow(_ evt: SpreadAlertEvent) -> some View {
         let dirColor: Color = evt.direction == .upperBreached ? ChartTheme.chartLoss : ChartTheme.chartProfit
         let kindColor: Color = evt.kind == .crossInstrument ? .orange : .cyan
         let kindLabel: String = evt.kind == .crossInstrument ? "跨品种" : "跨期"
         let isAdded = addedSpreadIDs.contains(evt.spreadID)
+        let highlighted = isHighlighted(evt)
         return HStack(spacing: 0) {
             // 信息区（点击切对应套利窗口）
             HStack(spacing: 0) {
@@ -546,6 +568,7 @@ struct SpreadAlertWindow: View {
             .tooltip(isAdded ? "已加到 ⌘B 预警面板（60s 周期真扫触发）" : "加到 ⌘B 预警面板（每 60s 自动扫描 · |z|≥阈值时触发系统通知）")
         }
         .padding(.horizontal, 14).padding(.vertical, 5)
+        .background(highlighted ? Color.accentColor.opacity(0.12) : Color.clear)
     }
 
     private func zColor(_ z: Double) -> Color {

@@ -41,6 +41,15 @@ struct OptionWindow: View {
     /// v15.42 · IV smile 翼端 skew（笑容陡峭度 · 0=无 smile / 0.5=典型笑 / 1=极端 skew）
     @State private var ivSmileSkew: Double = 0.5
 
+    /// v17.107 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.107 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+    private var chartProfitEmphasized: Color { chartProfitEmphasizedColor(mode: candleColorMode) }
+    private var chartLossEmphasized: Color { chartLossEmphasizedColor(mode: candleColorMode) }
+
     private var meta: OptionPresets.UnderlyingMeta? {
         OptionPresets.byUnderlyingID[selectedUnderlyingID]
     }
@@ -134,6 +143,11 @@ struct OptionWindow: View {
                   id != selectedUnderlyingID
             else { return }
             selectedUnderlyingID = id
+        }
+        // v17.107 · 同步用户 K 线配色偏好（Settings → 国际习惯 → PnL 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
         }
         // v15.36 · Phase 6.4 · 回测 sheet
         .sheet(isPresented: $backtestSheetPresented) {
@@ -514,8 +528,8 @@ struct OptionWindow: View {
     private func optionHoverTooltip(
         info: OptionPnLHoverInfo, strategy: OptionStrategy, analysis: PayoffAnalysis
     ) -> some View {
-        let pnlColor: Color = info.pnl > 0 ? ChartTheme.chartProfit
-                            : (info.pnl < 0 ? ChartTheme.chartLoss : ChartTheme.chartTransition)
+        let pnlColor: Color = info.pnl > 0 ? chartProfit
+                            : (info.pnl < 0 ? chartLoss : ChartTheme.chartTransition)
         let diffSpot = info.spotPrice - spotPrice
         // 最近 breakeven 距离（绝对值最小）
         let nearestBE = analysis.breakevens.min(by: { abs($0 - info.spotPrice) < abs($1 - info.spotPrice) })
@@ -558,7 +572,7 @@ struct OptionWindow: View {
             Divider().background(ChartTheme.tooltipDivider)
             optionTooltipRow("PnL", String(format: "%+.2f", info.pnl), color: pnlColor)
             optionTooltipRow("距现价", String(format: "%@%.2f", diffSpot >= 0 ? "+" : "", diffSpot),
-                             color: diffSpot >= 0 ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized)
+                             color: diffSpot >= 0 ? chartProfitEmphasized : chartLossEmphasized)
             optionTooltipRow("距盈亏点", beText,
                              color: nearestBE.map { abs(info.spotPrice - $0) < 1 ? ChartTheme.chartTransition : ChartTheme.tooltipSecondary } ?? .secondary)
             Divider().background(ChartTheme.tooltipDivider)
@@ -671,8 +685,8 @@ struct OptionWindow: View {
             var seg = Path()
             seg.move(to: CGPoint(x: x1, y: yFor(p1.pnl)))
             seg.addLine(to: CGPoint(x: x2, y: yFor(p2.pnl)))
-            let color: Color = (p1.pnl >= 0 && p2.pnl >= 0) ? ChartTheme.chartProfitEmphasized
-                              : (p1.pnl < 0 && p2.pnl < 0) ? ChartTheme.chartLossEmphasized
+            let color: Color = (p1.pnl >= 0 && p2.pnl >= 0) ? chartProfitEmphasized
+                              : (p1.pnl < 0 && p2.pnl < 0) ? chartLossEmphasized
                               : ChartTheme.chartTransition.opacity(0.85)
             ctx.stroke(seg, with: .color(color),
                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
@@ -895,8 +909,8 @@ struct OptionWindow: View {
         let moneyness = info.strike > spotPrice ? "OTM Call / ITM Put"
                       : (info.strike < spotPrice ? "ITM Call / OTM Put" : "ATM")
         let skewVsBase = info.callIV - assumedVol
-        let skewColor: Color = skewVsBase > 0.005 ? ChartTheme.chartLossEmphasized
-                             : (skewVsBase < -0.005 ? ChartTheme.chartProfitEmphasized : ChartTheme.tooltipSecondary)
+        let skewColor: Color = skewVsBase > 0.005 ? chartLossEmphasized
+                             : (skewVsBase < -0.005 ? chartProfitEmphasized : ChartTheme.tooltipSecondary)
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(String(format: "K %.0f", info.strike))

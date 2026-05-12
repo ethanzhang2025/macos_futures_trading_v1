@@ -36,6 +36,15 @@ struct OptionBacktestSheet: View {
     /// v15.40 · 回测图 hover（整块 Canvas 共享 · PnL/Spot 两区双联动）
     @State private var backtestHoverPoint: CGPoint?
 
+    /// v17.107 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.107 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+    private var chartProfitEmphasized: Color { chartProfitEmphasizedColor(mode: candleColorMode) }
+    private var chartLossEmphasized: Color { chartLossEmphasizedColor(mode: candleColorMode) }
+
     // MARK: - 轨迹模式
 
     enum TrajectoryMode: String, CaseIterable, Identifiable {
@@ -81,6 +90,11 @@ struct OptionBacktestSheet: View {
                 initialSpot = mids[mids.count / 2]
                 _ = firstStrike
             }
+        }
+        // v17.107 · 同步用户 K 线配色偏好（Settings → 国际习惯 → PnL 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
         }
     }
 
@@ -352,8 +366,8 @@ struct OptionBacktestSheet: View {
     }
 
     private func backtestHoverTooltip(info: BacktestHoverInfo) -> some View {
-        let pnlColor: Color = info.totalPnL > 0 ? ChartTheme.chartProfit
-                            : (info.totalPnL < 0 ? ChartTheme.chartLoss : ChartTheme.chartTransition)
+        let pnlColor: Color = info.totalPnL > 0 ? chartProfit
+                            : (info.totalPnL < 0 ? chartLoss : ChartTheme.chartTransition)
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = "yyyy-MM-dd"
@@ -370,16 +384,16 @@ struct OptionBacktestSheet: View {
             Divider().background(ChartTheme.tooltipDivider)
             backtestRow("总 PnL", String(format: "%+.2f", info.totalPnL), color: pnlColor)
             backtestRow("期权", String(format: "%+.2f", info.optionMTM),
-                        color: info.optionMTM >= 0 ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized)
+                        color: info.optionMTM >= 0 ? chartProfitEmphasized : chartLossEmphasized)
             if strategy.underlyingPositionSize > 0 {
                 backtestRow("标的", String(format: "%+.2f", info.underlyingMTM),
-                            color: info.underlyingMTM >= 0 ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized)
+                            color: info.underlyingMTM >= 0 ? chartProfitEmphasized : chartLossEmphasized)
             }
             Divider().background(ChartTheme.tooltipDivider)
             backtestRow("Spot", String(format: "%.2f", info.spotPrice), color: ChartTheme.chartLine)
             if strategy.underlyingPositionSize > 0 {
                 backtestRow("距入场", String(format: "%@%.2f", spotDiff >= 0 ? "+" : "", spotDiff),
-                            color: spotDiff >= 0 ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized)
+                            color: spotDiff >= 0 ? chartProfitEmphasized : chartLossEmphasized)
             }
         }
         .padding(ChartTheme.tooltipPadding)
@@ -460,8 +474,8 @@ struct OptionBacktestSheet: View {
             var seg = Path()
             seg.move(to: CGPoint(x: x1, y: yFor(p1)))
             seg.addLine(to: CGPoint(x: x2, y: yFor(p2)))
-            let color: Color = (p1 >= 0 && p2 >= 0) ? ChartTheme.chartProfitEmphasized
-                              : (p1 < 0 && p2 < 0) ? ChartTheme.chartLossEmphasized
+            let color: Color = (p1 >= 0 && p2 >= 0) ? chartProfitEmphasized
+                              : (p1 < 0 && p2 < 0) ? chartLossEmphasized
                               : ChartTheme.chartTransition.opacity(0.85)
             ctx.stroke(seg, with: .color(color),
                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
@@ -472,13 +486,13 @@ struct OptionBacktestSheet: View {
             let x = rect.minX + CGFloat(peakIdx) * xStep
             let y = yFor(pnls[peakIdx])
             ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: y - 3, width: 6, height: 6)),
-                     with: .color(ChartTheme.chartProfit))
+                     with: .color(chartProfit))
         }
         if let troughIdx = pnls.firstIndex(of: pnls.min()!) {
             let x = rect.minX + CGFloat(troughIdx) * xStep
             let y = yFor(pnls[troughIdx])
             ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: y - 3, width: 6, height: 6)),
-                     with: .color(ChartTheme.chartLoss))
+                     with: .color(chartLoss))
         }
 
         // y 轴标签（4 等分）

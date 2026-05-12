@@ -159,14 +159,19 @@ extension ChartTheme {
 
     // MARK: 涨跌 / 盈亏色（语义复用 candle）
 
-    /// 盈利（默认 .green · 国际惯例 · 兼容老 caller · 新代码请用 chartProfitColor(mode:) 跟 CandleColorMode）
-    static let chartProfit = Color.green
-    /// 亏损（默认 .red · 国际惯例 · 兼容老 caller · 新代码请用 chartLossColor(mode:) 跟 CandleColorMode）
-    static let chartLoss = Color.red
-    /// 盈亏分段过渡（PnL 跨 0 段 · 黄）
+    /// 盈亏分段过渡（PnL 跨 0 段 · 黄 · 与 CandleColorMode 无关）
     static let chartTransition = Color.yellow
-    /// 突出盈利（信号 entry/exit 等高亮 · 默认 · 新代码请用 chartProfitEmphasizedColor(mode:)）
+
+    // v17.110 · 旧静态 PnL 色已全替换为 chartProfitColor(mode:) / chartLossColor(mode:) · v17.106-110 覆盖 14 文件 149 调用点。
+    // 保留下面 4 个 static let 作零依赖兜底（未来如有第三方 module 或测试代码引用 · 避免破坏）· 不建议新代码使用。
+
+    @available(*, deprecated, message: "用 chartProfitColor(mode:) · 跟 CandleColorMode swap")
+    static let chartProfit = Color.green
+    @available(*, deprecated, message: "用 chartLossColor(mode:) · 跟 CandleColorMode swap")
+    static let chartLoss = Color.red
+    @available(*, deprecated, message: "用 chartProfitEmphasizedColor(mode:) · 跟 CandleColorMode swap")
     static let chartProfitEmphasized = Color.green.opacity(0.85)
+    @available(*, deprecated, message: "用 chartLossEmphasizedColor(mode:) · 跟 CandleColorMode swap")
     static let chartLossEmphasized = Color.red.opacity(0.85)
 
     // v17.105 · PnL 盈亏色按 CandleColorMode swap（trader 视觉一致性）

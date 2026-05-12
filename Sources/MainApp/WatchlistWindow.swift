@@ -77,6 +77,13 @@ struct WatchlistWindow: View {
     /// v17.42 C1 · 列可见性（持仓量 / 成交量 / 价差%）· 右键 📋 显示列 toggle · UserDefaults 跨窗口同步
     @State private var visibleColumns: Set<WatchlistColumn> = WatchlistColumnPreferences.load()
 
+    /// v17.110 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.110 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
+    private var chartProfit: Color { ChartTheme.chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+
     /// v15.78 · combo 异常周期 fetch · 30s 间隔（detector 是纯函数 · 不发网络请求）
     @State private var comboFetchTask: Task<Void, Never>?
 
@@ -169,6 +176,9 @@ struct WatchlistWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             flagsRevision += 1
             visibleColumns = WatchlistColumnPreferences.load()
+            // v17.110 · 同步 K 线配色（PnL 涨跌色 swap）
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
         }
         .onChange(of: book) { newValue in
             // M5 自动持久化：每次 book 变化异步 save · isLoaded 守卫避免初始 Mock 误写覆盖真数据
@@ -1616,7 +1626,7 @@ struct WatchlistWindow: View {
     }
 
     private func comboBadgeColor(_ c: ComboAnomaly) -> Color {
-        if c.kindCount >= 5 { return ChartTheme.chartLoss }
+        if c.kindCount >= 5 { return chartLoss }
         if c.kindCount == 4 { return .orange }
         return .yellow
     }

@@ -144,6 +144,34 @@ public enum ChineseFuturesProducts {
         Dictionary(grouping: all, by: { $0.exchange })
     }()
 
+    /// productID 大小写无关 → CategorizedSpec（"RB" → rb spec / "if" → IF spec）
+    /// hardcoded 表中 SHFE/DCE/INE/GFEX 用小写 · CZCE/CFFEX 用大写 · 调用方传 "RB0" 等大写主连续 ID 时需要回退
+    public static let byProductIDCaseInsensitive: [String: CategorizedSpec] = {
+        var map: [String: CategorizedSpec] = [:]
+        for entry in all {
+            map[entry.spec.productID.lowercased()] = entry
+        }
+        return map
+    }()
+
+    // MARK: - 价格精度（v17.98 · PricePrecisionMode.auto fallback）
+
+    /// 从 instrumentID 反推合约价格小数位数（auto 模式下使用）
+    /// - 算法：去除尾部数字得 productID prefix · 大小写无关查 byProductIDCaseInsensitive · 解析 priceTick 字符串小数位
+    /// - 例："RB0" → "rb" → priceTick "1" → 0 位；"AU0" → "au" → "0.02" → 2 位；"IF0" → "IF" → "0.2" → 1 位
+    /// - 找不到品种返 nil（调用方 fallback 默认 2）
+    public static func priceTickDigits(forInstrumentID id: String) -> Int? {
+        // 取首段非数字（trim 尾部所有 ASCII 数字）· "RB0" → "RB" · "rb2509" → "rb"
+        let prefix = id.prefix { !$0.isASCII || !$0.isNumber }
+        guard !prefix.isEmpty,
+              let entry = byProductIDCaseInsensitive[prefix.lowercased()] else { return nil }
+        let s = entry.spec.priceTick
+        if let dot = s.firstIndex(of: ".") {
+            return s.distance(from: s.index(after: dot), to: s.endIndex)
+        }
+        return 0
+    }
+
     // MARK: - 派生：合约清单（主连续 + 主力月份）
 
     /// 全部品种主连续合约 ID（如 "RB0" / "IF0" / "AU0"）· 大写

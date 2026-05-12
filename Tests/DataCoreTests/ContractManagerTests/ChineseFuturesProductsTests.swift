@@ -128,4 +128,37 @@ struct ChineseFuturesProductsTests {
             }
         }
     }
+
+    // v17.98 · priceTickDigits 推断（PricePrecisionMode.auto 用）
+
+    @Test("priceTickDigits · RB0 → rb priceTick \"1\" → 0 位")
+    func priceTickDigitsRB() {
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "RB0") == 0)
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "rb2509") == 0)
+    }
+
+    @Test("priceTickDigits · AU0 → au priceTick \"0.02\" → 2 位")
+    func priceTickDigitsAU() {
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "AU0") == 2)
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "au2506") == 2)
+    }
+
+    @Test("priceTickDigits · IF0 → IF priceTick \"0.2\" → 1 位")
+    func priceTickDigitsIF() {
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "IF0") == 1)
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "IF2505") == 1)
+    }
+
+    @Test("priceTickDigits · 未知品种返 nil（调用方自行 fallback）")
+    func priceTickDigitsUnknown() {
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "XYZ0") == nil)
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "") == nil)
+    }
+
+    @Test("priceTickDigits · 大小写无关（rb / RB / Rb 都命中）")
+    func priceTickDigitsCaseInsensitive() {
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "rb0") == 0)
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "RB0") == 0)
+        #expect(ChineseFuturesProducts.priceTickDigits(forInstrumentID: "Rb0") == 0)
+    }
 }

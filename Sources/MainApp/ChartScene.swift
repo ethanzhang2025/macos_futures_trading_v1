@@ -3351,17 +3351,20 @@ struct ChartContentView: View {
 
     // v15.x · drawingTypeLabel 提到 file scope · ChartContentView 内调用直接用 file 顶部 fileprivate 函数
 
-    /// v17.94 · 价格格式化（PricePrecisionMode 持久化）
-    /// auto 时取 stepSize 推算（暂回退 fixed 2 · 后续接合约 stepSize 后用真值）· fixed2/3/4 用用户指定
+    /// v17.94 / v17.98 · 价格格式化（PricePrecisionMode 持久化 · auto 跟合约 priceTick）
+    /// auto = ChineseFuturesProducts.priceTickDigits(instrumentLabel)，找不到回退 2；fixed2/3/4 用用户指定
+    private var effectivePriceDigits: Int {
+        if let d = pricePrecisionMode.digits { return d }
+        return ChineseFuturesProducts.priceTickDigits(forInstrumentID: instrumentLabel) ?? 2
+    }
+
     private func formatPrice(_ p: Decimal) -> String {
-        let d = pricePrecisionMode.digits ?? 2
-        return String(format: "%.\(d)f", NSDecimalNumber(decimal: p).doubleValue)
+        String(format: "%.\(effectivePriceDigits)f", NSDecimalNumber(decimal: p).doubleValue)
     }
 
     /// v17.94 · 价差格式化（与 formatPrice 共用精度 · 带符号）
     private func formatPriceDiff(_ diff: Decimal) -> String {
-        let d = pricePrecisionMode.digits ?? 2
-        return String(format: "%+.\(d)f", NSDecimalNumber(decimal: diff).doubleValue)
+        String(format: "%+.\(effectivePriceDigits)f", NSDecimalNumber(decimal: diff).doubleValue)
     }
 
     /// v13.5 画线右键上下文菜单 · v13.6 加复制 · v13.9 多选 · v13.8 改颜色/线宽 · v13.11 锁定/解锁
@@ -4666,7 +4669,7 @@ struct ChartContentView: View {
                 let pct = baseline > 0 ? diff / baseline * 100 : 0
                 let isUp = diff >= 0
                 let color: Color = isUp ? chartTheme.candleUp(mode: candleColorMode) : chartTheme.candleDown(mode: candleColorMode)
-                let digits = pricePrecisionMode.digits ?? 2
+                let digits = effectivePriceDigits
                 Text(String(format: "%.\(digits)f", close))
                     .font(.system(size: 22, weight: .bold, design: .monospaced))
                     .foregroundColor(color)
@@ -4913,10 +4916,9 @@ struct ChartContentView: View {
         return last
     }
 
-    /// v15.14 价格 / OI 数字格式 · v17.94 接 PricePrecisionMode
+    /// v15.14 价格 / OI 数字格式 · v17.94 接 PricePrecisionMode · v17.98 auto 跟合约 priceTick
     private func fmt(_ d: Decimal) -> String {
-        let digits = pricePrecisionMode.digits ?? 2
-        return String(format: "%.\(digits)f", NSDecimalNumber(decimal: d).doubleValue)
+        String(format: "%.\(effectivePriceDigits)f", NSDecimalNumber(decimal: d).doubleValue)
     }
 
     /// v15.14 K 线时间戳格式（按 period 跨度选不同格式 · 与 KLineCrosshairView 风格对齐）

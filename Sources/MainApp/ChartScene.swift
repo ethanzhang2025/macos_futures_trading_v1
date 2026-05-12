@@ -2219,13 +2219,11 @@ struct ChartContentView: View {
     /// v15.19 batch30 · 快捷测距锚点（⌘⇧M 设 · 再按取消）· 配合 hoverDataPoint 实时显示距离
     @State var measureAnchor: DrawingPoint?
 
-    /// v17.79 · 副图光标位置（本地主图 hover 优先 · 跨 Pane shellExternalCrosshair 作 fallback）
-    /// 让 trader 在本图 hover 主图时 · 副图也显示同 bar 位置的浅蓝虚线（同 group 兄弟广播时同效）
-    var effectiveSubChartCursorTime: Date? {
-        if let dp = hoverDataPoint, dp.barIndex >= 0, dp.barIndex < bars.count {
-            return bars[dp.barIndex].openTime
-        }
-        return shellExternalCrosshair
+    /// v17.80 · 副图本地 hover bar 时间（黄白虚线 · 与主图 KLineCrosshairView 本地光标风格一致）
+    /// 跨 Pane 共振时间走 SubChartView.externalTime（浅蓝虚线 · 视觉区分）
+    var localSubChartCursorTime: Date? {
+        guard let dp = hoverDataPoint, dp.barIndex >= 0, dp.barIndex < bars.count else { return nil }
+        return bars[dp.barIndex].openTime
     }
     /// v15.19 batch51 · 副图显隐切换（⌘. · 默认显示）· trader 专注主图分析时清屏
     @State var showSubCharts: Bool = true
@@ -2400,7 +2398,8 @@ struct ChartContentView: View {
                                 chartTheme: chartTheme,
                                 onClearOverride: { onClearSubSlot(idx) },
                                 hasOverride: subParamsOverrides[idx] != nil,
-                                externalTime: effectiveSubChartCursorTime   // v17.79 · 本地 hover 优先 · 跨 Pane 共振作 fallback
+                                externalTime: shellExternalCrosshair,   // v17.80 · 跨 Pane 共振 · 浅蓝虚线
+                                localTime: localSubChartCursorTime      // v17.80 · 本地 hover · 黄白虚线（同主图风格）
                             )
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             chartTheme.background

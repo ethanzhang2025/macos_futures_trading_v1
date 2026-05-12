@@ -177,8 +177,10 @@ struct SubChartView: View {
     var onClearOverride: (() -> Void)? = nil
     /// v15.17 是否当前 slot 有 override（菜单项显示禁用与否的视觉提示）
     var hasOverride: Bool = false
-    /// v17.71 · 跨周期共振外部光标时间（同 group 兄弟 Pane 广播 · 副图也画浅蓝竖线 · 与主图 KLineCrosshairView 对齐）
+    /// v17.71 · 跨周期共振外部光标时间（同 group 兄弟 Pane 广播 · 副图画浅蓝竖线 · 区分本地 hover）
     var externalTime: Date? = nil
+    /// v17.80 · 本地主图 hover 时间（ChartContentView 传入 · 副图画黄白虚线 · 与主图 KLineCrosshairView 本地光标风格一致）
+    var localTime: Date? = nil
 
     // MARK: - 主题响应的 instance computed 颜色（v15.9 替换原 static 单一深色）
 
@@ -211,7 +213,7 @@ struct SubChartView: View {
             bgColor
             Canvas { ctx, size in drawChart(ctx, size: size) }
             hud
-            // v17.71 · 跨周期共振外部光标（接 ChartScene shellExternalCrosshair env · 副图与主图同步显示）
+            // v17.71 · 跨周期共振外部光标（接 ChartScene shellExternalCrosshair env · 浅蓝 [2,2]）
             if let ext = externalTime {
                 GeometryReader { geom in
                     if let x = externalBarX(time: ext, in: geom.size) {
@@ -220,6 +222,19 @@ struct SubChartView: View {
                             p.addLine(to: CGPoint(x: x, y: geom.size.height))
                         }
                         .stroke(Color.cyan.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                        .allowsHitTesting(false)
+                    }
+                }
+            }
+            // v17.80 · 本地主图 hover 同步（黄白虚线 [4,4] · 与主图 KLineCrosshairView 本地光标风格一致）
+            if let local = localTime {
+                GeometryReader { geom in
+                    if let x = externalBarX(time: local, in: geom.size) {
+                        Path { p in
+                            p.move(to: CGPoint(x: x, y: 0))
+                            p.addLine(to: CGPoint(x: x, y: geom.size.height))
+                        }
+                        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
                         .allowsHitTesting(false)
                     }
                 }

@@ -230,6 +230,8 @@ struct ChartScene: View {
     @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
     /// v17.113 · HUD 半透明档（subtle / normal / strong · 跟 dark/light 主题）· Settings 图表 tab 持久化
     @State private var hudOpacityMode: HUDOpacityMode = ChartSettingsStore.loadHUDOpacityMode()
+    /// v17.114 · 网格密度档（sparse 3 标 / medium 5 标 / dense 7 标）· Settings 图表 tab 持久化
+    @State private var gridDensity: GridDensity = ChartSettingsStore.loadGridDensity()
     /// v17.13 A1.1 · 主图图表类型（candlestick / heikinAshi）· UserDefaults 全局共享
     @State private var chartType: ChartType = .candlestick
     @State private var isChartTypeLoaded: Bool = false
@@ -669,6 +671,11 @@ struct ChartScene: View {
         let newHUDOpacity = ChartSettingsStore.loadHUDOpacityMode()
         if newHUDOpacity != hudOpacityMode {
             hudOpacityMode = newHUDOpacity
+        }
+        // v17.114 · 网格密度
+        let newGridDensity = ChartSettingsStore.loadGridDensity()
+        if newGridDensity != gridDensity {
+            gridDensity = newGridDensity
         }
     }
 
@@ -1671,6 +1678,7 @@ struct ChartScene: View {
                 pricePrecisionMode: pricePrecisionMode,
                 chartFontSize: chartFontSize,
                 hudOpacityMode: hudOpacityMode,
+                gridDensity: gridDensity,
                 chartType: chartType,
                 hudFields: hudFields,
                 drawings: $drawings,
@@ -2218,6 +2226,8 @@ struct ChartContentView: View {
     let chartFontSize: ChartFontSize
     /// v17.113 · HUD 半透明档（subtle / normal / strong）· 由 ChartScene 父级注入
     let hudOpacityMode: HUDOpacityMode
+    /// v17.114 · 网格密度档（sparse / medium / dense · 影响 KLineAxisView labelCount 3/5/7）· 由 ChartScene 父级注入
+    let gridDensity: GridDensity
     /// v17.13 A1.1 图表类型（candlestick / heikinAshi · 仅 candle 渲染层使用 · HUD/hover/indicator 仍用原始 bars）
     let chartType: ChartType
     /// v15.14 HUD 自定义字段（按 fields 渲染各可选项）
@@ -2272,9 +2282,16 @@ struct ChartContentView: View {
     @State var showDrawings: Bool = true
     /// v13.20 副图区总高度 · 用户拖分割条调整 · 范围 80~480pt（默认 160 = subChartHeight 单副图）
     /// v15.16 hotfix #13：init 时同步 load · 防 ChartContentView 切合约重建时 onAppear 异步加载导致 160→保存值闪烁
+    /// v17.114 · 用户未拖动过时 · 默认高度跟 SubChartDefaultRatio 偏好（slim/normal/tall ≈ 107/160/213pt）
     @State var subChartTotalHeight: CGFloat = {
         let h = UserDefaults.standard.double(forKey: ChartContentView.subChartHeightKey)
-        return (h >= SubChart.minHeight && h <= SubChart.maxHeight) ? CGFloat(h) : SubChart.defaultHeight
+        if h >= SubChart.minHeight && h <= SubChart.maxHeight {
+            return CGFloat(h)
+        }
+        // 首次启动 · 跟用户偏好 SubChartDefaultRatio · normal 1.0 = 160pt baseline
+        let ratio = ChartSettingsStore.loadSubChartDefaultRatio().ratio / SubChartDefaultRatio.normal.ratio
+        let scaled = SubChart.defaultHeight * ratio
+        return max(SubChart.minHeight, min(SubChart.maxHeight, scaled))
     }()
     /// v13.20 拖分割条时的起始高度 · onChanged 累加 translation 算新高度
     @State var dragStartSubHeight: CGFloat?
@@ -2417,7 +2434,8 @@ struct ChartContentView: View {
                     priceRange: currentPriceRange,
                     orientation: .price,
                     axisBackground: chartTheme.background,
-                    axisTextColor: chartTheme.textSecondary
+                    axisTextColor: chartTheme.textSecondary,
+                    labelCount: axisLabelCount       // v17.114 · 跟 GridDensity 偏好
                 )
                 .frame(width: 60)
             }
@@ -2463,7 +2481,8 @@ struct ChartContentView: View {
                 orientation: .time,
                 axisBackground: chartTheme.background,
                 axisTextColor: chartTheme.textSecondary,
-                sessionGaps: sessionGaps
+                sessionGaps: sessionGaps,
+                labelCount: axisLabelCount       // v17.114 · 跟 GridDensity 偏好
             )
             .frame(height: 28)
         }
@@ -3378,6 +3397,15 @@ struct ChartContentView: View {
     private var effectivePriceDigits: Int {
         if let d = pricePrecisionMode.digits { return d }
         return ChineseFuturesProducts.priceTickDigits(forInstrumentID: instrumentLabel) ?? 2
+    }
+
+    /// v17.114 · KLineAxisView labelCount（跟 GridDensity 偏好 · sparse 3 / medium 5 / dense 7）
+    private var axisLabelCount: Int {
+        switch gridDensity {
+        case .sparse: return KLineAxisView.labelCountSparse
+        case .medium: return KLineAxisView.labelCount
+        case .dense:  return KLineAxisView.labelCountDense
+        }
     }
 
     private func formatPrice(_ p: Decimal) -> String {

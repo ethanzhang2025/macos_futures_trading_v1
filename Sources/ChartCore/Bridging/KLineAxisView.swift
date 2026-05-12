@@ -20,8 +20,10 @@ public struct KLineAxisView: View {
         case price  // 纵向 · 右侧 · 价格标签
     }
 
-    /// 标签数量（视觉密度 · 5 是文华/国信主流）
+    /// 标签数量（视觉密度 · 5 是文华/国信主流 · 默认值 · 可由调用方覆盖）
     public static let labelCount = 5
+    public static let labelCountSparse = 3   // v17.114 · GridDensity.sparse
+    public static let labelCountDense = 7    // v17.114 · GridDensity.dense
     /// 同日内：仅 HH:mm（v15.33 session-aware · 跨日时智能切到 fullFormatter）
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -46,6 +48,8 @@ public struct KLineAxisView: View {
     public let axisTextColor: Color
     /// v15.33 session-aware · 可选传入 · 提供时启用跨 session 智能避让标签
     public let sessionGaps: [SessionGap]
+    /// v17.114 · 实例 labelCount（默认 Self.labelCount=5 · trader 偏好 GridDensity 时可传 3/5/7）
+    public let labelCount: Int
 
     public init(
         bars: [KLine],
@@ -54,7 +58,8 @@ public struct KLineAxisView: View {
         orientation: Orientation,
         axisBackground: Color = Color.black.opacity(0.35),
         axisTextColor: Color = Color.white.opacity(0.78),
-        sessionGaps: [SessionGap] = []
+        sessionGaps: [SessionGap] = [],
+        labelCount: Int = KLineAxisView.labelCount
     ) {
         self.bars = bars
         self.viewport = viewport
@@ -63,13 +68,14 @@ public struct KLineAxisView: View {
         self.axisBackground = axisBackground
         self.axisTextColor = axisTextColor
         self.sessionGaps = sessionGaps
+        self.labelCount = labelCount
     }
 
     public var body: some View {
         GeometryReader { geom in
             ZStack(alignment: .topLeading) {
                 axisBackground
-                ForEach(0..<Self.labelCount, id: \.self) { i in
+                ForEach(0..<labelCount, id: \.self) { i in
                     Text(label(at: i))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(axisTextColor)
@@ -117,7 +123,7 @@ public struct KLineAxisView: View {
         switch orientation {
         case .time:
             let visible = max(1, viewport.visibleCount)
-            let step = visible / max(1, Self.labelCount - 1)
+            let step = visible / max(1, labelCount - 1)
             let raw = viewport.startIndex + step * i
             let idx = preferLabelIndex(near: raw)
             guard idx >= 0, idx < bars.count else { return "" }
@@ -127,7 +133,7 @@ public struct KLineAxisView: View {
             // 顶 = upperBound · 底 = lowerBound · 5 等分（i=0 最上 · i=4 最下）
             let lo = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
             let hi = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
-            let t = Double(Self.labelCount - 1 - i) / Double(max(1, Self.labelCount - 1))
+            let t = Double(labelCount - 1 - i) / Double(max(1, labelCount - 1))
             let value = lo + (hi - lo) * t
             return String(format: "%.1f", value)
         }
@@ -151,7 +157,7 @@ public struct KLineAxisView: View {
     }
 
     private func position(at i: Int, in size: CGSize) -> CGPoint {
-        let t = CGFloat(i) / CGFloat(max(1, Self.labelCount - 1))
+        let t = CGFloat(i) / CGFloat(max(1, labelCount - 1))
         switch orientation {
         case .time:
             return CGPoint(x: t * size.width, y: size.height / 2)

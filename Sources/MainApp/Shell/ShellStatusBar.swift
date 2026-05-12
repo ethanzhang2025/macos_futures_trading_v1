@@ -13,6 +13,12 @@ struct ShellStatusBar: View {
     @State private var currentTheme: ChartTheme = ChartThemeStore.load() ?? .dark
 
     private let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    /// v17.96 · 心跳点透明度（每偶数秒 0.4 · 奇数秒 1.0 · 节拍式呼吸 · 提示数据流活着）
+    private var heartbeatOpacity: Double {
+        let s = Calendar.current.component(.second, from: now)
+        return s.isMultiple(of: 2) ? 0.4 : 1.0
+    }
     private let dateFmt: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss"
@@ -34,12 +40,20 @@ struct ShellStatusBar: View {
                 color: .orange
             )
             statusDivider
-            // 行情状态
-            statusChip(
-                icon: Circle().fill(Color.green).frame(width: 6, height: 6),
-                text: "行情正常",
-                color: .green
-            )
+            // 行情状态 + v17.96 心跳（上次更新时间 · 1s tick · trader 一眼确认数据流活着）
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
+                    .opacity(heartbeatOpacity)
+                Text("行情正常")
+                    .font(.system(size: 10))
+                    .foregroundColor(.green)
+                Text("· 上次更新 \(dateFmt.string(from: now))")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+            .help("数据流心跳 · 每秒刷新本机时间作为 mock tick（Stage A · 接 CTP 后改读真行情 lastTickAt）")
             statusDivider
             // 资金风险度
             statusChip(

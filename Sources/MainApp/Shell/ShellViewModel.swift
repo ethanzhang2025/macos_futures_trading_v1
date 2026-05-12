@@ -265,6 +265,30 @@ public final class ShellViewModel: ObservableObject {
         persistUserPresets()
     }
 
+    /// v17.85 · 重命名用户自定义预设（空白名忽略）
+    public func renameUserPreset(_ id: UUID, to newName: String, emoji: String? = nil) {
+        guard let idx = userPresets.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        userPresets[idx].name = trimmed
+        if let e = emoji, !e.isEmpty {
+            userPresets[idx].emoji = e
+        }
+        persistUserPresets()
+    }
+
+    /// v17.85 · 用户预设拖拽排序（移到 targetIndex · 拍平 clamp）
+    public func moveUserPreset(_ id: UUID, to targetIndex: Int) {
+        guard let srcIdx = userPresets.firstIndex(where: { $0.id == id }) else { return }
+        var dst = max(0, min(userPresets.count - 1, targetIndex))
+        if srcIdx == dst { return }
+        let preset = userPresets.remove(at: srcIdx)
+        if dst > srcIdx { dst -= 1 }   // remove 后 dst 索引前移补偿
+        dst = max(0, min(userPresets.count, dst))
+        userPresets.insert(preset, at: dst)
+        persistUserPresets()
+    }
+
     public func closeWorkspace(_ id: UUID) {
         guard workspaces.count > 1 else { return }  // 至少保留 1 个
         workspaces.removeAll { $0.id == id }

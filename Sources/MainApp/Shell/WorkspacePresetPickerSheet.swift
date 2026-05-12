@@ -14,6 +14,11 @@ struct WorkspacePresetPickerSheet: View {
     @State private var newPresetName: String = ""
     @State private var newPresetEmoji: String = "🎯"
 
+    /// v17.85 · 重命名 sheet 状态（双击 userCard 触发）
+    @State private var renamingPresetID: UUID?
+    @State private var renameName: String = ""
+    @State private var renameEmoji: String = "🎯"
+
     private let cardColumns: [GridItem] = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12),
@@ -40,6 +45,12 @@ struct WorkspacePresetPickerSheet: View {
         .frame(width: 580, height: 620)
         .sheet(isPresented: $showSaveSheet) {
             saveSheet
+        }
+        .sheet(isPresented: Binding(
+            get: { renamingPresetID != nil },
+            set: { if !$0 { renamingPresetID = nil } }
+        )) {
+            renameSheet
         }
     }
 
@@ -82,12 +93,18 @@ struct WorkspacePresetPickerSheet: View {
 
     private var userSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("我的预设（\(shellVM.userPresets.count)）")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
+            HStack(spacing: 4) {
+                Text("我的预设（\(shellVM.userPresets.count)）")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                Text("· 拖拽排序 · 双击重命名")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.7))
+                Spacer()
+            }
             LazyVGrid(columns: cardColumns, spacing: 12) {
-                ForEach(shellVM.userPresets) { preset in
-                    userCard(preset)
+                ForEach(Array(shellVM.userPresets.enumerated()), id: \.element.id) { index, preset in
+                    userCard(preset, at: index)
                 }
             }
         }
@@ -135,7 +152,7 @@ struct WorkspacePresetPickerSheet: View {
         .buttonStyle(.plain)
     }
 
-    private func userCard(_ preset: UserWorkspacePreset) -> some View {
+    private func userCard(_ preset: UserWorkspacePreset, at index: Int) -> some View {
         ZStack(alignment: .topTrailing) {
             Button {
                 shellVM.newWorkspace(from: preset)
@@ -185,6 +202,27 @@ struct WorkspacePresetPickerSheet: View {
             }
             .buttonStyle(.plain)
             .help("删除此预设（不可撤销）")
+        }
+        // v17.85 · 双击 → 重命名 sheet
+        .simultaneousGesture(TapGesture(count: 2).onEnded {
+            renamingPresetID = preset.id
+            renameName = preset.name
+            renameEmoji = preset.emoji
+        })
+        // v17.85 · 拖拽排序（macOS 13+ Transferable · 与 WatchlistWindow 同模式）
+        .draggable(UserPresetRef(id: preset.id)) {
+            HStack(spacing: 4) {
+                Text(preset.emoji).font(.system(size: 14))
+                Text(preset.name).font(.system(size: 11, weight: .semibold))
+            }
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(Color.purple.opacity(0.18))
+            .cornerRadius(4)
+        }
+        .dropDestination(for: UserPresetRef.self) { refs, _ in
+            guard let ref = refs.first, ref.id != preset.id else { return false }
+            shellVM.moveUserPreset(ref.id, to: index)
+            return true
         }
     }
 
@@ -238,6 +276,54 @@ struct WorkspacePresetPickerSheet: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    // v17.85 · 重命名 sheet（双击 userCard 触发）
+    private var renameSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("重命名预设").font(.headline)
+            HStack {
+                Text("名称").frame(width: 50, alignment: .leading)
+                TextField("例：早盘多周期", text: $renameName)
+                    .textFieldStyle(.roundedBorder)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Emoji").font(.caption).foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    ForEach(emojiChoices, id: \.self) { e in
+                        Button(e) { renameEmoji = e }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 18))
+                            .frame(width: 30, height: 30)
+                            .background(renameEmoji == e ? Color.accentColor.opacity(0.18) : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+            }
+            HStack {
+                Spacer()
+                Button("取消") { renamingPresetID = nil }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") {
+                    if let id = renamingPresetID {
+                        shellVM.renameUserPreset(id, to: renameName, emoji: renameEmoji)
+                    }
+                    renamingPresetID = nil
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(renameName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+    }
+}
+
+// v17.85 · Transferable 拖拽载荷
+private struct UserPresetRef: Codable, Hashable, Transferable {
+    let id: UUID
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
     }
 }
 

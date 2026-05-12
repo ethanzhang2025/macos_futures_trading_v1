@@ -117,6 +117,13 @@ struct WorkspaceTabBar: View {
             Button("复制 Workspace") {
                 shellVM.duplicateWorkspace(ws.id)
             }
+            // v17.74 · Tab 排序（同 PrimaryTab 内左右移 · 边界禁用）
+            Divider()
+            let tabIdx = visibleWorkspaces.firstIndex(where: { $0.id == ws.id }) ?? 0
+            Button("← 左移") { shellVM.moveWorkspace(ws.id, by: -1) }
+                .disabled(tabIdx == 0)
+            Button("→ 右移") { shellVM.moveWorkspace(ws.id, by: +1) }
+                .disabled(tabIdx >= visibleWorkspaces.count - 1)
             Divider()
             // v17.62 · Workspace 导入 / 导出 JSON（trader 分享布局）
             Button("📤 导出为 JSON…") {

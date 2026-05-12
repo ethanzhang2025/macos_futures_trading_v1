@@ -424,6 +424,21 @@ public final class ShellViewModel: ObservableObject {
         return true
     }
 
+    /// v17.74 · Workspace tab 排序（仅在同 PrimaryTab 内移动 · 跨 tab 移动不影响视觉顺序）
+    /// direction: -1 左移 / +1 右移
+    public func moveWorkspace(_ id: UUID, by direction: Int) {
+        guard let absIdx = workspaces.firstIndex(where: { $0.id == id }) else { return }
+        let ws = workspaces[absIdx]
+        // 找同 primaryTab 的相邻邻居 abs index
+        let neighbors = workspaces.indices.filter { workspaces[$0].primaryTab == ws.primaryTab }
+        guard let localIdx = neighbors.firstIndex(of: absIdx) else { return }
+        let targetLocalIdx = localIdx + direction
+        guard targetLocalIdx >= 0, targetLocalIdx < neighbors.count else { return }
+        let targetAbsIdx = neighbors[targetLocalIdx]
+        workspaces.swapAt(absIdx, targetAbsIdx)
+        persistWorkspaces()
+    }
+
     /// 复制 Workspace（panes + layout 全复制 · name = "原名 副本"·新 UUID · 紧跟原 ws 之后插入并激活）
     public func duplicateWorkspace(_ id: UUID) {
         guard let idx = workspaces.firstIndex(where: { $0.id == id }) else { return }

@@ -39,6 +39,8 @@ struct SpreadAlertWindow: View {
 
     /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+    /// v17.122 · 用户字号档（跟 ChartScene/Settings 同步）
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
 
     // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
@@ -114,9 +116,12 @@ struct SpreadAlertWindow: View {
             if let id = note.object as? String { highlightedInstrumentID = id }
         }
         // v17.109 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        // v17.122 · 同步字号档
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
         .task {
             // v15.75 · 启动加载用户自定义价差对（UserDefaults · 同步即可 · 数据量小）
@@ -478,7 +483,7 @@ struct SpreadAlertWindow: View {
                 // |Z| 进度条
                 HStack(spacing: 4) {
                     Text(String(format: "%.2f", evt.absZ))
-                        .font(.system(size: 11, design: .monospaced).bold())
+                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                         .foregroundColor(zColor(evt.absZ))
                         .frame(width: 36, alignment: .trailing)
                     GeometryReader { geom in
@@ -507,9 +512,9 @@ struct SpreadAlertWindow: View {
                 // 价差对
                 VStack(alignment: .leading, spacing: 1) {
                     Text(evt.spreadName)
-                        .font(.system(size: 11, design: .monospaced).bold())
+                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     Text(evt.categoryDisplay)
-                        .font(.system(size: 9))
+                        .font(.system(size: 9 + chartFontSize.sizeDelta))
                         .foregroundColor(.secondary)
                 }
                 .frame(width: 160, alignment: .leading)
@@ -523,19 +528,19 @@ struct SpreadAlertWindow: View {
 
                 // 当前
                 Text(formatValue(evt.currentValue, unit: evt.unitLabel))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(dirColor)
                     .frame(width: 80, alignment: .trailing)
 
                 // 均值
                 Text(formatValue(evt.mean, unit: evt.unitLabel))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 80, alignment: .trailing)
 
                 // ±2σ 区间
                 Text("[\(formatValue(evt.lowerBand, unit: nil)), \(formatValue(evt.upperBand, unit: nil))]")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 130, alignment: .trailing)
 
@@ -549,7 +554,7 @@ struct SpreadAlertWindow: View {
 
                 // 策略
                 Text(evt.strategy)
-                    .font(.system(size: 11))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)

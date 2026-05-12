@@ -79,6 +79,8 @@ struct WatchlistWindow: View {
 
     /// v17.110 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+    /// v17.122 · 用户字号档（跟 ChartScene/Settings 同步）
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
 
     // v17.110 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
     private var chartProfit: Color { ChartTheme.chartProfitColor(mode: candleColorMode) }
@@ -179,6 +181,9 @@ struct WatchlistWindow: View {
             // v17.110 · 同步 K 线配色（PnL 涨跌色 swap）
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            // v17.122 · 同步字号档
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
         .onChange(of: book) { newValue in
             // M5 自动持久化：每次 book 变化异步 save · isLoaded 守卫避免初始 Mock 误写覆盖真数据
@@ -311,10 +316,10 @@ struct WatchlistWindow: View {
                             ForEach(group.1, id: \.0) { item in
                                 HStack(alignment: .top, spacing: 8) {
                                     Text(item.0)
-                                        .font(.system(size: 12, design: .monospaced))
+                                        .font(.system(size: 12 + chartFontSize.sizeDelta, design: .monospaced))
                                         .foregroundColor(.accentColor)
                                         .frame(width: 180, alignment: .leading)
-                                    Text(item.1).font(.system(size: 12))
+                                    Text(item.1).font(.system(size: 12 + chartFontSize.sizeDelta))
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
@@ -495,7 +500,7 @@ struct WatchlistWindow: View {
                 .foregroundColor(isActive ? .accentColor : .secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text("全部 · 跨分组扫盘")
-                    .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+                    .font(.system(size: 12 + chartFontSize.sizeDelta, weight: isActive ? .semibold : .regular))
                 Text("\(total) 个合约（去重）")
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -877,7 +882,7 @@ struct WatchlistWindow: View {
             // v15.38 V2 · 排序菜单（一键切到隐藏字段）
             sortFieldMenu
         }
-        .font(.system(size: 11, design: .monospaced))
+        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
         .foregroundColor(.secondary)
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
@@ -906,7 +911,7 @@ struct WatchlistWindow: View {
             }
         } label: {
             Label(sortField.displayName, systemImage: "arrow.up.arrow.down")
-                .font(.system(size: 11))
+                .font(.system(size: 11 + chartFontSize.sizeDelta))
         }
         .menuStyle(.borderlessButton)
         .frame(width: 90)
@@ -1108,7 +1113,7 @@ struct WatchlistWindow: View {
             HStack(spacing: 4) {
                 if flag != .none {
                     Text(flag.emoji)
-                        .font(.system(size: 11))
+                        .font(.system(size: 11 + chartFontSize.sizeDelta))
                         .tooltip(flag.displayName)
                 }
                 Text(id)
@@ -1613,8 +1618,8 @@ struct WatchlistWindow: View {
     private func comboWatchlistBadge(for id: String) -> some View {
         if let c = comboFor(userID: id) {
             HStack(spacing: 2) {
-                Image(systemName: "sparkles").font(.system(size: 9))
-                Text("\(c.kindCount)/5").font(.system(size: 10, design: .monospaced).bold())
+                Image(systemName: "sparkles").font(.system(size: 9 + chartFontSize.sizeDelta))
+                Text("\(c.kindCount)/5").font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced).bold())
             }
             .foregroundColor(.white)
             .padding(.horizontal, 5).padding(.vertical, 1)
@@ -2029,7 +2034,7 @@ private struct QuickPasteSheet: View {
                 .foregroundColor(.secondary)
 
             TextEditor(text: $text)
-                .font(.system(size: 13, design: .monospaced))
+                .font(.system(size: 13 + chartFontSize.sizeDelta, design: .monospaced))
                 .frame(height: 160)
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.gray.opacity(0.4), lineWidth: 1))
 
@@ -2041,7 +2046,7 @@ private struct QuickPasteSheet: View {
                 } else {
                     Text("\(parsedPreview.count) 个 · ").font(.caption)
                     Text(parsedPreview.prefix(8).joined(separator: ", "))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                         .lineLimit(1)
                         .truncationMode(.tail)
                     if parsedPreview.count > 8 {

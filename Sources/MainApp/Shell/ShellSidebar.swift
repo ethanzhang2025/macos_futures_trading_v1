@@ -265,28 +265,46 @@ struct ShellSidebar: View {
     private var positionSection: some View {
         Section {
             ForEach(realPositions, id: \.instrumentID) { pos in
-                HStack(spacing: 6) {
-                    Text(pos.instrumentID)
-                        .font(.system(size: 12, design: .monospaced))
-                    Text(pos.direction.displayName)
-                        .font(.system(size: 10))
-                        .padding(.horizontal, 3)
-                        .background((pos.direction == .long ? Color.red : Color.green).opacity(0.2))
-                        .cornerRadius(2)
-                    Text("\(pos.volume)")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    let pnl = positionPnL(pos)
-                    let pnlVal = NSDecimalNumber(decimal: pnl).doubleValue
-                    Text(String(format: "%@¥%.0f", pnlVal >= 0 ? "+" : "", pnlVal))
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(pnlVal >= 0 ? .red : .green)
+                Button {
+                    // v17.91 · 点击持仓 → 切主图 K 线（同 watchlistInstrumentSelected 通道）
+                    openWindow(id: "chart")
+                    NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: pos.instrumentID)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(pos.instrumentID)
+                            .font(.system(size: 12, design: .monospaced))
+                        Text(pos.direction.displayName)
+                            .font(.system(size: 10))
+                            .padding(.horizontal, 3)
+                            .background((pos.direction == .long ? Color.red : Color.green).opacity(0.2))
+                            .cornerRadius(2)
+                        Text("\(pos.volume)")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        let pnl = positionPnL(pos)
+                        let pnlVal = NSDecimalNumber(decimal: pnl).doubleValue
+                        Text(String(format: "%@¥%.0f", pnlVal >= 0 ? "+" : "", pnlVal))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(pnlVal >= 0 ? .red : .green)
+                    }
+                    .padding(.vertical, 1)
+                    .contentShape(Rectangle())
                 }
-                .padding(.vertical, 1)
+                .buttonStyle(.plain)
+                .help("\(pos.instrumentID) · \(pos.direction.displayName) \(pos.volume) 手 · 点击切主图")
             }
             if realPositions.isEmpty {
-                Text("无持仓").font(.caption).foregroundColor(.secondary)
+                Button {
+                    openWindow(id: "trading")
+                } label: {
+                    Text("无持仓 · 打开模拟交易→")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("打开模拟交易窗口")
             }
         } header: {
             HStack(spacing: 4) {
@@ -444,46 +462,53 @@ struct ShellSidebar: View {
 
     private var trainingSection: some View {
         Section {
-            // 连胜/连败 streak
-            let streak = trainingLog.currentStreak
-            if streak.count >= 2 {
-                HStack {
-                    Text(streak.isWinning ? "🔥" : "💧")
-                    Text("\(streak.isWinning ? "连胜" : "连败") \(streak.count) 次")
-                        .font(.system(size: 12))
-                    Spacer()
+            // v17.91 · 整个 section 块包成 Button · 点击切 PrimaryTab=.training（与 ⌘5 同效）
+            Button {
+                shellVM.primaryTab = .training
+                shellVM.activateFirstWorkspaceOfPrimaryTab()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    let streak = trainingLog.currentStreak
+                    if streak.count >= 2 {
+                        HStack {
+                            Text(streak.isWinning ? "🔥" : "💧")
+                            Text("\(streak.isWinning ? "连胜" : "连败") \(streak.count) 次")
+                                .font(.system(size: 12))
+                            Spacer()
+                        }
+                    }
+                    if let avg = thisMonthAvg {
+                        HStack {
+                            Text("📊")
+                            Text("本月均分 \(avg)")
+                                .font(.system(size: 12))
+                            Spacer()
+                        }
+                    }
+                    HStack {
+                        Text("🎯")
+                        Text("累计 \(trainingLog.sessions.count) 次训练")
+                            .font(.system(size: 12))
+                        Spacer()
+                    }
+                    if let dim = focusDimension {
+                        HStack {
+                            Text("🎯")
+                            Text("下次专项: \(dim)")
+                                .font(.system(size: 12))
+                                .foregroundColor(.purple)
+                            Spacer()
+                        }
+                    }
+                    if trainingLog.sessions.isEmpty {
+                        Text("尚未开始训练 · 点击进入训练模块 →")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                 }
+                .contentShape(Rectangle())
             }
-            // 本月均分
-            if let avg = thisMonthAvg {
-                HStack {
-                    Text("📊")
-                    Text("本月均分 \(avg)")
-                        .font(.system(size: 12))
-                    Spacer()
-                }
-            }
-            // 训练总次数
-            HStack {
-                Text("🎯")
-                Text("累计 \(trainingLog.sessions.count) 次训练")
-                    .font(.system(size: 12))
-                Spacer()
-            }
-            // 下次专项（v16.213 加的 focusDimension）
-            if let dim = focusDimension {
-                HStack {
-                    Text("🎯")
-                    Text("下次专项: \(dim)")
-                        .font(.system(size: 12))
-                        .foregroundColor(.purple)
-                    Spacer()
-                }
-            }
-            if trainingLog.sessions.isEmpty {
-                Text("尚未开始训练 · 主区切到 🎯 训练模块")
-                    .font(.caption).foregroundColor(.secondary)
-            }
+            .buttonStyle(.plain)
+            .help("点击切到训练模块（⌘5）")
         } header: {
             Label("训练", systemImage: "target")
                 .foregroundColor(.green)

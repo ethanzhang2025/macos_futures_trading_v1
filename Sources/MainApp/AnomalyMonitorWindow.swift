@@ -26,6 +26,15 @@ struct AnomalyMonitorWindow: View {
     @State private var comboSortMode: ComboSortMode = .totalSeverity  // v15.80
     @Environment(\.openWindow) private var openWindow
 
+    /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+    private var chartProfitEmphasized: Color { chartProfitEmphasizedColor(mode: candleColorMode) }
+    private var chartLossEmphasized: Color { chartLossEmphasizedColor(mode: candleColorMode) }
+
     enum SectorFilter: Hashable, Identifiable {
         case all
         case sector(Sector)
@@ -132,6 +141,11 @@ struct AnomalyMonitorWindow: View {
             if let id = note.object as? String, let sec = SectorPresets.byID[id]?.sector {
                 sectorFilter = .sector(sec)
             }
+        }
+        // v17.109 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
         }
     }
 
@@ -349,7 +363,7 @@ struct AnomalyMonitorWindow: View {
         let kinds = AnomalyKind.allCases.filter { (r.countByKind[$0] ?? 0) > 0 }.count
         let sectors = r.countBySector.values.filter { $0 > 0 }.count
         return HStack(spacing: 22) {
-            statBlock("异常总数", "\(r.total)", color: r.total > 20 ? ChartTheme.chartLoss : .primary)
+            statBlock("异常总数", "\(r.total)", color: r.total > 20 ? chartLoss : .primary)
             statBlock("当前过滤", "\(filtered)", color: .secondary)
             Divider().frame(height: 28)
             ForEach(AnomalyKind.allCases) { k in
@@ -373,7 +387,7 @@ struct AnomalyMonitorWindow: View {
 
     private func kindColor(_ kind: AnomalyKind) -> Color {
         switch kind {
-        case .priceSpike:        return ChartTheme.chartLoss
+        case .priceSpike:        return chartLoss
         case .oiSpike:           return .orange
         case .fundSurge:         return .yellow
         case .priceOIDivergence: return .purple
@@ -492,7 +506,7 @@ struct AnomalyMonitorWindow: View {
     }
 
     private func severityColor(_ s: Double) -> Color {
-        if s >= 80 { return ChartTheme.chartLoss }
+        if s >= 80 { return chartLoss }
         if s >= 50 { return .orange }
         return .yellow
     }
@@ -625,7 +639,7 @@ struct AnomalyMonitorWindow: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "crown.fill")
                                     .font(.caption2)
-                                    .foregroundColor(ChartTheme.chartLoss)
+                                    .foregroundColor(chartLoss)
                                 Text("龙头：\(l.instrumentName)（\(Int(l.severity))）")
                                     .font(.caption.monospaced())
                                     .foregroundColor(.primary)
@@ -636,7 +650,7 @@ struct AnomalyMonitorWindow: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "exclamationmark.triangle")
                                     .font(.caption2)
-                                    .foregroundColor(ChartTheme.chartProfit)
+                                    .foregroundColor(chartProfit)
                                 Text("弱势：\(lag.instrumentName)（\(Int(lag.severity))）")
                                     .font(.caption.monospaced())
                                     .foregroundColor(.secondary)
@@ -656,7 +670,7 @@ struct AnomalyMonitorWindow: View {
     }
 
     private func densityColor(_ d: Double) -> Color {
-        if d >= 0.6 { return ChartTheme.chartLoss }
+        if d >= 0.6 { return chartLoss }
         if d >= 0.3 { return .orange }
         if d > 0    { return .yellow }
         return .secondary.opacity(0.3)
@@ -794,13 +808,13 @@ struct AnomalyMonitorWindow: View {
     private func sparklineColor(_ count: Int, peak: Int) -> Color {
         guard peak > 0 else { return .secondary }
         let ratio = Double(count) / Double(peak)
-        if ratio >= 0.75 { return ChartTheme.chartLoss }
+        if ratio >= 0.75 { return chartLoss }
         if ratio >= 0.4  { return .orange }
         return .yellow
     }
 
     private func totalCountColor(_ count: Int) -> Color {
-        if count >= 80 { return ChartTheme.chartLoss }
+        if count >= 80 { return chartLoss }
         if count >= 40 { return .orange }
         return .primary
     }
@@ -869,8 +883,8 @@ struct AnomalyMonitorWindow: View {
 
     private func weeklyTrendStatsBar(surging: Int, easing: Int, flat: Int) -> some View {
         HStack(spacing: 22) {
-            statBlock("加剧 ↑20%+", "\(surging)", color: ChartTheme.chartLoss)
-            statBlock("减弱 ↓20%+", "\(easing)", color: ChartTheme.chartProfit)
+            statBlock("加剧 ↑20%+", "\(surging)", color: chartLoss)
+            statBlock("减弱 ↓20%+", "\(easing)", color: chartProfit)
             statBlock("持平", "\(flat)", color: .secondary)
             Spacer()
             Text("本周 7d vs 上周 7d · 异动突然加剧的品种值得重点跟踪")
@@ -1015,9 +1029,9 @@ struct AnomalyMonitorWindow: View {
     private func comboStatsBar(total: Int, c5: Int, c4: Int, c3: Int) -> some View {
         HStack(spacing: 18) {
             statBlock("Combo 总数", "\(total)",
-                      color: total > 0 ? ChartTheme.chartLoss : .secondary)
+                      color: total > 0 ? chartLoss : .secondary)
             Divider().frame(height: 28)
-            statBlock("5 类", "\(c5)", color: c5 > 0 ? ChartTheme.chartLoss : .secondary)
+            statBlock("5 类", "\(c5)", color: c5 > 0 ? chartLoss : .secondary)
             statBlock("4 类", "\(c4)", color: c4 > 0 ? .orange : .secondary)
             statBlock("3 类", "\(c3)", color: c3 > 0 ? .yellow : .secondary)
             Divider().frame(height: 28)
@@ -1232,35 +1246,35 @@ struct AnomalyMonitorWindow: View {
     }
 
     private func comboSeverityColor(_ combo: ComboAnomaly) -> Color {
-        if combo.kindCount >= 5 { return ChartTheme.chartLoss }
+        if combo.kindCount >= 5 { return chartLoss }
         if combo.kindCount == 4 { return .orange }
-        if combo.totalSeverity >= 80 { return ChartTheme.chartLoss }
+        if combo.totalSeverity >= 80 { return chartLoss }
         if combo.totalSeverity >= 50 { return .orange }
         return .yellow
     }
 
     private func comboKindCountColor(_ count: Int) -> Color {
-        if count >= 5 { return ChartTheme.chartLoss }
+        if count >= 5 { return chartLoss }
         if count == 4 { return .orange }
         return .yellow
     }
 
     private func weekCountColor(_ c: Int) -> Color {
-        if c >= 15 { return ChartTheme.chartLoss }
+        if c >= 15 { return chartLoss }
         if c >= 8  { return .orange }
         return .primary
     }
 
     private func deltaColor(_ d: Int) -> Color {
-        if d > 5 { return ChartTheme.chartLoss }
-        if d < -5 { return ChartTheme.chartProfit }
+        if d > 5 { return chartLoss }
+        if d < -5 { return chartProfit }
         return .secondary
     }
 
     private func trendColor(_ t: WeekTrend) -> Color {
         switch t {
-        case .surging: return ChartTheme.chartLoss
-        case .easing:  return ChartTheme.chartProfit
+        case .surging: return chartLoss
+        case .easing:  return chartProfit
         case .flat:    return .secondary
         }
     }
@@ -1276,7 +1290,7 @@ struct AnomalyMonitorWindow: View {
     private var legendBar: some View {
         HStack(spacing: 14) {
             HStack(spacing: 6) {
-                Circle().fill(ChartTheme.chartLoss).frame(width: 8, height: 8)
+                Circle().fill(chartLoss).frame(width: 8, height: 8)
                 Text("≥ 80 高").font(.caption2).foregroundColor(.secondary)
             }
             HStack(spacing: 6) {

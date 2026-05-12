@@ -30,6 +30,13 @@ struct SessionCompareWindow: View {
     @State private var highlightedID: String?
     @Environment(\.openWindow) private var openWindow
 
+    /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+
     enum CompareMode: String, CaseIterable, Identifiable {
         case nightVsDay
         case morningVsAfternoon
@@ -151,6 +158,11 @@ struct SessionCompareWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
             if let id = note.object as? String { highlightedID = id }
         }
+        // v17.109 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
+        }
     }
 
     // MARK: - Toolbar
@@ -224,13 +236,13 @@ struct SessionCompareWindow: View {
             Divider().frame(height: 28)
             statBlock("均 \(compareMode.sessionALabel)",
                      String(format: "%+.2f%%", avgA),
-                     color: avgA >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                     color: avgA >= 0 ? chartLoss : chartProfit)
             statBlock("均 \(compareMode.sessionBLabel)",
                      String(format: "%+.2f%%", avgB),
-                     color: avgB >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                     color: avgB >= 0 ? chartLoss : chartProfit)
             statBlock("时段差",
                      String(format: "%+.2f%%", diff),
-                     color: diff >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                     color: diff >= 0 ? chartLoss : chartProfit)
             Spacer()
             Text(diff > 0.5
                  ? "\(compareMode.sessionBLabel) 整体强于 \(compareMode.sessionALabel)"
@@ -286,14 +298,14 @@ struct SessionCompareWindow: View {
 
     private func rowView(row: SessionRow, maxAbs: Double) -> some View {
         let inst = row.inst
-        let aColor: Color = row.sessionA > 0 ? ChartTheme.chartLoss
-                          : (row.sessionA < 0 ? ChartTheme.chartProfit : .secondary)
-        let bColor: Color = row.sessionB > 0 ? ChartTheme.chartLoss
-                          : (row.sessionB < 0 ? ChartTheme.chartProfit : .secondary)
-        let diffColor: Color = row.difference > 0 ? ChartTheme.chartLoss
-                             : (row.difference < 0 ? ChartTheme.chartProfit : .secondary)
-        let totalColor: Color = inst.changePct > 0 ? ChartTheme.chartLoss
-                              : (inst.changePct < 0 ? ChartTheme.chartProfit : .secondary)
+        let aColor: Color = row.sessionA > 0 ? chartLoss
+                          : (row.sessionA < 0 ? chartProfit : .secondary)
+        let bColor: Color = row.sessionB > 0 ? chartLoss
+                          : (row.sessionB < 0 ? chartProfit : .secondary)
+        let diffColor: Color = row.difference > 0 ? chartLoss
+                             : (row.difference < 0 ? chartProfit : .secondary)
+        let totalColor: Color = inst.changePct > 0 ? chartLoss
+                              : (inst.changePct < 0 ? chartProfit : .secondary)
         return Button {
             openWindow(id: "chart")
             NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: inst.id)
@@ -349,8 +361,8 @@ struct SessionCompareWindow: View {
             let halfW = totalW / 2
             let aRatio = min(abs(row.sessionA) / maxAbs, 1.0)
             let bRatio = min(abs(row.sessionB) / maxAbs, 1.0)
-            let aColor: Color = row.sessionA > 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit
-            let bColor: Color = row.sessionB > 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit
+            let aColor: Color = row.sessionA > 0 ? chartLoss : chartProfit
+            let bColor: Color = row.sessionB > 0 ? chartLoss : chartProfit
             ZStack {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(Color.secondary.opacity(0.10))
@@ -404,8 +416,8 @@ struct SessionCompareWindow: View {
         let avgA = rows.reduce(0.0) { $0 + $1.sessionA } / Double(rows.count)
         let avgB = rows.reduce(0.0) { $0 + $1.sessionB } / Double(rows.count)
         let diff = avgB - avgA
-        let diffColor: Color = diff > 0 ? ChartTheme.chartLoss
-                             : (diff < 0 ? ChartTheme.chartProfit : .secondary)
+        let diffColor: Color = diff > 0 ? chartLoss
+                             : (diff < 0 ? chartProfit : .secondary)
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
                 Image(systemName: sector.icon).font(.system(size: 9))
@@ -414,13 +426,13 @@ struct SessionCompareWindow: View {
             HStack(spacing: 6) {
                 Text("\(compareMode.sessionALabel)\(String(format: "%+.1f", avgA))%")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(avgA >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                    .foregroundColor(avgA >= 0 ? chartLoss : chartProfit)
                 Text("→")
                     .font(.system(size: 9))
                     .foregroundColor(.secondary)
                 Text("\(compareMode.sessionBLabel)\(String(format: "%+.1f", avgB))%")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(avgB >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                    .foregroundColor(avgB >= 0 ? chartLoss : chartProfit)
             }
             Text(String(format: "差 %+.2f%%", diff))
                 .font(.system(size: 9, design: .monospaced).bold())

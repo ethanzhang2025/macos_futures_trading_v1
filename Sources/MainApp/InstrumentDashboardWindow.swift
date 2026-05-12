@@ -26,6 +26,15 @@ struct InstrumentDashboardWindow: View {
     @State private var cachedSeries: [Double] = []
     @Environment(\.openWindow) private var openWindow
 
+    /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+    private var chartProfitEmphasized: Color { chartProfitEmphasizedColor(mode: candleColorMode) }
+    private var chartLossEmphasized: Color { chartLossEmphasizedColor(mode: candleColorMode) }
+
     enum SectorFilter: Hashable, Identifiable {
         case all
         case sector(Sector)
@@ -115,6 +124,11 @@ struct InstrumentDashboardWindow: View {
                 selectedID = id   // 触发 onChange → refreshCache
             }
         }
+        // v17.109 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
+        }
     }
 
     // MARK: - Toolbar
@@ -189,8 +203,8 @@ struct InstrumentDashboardWindow: View {
         guard let inst = selected else {
             return AnyView(Color.clear.frame(height: 0))
         }
-        let changeColor: Color = inst.changePct > 0 ? ChartTheme.chartLoss
-                              : (inst.changePct < 0 ? ChartTheme.chartProfit : .secondary)
+        let changeColor: Color = inst.changePct > 0 ? chartLoss
+                              : (inst.changePct < 0 ? chartProfit : .secondary)
         return AnyView(HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
@@ -236,10 +250,10 @@ struct InstrumentDashboardWindow: View {
         let firstN = Array(series.prefix(10))
         let momentum = (lastN.reduce(0, +) / Double(lastN.count)) - (firstN.reduce(0, +) / Double(firstN.count))
         let momPct = momentum / avg * 100
-        let momColor: Color = momPct > 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit
+        let momColor: Color = momPct > 0 ? chartLoss : chartProfit
         return AnyView(HStack(spacing: 22) {
-            statBlock("200 日高", String(format: "%.2f", high), color: ChartTheme.chartLoss)
-            statBlock("200 日低", String(format: "%.2f", low), color: ChartTheme.chartProfit)
+            statBlock("200 日高", String(format: "%.2f", high), color: chartLoss)
+            statBlock("200 日低", String(format: "%.2f", low), color: chartProfit)
             statBlock("均值", String(format: "%.2f", avg), color: .secondary)
             statBlock("振幅", String(format: "%.1f%%", amp), color: .yellow)
             Divider().frame(height: 24)
@@ -309,8 +323,8 @@ struct InstrumentDashboardWindow: View {
             var seg = Path()
             seg.move(to: CGPoint(x: x1, y: yFor(v1)))
             seg.addLine(to: CGPoint(x: x2, y: yFor(v2)))
-            let color: Color = v2 >= v1 ? ChartTheme.chartLoss.opacity(0.85)
-                                        : ChartTheme.chartProfit.opacity(0.85)
+            let color: Color = v2 >= v1 ? chartLoss.opacity(0.85)
+                                        : chartProfit.opacity(0.85)
             ctx.stroke(seg, with: .color(color),
                        style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
         }
@@ -365,8 +379,8 @@ struct InstrumentDashboardWindow: View {
         guard let inst = selected, let stats = sectorStats else {
             return AnyView(Color.clear.frame(height: 0))
         }
-        let avgColor: Color = stats.avgChangePct > 0.3 ? ChartTheme.chartLoss
-                            : (stats.avgChangePct < -0.3 ? ChartTheme.chartProfit : .secondary)
+        let avgColor: Color = stats.avgChangePct > 0.3 ? chartLoss
+                            : (stats.avgChangePct < -0.3 ? chartProfit : .secondary)
         return AnyView(VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: inst.sector.icon).font(.callout.bold())
@@ -378,8 +392,8 @@ struct InstrumentDashboardWindow: View {
             }
             HStack(spacing: 16) {
                 statTile("家数", "\(stats.totalCount)", color: .secondary)
-                statTile("涨", "\(stats.gainers)", color: ChartTheme.chartLoss)
-                statTile("跌", "\(stats.losers)", color: ChartTheme.chartProfit)
+                statTile("涨", "\(stats.gainers)", color: chartLoss)
+                statTile("跌", "\(stats.losers)", color: chartProfit)
             }
             // 多空偏向
             VStack(alignment: .leading, spacing: 3) {
@@ -405,7 +419,7 @@ struct InstrumentDashboardWindow: View {
 
     private func bullBiasBar(bias: Double) -> some View {
         let pct = (bias + 1) / 2
-        let color: Color = bias > 0 ? ChartTheme.chartLoss : (bias < 0 ? ChartTheme.chartProfit : .secondary)
+        let color: Color = bias > 0 ? chartLoss : (bias < 0 ? chartProfit : .secondary)
         return HStack(spacing: 8) {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2)
@@ -434,7 +448,7 @@ struct InstrumentDashboardWindow: View {
                 Spacer()
                 Text(String(format: "%+.2f%%", inst.changePct))
                     .font(.caption.monospaced())
-                    .foregroundColor(inst.changePct >= 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                    .foregroundColor(inst.changePct >= 0 ? chartLoss : chartProfit)
             }
             .padding(.horizontal, 6).padding(.vertical, 3)
             .background(Color.secondary.opacity(0.06))

@@ -37,6 +37,15 @@ struct SpreadAlertWindow: View {
     @Environment(\.alertEvaluator) private var alertEvaluator
     @Environment(\.storeManager) private var storeManager
 
+    /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+    private var chartProfitEmphasized: Color { chartProfitEmphasizedColor(mode: candleColorMode) }
+    private var chartLossEmphasized: Color { chartLossEmphasizedColor(mode: candleColorMode) }
+
     enum DirectionFilter: String, CaseIterable, Identifiable {
         case all
         case upperOnly  // 仅上轨突破
@@ -103,6 +112,11 @@ struct SpreadAlertWindow: View {
         // v17.101 · inbound · 主图切到某合约 · 高亮所有含该腿的价差行（不切 filter · 仅视觉指引）
         .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
             if let id = note.object as? String { highlightedInstrumentID = id }
+        }
+        // v17.109 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
         }
         .task {
             // v15.75 · 启动加载用户自定义价差对（UserDefaults · 同步即可 · 数据量小）
@@ -376,16 +390,16 @@ struct SpreadAlertWindow: View {
         let calCount = evts.filter { $0.kind == .calendar }.count
         let maxAbsZ = evts.map(\.absZ).max() ?? 0
         return HStack(spacing: 22) {
-            statBlock("命中", "\(evts.count) / 26", color: evts.count > 5 ? ChartTheme.chartLoss : .primary)
+            statBlock("命中", "\(evts.count) / 26", color: evts.count > 5 ? chartLoss : .primary)
             Divider().frame(height: 28)
-            statBlock("上轨", "\(upperCount)", color: ChartTheme.chartLoss)
-            statBlock("下轨", "\(lowerCount)", color: ChartTheme.chartProfit)
+            statBlock("上轨", "\(upperCount)", color: chartLoss)
+            statBlock("下轨", "\(lowerCount)", color: chartProfit)
             Divider().frame(height: 28)
             statBlock("跨品种", "\(crossCount)", color: .orange)
             statBlock("跨期", "\(calCount)", color: .cyan)
             Divider().frame(height: 28)
             statBlock("最大 |Z|", String(format: "%.2f", maxAbsZ),
-                     color: maxAbsZ >= 3 ? ChartTheme.chartLoss : .primary)
+                     color: maxAbsZ >= 3 ? chartLoss : .primary)
             Spacer()
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
@@ -453,7 +467,7 @@ struct SpreadAlertWindow: View {
     }
 
     private func eventRow(_ evt: SpreadAlertEvent) -> some View {
-        let dirColor: Color = evt.direction == .upperBreached ? ChartTheme.chartLoss : ChartTheme.chartProfit
+        let dirColor: Color = evt.direction == .upperBreached ? chartLoss : chartProfit
         let kindColor: Color = evt.kind == .crossInstrument ? .orange : .cyan
         let kindLabel: String = evt.kind == .crossInstrument ? "跨品种" : "跨期"
         let isAdded = addedSpreadIDs.contains(evt.spreadID)
@@ -556,7 +570,7 @@ struct SpreadAlertWindow: View {
             } label: {
                 if isAdded {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(ChartTheme.chartLoss)
+                        .foregroundColor(chartLoss)
                 } else {
                     Image(systemName: "bell.badge")
                         .foregroundColor(.accentColor)
@@ -572,7 +586,7 @@ struct SpreadAlertWindow: View {
     }
 
     private func zColor(_ z: Double) -> Color {
-        if z >= 3.0 { return ChartTheme.chartLoss }
+        if z >= 3.0 { return chartLoss }
         if z >= 2.0 { return .orange }
         return .yellow
     }
@@ -615,13 +629,13 @@ struct SpreadAlertWindow: View {
             var upperLine = Path()
             upperLine.move(to: CGPoint(x: 0, y: yFor(evt.upperBand)))
             upperLine.addLine(to: CGPoint(x: w, y: yFor(evt.upperBand)))
-            ctx.stroke(upperLine, with: .color(ChartTheme.chartLoss.opacity(0.4)),
+            ctx.stroke(upperLine, with: .color(chartLoss.opacity(0.4)),
                        style: StrokeStyle(lineWidth: 0.6, dash: [2, 2]))
 
             var lowerLine = Path()
             lowerLine.move(to: CGPoint(x: 0, y: yFor(evt.lowerBand)))
             lowerLine.addLine(to: CGPoint(x: w, y: yFor(evt.lowerBand)))
-            ctx.stroke(lowerLine, with: .color(ChartTheme.chartProfit.opacity(0.4)),
+            ctx.stroke(lowerLine, with: .color(chartProfit.opacity(0.4)),
                        style: StrokeStyle(lineWidth: 0.6, dash: [2, 2]))
 
             // mean 中线（更淡）
@@ -673,7 +687,7 @@ struct SpreadAlertWindow: View {
     private var legendBar: some View {
         HStack(spacing: 14) {
             HStack(spacing: 6) {
-                Circle().fill(ChartTheme.chartLoss).frame(width: 8, height: 8)
+                Circle().fill(chartLoss).frame(width: 8, height: 8)
                 Text("|Z| ≥ 3 极值").font(.caption2).foregroundColor(.secondary)
             }
             HStack(spacing: 6) {

@@ -26,6 +26,13 @@ struct PositionWindow: View {
     @State private var sortDescending: Bool = true
     @Environment(\.openWindow) private var openWindow
 
+    /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+
     enum SectorFilter: Hashable, Identifiable {
         case all
         case sector(Sector)
@@ -120,6 +127,11 @@ struct PositionWindow: View {
                 sectorFilter = .sector(sec)
             }
         }
+        // v17.109 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
+        }
     }
 
     // MARK: - Toolbar
@@ -178,15 +190,15 @@ struct PositionWindow: View {
         let avgBull = r.reduce(0.0) { $0 + $1.bullRatio } / Double(r.count)
         return AnyView(HStack(spacing: 22) {
             statBlock("品种", "\(r.count)", color: .secondary)
-            statBlock("多头主导", "\(bullDominant)", color: ChartTheme.chartLoss)
-            statBlock("空头主导", "\(bearDominant)", color: ChartTheme.chartProfit)
+            statBlock("多头主导", "\(bullDominant)", color: chartLoss)
+            statBlock("空头主导", "\(bearDominant)", color: chartProfit)
             statBlock("均多头比",
                      String(format: "%.1f%%", avgBull * 100),
-                     color: avgBull >= 0.5 ? ChartTheme.chartLoss : ChartTheme.chartProfit)
+                     color: avgBull >= 0.5 ? chartLoss : chartProfit)
             statBlock("市场情绪",
                      avgBull >= 0.55 ? "偏多" : (avgBull <= 0.45 ? "偏空" : "中性"),
-                     color: avgBull >= 0.55 ? ChartTheme.chartLoss
-                          : (avgBull <= 0.45 ? ChartTheme.chartProfit : .secondary))
+                     color: avgBull >= 0.55 ? chartLoss
+                          : (avgBull <= 0.45 ? chartProfit : .secondary))
             Spacer()
             statBlock("总持仓", String(format: "%.0fK", totalOI), color: .secondary)
         }
@@ -232,9 +244,9 @@ struct PositionWindow: View {
 
     private func positionRowView(_ row: PositionRow) -> some View {
         let inst = row.inst
-        let changeColor: Color = inst.changePct > 0 ? ChartTheme.chartLoss
-                              : (inst.changePct < 0 ? ChartTheme.chartProfit : .secondary)
-        let netColor: Color = row.netOI > 0 ? ChartTheme.chartLoss : ChartTheme.chartProfit
+        let changeColor: Color = inst.changePct > 0 ? chartLoss
+                              : (inst.changePct < 0 ? chartProfit : .secondary)
+        let netColor: Color = row.netOI > 0 ? chartLoss : chartProfit
         return Button {
             openWindow(id: "chart")
             NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: inst.id)
@@ -297,7 +309,7 @@ struct PositionWindow: View {
     }
 
     private func comboBadgeColor(_ c: ComboAnomaly) -> Color {
-        if c.kindCount >= 5 { return ChartTheme.chartLoss }
+        if c.kindCount >= 5 { return chartLoss }
         if c.kindCount == 4 { return .orange }
         return .yellow
     }
@@ -330,13 +342,13 @@ struct PositionWindow: View {
                     HStack {
                         Spacer()
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(ChartTheme.chartLoss.opacity(0.85))
+                            .fill(chartLoss.opacity(0.85))
                             .frame(width: bullW * 0.95, height: 14)
                     }
                     // 右半：空头条（从中点向右生长）
                     HStack {
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(ChartTheme.chartProfit.opacity(0.85))
+                            .fill(chartProfit.opacity(0.85))
                             .frame(width: bearW * 0.95, height: 14)
                         Spacer()
                     }
@@ -370,8 +382,8 @@ struct PositionWindow: View {
 
     private var legendBar: some View {
         HStack(spacing: 22) {
-            legendItem(color: ChartTheme.chartLoss, text: "多头持仓（涨幅推算）")
-            legendItem(color: ChartTheme.chartProfit, text: "空头持仓")
+            legendItem(color: chartLoss, text: "多头持仓（涨幅推算）")
+            legendItem(color: chartProfit, text: "空头持仓")
             Text("净持仓 = 多 - 空 · 正=多头主导（红） · 负=空头主导（绿）")
                 .font(.caption2).foregroundColor(.secondary)
             Spacer()

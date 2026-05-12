@@ -222,6 +222,11 @@ private struct ChartSettingsTab: View {
     @State private var book: IndicatorParamsBook = IndicatorParamsStore.load() ?? .default
     @State private var candleMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
     @State private var pricePrecision: PricePrecisionMode = ChartSettingsStore.loadPricePrecision()
+    // v17.112 · 4 个新偏好
+    @State private var fontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
+    @State private var hudOpacity: HUDOpacityMode = ChartSettingsStore.loadHUDOpacityMode()
+    @State private var gridDensity: GridDensity = ChartSettingsStore.loadGridDensity()
+    @State private var subChartRatio: SubChartDefaultRatio = ChartSettingsStore.loadSubChartDefaultRatio()
 
     var body: some View {
         Form {
@@ -309,11 +314,52 @@ private struct ChartSettingsTab: View {
                     .font(.system(size: 11)).foregroundColor(.secondary)
             }
 
+            // v17.112 · 字号 / HUD 透明 / 网格 / 副图高 4 项
+            Section {
+                Picker("字号档", selection: $fontSize) {
+                    ForEach(ChartFontSize.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Picker("HUD 不透明度", selection: $hudOpacity) {
+                    ForEach(HUDOpacityMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("HUD 外观").font(.headline)
+            } footer: {
+                Text("字号影响 HUD/Tooltip/Axis · HUD 不透明度弱档透出 K 线 / 强档高对比")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+
+            Section {
+                Picker("网格密度", selection: $gridDensity) {
+                    ForEach(GridDensity.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Picker("副图默认高度", selection: $subChartRatio) {
+                    ForEach(SubChartDefaultRatio.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("布局").font(.headline)
+            } footer: {
+                Text("网格密度影响 axis 主刻度间距 · 副图默认高度新开图表生效 · 已开图表手动拖分割条仍可临时调")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+
             Section {
                 Button("恢复全部默认") { resetAll() }
                     .foregroundColor(.red)
             } footer: {
-                Text("仅重置图表偏好（指标 / 配色 / 精度）· 不影响通用 / 通知 / 隐私 tab")
+                Text("仅重置图表偏好（指标 / 配色 / 精度 / 字号 / HUD / 网格 / 副图）· 不影响通用 / 通知 / 隐私 tab")
                     .font(.system(size: 11)).foregroundColor(.secondary)
             }
         }
@@ -327,6 +373,18 @@ private struct ChartSettingsTab: View {
         }
         .onChange(of: pricePrecision) { newValue in
             ChartSettingsStore.savePricePrecision(newValue)
+        }
+        .onChange(of: fontSize) { newValue in
+            ChartSettingsStore.saveChartFontSize(newValue)
+        }
+        .onChange(of: hudOpacity) { newValue in
+            ChartSettingsStore.saveHUDOpacityMode(newValue)
+        }
+        .onChange(of: gridDensity) { newValue in
+            ChartSettingsStore.saveGridDensity(newValue)
+        }
+        .onChange(of: subChartRatio) { newValue in
+            ChartSettingsStore.saveSubChartDefaultRatio(newValue)
         }
     }
 
@@ -350,7 +408,7 @@ private struct ChartSettingsTab: View {
     private func resetAll() {
         let alert = NSAlert()
         alert.messageText = L("恢复图表偏好默认")
-        alert.informativeText = "将重置指标参数 + K 线配色 + 价格精度 · 不可撤销"
+        alert.informativeText = "将重置指标参数 + K 线配色 + 价格精度 + 字号 + HUD + 网格 + 副图默认高 · 不可撤销"
         alert.addButton(withTitle: L("确认重置"))
         alert.addButton(withTitle: L("取消"))
         alert.alertStyle = .warning
@@ -358,6 +416,10 @@ private struct ChartSettingsTab: View {
         book = .default
         candleMode = .redUpGreenDown
         pricePrecision = .auto
+        fontSize = .medium
+        hudOpacity = .normal
+        gridDensity = .medium
+        subChartRatio = .normal
         IndicatorParamsStore.save(.default)
         ChartSettingsStore.resetAll()
     }

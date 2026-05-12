@@ -20,7 +20,7 @@ struct SettingsContentView: View {
                 .tabItem { Label("通知", systemImage: "bell.badge") }
             PrivacySettingsTab()
                 .tabItem { Label("隐私", systemImage: "hand.raised.fill") }
-            placeholder(title: "图表", note: "全局快捷键 ⌘⇧D 切主题（已实现 v15.17）· 颜色 / 指标 / 精度细化待补")
+            ChartSettingsTab()
                 .tabItem { Label("图表", systemImage: "chart.line.uptrend.xyaxis") }
             placeholder(title: "数据", note: "行情源 / 缓存路径 / 加密 passphrase（Keychain wire 待 Stage B IAP）")
                 .tabItem { Label("数据", systemImage: "externaldrive") }
@@ -212,6 +212,154 @@ private struct PrivacySettingsTab: View {
             totalEvents = total
             pendingEvents = pending
         }
+    }
+}
+
+// MARK: - 图表 Tab（v17.92 · 指标默认参数 + K 线配色 + 价格精度）
+
+private struct ChartSettingsTab: View {
+
+    @State private var book: IndicatorParamsBook = IndicatorParamsStore.load() ?? .default
+    @State private var candleMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+    @State private var pricePrecision: PricePrecisionMode = ChartSettingsStore.loadPricePrecision()
+
+    var body: some View {
+        Form {
+            Section {
+                HStack {
+                    Text("MA 周期").font(.callout)
+                    Spacer()
+                    intStepper($book.mainMAPeriods, idx: 0, range: 2...250, width: 70)
+                    Text("/").foregroundColor(.secondary)
+                    intStepper($book.mainMAPeriods, idx: 1, range: 2...250, width: 70)
+                    Text("/").foregroundColor(.secondary)
+                    intStepper($book.mainMAPeriods, idx: 2, range: 2...250, width: 70)
+                }
+                HStack {
+                    Text("BOLL 参数").font(.callout)
+                    Spacer()
+                    intStepper($book.mainBOLLParams, idx: 0, range: 5...100, width: 70)
+                    Text("× σ").foregroundColor(.secondary)
+                    intStepper($book.mainBOLLParams, idx: 1, range: 1...4, width: 70)
+                }
+            } header: {
+                Text("主图指标默认").font(.headline)
+            } footer: {
+                Text("新建图表时默认参数 · 已打开的图表不影响（指标右键 → 参数 仍可单独覆盖）")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+
+            Section {
+                HStack {
+                    Text("MACD").font(.callout)
+                    Spacer()
+                    intStepper($book.macdParams, idx: 0, range: 2...50, width: 55)
+                    Text("/").foregroundColor(.secondary)
+                    intStepper($book.macdParams, idx: 1, range: 2...100, width: 55)
+                    Text("/").foregroundColor(.secondary)
+                    intStepper($book.macdParams, idx: 2, range: 2...50, width: 55)
+                }
+                HStack {
+                    Text("KDJ").font(.callout)
+                    Spacer()
+                    intStepper($book.kdjParams, idx: 0, range: 2...50, width: 55)
+                    Text("/").foregroundColor(.secondary)
+                    intStepper($book.kdjParams, idx: 1, range: 1...10, width: 55)
+                    Text("/").foregroundColor(.secondary)
+                    intStepper($book.kdjParams, idx: 2, range: 1...10, width: 55)
+                }
+                HStack {
+                    Text("RSI 周期").font(.callout)
+                    Spacer()
+                    Stepper(value: $book.rsiPeriod, in: 2...50) {
+                        Text("\(book.rsiPeriod)")
+                            .font(.callout.monospaced())
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                }
+            } header: {
+                Text("副图指标默认").font(.headline)
+            }
+
+            Section {
+                Picker("涨跌配色", selection: $candleMode) {
+                    ForEach(CandleColorMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+            } header: {
+                Text("K 线配色").font(.headline)
+            } footer: {
+                Text("默认涨红跌绿（中国习惯）· 切换后下次 K 线图渲染生效")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+
+            Section {
+                Picker("价格精度", selection: $pricePrecision) {
+                    ForEach(PricePrecisionMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+            } header: {
+                Text("价格显示").font(.headline)
+            } footer: {
+                Text("自动模式按合约规则推算（如螺纹 1 位、白银 0 位）· 固定模式强制覆盖")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+
+            Section {
+                Button("恢复全部默认") { resetAll() }
+                    .foregroundColor(.red)
+            } footer: {
+                Text("仅重置图表偏好（指标 / 配色 / 精度）· 不影响通用 / 通知 / 隐私 tab")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .padding(.vertical, 8)
+        .onChange(of: book) { newValue in
+            IndicatorParamsStore.save(newValue)
+        }
+        .onChange(of: candleMode) { newValue in
+            ChartSettingsStore.saveCandleColorMode(newValue)
+        }
+        .onChange(of: pricePrecision) { newValue in
+            ChartSettingsStore.savePricePrecision(newValue)
+        }
+    }
+
+    private func intStepper(_ binding: Binding<[Int]>, idx: Int, range: ClosedRange<Int>, width: CGFloat) -> some View {
+        Stepper(value: Binding(
+            get: { binding.wrappedValue[idx] },
+            set: { newValue in
+                guard binding.wrappedValue.indices.contains(idx) else { return }
+                var arr = binding.wrappedValue
+                arr[idx] = newValue
+                binding.wrappedValue = arr
+            }
+        ), in: range) {
+            Text("\(binding.wrappedValue[idx])")
+                .font(.callout.monospaced())
+                .frame(width: width - 30, alignment: .trailing)
+        }
+        .frame(width: width)
+    }
+
+    private func resetAll() {
+        let alert = NSAlert()
+        alert.messageText = L("恢复图表偏好默认")
+        alert.informativeText = "将重置指标参数 + K 线配色 + 价格精度 · 不可撤销"
+        alert.addButton(withTitle: L("确认重置"))
+        alert.addButton(withTitle: L("取消"))
+        alert.alertStyle = .warning
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        book = .default
+        candleMode = .redUpGreenDown
+        pricePrecision = .auto
+        IndicatorParamsStore.save(.default)
+        ChartSettingsStore.resetAll()
     }
 }
 

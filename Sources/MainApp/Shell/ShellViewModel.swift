@@ -72,6 +72,9 @@ public final class ShellViewModel: ObservableObject {
     /// F10 合约资料 sheet（v1 显示当前 active pane symbol · v2 接 InstrumentDashboardWindow 详情）
     @Published public var showInstrumentInfoSheet: Bool = false
 
+    /// v17.67 · 预设选择 sheet（WorkspaceTabBar + Menu「从预设新建...」触发）
+    @Published public var showPresetPickerSheet: Bool = false
+
     /// 空格快捷下单浮层（v1 占位 · Stage A 不接 CTP · v2 接 SimulatedTradingEngine 浮窗）
     @Published public var showQuickOrderSheet: Bool = false
 
@@ -218,6 +221,15 @@ public final class ShellViewModel: ObservableObject {
             panes: [PaneConfig(kind: primaryTab.defaultPaneKind)]
         )
         workspaces.append(ws)
+        activeWorkspaceID = ws.id
+        persistWorkspaces()
+    }
+
+    /// v17.67 · 从内置预设新建 Workspace（一键应用完整 panes + layout + recommendedPrimaryTab）
+    public func newWorkspace(from preset: WorkspacePreset) {
+        let ws = preset.toWorkspace()
+        workspaces.append(ws)
+        primaryTab = ws.primaryTab
         activeWorkspaceID = ws.id
         persistWorkspaces()
     }

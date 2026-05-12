@@ -58,6 +58,11 @@ public struct ShellWindow: View {
             ShellQuickOrderSheet(isPresented: $shellVM.showQuickOrderSheet)
                 .environmentObject(shellVM)
         }
+        // v17.67 · Workspace 预设选择 sheet
+        .sheet(isPresented: $shellVM.showPresetPickerSheet) {
+            WorkspacePresetPickerSheet(isPresented: $shellVM.showPresetPickerSheet)
+                .environmentObject(shellVM)
+        }
         // v17.57 · F 键 toast overlay（瞬态 1.5s）
         .overlay(alignment: .top) {
             if let toast = shellVM.fKeyToast {

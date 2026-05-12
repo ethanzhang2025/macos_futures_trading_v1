@@ -165,9 +165,25 @@ struct WorkspaceTabBar: View {
         }
     }
 
+    /// v17.67 · + 按钮改为 Menu · 「空白」/「从预设新建...」二选
     private var newTabButton: some View {
-        Button {
-            shellVM.newWorkspace()
+        Menu {
+            Button("➕ 空白 Workspace") {
+                shellVM.newWorkspace()
+            }
+            .keyboardShortcut("t", modifiers: [.command])
+            Divider()
+            Section("从预设新建") {
+                ForEach(WorkspacePreset.allCases) { preset in
+                    Button("\(preset.emoji) \(preset.displayName)") {
+                        shellVM.newWorkspace(from: preset)
+                    }
+                }
+                Divider()
+                Button("📋 全部预设…") {
+                    shellVM.showPresetPickerSheet = true
+                }
+            }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 11, weight: .medium))
@@ -175,8 +191,10 @@ struct WorkspaceTabBar: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
         }
-        .buttonStyle(.plain)
-        .help("新建 workspace（⌘T）")
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("新建 workspace · 空白（⌘T）或从预设")
     }
 
     private func commitRename() {

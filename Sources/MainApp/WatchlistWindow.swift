@@ -78,6 +78,13 @@ struct WatchlistWindow: View {
     /// v17.129 · 待编辑备注的合约 · Identifiable 包装让 .sheet(item:) 兼容
     @State private var pendingNoteInstrumentID: NoteEditTarget?
 
+    /// v17.132 · 合约多标签 store · UserDefaults 持久化 · 跨窗口同步
+    private let tagStore = InstrumentTagStore()
+    /// v17.132 · 待编辑标签的合约（单选 · 复用 NoteEditTarget 模式）
+    @State private var pendingTagInstrumentID: NoteEditTarget?
+    /// v17.132 · 标签筛选 · CSV string · 空 = 不筛选 · 多标签 OR 关系（含任一即匹配） · 跨重启保留
+    @AppStorage("viewState.v1.watchlist.tagFilterRaw") private var tagFilterRaw: String = ""
+
     /// v17.42 C1 · 列可见性（持仓量 / 成交量 / 价差%）· 右键 📋 显示列 toggle · UserDefaults 跨窗口同步
     @State private var visibleColumns: Set<WatchlistColumn> = WatchlistColumnPreferences.load()
 
@@ -148,6 +155,32 @@ struct WatchlistWindow: View {
     /// v17.131 · 当前 group 的 sortAscending · 未设回落全局
     private func effectiveSortAscending(for group: Watchlist) -> Bool {
         group.sortAscending ?? sortAscending
+    }
+
+    /// v17.132 · 当前激活的标签筛选集合（去重 trim 后 set）· 空 = 不筛选
+    private var activeTagFilter: Set<String> {
+        let parts = tagFilterRaw.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+        return Set(parts.filter { !$0.isEmpty })
+    }
+
+    /// v17.132 · instrument 是否通过标签筛选（空 filter 全通过 · 否则含任一选中 tag 即通过 · OR 关系）
+    private func passesTagFilter(_ id: String) -> Bool {
+        let active = activeTagFilter
+        guard !active.isEmpty else { return true }
+        let tags = Set(tagStore.tags(for: id))
+        return !tags.isDisjoint(with: active)
+    }
+
+    /// v17.132 · toggle 一个标签到筛选集合（已在则移除）
+    private func toggleTagFilter(_ tag: String) {
+        var current = activeTagFilter
+        if current.contains(tag) { current.remove(tag) } else { current.insert(tag) }
+        tagFilterRaw = current.sorted().joined(separator: ",")
+    }
+
+    /// v17.132 · 清空标签筛选
+    private func clearTagFilter() {
+        tagFilterRaw = ""
     }
 
     /// v17.131 · 写排序规则 · 单组视图写到 group · 聚合视图（无 selectedGroupID）写全局
@@ -276,6 +309,17 @@ struct WatchlistWindow: View {
             ) { newNote in
                 noteStore.setNote(newNote, for: target.id)
                 flagsRevision += 1   // 复用 tick 触发 row 重渲（@State 不能直接观察 noteStore）
+            }
+        }
+        // v17.132 · 标签编辑 sheet
+        .sheet(item: $pendingTagInstrumentID) { target in
+            TagEditSheet(
+                instrumentID: target.id,
+                initialTags: tagStore.tags(for: target.id),
+                allKnownTags: tagStore.allTagsAcrossInstruments()
+            ) { newTags in
+                tagStore.setTags(newTags, for: target.id)
+                flagsRevision += 1   // 复用 tick 触发 row 重渲
             }
         }
         .confirmationDialog(
@@ -697,8 +741,10 @@ struct WatchlistWindow: View {
             changePctForID: currentChangePct,
             volumeForID: currentVolume
         )
+        // v17.132 · 标签筛选（OR 关系 · 空筛选全通过）
+        let tagFilteredIDs = filteredIDs.filter(passesTagFilter)
         let sortedIDs = WatchlistSorter.sort(
-            ids: filteredIDs,
+            ids: tagFilteredIDs,
             field: sortField,
             ascending: sortAscending,
             keyForID: keyForInstrument
@@ -731,6 +777,8 @@ struct WatchlistWindow: View {
                     .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
                 // v15.38 V2 · 高级过滤 menu（涨幅/跌幅/涨停/跌停/极端/活跃 6 preset）
                 filterPresetMenu
+                // v17.132 · 标签筛选 menu（多选 OR 关系）
+                tagFilterMenu
                 Spacer()
                 // v15.20 batch68 · 涨幅/跌幅前 N 一键批量预警（聚合扫盘 + AlertPreset 联动）
                 Menu {
@@ -867,6 +915,8 @@ struct WatchlistWindow: View {
                 }
                 // v15.38 V2 · 高级过滤 menu
                 filterPresetMenu
+                // v17.132 · 标签筛选 menu（多选 OR 关系）
+                tagFilterMenu
                 Spacer()
                 Button {
                     sheetState = .addInstrument(groupID: group.id, groupName: group.name)
@@ -930,6 +980,27 @@ struct WatchlistWindow: View {
                                         Text(f.emoji.isEmpty ? "—" : f.emoji)
                                         Text(f.displayName)
                                     }
+                                }
+                            }
+                        }
+                    }
+                    // v17.132 · 批量加标签（多选时一次给全选合约加同一标签 · 已有则跳过）
+                    if ids.count >= 2 {
+                        let known = tagStore.allTagsAcrossInstruments()
+                        Menu("🏷️ 批量加标签 \(ids.count) 个 →") {
+                            if known.isEmpty {
+                                Text("（先用单合约右键创建标签）")
+                            } else {
+                                ForEach(known, id: \.self) { tag in
+                                    Button("#\(tag)") {
+                                        for id in ids { tagStore.addTag(tag, to: id) }
+                                        flagsRevision += 1
+                                    }
+                                }
+                                Divider()
+                                Button("🚫 清空全部标签") {
+                                    for id in ids { tagStore.setTags([], for: id) }
+                                    flagsRevision += 1
                                 }
                             }
                         }
@@ -1028,9 +1099,9 @@ struct WatchlistWindow: View {
             .tooltip("点击按\(title)排序 · 再点切升降序 · 拖拽行自动切回手动（v17.131 · 每组独立）")
     }
 
-    /// v15.20 batch59 · 按 sortField + sortAscending 排序合约 ID（v15.38 V2 加 filter preset + 分组搜索）
+    /// v15.20 batch59 · 按 sortField + sortAscending 排序合约 ID（v15.38 V2 加 filter preset + 分组搜索 · v17.132 加标签筛选）
     private func sortedInstrumentIDs(for group: Watchlist) -> [String] {
-        // 先 filter（preset + 关键词）· 再 sort
+        // 先 filter（preset + 关键词 + 标签）· 再 sort
         let filtered = WatchlistFilter.filter(
             ids: group.instrumentIDs,
             preset: filterPreset,
@@ -1038,11 +1109,13 @@ struct WatchlistWindow: View {
             changePctForID: currentChangePct,
             volumeForID: currentVolume
         )
+        // v17.132 · 标签筛选（OR 关系 · 空筛选全通过）
+        let tagFiltered = filtered.filter(passesTagFilter)
         // v17.131 · 每组独立排序（fallback 全局）
         let f = effectiveSortField(for: group)
         let a = effectiveSortAscending(for: group)
         return WatchlistSorter.sort(
-            ids: filtered,
+            ids: tagFiltered,
             field: f,
             ascending: a,
             keyForID: { keyForInstrument($0, field: f) }
@@ -1120,6 +1193,40 @@ struct WatchlistWindow: View {
                 .foregroundColor(filterPreset == .all ? .primary : .accentColor)
         }
         .tooltip("按涨跌幅 / 涨跌停 / 活跃度过滤合约")
+    }
+
+    /// v17.132 · 标签筛选 Menu（toolbar 用 · 多选 OR 关系 · 选中 ✓ 标识 · 跨重启保留）
+    @ViewBuilder
+    private var tagFilterMenu: some View {
+        let known = tagStore.allTagsAcrossInstruments()
+        let active = activeTagFilter
+        Menu {
+            if known.isEmpty {
+                Text("（暂无标签 · 右键合约「🏷️ 添加标签」创建）")
+            } else {
+                ForEach(known, id: \.self) { tag in
+                    Button {
+                        toggleTagFilter(tag)
+                    } label: {
+                        HStack {
+                            Text("#\(tag)")
+                            if active.contains(tag) {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+                if !active.isEmpty {
+                    Divider()
+                    Button("清空标签筛选（\(active.count)）") { clearTagFilter() }
+                }
+            }
+        } label: {
+            Label(active.isEmpty ? "标签" : "标签（\(active.count)）",
+                  systemImage: active.isEmpty ? "tag" : "tag.fill")
+                .foregroundColor(active.isEmpty ? .primary : .accentColor)
+        }
+        .tooltip("按合约标签筛选 · 多选 OR 关系（含任一即匹配）· v17.132")
     }
 
     /// 视图统计 HUD（涨跌家数 + 平均涨幅 + 涨停跌停数 + 极值合约 ID）
@@ -1204,6 +1311,8 @@ struct WatchlistWindow: View {
         let flag = flagStore.flag(for: id)
         // v17.129 · 当前合约备注（持久化 InstrumentNoteStore · 跨窗口同步）
         let note = noteStore.note(for: id)
+        // v17.132 · 当前合约多标签（持久化 InstrumentTagStore · 跨窗口同步）
+        let tags = tagStore.tags(for: id)
         return HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.5))
@@ -1223,6 +1332,17 @@ struct WatchlistWindow: View {
                         .font(.system(size: 10 + chartFontSize.sizeDelta))
                         .foregroundColor(.accentColor.opacity(0.85))
                         .tooltip(n)
+                }
+                // v17.132 · 标签 🏷️N 小标识 · hover tooltip 列全部标签
+                if !tags.isEmpty {
+                    HStack(spacing: 1) {
+                        Image(systemName: "tag.fill")
+                            .font(.system(size: 8 + chartFontSize.sizeDelta))
+                        Text("\(tags.count)")
+                            .font(.system(size: 9 + chartFontSize.sizeDelta))
+                    }
+                    .foregroundColor(.accentColor.opacity(0.85))
+                    .tooltip("标签: " + tags.joined(separator: " · "))
                 }
             }
                 .frame(width: 100, alignment: .leading)
@@ -1315,6 +1435,16 @@ struct WatchlistWindow: View {
                 Button("📝 删除备注") {
                     noteStore.setNote(nil, for: id)
                     flagsRevision += 1  // 复用 tick 触发 row 重渲
+                }
+            }
+            // v17.132 · 标签管理（trader 多分类标记 · 全局持久化 · 跨窗口同步）
+            Button(tags.isEmpty ? "🏷️ 添加标签" : "🏷️ 标签管理（\(tags.count)）") {
+                pendingTagInstrumentID = NoteEditTarget(id: id)
+            }
+            if !tags.isEmpty {
+                Button("🏷️ 清空标签") {
+                    tagStore.setTags([], for: id)
+                    flagsRevision += 1
                 }
             }
             // v17.42 C1 · 列自定义（toggle 持仓 / 成交量 / 价差% · UserDefaults 跨窗口同步）
@@ -2219,6 +2349,171 @@ private struct NoteEditSheet: View {
         }
         .padding(20)
         .frame(width: 500, height: 320)
+    }
+}
+
+// MARK: - Sheet · 合约标签编辑（v17.132 · trader 多分类标记 · 全局持久化 InstrumentTagStore）
+
+private struct TagEditSheet: View {
+
+    let instrumentID: String
+    let initialTags: [String]
+    let allKnownTags: [String]
+    let onSubmit: ([String]) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var tags: [String]
+    @State private var newTagText: String = ""
+
+    init(instrumentID: String, initialTags: [String], allKnownTags: [String], onSubmit: @escaping ([String]) -> Void) {
+        self.instrumentID = instrumentID
+        self.initialTags = initialTags
+        self.allKnownTags = allKnownTags
+        self.onSubmit = onSubmit
+        self._tags = State(initialValue: initialTags)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("🏷️ \(instrumentID) 标签").font(.title2).bold()
+            Text("trader 多分类标记 · 跨日跨周保留 · 跨窗口同步 · 上限 \(InstrumentTagStore.maxTagsPerInstrument) 个")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            // 已选标签 chip 列表（点击 ✗ 移除）
+            VStack(alignment: .leading, spacing: 6) {
+                Text("当前标签（\(tags.count)）").font(.caption).foregroundColor(.secondary)
+                if tags.isEmpty {
+                    Text("（暂无 · 下方添加）")
+                        .font(.caption2)
+                        .foregroundColor(.secondary.opacity(0.6))
+                        .padding(.vertical, 6)
+                } else {
+                    FlowChipsView(tags: tags) { removed in
+                        tags.removeAll { $0 == removed }
+                    }
+                }
+            }
+
+            Divider()
+
+            // 添加输入框
+            HStack {
+                TextField("新标签（≤ \(InstrumentTagStore.maxTagLength) 字 · 回车确认）", text: $newTagText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { addCurrentInput() }
+                Button("添加") { addCurrentInput() }
+                    .disabled(newTagText.trimmingCharacters(in: .whitespaces).isEmpty
+                              || tags.count >= InstrumentTagStore.maxTagsPerInstrument)
+            }
+
+            // 已有标签建议（其他合约用过的 · 点击直接加）
+            if !suggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("从已有标签选").font(.caption).foregroundColor(.secondary)
+                    FlowSuggestionsView(suggestions: suggestions) { picked in
+                        addTag(picked)
+                    }
+                }
+            }
+
+            Spacer()
+
+            HStack {
+                Text("\(tags.count) / \(InstrumentTagStore.maxTagsPerInstrument)")
+                    .font(.caption2).foregroundColor(.secondary)
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") {
+                    onSubmit(tags)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 520, height: 460)
+    }
+
+    /// 已有标签 - 当前合约已用 = 建议列表
+    private var suggestions: [String] {
+        allKnownTags.filter { !tags.contains($0) }
+    }
+
+    private func addCurrentInput() {
+        let trimmed = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        addTag(trimmed)
+        newTagText = ""
+    }
+
+    private func addTag(_ raw: String) {
+        let clipped = String(raw.prefix(InstrumentTagStore.maxTagLength))
+        guard !tags.contains(clipped) else { return }
+        guard tags.count < InstrumentTagStore.maxTagsPerInstrument else { return }
+        tags.append(clipped)
+    }
+}
+
+/// 已选标签 chip 列表（横向 wrap · 每个 chip 加 ✗ 移除按钮）
+private struct FlowChipsView: View {
+    let tags: [String]
+    let onRemove: (String) -> Void
+
+    var body: some View {
+        // 简化：横向 ScrollView + HStack（trader 标签 ≤ 10 个 · 一行足够）
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(tags, id: \.self) { tag in
+                    HStack(spacing: 4) {
+                        Text("#\(tag)").font(.system(size: 12))
+                        Button {
+                            onRemove(tag)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill").font(.system(size: 11))
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.18))
+                    .foregroundColor(.accentColor)
+                    .cornerRadius(10)
+                }
+            }
+        }
+        .frame(height: 32)
+    }
+}
+
+/// 已有标签建议 chip（点击直接加 · 无 ✗ 按钮）
+private struct FlowSuggestionsView: View {
+    let suggestions: [String]
+    let onPick: (String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(suggestions, id: \.self) { tag in
+                    Button {
+                        onPick(tag)
+                    } label: {
+                        Text("#\(tag)")
+                            .font(.system(size: 11))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.secondary.opacity(0.12))
+                            .foregroundColor(.primary)
+                            .cornerRadius(10)
+                    }
+                    .buttonStyle(.plain)
+                    .tooltip("点击加入当前合约标签")
+                }
+            }
+        }
+        .frame(height: 32)
     }
 }
 

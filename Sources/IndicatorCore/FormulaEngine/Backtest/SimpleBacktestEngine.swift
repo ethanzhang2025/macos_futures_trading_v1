@@ -13,24 +13,41 @@
 
 import Foundation
 
+/// 持仓方向（v17.47 D2 v2.3）· 老代码默认 .long 保持兼容
+public enum TradeDirection: String, Sendable, Equatable, Codable {
+    case long
+    case short
+}
+
 /// 单笔交易记录
 public struct BacktestTrade: Sendable, Equatable {
     public let entryBarIndex: Int
     public let entryPrice: Decimal
     public let exitBarIndex: Int
     public let exitPrice: Decimal
-    public var pnl: Decimal { exitPrice - entryPrice }
+    public let direction: TradeDirection
+
+    /// PnL（按方向算）· long: exit - entry · short: entry - exit
+    public var pnl: Decimal {
+        switch direction {
+        case .long:  return exitPrice - entryPrice
+        case .short: return entryPrice - exitPrice
+        }
+    }
     public var pnlPercent: Decimal {
         guard entryPrice > 0 else { return 0 }
-        return (exitPrice - entryPrice) / entryPrice
+        return pnl / entryPrice
     }
-    public var isWin: Bool { exitPrice > entryPrice }
+    public var isWin: Bool { pnl > 0 }
 
-    public init(entryBarIndex: Int, entryPrice: Decimal, exitBarIndex: Int, exitPrice: Decimal) {
+    public init(entryBarIndex: Int, entryPrice: Decimal,
+                exitBarIndex: Int, exitPrice: Decimal,
+                direction: TradeDirection = .long) {
         self.entryBarIndex = entryBarIndex
         self.entryPrice = entryPrice
         self.exitBarIndex = exitBarIndex
         self.exitPrice = exitPrice
+        self.direction = direction
     }
 }
 
@@ -75,6 +92,13 @@ public struct BacktestResult: Sendable, Equatable {
 
 public enum SimpleBacktestEngine {
 
+    /// 持仓状态（v17.47 D2 v2.3 · long-only → both long & short）
+    private enum Position {
+        case none
+        case long(entryPrice: Decimal, entryIndex: Int)
+        case short(entryPrice: Decimal, entryIndex: Int)
+    }
+
     /// 跑回测
     /// - Parameters:
     ///   - formula: 已 parsed Formula
@@ -83,6 +107,7 @@ public enum SimpleBacktestEngine {
     ///   - initialEquity: 起始权益（默认 100000）
     ///   - commission: v17.46 D2 v2.2 · 每笔双向手续费（绝对额 · 开+平各扣一次 · 默认 0 同 v1）
     ///   - slippage: v17.46 D2 v2.2 · 滑点（绝对额 · 开仓 +slippage 买高 · 平仓 -slippage 卖低 · 默认 0）
+    ///   - allowShort: v17.47 D2 v2.3 · 信号 < 0 时做空（默认 false 兼容 v1 long-only）
     /// - Returns: BacktestResult · 解释器报错 → 抛 Error
     public static func run(
         formula: Formula,
@@ -90,7 +115,8 @@ public enum SimpleBacktestEngine {
         signalLineName: String = "BUY",
         initialEquity: Decimal = 100_000,
         commission: Decimal = 0,
-        slippage: Decimal = 0
+        slippage: Decimal = 0,
+        allowShort: Bool = false
     ) throws -> BacktestResult {
         guard !bars.isEmpty else {
             return empty(initialEquity: initialEquity)
@@ -102,7 +128,8 @@ public enum SimpleBacktestEngine {
         }
         return runWithSignal(signal: signal.values, bars: bars,
                              initialEquity: initialEquity,
-                             commission: commission, slippage: slippage)
+                             commission: commission, slippage: slippage,
+                             allowShort: allowShort)
     }
 
     /// 直接基于已计算的信号 series 跑（测试 / 不走 Formula 解释器路径）
@@ -111,59 +138,83 @@ public enum SimpleBacktestEngine {
         bars: [BarData],
         initialEquity: Decimal = 100_000,
         commission: Decimal = 0,
-        slippage: Decimal = 0
+        slippage: Decimal = 0,
+        allowShort: Bool = false
     ) -> BacktestResult {
         guard !bars.isEmpty else { return empty(initialEquity: initialEquity) }
         var trades: [BacktestTrade] = []
         var equityCurve: [Decimal] = []
         equityCurve.reserveCapacity(bars.count)
 
-        var inPosition = false
-        var entryPrice: Decimal = 0
-        var entryIndex = 0
-        var realizedPnL: Decimal = 0   // 已平仓累计（含 commission 扣减）
+        var position: Position = .none
+        var realizedPnL: Decimal = 0
+
+        // 信号符号 → 目标方向（none/long/short · 不开仓时 .none）
+        func targetDirection(at i: Int) -> TradeDirection? {
+            let v = (i < signal.count ? signal[i] : nil) ?? 0
+            if v > 0 { return .long }
+            if v < 0, allowShort { return .short }
+            return nil
+        }
+
+        // 平仓 helper（含 slippage + commission · 更新 realizedPnL · 返回 trade）
+        func close(position p: Position, at i: Int, barClose: Decimal) -> BacktestTrade? {
+            switch p {
+            case .none: return nil
+            case .long(let entryPrice, let entryIndex):
+                let exitPrice = barClose - slippage
+                let t = BacktestTrade(entryBarIndex: entryIndex, entryPrice: entryPrice,
+                                       exitBarIndex: i, exitPrice: exitPrice, direction: .long)
+                trades.append(t)
+                realizedPnL += t.pnl - commission
+                return t
+            case .short(let entryPrice, let entryIndex):
+                let exitPrice = barClose + slippage   // 空头买回 · 不利方向是高价
+                let t = BacktestTrade(entryBarIndex: entryIndex, entryPrice: entryPrice,
+                                       exitBarIndex: i, exitPrice: exitPrice, direction: .short)
+                trades.append(t)
+                realizedPnL += t.pnl - commission
+                return t
+            }
+        }
 
         for i in 0..<bars.count {
-            let close = bars[i].close
-            // 当前 bar 信号（上根末态决定本根行为 · 实际本根 close 撮合）
-            let curSignal = i < signal.count ? signal[i] : nil
-            let isLong = (curSignal ?? 0) > 0
+            let barClose = bars[i].close
+            let target = targetDirection(at: i)
 
-            if !inPosition && isLong {
-                // 开仓 · close + slippage（买高 · 不利方向）
-                inPosition = true
-                entryPrice = close + slippage
-                entryIndex = i
-            } else if inPosition && !isLong {
-                // 平仓 · close - slippage（卖低 · 不利方向）· 双向手续费一次性扣（开+平）
-                let exitPrice = close - slippage
-                let trade = BacktestTrade(
-                    entryBarIndex: entryIndex,
-                    entryPrice: entryPrice,
-                    exitBarIndex: i,
-                    exitPrice: exitPrice
-                )
-                trades.append(trade)
-                realizedPnL += trade.pnl - commission
-                inPosition = false
+            switch (position, target) {
+            case (.none, .some(.long)):
+                position = .long(entryPrice: barClose + slippage, entryIndex: i)
+            case (.none, .some(.short)):
+                position = .short(entryPrice: barClose - slippage, entryIndex: i)   // 空头卖出 · 不利是低价
+            case (.long, .none), (.short, .none):
+                _ = close(position: position, at: i, barClose: barClose)
+                position = .none
+            case (.long, .some(.short)):
+                // 反手：平多 + 开空（trader 反向信号自动反手）
+                _ = close(position: position, at: i, barClose: barClose)
+                position = .short(entryPrice: barClose - slippage, entryIndex: i)
+            case (.short, .some(.long)):
+                _ = close(position: position, at: i, barClose: barClose)
+                position = .long(entryPrice: barClose + slippage, entryIndex: i)
+            case (.none, .none), (.long, .some(.long)), (.short, .some(.short)):
+                break   // 保持现状
             }
 
-            // 当前 equity = 起始 + 已实现 PnL + 未实现 PnL（持仓时 · 含 slippage 进 · 未平仓不扣 commission）
-            let unrealized: Decimal = inPosition ? (close - entryPrice) : 0
+            // unrealized = 当前持仓的纸面 PnL（按方向算）
+            let unrealized: Decimal = {
+                switch position {
+                case .none: return 0
+                case .long(let entryPrice, _):  return barClose - entryPrice
+                case .short(let entryPrice, _): return entryPrice - barClose
+                }
+            }()
             equityCurve.append(initialEquity + realizedPnL + unrealized)
         }
 
-        // 末尾仍持仓 · 强制按末 bar close 平仓（含 slippage + commission · 与正常平仓一致）
-        if inPosition, let last = bars.last {
-            let exitPrice = last.close - slippage
-            let trade = BacktestTrade(
-                entryBarIndex: entryIndex,
-                entryPrice: entryPrice,
-                exitBarIndex: bars.count - 1,
-                exitPrice: exitPrice
-            )
-            trades.append(trade)
-            realizedPnL += trade.pnl - commission
+        // 末尾强平
+        if case .none = position {} else if let last = bars.last {
+            _ = close(position: position, at: bars.count - 1, barClose: last.close)
         }
         let endingPnL = realizedPnL
         let metrics = computeMetrics(equityCurve: equityCurve, trades: trades, initialEquity: initialEquity)

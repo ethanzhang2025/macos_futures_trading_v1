@@ -32,6 +32,7 @@ public struct BacktestWindow: View {
     @AppStorage("backtestWindow.v1.trajectory") private var trajectoryRaw: String = TrajectoryMode.randomWalk.rawValue
     @AppStorage("backtestWindow.v2.commission") private var commission: Double = 0   // v17.46 · 每 trade 双向手续费
     @AppStorage("backtestWindow.v2.slippage") private var slippage: Double = 0       // v17.46 · 滑点（绝对额）
+    @AppStorage("backtestWindow.v2.allowShort") private var allowShort: Bool = false // v17.47 · 双向（信号 < 0 做空）
 
     // MARK: - 结果 / 状态
 
@@ -153,6 +154,9 @@ public struct BacktestWindow: View {
                         .frame(width: 120)
                         .help("滑点（绝对额 · 开仓买高 +slip · 平仓卖低 -slip）")
                 }
+                Toggle("允许做空（信号 < 0 开空 · v17.47）", isOn: $allowShort)
+                    .font(.callout)
+                    .help("勾选后信号 < 0 → 空仓 · 反向信号自动反手")
 
                 Divider()
 
@@ -675,7 +679,8 @@ public struct BacktestWindow: View {
                 signalLineName: signalLineName,
                 initialEquity: Decimal(initialEquity),
                 commission: Decimal(commission),
-                slippage: Decimal(slippage)
+                slippage: Decimal(slippage),
+                allowShort: allowShort
             )
             self.bars = generatedBars
             self.result = r

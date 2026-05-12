@@ -183,6 +183,8 @@ struct SubChartView: View {
     var localTime: Date? = nil
     /// v17.104 · 价格精度（VolumeProfile POC/VAH/VAL 等价格 HUD 用 · 父级传 effectivePriceDigits · 默认 2 兼容老 caller）
     var priceDigits: Int = 2
+    /// v17.119 · 用户字号档（父级 ChartContentView 透传 · 副图 HUD 跟 ChartTheme.fontXxx(size:) 同步）
+    var chartFontSize: ChartFontSize = .medium
 
     // MARK: - 主题响应的 instance computed 颜色（v15.9 替换原 static 单一深色）
 
@@ -514,7 +516,7 @@ struct SubChartView: View {
                 }
             }
         }
-        .font(.system(size: 11, design: .monospaced))
+        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(chartTheme.hudBackground)

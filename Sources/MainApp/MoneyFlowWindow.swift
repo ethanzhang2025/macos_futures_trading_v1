@@ -32,6 +32,8 @@ struct MoneyFlowWindow: View {
 
     /// v17.108 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+    /// v17.119 · 用户字号档（跟 ChartScene/Settings 同步）
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
 
     // v17.108 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
@@ -119,9 +121,12 @@ struct MoneyFlowWindow: View {
             }
         }
         // v17.108 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        // v17.119 · 同步字号档
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -263,18 +268,18 @@ struct MoneyFlowWindow: View {
         } label: {
             HStack(spacing: 8) {
                 Text("\(rank)")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 24, alignment: .trailing)
                 Text(inst.id)
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .frame(width: 60, alignment: .leading)
                 Text(inst.name)
-                    .font(.system(size: 11))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta))
                     .foregroundColor(.secondary)
                     .frame(width: 80, alignment: .leading)
                 Text(String(format: "%+.2f%%", inst.changePct))
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(inst.changePct >= 0 ? chartLoss : chartProfit)
                     .frame(width: 56, alignment: .trailing)
                 // bar
@@ -290,7 +295,7 @@ struct MoneyFlowWindow: View {
                 }
                 .frame(height: 16)
                 Text(String(format: "%+.1fM", row.netInflow))
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(color)
                     .frame(width: 80, alignment: .trailing)
                 // v15.77 · combo 徽章
@@ -309,8 +314,8 @@ struct MoneyFlowWindow: View {
     private func comboBadge(for inst: SectorInstrument) -> some View {
         if let c = comboMap[inst.id] {
             HStack(spacing: 2) {
-                Image(systemName: "sparkles").font(.system(size: 9))
-                Text("\(c.kindCount)/5").font(.system(size: 10, design: .monospaced).bold())
+                Image(systemName: "sparkles").font(.system(size: 9 + chartFontSize.sizeDelta))
+                Text("\(c.kindCount)/5").font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced).bold())
             }
             .foregroundColor(.white)
             .padding(.horizontal, 5).padding(.vertical, 1)
@@ -390,7 +395,7 @@ struct MoneyFlowWindow: View {
                 }
                 .frame(height: 24)
                 Text(String(format: "%+.1fM", value))
-                    .font(.system(size: 13, design: .monospaced).bold())
+                    .font(.system(size: 13 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(color)
                     .frame(width: 100, alignment: .trailing)
             }

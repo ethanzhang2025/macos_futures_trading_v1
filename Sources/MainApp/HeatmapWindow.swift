@@ -30,6 +30,8 @@ struct HeatmapWindow: View {
 
     /// v17.108 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+    /// v17.119 · 用户字号档（跟 ChartScene/Settings 同步）
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
 
     // v17.108 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
@@ -87,9 +89,12 @@ struct HeatmapWindow: View {
             if let id = note.object as? String { highlightedID = id }
         }
         // v17.108 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        // v17.119 · 同步字号档
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -227,13 +232,13 @@ struct HeatmapWindow: View {
             ZStack(alignment: .topTrailing) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
-                        Text(inst.id).font(.system(size: 11, design: .monospaced).bold())
+                        Text(inst.id).font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                         Spacer()
                         Text(String(format: "%+.1f%%", inst.changePct))
-                            .font(.system(size: 10, design: .monospaced).bold())
+                            .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     }
                     Text(inst.name)
-                        .font(.system(size: 9))
+                        .font(.system(size: 9 + chartFontSize.sizeDelta))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }
@@ -243,9 +248,9 @@ struct HeatmapWindow: View {
                 if let c = combo, let col = comboColor {
                     HStack(spacing: 1) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 8))
+                            .font(.system(size: 8 + chartFontSize.sizeDelta))
                         Text("\(c.kindCount)")
-                            .font(.system(size: 9, design: .monospaced).bold())
+                            .font(.system(size: 9 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     }
                     .foregroundColor(.white)
                     .padding(.horizontal, 4).padding(.vertical, 1)
@@ -316,7 +321,7 @@ struct HeatmapWindow: View {
                         .frame(width: 38, height: 16)
                         .overlay(
                             Text(String(format: "%+.1f%%", pct))
-                                .font(.system(size: 9, design: .monospaced))
+                                .font(.system(size: 9 + chartFontSize.sizeDelta, design: .monospaced))
                                 .foregroundColor(.white)
                         )
                 }

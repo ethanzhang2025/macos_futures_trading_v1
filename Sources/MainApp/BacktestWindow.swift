@@ -30,6 +30,8 @@ public struct BacktestWindow: View {
     @AppStorage("backtestWindow.v1.volatility") private var volatility: Double = 0.20
     @AppStorage("backtestWindow.v1.seed") private var rngSeedStored: Int = 42
     @AppStorage("backtestWindow.v1.trajectory") private var trajectoryRaw: String = TrajectoryMode.randomWalk.rawValue
+    @AppStorage("backtestWindow.v2.commission") private var commission: Double = 0   // v17.46 · 每 trade 双向手续费
+    @AppStorage("backtestWindow.v2.slippage") private var slippage: Double = 0       // v17.46 · 滑点（绝对额）
 
     // MARK: - 结果 / 状态
 
@@ -134,6 +136,22 @@ public struct BacktestWindow: View {
                     Stepper(value: $barCount, in: 30...2000, step: 10) {
                         Text("\(barCount)").font(.callout.monospaced())
                     }
+                }
+
+                Divider()
+
+                Text("成本模型（v17.46）").font(.headline)
+                configRow("手续费/笔") {
+                    TextField("", value: $commission, format: .number.precision(.fractionLength(2)))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 120)
+                        .help("每笔交易双向手续费（绝对额 · 开+平一次性扣）")
+                }
+                configRow("滑点") {
+                    TextField("", value: $slippage, format: .number.precision(.fractionLength(2)))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 120)
+                        .help("滑点（绝对额 · 开仓买高 +slip · 平仓卖低 -slip）")
                 }
 
                 Divider()
@@ -655,7 +673,9 @@ public struct BacktestWindow: View {
                 formula: formula,
                 bars: generatedBars,
                 signalLineName: signalLineName,
-                initialEquity: Decimal(initialEquity)
+                initialEquity: Decimal(initialEquity),
+                commission: Decimal(commission),
+                slippage: Decimal(slippage)
             )
             self.bars = generatedBars
             self.result = r

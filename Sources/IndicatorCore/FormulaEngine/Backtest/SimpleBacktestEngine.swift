@@ -81,12 +81,16 @@ public enum SimpleBacktestEngine {
     ///   - bars: 输入 K 线
     ///   - signalLineName: 取哪条输出线作为信号（默认 "BUY"）· 大小写敏感
     ///   - initialEquity: 起始权益（默认 100000）
+    ///   - commission: v17.46 D2 v2.2 · 每笔双向手续费（绝对额 · 开+平各扣一次 · 默认 0 同 v1）
+    ///   - slippage: v17.46 D2 v2.2 · 滑点（绝对额 · 开仓 +slippage 买高 · 平仓 -slippage 卖低 · 默认 0）
     /// - Returns: BacktestResult · 解释器报错 → 抛 Error
     public static func run(
         formula: Formula,
         bars: [BarData],
         signalLineName: String = "BUY",
-        initialEquity: Decimal = 100_000
+        initialEquity: Decimal = 100_000,
+        commission: Decimal = 0,
+        slippage: Decimal = 0
     ) throws -> BacktestResult {
         guard !bars.isEmpty else {
             return empty(initialEquity: initialEquity)
@@ -96,14 +100,18 @@ public enum SimpleBacktestEngine {
         guard let signal = lines.first(where: { $0.name == signalLineName }) else {
             throw InterpreterError(message: "回测：找不到信号输出 \(signalLineName)")
         }
-        return runWithSignal(signal: signal.values, bars: bars, initialEquity: initialEquity)
+        return runWithSignal(signal: signal.values, bars: bars,
+                             initialEquity: initialEquity,
+                             commission: commission, slippage: slippage)
     }
 
     /// 直接基于已计算的信号 series 跑（测试 / 不走 Formula 解释器路径）
     public static func runWithSignal(
         signal: [Decimal?],
         bars: [BarData],
-        initialEquity: Decimal = 100_000
+        initialEquity: Decimal = 100_000,
+        commission: Decimal = 0,
+        slippage: Decimal = 0
     ) -> BacktestResult {
         guard !bars.isEmpty else { return empty(initialEquity: initialEquity) }
         var trades: [BacktestTrade] = []
@@ -113,47 +121,49 @@ public enum SimpleBacktestEngine {
         var inPosition = false
         var entryPrice: Decimal = 0
         var entryIndex = 0
-        var realizedPnL: Decimal = 0   // 已平仓累计
+        var realizedPnL: Decimal = 0   // 已平仓累计（含 commission 扣减）
 
         for i in 0..<bars.count {
             let close = bars[i].close
-            // 当前 bar 信号（上根末态决定本根行为 · 实际本根 close 撮合 · 简化无 slippage）
+            // 当前 bar 信号（上根末态决定本根行为 · 实际本根 close 撮合）
             let curSignal = i < signal.count ? signal[i] : nil
             let isLong = (curSignal ?? 0) > 0
 
             if !inPosition && isLong {
-                // 开仓 · 本根 close 价
+                // 开仓 · close + slippage（买高 · 不利方向）
                 inPosition = true
-                entryPrice = close
+                entryPrice = close + slippage
                 entryIndex = i
             } else if inPosition && !isLong {
-                // 平仓 · 本根 close 价
+                // 平仓 · close - slippage（卖低 · 不利方向）· 双向手续费一次性扣（开+平）
+                let exitPrice = close - slippage
                 let trade = BacktestTrade(
                     entryBarIndex: entryIndex,
                     entryPrice: entryPrice,
                     exitBarIndex: i,
-                    exitPrice: close
+                    exitPrice: exitPrice
                 )
                 trades.append(trade)
-                realizedPnL += trade.pnl
+                realizedPnL += trade.pnl - commission
                 inPosition = false
             }
 
-            // 当前 equity = 起始 + 已实现 PnL + 未实现 PnL（持仓时）
+            // 当前 equity = 起始 + 已实现 PnL + 未实现 PnL（持仓时 · 含 slippage 进 · 未平仓不扣 commission）
             let unrealized: Decimal = inPosition ? (close - entryPrice) : 0
             equityCurve.append(initialEquity + realizedPnL + unrealized)
         }
 
-        // 末尾仍持仓 · 强制按末 bar close 平仓（v1 简化 · 不留尾仓）
+        // 末尾仍持仓 · 强制按末 bar close 平仓（含 slippage + commission · 与正常平仓一致）
         if inPosition, let last = bars.last {
+            let exitPrice = last.close - slippage
             let trade = BacktestTrade(
                 entryBarIndex: entryIndex,
                 entryPrice: entryPrice,
                 exitBarIndex: bars.count - 1,
-                exitPrice: last.close
+                exitPrice: exitPrice
             )
             trades.append(trade)
-            realizedPnL += trade.pnl
+            realizedPnL += trade.pnl - commission
         }
         let endingPnL = realizedPnL
         let metrics = computeMetrics(equityCurve: equityCurve, trades: trades, initialEquity: initialEquity)

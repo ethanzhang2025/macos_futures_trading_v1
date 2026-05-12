@@ -121,6 +121,15 @@ enum ChartTheme: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// v17.113 · HUD 半透明背景（带用户偏好 mode · subtle/normal/strong · 跟 dark/light 主题适配）
+    /// 老 caller 仍用 var hudBackground（默认 normal）· 新 caller 用本方法
+    func hudBackground(mode: HUDOpacityMode) -> Color {
+        switch self {
+        case .dark:  return Color.black.opacity(mode.darkAlpha)
+        case .light: return Color.white.opacity(mode.lightAlpha)
+        }
+    }
+
     /// v15.17 · SwiftUI ColorScheme 桥接 · ChartScene 用 .preferredColorScheme(chartTheme.colorScheme)
     /// 让 sheet / 系统按钮 / NSPopUpButton 等系统色组件也跟主题切换
     var colorScheme: ColorScheme {
@@ -246,6 +255,36 @@ extension ChartTheme {
     static let fontSubvalue = Font.system(size: 10, design: .monospaced)
     /// 提示（最小 · 单位 / 备注 · 9pt）
     static let fontHint = Font.system(size: 9, design: .monospaced)
+
+    // v17.113 · 字号 mode-aware API（按 ChartFontSize sizeDelta ±1pt · trader 偏好 small / medium 默认 / large）
+    //
+    // 老 caller 用 fontValue / fontValueBold / fontLabel / fontSubvalue / fontHint 5 个 static let 不变（默认 medium）
+    // 新 caller 用 fontValue(size:) 等方法 · 接 ChartFontSize 切换字号档
+
+    private static let fontBaseValue: CGFloat = 11
+    private static let fontBaseSubvalue: CGFloat = 10
+    private static let fontBaseHint: CGFloat = 9
+
+    /// 主值（hover tooltip 数值 / HUD 数字）按字号档切换
+    static func fontValue(size: ChartFontSize) -> Font {
+        .system(size: fontBaseValue + size.sizeDelta, design: .monospaced)
+    }
+    /// 主值粗体（标题 / 高亮）按字号档切换
+    static func fontValueBold(size: ChartFontSize) -> Font {
+        .system(size: fontBaseValue + size.sizeDelta, design: .monospaced).weight(.bold)
+    }
+    /// 标签（行首 label）按字号档切换 · 与 fontValue 同字号
+    static func fontLabel(size: ChartFontSize) -> Font {
+        .system(size: fontBaseValue + size.sizeDelta, design: .monospaced)
+    }
+    /// 副值（点位编号 / 范围说明）按字号档切换
+    static func fontSubvalue(size: ChartFontSize) -> Font {
+        .system(size: fontBaseSubvalue + size.sizeDelta, design: .monospaced)
+    }
+    /// 提示（最小 · 单位 / 备注）按字号档切换
+    static func fontHint(size: ChartFontSize) -> Font {
+        .system(size: fontBaseHint + size.sizeDelta, design: .monospaced)
+    }
 
     // MARK: tooltip 容器尺寸约定（避免 4 窗口写不同的圆角 / padding）
 

@@ -226,6 +226,10 @@ struct ChartScene: View {
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
     /// v17.94 · 价格精度（auto = 跟合约 stepSize · fixed2/3/4 = 用户固定）· Settings 图表 tab 持久化
     @State private var pricePrecisionMode: PricePrecisionMode = ChartSettingsStore.loadPricePrecision()
+    /// v17.113 · HUD/Tooltip/Axis 字号档（small / medium / large · 偏移 ±1pt）· Settings 图表 tab 持久化
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
+    /// v17.113 · HUD 半透明档（subtle / normal / strong · 跟 dark/light 主题）· Settings 图表 tab 持久化
+    @State private var hudOpacityMode: HUDOpacityMode = ChartSettingsStore.loadHUDOpacityMode()
     /// v17.13 A1.1 · 主图图表类型（candlestick / heikinAshi）· UserDefaults 全局共享
     @State private var chartType: ChartType = .candlestick
     @State private var isChartTypeLoaded: Bool = false
@@ -657,6 +661,15 @@ struct ChartScene: View {
         if newPriceMode != pricePrecisionMode {
             pricePrecisionMode = newPriceMode
         }
+        // v17.113 · 字号 + HUD 透明度（影响 priceTopBar / OHLCTooltip / 各 HUD chip）
+        let newFontSize = ChartSettingsStore.loadChartFontSize()
+        if newFontSize != chartFontSize {
+            chartFontSize = newFontSize
+        }
+        let newHUDOpacity = ChartSettingsStore.loadHUDOpacityMode()
+        if newHUDOpacity != hudOpacityMode {
+            hudOpacityMode = newHUDOpacity
+        }
     }
 
     /// v15.17 · InAppOverlayChannel toast 信息（NotificationCenter userInfo 解码）
@@ -752,7 +765,7 @@ struct ChartScene: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(width: 480)
-        .background(chartTheme.hudBackground)
+        .background(chartTheme.hudBackground(mode: hudOpacityMode))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -795,7 +808,7 @@ struct ChartScene: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(width: 360)
-        .background(chartTheme.hudBackground)
+        .background(chartTheme.hudBackground(mode: hudOpacityMode))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -1656,6 +1669,8 @@ struct ChartScene: View {
                 chartTheme: chartTheme,
                 candleColorMode: candleColorMode,
                 pricePrecisionMode: pricePrecisionMode,
+                chartFontSize: chartFontSize,
+                hudOpacityMode: hudOpacityMode,
                 chartType: chartType,
                 hudFields: hudFields,
                 drawings: $drawings,
@@ -2199,6 +2214,10 @@ struct ChartContentView: View {
     let candleColorMode: CandleColorMode
     /// v17.94 · 价格精度（auto = 跟合约 stepSize · fixed2/3/4 = 用户固定）· 由 ChartScene 父级注入
     let pricePrecisionMode: PricePrecisionMode
+    /// v17.113 · HUD/Tooltip/Axis 字号档（small / medium / large）· 由 ChartScene 父级注入
+    let chartFontSize: ChartFontSize
+    /// v17.113 · HUD 半透明档（subtle / normal / strong）· 由 ChartScene 父级注入
+    let hudOpacityMode: HUDOpacityMode
     /// v17.13 A1.1 图表类型（candlestick / heikinAshi · 仅 candle 渲染层使用 · HUD/hover/indicator 仍用原始 bars）
     let chartType: ChartType
     /// v15.14 HUD 自定义字段（按 fields 渲染各可选项）
@@ -2659,7 +2678,7 @@ struct ChartContentView: View {
                 viewport: viewport,
                 priceRange: currentPriceRange,
                 period: bars.first?.period ?? .minute15,
-                tooltipBackground: chartTheme.hudBackground,
+                tooltipBackground: chartTheme.hudBackground(mode: hudOpacityMode),
                 tooltipPrimaryText: chartTheme.textPrimary,
                 tooltipSecondaryText: chartTheme.textSecondary,
                 crosshairLineColor: chartTheme.textSecondary.opacity(0.7),
@@ -2825,7 +2844,7 @@ struct ChartContentView: View {
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(color)
                     .padding(.horizontal, 3).padding(.vertical, 1)
-                    .background(chartTheme.hudBackground.opacity(0.85))
+                    .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.85))
                     .cornerRadius(2)
                     .position(x: labelX, y: y)
             }
@@ -2858,7 +2877,7 @@ struct ChartContentView: View {
                 .font(.system(size: 10, design: .monospaced))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
-                .background(chartTheme.hudBackground.opacity(0.85))
+                .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.85))
                 .cornerRadius(4)
                 .padding(.top, 60)    // 偏移 priceTopBar 下方
                 .padding(.trailing, 12)
@@ -2996,7 +3015,7 @@ struct ChartContentView: View {
         }
         .padding(20)
         .frame(width: 480)
-        .background(chartTheme.hudBackground)
+        .background(chartTheme.hudBackground(mode: hudOpacityMode))
         .cornerRadius(8)
         .shadow(radius: 12)
     }
@@ -3028,7 +3047,7 @@ struct ChartContentView: View {
         }
         .buttonStyle(.borderless)
         .padding(6)
-        .background(chartTheme.hudBackground)
+        .background(chartTheme.hudBackground(mode: hudOpacityMode))
         .cornerRadius(6)
         .padding(12)
     }
@@ -3108,7 +3127,7 @@ struct ChartContentView: View {
             .foregroundColor(color)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(chartTheme.hudBackground.opacity(0.92))
+            .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.92))
             .cornerRadius(3)
             .position(position)
     }
@@ -3170,7 +3189,7 @@ struct ChartContentView: View {
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundColor(swingColor)
                     .padding(.horizontal, 2)
-                    .background(chartTheme.hudBackground.opacity(0.85))
+                    .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.85))
                     .cornerRadius(2)
                     .position(x: x, y: isHigh ? markerY - 12 : markerY + 12)
                 // v15.21 batch130 · 距上次同向 swing 的 bar 数 + 价差%（趋势强度可视化）
@@ -3185,7 +3204,7 @@ struct ChartContentView: View {
                         .font(.system(size: 8, design: .monospaced))
                         .foregroundColor(swingColor.opacity(0.7))
                         .padding(.horizontal, 2)
-                        .background(chartTheme.hudBackground.opacity(0.7))
+                        .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.7))
                         .cornerRadius(2)
                         .position(x: x, y: isHigh ? markerY - 24 : markerY + 24)
                 }
@@ -3255,7 +3274,7 @@ struct ChartContentView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(chartTheme.hudBackground)
+            .background(chartTheme.hudBackground(mode: hudOpacityMode))
             .cornerRadius(6)
             .padding(12)
         }
@@ -3288,7 +3307,7 @@ struct ChartContentView: View {
             .foregroundColor(chartTheme.textPrimary)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(chartTheme.hudBackground)
+            .background(chartTheme.hudBackground(mode: hudOpacityMode))
             .cornerRadius(6)
             .padding(12)
         } else if let id = selectedDrawingIDs.first, let d = drawings.first(where: { $0.id == id }) {
@@ -3346,7 +3365,7 @@ struct ChartContentView: View {
             .foregroundColor(chartTheme.textPrimary)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(chartTheme.hudBackground)
+            .background(chartTheme.hudBackground(mode: hudOpacityMode))
             .cornerRadius(6)
             .padding(12)
         }
@@ -4673,16 +4692,17 @@ struct ChartContentView: View {
                 let isUp = diff >= 0
                 let color: Color = isUp ? chartTheme.candleUp(mode: candleColorMode) : chartTheme.candleDown(mode: candleColorMode)
                 let digits = effectivePriceDigits
+                // v17.113 · 大字号 22pt 跟字号档偏移（small 21 / medium 22 / large 23）· 副栏跟 fontValue
                 Text(String(format: "%.\(digits)f", close))
-                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .font(.system(size: 22 + chartFontSize.sizeDelta, weight: .bold, design: .monospaced))
                     .foregroundColor(color)
                 if !hudFields.fields.contains(.change) {
                     VStack(alignment: .trailing, spacing: 1) {
                         Text("\(isUp ? "▲" : "▼") \(String(format: "%+.\(digits)f", diff))")
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(ChartTheme.fontValue(size: chartFontSize))
                             .foregroundColor(color)
                         Text(String(format: "%+.2f%%", pct))
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(ChartTheme.fontValue(size: chartFontSize))
                             .foregroundColor(color)
                     }
                 }
@@ -4690,7 +4710,7 @@ struct ChartContentView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(chartTheme.hudBackground)
+        .background(chartTheme.hudBackground(mode: hudOpacityMode))
         .cornerRadius(6)
         .padding(12)
     }
@@ -4842,7 +4862,7 @@ struct ChartContentView: View {
         .font(.system(size: 12, design: .monospaced))
         .foregroundColor(chartTheme.textPrimary)
         .padding(8)
-        .background(chartTheme.hudBackground)
+        .background(chartTheme.hudBackground(mode: hudOpacityMode))
         .cornerRadius(6)
         .padding(12)
     }

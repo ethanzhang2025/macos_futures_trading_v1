@@ -22,7 +22,7 @@ struct SettingsContentView: View {
                 .tabItem { Label("隐私", systemImage: "hand.raised.fill") }
             ChartSettingsTab()
                 .tabItem { Label("图表", systemImage: "chart.line.uptrend.xyaxis") }
-            placeholder(title: "数据", note: "行情源 / 缓存路径 / 加密 passphrase（Keychain wire 待 Stage B IAP）")
+            DataSettingsTab()
                 .tabItem { Label("数据", systemImage: "externaldrive") }
             placeholder(title: "订阅", note: "Pro / Pro 500 / 设备绑定（待 WP-91 IAP 接入）")
                 .tabItem { Label("订阅", systemImage: "person.badge.key") }
@@ -360,6 +360,135 @@ private struct ChartSettingsTab: View {
         pricePrecision = .auto
         IndicatorParamsStore.save(.default)
         ChartSettingsStore.resetAll()
+    }
+}
+
+// MARK: - 数据 Tab（v17.102 · 行情源 + 缓存路径 + 数据库大小 · 加密 passphrase 留 Stage B IAP）
+
+private struct DataSettingsTab: View {
+
+    @State private var storageRoot: URL?
+    @State private var totalSize: Int64 = 0
+    @State private var fileCount: Int = 0
+    @State private var lastRefreshAt: Date?
+
+    private var humanSize: String {
+        ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("当前源") {
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.green).frame(width: 6, height: 6)
+                        Text("Sina（免费 5s 轮询）").font(.callout)
+                    }
+                }
+                LabeledContent("CTP 实盘行情") {
+                    Text("M5+ 接入").font(.callout).foregroundColor(.secondary)
+                }
+            } header: {
+                Text("行情源").font(.headline)
+            } footer: {
+                Text("Stage A 仅 Sina 免费源 · CTP 真盘行情待用户期货账户接入后启用（M5+）")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+
+            Section {
+                if let root = storageRoot {
+                    LabeledContent("路径") {
+                        Text(root.path)
+                            .font(.system(size: 11, design: .monospaced))
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                    }
+                    LabeledContent("占用空间") {
+                        Text(humanSize)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(totalSize > 500 * 1024 * 1024 ? .orange : .primary)
+                    }
+                    LabeledContent("文件数") {
+                        Text("\(fileCount)").font(.system(size: 12, design: .monospaced))
+                    }
+                    HStack(spacing: 12) {
+                        Button("在 Finder 中显示") { revealInFinder(root) }
+                        Button("刷新") { Task { await refreshStats() } }
+                    }
+                } else {
+                    Text("加载中…").foregroundColor(.secondary)
+                }
+            } header: {
+                Text("本地缓存").font(.headline)
+            } footer: {
+                if let at = lastRefreshAt {
+                    Text("上次刷新：\(timeAgoString(from: at)) · 大于 500 MB 时显示橙色提示")
+                        .font(.system(size: 11)).foregroundColor(.secondary)
+                } else {
+                    Text("大于 500 MB 时显示橙色提示 · 可手动 Finder 清理（关闭 App 后）")
+                        .font(.system(size: 11)).foregroundColor(.secondary)
+                }
+            }
+
+            Section {
+                LabeledContent("数据库加密") {
+                    Text("未启用").foregroundColor(.secondary).font(.callout)
+                }
+            } header: {
+                Text("安全").font(.headline)
+            } footer: {
+                Text("Stage A 暂不强制加密 · Stage B（订阅上线后）将引导 Keychain passphrase + SQLite SEE 加密往返")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .padding(.vertical, 8)
+        .task { await refreshStats() }
+    }
+
+    private func revealInFinder(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    private func timeAgoString(from date: Date) -> String {
+        let s = Int(Date().timeIntervalSince(date))
+        if s < 60 { return "\(s)s 前" }
+        if s < 3600 { return "\(s / 60)m 前" }
+        return "\(s / 3600)h 前"
+    }
+
+    private func refreshStats() async {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let root = base.appendingPathComponent("FuturesTerminal/db")
+        let (size, count) = await Task.detached(priority: .userInitiated) {
+            DataSettingsStats.scan(root: root)
+        }.value
+        await MainActor.run {
+            storageRoot = root
+            totalSize = size
+            fileCount = count
+            lastRefreshAt = Date()
+        }
+    }
+}
+
+/// v17.102 · 目录扫描（递归 size + file count · detach 跑避免主线程卡）
+enum DataSettingsStats {
+    static func scan(root: URL) -> (size: Int64, count: Int) {
+        guard let it = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey]) else {
+            return (0, 0)
+        }
+        var size: Int64 = 0
+        var count = 0
+        for case let url as URL in it {
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+            guard values?.isRegularFile == true else { continue }
+            size += Int64(values?.fileSize ?? 0)
+            count += 1
+        }
+        return (size, count)
     }
 }
 

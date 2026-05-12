@@ -29,11 +29,19 @@ public struct SymbolBinding: Equatable, Codable, Sendable {
     public var symbol: String
     public var periodRaw: String?
     public var crosshairUnixTime: Double?
+    /// v18 · publish 源 Pane ID 字符串 · 用于 effectiveCrosshair 排除自身回流（避免 ChartScene 同时画本地+外部光标重叠）
+    public var crosshairSourcePaneIDString: String?
 
-    public init(symbol: String, periodRaw: String? = nil, crosshairUnixTime: Double? = nil) {
+    public init(
+        symbol: String,
+        periodRaw: String? = nil,
+        crosshairUnixTime: Double? = nil,
+        crosshairSourcePaneIDString: String? = nil
+    ) {
         self.symbol = symbol
         self.periodRaw = periodRaw
         self.crosshairUnixTime = crosshairUnixTime
+        self.crosshairSourcePaneIDString = crosshairSourcePaneIDString
     }
 }
 

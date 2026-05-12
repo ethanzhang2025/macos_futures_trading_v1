@@ -2614,6 +2614,7 @@ struct ChartContentView: View {
                 bars: bars, viewport: viewport, gaps: sessionGaps
             )
             // 视觉迭代第 2 项：十字光标 + OHLC 浮窗 + 轴边价格/时间浮标（hover 跟随）
+            // v18 · externalTime 接通 shellExternalCrosshair env · 同 group 兄弟 Pane 广播的时间画外部竖线
             KLineCrosshairView(
                 bars: bars,
                 viewport: viewport,
@@ -2622,7 +2623,8 @@ struct ChartContentView: View {
                 tooltipBackground: chartTheme.hudBackground,
                 tooltipPrimaryText: chartTheme.textPrimary,
                 tooltipSecondaryText: chartTheme.textSecondary,
-                crosshairLineColor: chartTheme.textSecondary.opacity(0.7)
+                crosshairLineColor: chartTheme.textSecondary.opacity(0.7),
+                externalTime: shellExternalCrosshair
             )
             // v15.19 batch35 · 昨结算线（trader 关键参考位 · 商品昨结算 / 金融昨收 · price 在线上下分歧情绪不同）
             preSettlementLine

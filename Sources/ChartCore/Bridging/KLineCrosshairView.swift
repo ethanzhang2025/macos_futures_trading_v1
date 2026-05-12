@@ -23,6 +23,9 @@ public struct KLineCrosshairView: View {
     public let tooltipPrimaryText: Color
     public let tooltipSecondaryText: Color
     public let crosshairLineColor: Color
+    /// v18 · 跨周期十字光标深度集成 · 同 group 兄弟 Pane 广播的时间
+    /// nil 时不渲染外部光标 · 非 nil 时画蓝色虚线竖线 + 顶部 🎯 tag（仅时间维度跨周期共振）
+    public let externalTime: Date?
 
     @State private var hoverPoint: CGPoint?
 
@@ -51,7 +54,8 @@ public struct KLineCrosshairView: View {
         tooltipBackground: Color = Color.black.opacity(0.85),
         tooltipPrimaryText: Color = .white,
         tooltipSecondaryText: Color = Color.white.opacity(0.7),
-        crosshairLineColor: Color = Color.white.opacity(0.5)
+        crosshairLineColor: Color = Color.white.opacity(0.5),
+        externalTime: Date? = nil
     ) {
         self.bars = bars
         self.viewport = viewport
@@ -61,6 +65,7 @@ public struct KLineCrosshairView: View {
         self.tooltipPrimaryText = tooltipPrimaryText
         self.tooltipSecondaryText = tooltipSecondaryText
         self.crosshairLineColor = crosshairLineColor
+        self.externalTime = externalTime
     }
 
     public var body: some View {
@@ -75,6 +80,13 @@ public struct KLineCrosshairView: View {
                         case .ended: hoverPoint = nil
                         }
                     }
+
+                // v18 · 外部光标（同 group 兄弟 Pane 广播 · 仅竖线 + 顶部 tag）
+                // 画在本地光标下层（zIndex 隐式靠前后顺序）· 本地光标覆盖时视觉优先本地
+                if let ext = externalTime, let extX = externalBarX(time: ext, in: geom.size) {
+                    externalCrosshairLine(x: extX, in: geom.size)
+                    externalTopTag(time: ext, x: extX, in: geom.size)
+                }
 
                 if let pt = hoverPoint, let info = computeBarInfo(at: pt, in: geom.size) {
                     crosshairLines(at: pt, in: geom.size)
@@ -177,6 +189,38 @@ public struct KLineCrosshairView: View {
             ? tooltipHeight / 2 + 12
             : -tooltipHeight / 2 - 12
         return CGPoint(x: pt.x + dx, y: pt.y + dy)
+    }
+
+    // MARK: - v18 · 外部光标（同 group 兄弟广播 · 跨周期共振）
+
+    /// externalTime → 像素 x · 找最后一根 openTime ≤ externalTime 的 bar · 不在 viewport 可视区返 nil
+    private func externalBarX(time: Date, in size: CGSize) -> CGFloat? {
+        guard !bars.isEmpty,
+              let idx = bars.lastIndex(where: { $0.openTime <= time }) else { return nil }
+        return ChartHitTester.xPosition(forBarIndex: idx, width: size.width, viewport: viewport)
+    }
+
+    /// 外部光标竖线（仅时间维度 · 浅蓝虚线 · 与本地黄白虚线区分）
+    private func externalCrosshairLine(x: CGFloat, in size: CGSize) -> some View {
+        Path { p in
+            p.move(to: CGPoint(x: x, y: 0))
+            p.addLine(to: CGPoint(x: x, y: size.height))
+        }
+        .stroke(Color.cyan.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+        .allowsHitTesting(false)
+    }
+
+    /// 外部光标顶部 tag（🎯 + 时间 · 提示 trader 这是同组广播来的）
+    private func externalTopTag(time: Date, x: CGFloat, in size: CGSize) -> some View {
+        Text("🎯 \(timeFormatter.string(from: time))")
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .foregroundColor(.white)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(Color.cyan.opacity(0.85))
+            .cornerRadius(2)
+            .position(x: x, y: 10)
+            .allowsHitTesting(false)
     }
 }
 

@@ -287,12 +287,14 @@ public final class ShellViewModel: ObservableObject {
     // → ChartScene v18+ 接 effectiveCrosshair(for:) 直接画十字（深度集成）
 
     /// 设置某 Pane 的 crosshair（仅当 Pane 有 group color 时生效 · 广播到同组）
+    /// v18 · 同时记录 source paneID · 用于 effectiveCrosshair 排除自身回流
     public func setPaneCrosshair(paneID: UUID, unixTime: Double?) {
         guard let wsIdx = workspaceIndexContainingPane(paneID),
               let pane = workspaces[wsIdx].panes.first(where: { $0.id == paneID }),
               let color = pane.groupColor else { return }
         if var binding = groupBindings[color] {
             binding.crosshairUnixTime = unixTime
+            binding.crosshairSourcePaneIDString = unixTime == nil ? nil : paneID.uuidString
             groupBindings[color] = binding
         }
     }
@@ -303,9 +305,12 @@ public final class ShellViewModel: ObservableObject {
     }
 
     /// 获取 Pane 当前应显示的 crosshair（同 group 兄弟广播的时间）
+    /// v18 · 排除自身回流（source == self 时返回 nil · 避免 ChartScene 重复画光标）
     public func effectiveCrosshair(for config: PaneConfig) -> Date? {
         guard let c = config.groupColor,
-              let ts = groupBindings[c]?.crosshairUnixTime else { return nil }
+              let binding = groupBindings[c],
+              let ts = binding.crosshairUnixTime else { return nil }
+        if binding.crosshairSourcePaneIDString == config.id.uuidString { return nil }
         return Date(timeIntervalSince1970: ts)
     }
 

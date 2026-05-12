@@ -28,6 +28,8 @@ struct AnomalyMonitorWindow: View {
 
     /// v17.109 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+    /// v17.121 · 用户字号档（跟 ChartScene/Settings 同步）
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
 
     // v17.109 · 涨跌色（跟 candleColorMode swap · 中国习惯红涨绿跌 / 国际相反）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
@@ -143,9 +145,12 @@ struct AnomalyMonitorWindow: View {
             }
         }
         // v17.109 · 同步用户 K 线配色偏好（Settings → 国际习惯 → 涨跌色 swap）
+        // v17.121 · 同步字号档
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -446,7 +451,7 @@ struct AnomalyMonitorWindow: View {
                 // severity bar
                 HStack(spacing: 4) {
                     Text(String(format: "%.0f", evt.severity))
-                        .font(.system(size: 11, design: .monospaced).bold())
+                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                         .foregroundColor(severityColor(evt.severity))
                         .frame(width: 28, alignment: .trailing)
                     GeometryReader { geom in
@@ -475,10 +480,10 @@ struct AnomalyMonitorWindow: View {
                 // 品种
                 HStack(spacing: 6) {
                     Text(evt.instrumentID)
-                        .font(.system(size: 11, design: .monospaced).bold())
+                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                         .frame(width: 50, alignment: .leading)
                     Text(evt.instrumentName)
-                        .font(.system(size: 11))
+                        .font(.system(size: 11 + chartFontSize.sizeDelta))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -493,7 +498,7 @@ struct AnomalyMonitorWindow: View {
 
                 // 说明
                 Text(evt.description)
-                    .font(.system(size: 11))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -732,16 +737,16 @@ struct AnomalyMonitorWindow: View {
         } label: {
             HStack(spacing: 0) {
                 Text("\(rank)")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 36, alignment: .trailing)
 
                 HStack(spacing: 6) {
                     Text(h.instrumentID)
-                        .font(.system(size: 11, design: .monospaced).bold())
+                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                         .frame(width: 50, alignment: .leading)
                     Text(h.instrumentName)
-                        .font(.system(size: 11))
+                        .font(.system(size: 11 + chartFontSize.sizeDelta))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -754,17 +759,17 @@ struct AnomalyMonitorWindow: View {
                     .lineLimit(1)
 
                 Text("\(h.totalCount)")
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(totalCountColor(h.totalCount))
                     .frame(width: 60, alignment: .trailing)
 
                 Text(String(format: "%.1f", h.avgPerDay))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 60, alignment: .trailing)
 
                 Text("\(h.peakDayCount)")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 50, alignment: .trailing)
 
@@ -824,7 +829,7 @@ struct AnomalyMonitorWindow: View {
             ForEach(AnomalyKind.allCases) { k in
                 let c = counts[k] ?? 0
                 Text("\(c)")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(c > 0 ? kindColor(k) : .secondary.opacity(0.5))
                     .frame(width: 24, alignment: .center)
                     .padding(.vertical, 2)
@@ -919,16 +924,16 @@ struct AnomalyMonitorWindow: View {
         } label: {
             HStack(spacing: 0) {
                 Text("\(rank)")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 36, alignment: .trailing)
 
                 HStack(spacing: 6) {
                     Text(h.instrumentID)
-                        .font(.system(size: 11, design: .monospaced).bold())
+                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                         .frame(width: 50, alignment: .leading)
                     Text(h.instrumentName)
-                        .font(.system(size: 11))
+                        .font(.system(size: 11 + chartFontSize.sizeDelta))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -941,22 +946,22 @@ struct AnomalyMonitorWindow: View {
                     .lineLimit(1)
 
                 Text("\(h.thisWeekCount)")
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(weekCountColor(h.thisWeekCount))
                     .frame(width: 50, alignment: .trailing)
 
                 Text("\(h.lastWeekCount)")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 50, alignment: .trailing)
 
                 Text(h.weekDelta > 0 ? "+\(h.weekDelta)" : "\(h.weekDelta)")
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(deltaColor(h.weekDelta))
                     .frame(width: 50, alignment: .trailing)
 
                 Text(formatPct(h.weekDeltaPct))
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(trendColor(h.weekTrend))
                     .frame(width: 70, alignment: .trailing)
 
@@ -968,7 +973,7 @@ struct AnomalyMonitorWindow: View {
                     .frame(width: 80, alignment: .leading)
 
                 Text("\(h.totalCount)")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 60, alignment: .trailing)
 
@@ -1128,14 +1133,14 @@ struct AnomalyMonitorWindow: View {
         } label: {
             HStack(spacing: 0) {
                 Text("\(rank)")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 36, alignment: .trailing)
 
                 // Combo severity 徽章（数字 + 进度条）
                 HStack(spacing: 4) {
                     Text(String(format: "%.0f", combo.totalSeverity))
-                        .font(.system(size: 11, design: .monospaced).bold())
+                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                         .foregroundColor(comboSeverityColor(combo))
                     GeometryReader { geom in
                         ZStack(alignment: .leading) {
@@ -1155,10 +1160,10 @@ struct AnomalyMonitorWindow: View {
                 // 品种
                 HStack(spacing: 6) {
                     Text(combo.instrumentID)
-                        .font(.system(size: 11, design: .monospaced).bold())
+                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                         .frame(width: 50, alignment: .leading)
                     Text(combo.instrumentName)
-                        .font(.system(size: 11))
+                        .font(.system(size: 11 + chartFontSize.sizeDelta))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -1173,7 +1178,7 @@ struct AnomalyMonitorWindow: View {
 
                 // 类型数（5/5 染色）
                 Text("\(combo.kindCount) / 5")
-                    .font(.system(size: 11, design: .monospaced).bold())
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced).bold())
                     .foregroundColor(comboKindCountColor(combo.kindCount))
                     .frame(width: 56, alignment: .trailing)
 
@@ -1185,7 +1190,7 @@ struct AnomalyMonitorWindow: View {
 
                 // avg severity
                 Text(String(format: "%.0f", combo.avgSeverity))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 50, alignment: .trailing)
 
@@ -1197,7 +1202,7 @@ struct AnomalyMonitorWindow: View {
                         sparkline(counts: h.dailyCounts, peak: globalPeak)
                             .frame(width: 130, height: 20)
                         Text("\(h.totalCount)")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 10 + chartFontSize.sizeDelta, design: .monospaced))
                             .foregroundColor(.secondary)
                             .frame(width: 30, alignment: .trailing)
                     }
@@ -1235,7 +1240,7 @@ struct AnomalyMonitorWindow: View {
             ForEach(AnomalyKind.allCases) { k in
                 let hit = kinds.contains(k)
                 Label(k.displayName, systemImage: k.icon)
-                    .font(.system(size: 10))
+                    .font(.system(size: 10 + chartFontSize.sizeDelta))
                     .foregroundColor(hit ? kindColor(k) : .secondary.opacity(0.4))
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .background(hit ? kindColor(k).opacity(0.14) : Color.clear,

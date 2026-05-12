@@ -38,6 +38,7 @@ public struct BacktestWindow: View {
     @State private var errorMessage: String?
     @State private var hoverPoint: CGPoint?
     @State private var historyRevision: Int = 0   // 触发 history 列表刷新
+    @State private var showGridSearchSheet: Bool = false   // v17.44 D4 UI · 参数扫描
 
     // MARK: - 标的轨迹
 
@@ -71,6 +72,18 @@ public struct BacktestWindow: View {
             }
         }
         .frame(minWidth: 1100, minHeight: 720)
+        .sheet(isPresented: $showGridSearchSheet) {
+            GridSearchSheet(
+                bars: bars,
+                signalLineName: signalLineName,
+                initialEquity: initialEquity,
+                isPresented: $showGridSearchSheet,
+                onApplyFormula: { filledFormula in
+                    sourceText = filledFormula
+                    runBacktest()
+                }
+            )
+        }
     }
 
     // MARK: - Header
@@ -176,6 +189,22 @@ public struct BacktestWindow: View {
                     .buttonStyle(.bordered)
                     .help("保存当前回测结果 · 可在月报中 cross-ref")
                 }
+
+                // v17.44 D4 · 参数扫描入口（需要已跑过一次回测确保 bars 有效）
+                Button {
+                    if bars.isEmpty {
+                        bars = makeBars()
+                    }
+                    showGridSearchSheet = true
+                } label: {
+                    HStack {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("参数扫描").font(.callout)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .help("批量跑公式参数组合（笛卡尔积）· 按 metric 排序找最优")
 
                 if let err = errorMessage {
                     Text(err)

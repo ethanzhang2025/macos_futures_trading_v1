@@ -39,6 +39,9 @@ struct SpreadBacktestSheet: View {
     /// v17.106 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
 
+    /// v17.115 · 用户字号偏好
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
+
     // v17.106 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
     private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
@@ -57,10 +60,12 @@ struct SpreadBacktestSheet: View {
         }
         .frame(width: 1080, height: 660)
         .onAppear { runBacktest() }
-        // v17.106 · 同步用户 K 线配色偏好（Settings → 国际习惯 → PnL 涨跌色 swap）
+        // v17.106 / v17.115 · 同步用户 K 线配色 + 字号偏好（Settings → swap）
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -257,7 +262,7 @@ struct SpreadBacktestSheet: View {
                             : (info.cumPnL < 0 ? chartLoss : ChartTheme.chartTransition)
         return VStack(alignment: .leading, spacing: 4) {
             Text(info.index == 0 ? "起点" : "第 \(info.index) 笔后")
-                .font(ChartTheme.fontValue)
+                .font(ChartTheme.fontValue(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipSecondary)
             Divider().background(ChartTheme.tooltipDivider)
             cumPnLRow("累积 PnL", String(format: "%+.2f", info.cumPnL), color: cumColor)
@@ -273,7 +278,7 @@ struct SpreadBacktestSheet: View {
                 cumPnLRow("结果", t.isWin ? "盈" : "亏", color: pnlColor)
             } else {
                 Text("（起始位置 · 无单笔信息）")
-                    .font(ChartTheme.fontSubvalue)
+                    .font(ChartTheme.fontSubvalue(size: chartFontSize))
                     .foregroundColor(ChartTheme.tooltipDimmed)
             }
         }
@@ -288,11 +293,11 @@ struct SpreadBacktestSheet: View {
     private func cumPnLRow(_ label: String, _ value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(ChartTheme.fontLabel)
+                .font(ChartTheme.fontLabel(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipLabel)
                 .frame(width: 56, alignment: .leading)
             Text(value)
-                .font(ChartTheme.fontValue)
+                .font(ChartTheme.fontValue(size: chartFontSize))
                 .foregroundColor(color)
             Spacer()
         }
@@ -358,7 +363,7 @@ struct SpreadBacktestSheet: View {
         }
 
         let title = Text("累积 PnL（绿涨段 · 红跌段 · ● peak/trough）")
-            .font(ChartTheme.fontSubvalue).foregroundColor(.secondary)
+            .font(ChartTheme.fontSubvalue(size: chartFontSize)).foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }
 

@@ -35,6 +35,9 @@ struct CalendarSpreadWindow: View {
     /// v17.106 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
 
+    /// v17.115 · 用户字号偏好
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
+
     private var selectedPair: CalendarSpreadPair {
         CalendarSpreadPresets.byID[selectedPairID] ?? CalendarSpreadPresets.all.first!
     }
@@ -107,10 +110,12 @@ struct CalendarSpreadWindow: View {
                 selectedPairID = match.id
             }
         }
-        // v17.106 · 同步用户 K 线配色偏好（Settings → 国际习惯 → PnL 涨跌色 swap）
+        // v17.106 / v17.115 · 同步用户 K 线配色 + 字号偏好（Settings → swap）
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
     }
 
@@ -273,7 +278,7 @@ struct CalendarSpreadWindow: View {
     private func drawSpread(_ ctx: GraphicsContext, size: CGSize) {
         guard spreadValues.count >= 2 else {
             let text = Text("等待数据 · \(spreadValues.count) 点")
-                .font(ChartTheme.fontValue).foregroundColor(.secondary)
+                .font(ChartTheme.fontValue(size: chartFontSize)).foregroundColor(.secondary)
             ctx.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2), anchor: .center)
             return
         }
@@ -355,7 +360,7 @@ struct CalendarSpreadWindow: View {
     private func drawRollingZ(ctx: GraphicsContext, size: CGSize) {
         guard rollingZScores.count >= 2 else {
             let text = Text("滚动 Z 不足（窗口 \(rollingWindow)）")
-                .font(ChartTheme.fontValue).foregroundColor(.secondary)
+                .font(ChartTheme.fontValue(size: chartFontSize)).foregroundColor(.secondary)
             ctx.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2), anchor: .center)
             return
         }
@@ -390,7 +395,7 @@ struct CalendarSpreadWindow: View {
                    style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
         // 标题
         let title = Text("📈 滚动 Z-score（窗口 \(rollingWindow) · 橙线 ±2σ 反转阈值）")
-            .font(ChartTheme.fontSubvalue).foregroundColor(.secondary)
+            .font(ChartTheme.fontSubvalue(size: chartFontSize)).foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }
 
@@ -448,10 +453,10 @@ struct CalendarSpreadWindow: View {
         let timeText = f.string(from: spreadValues[info.index].openTime)
         return VStack(alignment: .leading, spacing: 4) {
             Text(timeText)
-                .font(ChartTheme.fontValue)
+                .font(ChartTheme.fontValue(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipSecondary)
             Text("点 #\(info.index + 1) / \(spreadValues.count)")
-                .font(ChartTheme.fontSubvalue)
+                .font(ChartTheme.fontSubvalue(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipMuted)
             Divider().background(ChartTheme.tooltipDivider)
             row("近月", String(format: "%.2f", info.nearPrice), color: ChartTheme.tooltipSecondary)
@@ -474,11 +479,11 @@ struct CalendarSpreadWindow: View {
     private func row(_ label: String, _ value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(ChartTheme.fontLabel)
+                .font(ChartTheme.fontLabel(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipLabel)
                 .frame(width: 38, alignment: .leading)
             Text(value)
-                .font(ChartTheme.fontValue)
+                .font(ChartTheme.fontValue(size: chartFontSize))
                 .foregroundColor(color)
             Spacer()
         }

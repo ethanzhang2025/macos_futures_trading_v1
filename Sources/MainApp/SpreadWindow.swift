@@ -43,6 +43,9 @@ struct SpreadWindow: View {
     /// v17.106 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
 
+    /// v17.115 · 用户字号偏好（跟 ChartScene/Settings 同步 · HUD/Tooltip 字号 swap 用）
+    @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
+
     /// v17.95 · 单击两腿 label → openWindow("chart") + post 切主图
     @Environment(\.openWindow) private var openWindow
 
@@ -98,10 +101,12 @@ struct SpreadWindow: View {
                 selectedPairID = match.id
             }
         }
-        // v17.106 · 同步用户 K 线配色偏好（Settings → 国际习惯 → PnL 涨跌色 swap）
+        // v17.106 / v17.115 · 同步用户 K 线配色 + 字号偏好（Settings → swap）
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let newMode = ChartSettingsStore.loadCandleColorMode()
             if newMode != candleColorMode { candleColorMode = newMode }
+            let newFontSize = ChartSettingsStore.loadChartFontSize()
+            if newFontSize != chartFontSize { chartFontSize = newFontSize }
         }
         .sheet(isPresented: $backtestSheetPresented) {
             SpreadBacktestSheet(
@@ -339,10 +344,10 @@ struct SpreadWindow: View {
         let timeText = spreadHoverTimeFormatter.string(from: sv.openTime)
         return VStack(alignment: .leading, spacing: 4) {
             Text(timeText)
-                .font(ChartTheme.fontValue)
+                .font(ChartTheme.fontValue(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipSecondary)
             Text("点 #\(info.index + 1) / \(spreadValues.count)")
-                .font(ChartTheme.fontSubvalue)
+                .font(ChartTheme.fontSubvalue(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipMuted)
             Divider().background(ChartTheme.tooltipDivider)
             tooltipRow("价差", String(format: "%.2f", info.value), color: ChartTheme.chartLine)
@@ -382,11 +387,11 @@ struct SpreadWindow: View {
     private func tooltipRow(_ label: String, _ value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(ChartTheme.fontLabel)
+                .font(ChartTheme.fontLabel(size: chartFontSize))
                 .foregroundColor(ChartTheme.tooltipLabel)
                 .frame(width: 32, alignment: .leading)
             Text(value)
-                .font(ChartTheme.fontValue)
+                .font(ChartTheme.fontValue(size: chartFontSize))
                 .foregroundColor(color)
             Spacer()
         }
@@ -551,7 +556,7 @@ struct SpreadWindow: View {
         }
         // 顶部标题
         let title = Text("📊 价差分布（\(h.bins.count) bins · cyan=当前 · yellow=众数 · 共 \(h.totalCount) 样本）")
-            .font(ChartTheme.fontSubvalue)
+            .font(ChartTheme.fontSubvalue(size: chartFontSize))
             .foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }
@@ -559,7 +564,7 @@ struct SpreadWindow: View {
     private func drawRollingZ(ctx: GraphicsContext, size: CGSize) {
         guard rollingZScores.count >= 2 else {
             let text = Text("滚动 Z 不足（窗口 \(rollingWindow)）")
-                .font(ChartTheme.fontValue).foregroundColor(.secondary)
+                .font(ChartTheme.fontValue(size: chartFontSize)).foregroundColor(.secondary)
             ctx.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2), anchor: .center)
             return
         }
@@ -595,7 +600,7 @@ struct SpreadWindow: View {
                    style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
         // 标题
         let title = Text("📈 滚动 Z-score（窗口 \(rollingWindow) · 橙线 ±2σ 阈值）")
-            .font(ChartTheme.fontSubvalue)
+            .font(ChartTheme.fontSubvalue(size: chartFontSize))
             .foregroundColor(.secondary)
         ctx.draw(title, at: CGPoint(x: 8, y: 6), anchor: .topLeading)
     }

@@ -12,6 +12,8 @@ struct ShellSidebar: View {
     @EnvironmentObject var shellVM: ShellViewModel
     /// v17.70 · 预警历史 store（mini section · 5 条最近触发）
     @Environment(\.storeManager) private var storeManager
+    /// v17.82 · 异动 / 预警行点击 → 切主图 K 线（与 ⌘⌥A AnomalyMonitorWindow 同机制）
+    @Environment(\.openWindow) private var openWindow
     /// v17.3 · 训练 log 真实数据（启动时一次性加载 · 后续重启刷新）
     @State private var trainingLog: TrainingSessionLog = TrainingLogPersistence.load()
     /// v17.21 · 模拟交易 snapshot 真实数据（持仓 + 现价 · UserDefaults didChange 跟随）
@@ -199,28 +201,35 @@ struct ShellSidebar: View {
                 Text("尚无触发记录").font(.caption).foregroundColor(.secondary)
             } else {
                 ForEach(recentAlerts) { entry in
-                    HStack(spacing: 6) {
-                        Text("🔔").font(.system(size: 10))
-                        VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 4) {
-                                Text(entry.instrumentID)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.accentColor)
-                                Text(entry.alertName)
-                                    .font(.system(size: 11))
-                                    .lineLimit(1)
+                    Button {
+                        openWindow(id: "chart")
+                        NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: entry.instrumentID)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("🔔").font(.system(size: 10))
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 4) {
+                                    Text(entry.instrumentID)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                    Text(entry.alertName)
+                                        .font(.system(size: 11))
+                                        .lineLimit(1)
+                                }
+                                Text(Self.alertTimeFormatter.string(from: entry.triggeredAt))
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(.secondary)
                             }
-                            Text(Self.alertTimeFormatter.string(from: entry.triggeredAt))
-                                .font(.system(size: 9, design: .monospaced))
+                            Spacer()
+                            Text(NSDecimalNumber(decimal: entry.triggerPrice).stringValue)
+                                .font(.system(size: 10, design: .monospaced))
                                 .foregroundColor(.secondary)
                         }
-                        Spacer()
-                        Text(NSDecimalNumber(decimal: entry.triggerPrice).stringValue)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary)
+                        .padding(.vertical, 1)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.vertical, 1)
-                    .help(entry.message)
+                    .buttonStyle(.plain)
+                    .help("\(entry.message) · 点击切主图")
                 }
             }
         } header: {
@@ -243,24 +252,67 @@ struct ShellSidebar: View {
         await MainActor.run { recentAlerts = top }
     }
 
-    // MARK: - 异动
+    // MARK: - 异动（v17.82 · 接 AnomalyDetector 真扫描 · top 5 severity desc · 点击切主图）
+
+    private var topAnomalies: [AnomalyEvent] {
+        let result = AnomalyDetector.scan()
+        return Array(result.events.prefix(5))
+    }
 
     private var anomalySection: some View {
         Section {
-            ForEach(mockAnomalies, id: \.title) { item in
-                HStack(spacing: 6) {
-                    Text("⚠️").font(.system(size: 10))
-                    Text(item.title).font(.system(size: 11))
-                    Spacer()
-                    Text(item.time)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
+            let evts = topAnomalies
+            if evts.isEmpty {
+                Text("无异常 · 全市场平稳").font(.caption).foregroundColor(.secondary)
+            } else {
+                ForEach(evts) { evt in
+                    Button {
+                        openWindow(id: "chart")
+                        NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: evt.instrumentID)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: evt.kind.icon)
+                                .font(.system(size: 10))
+                                .foregroundColor(Self.anomalyKindColor(evt.kind))
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 4) {
+                                    Text(evt.instrumentID)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                    Text(evt.instrumentName)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                }
+                                Text(evt.kind.displayName)
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Text(String(format: "%.0f", evt.severity))
+                                .font(.system(size: 10, design: .monospaced).bold())
+                                .foregroundColor(Self.anomalyKindColor(evt.kind))
+                        }
+                        .padding(.vertical, 1)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("\(evt.instrumentName) · \(evt.description) · 点击切主图")
                 }
-                .padding(.vertical, 1)
             }
         } header: {
-            Label("异动 (\(mockAnomalies.count))", systemImage: "exclamationmark.triangle.fill")
+            Label("异动 (\(topAnomalies.count))", systemImage: "exclamationmark.triangle.fill")
                 .foregroundColor(.orange)
+        }
+    }
+
+    private static func anomalyKindColor(_ k: AnomalyKind) -> Color {
+        switch k {
+        case .priceSpike:        return .red
+        case .oiSpike:           return .orange
+        case .fundSurge:         return .yellow
+        case .priceOIDivergence: return .purple
+        case .sectorOutlier:     return .pink
         }
     }
 
@@ -340,7 +392,6 @@ struct ShellSidebar: View {
 
 private struct WatchItem { let symbol: String; let price: String; let change: String }
 private struct SectorItem { let emoji: String; let name: String; let change: String }
-private struct AnomalyItem { let title: String; let time: String }
 
 private let mockWatchlist: [WatchItem] = [
     WatchItem(symbol: "rb2510",   price: "3225",   change: "+0.78%"),
@@ -355,12 +406,6 @@ private let mockSectors: [SectorItem] = [
     SectorItem(emoji: "🔧", name: "有色",   change: "+0.20%"),
     SectorItem(emoji: "🌾", name: "农产品", change: "-0.42%"),
     SectorItem(emoji: "🛢", name: "能化",   change: "+0.88%"),
-]
-
-private let mockAnomalies: [AnomalyItem] = [
-    AnomalyItem(title: "螺纹突破阻力", time: "14:23"),
-    AnomalyItem(title: "原油持续单边", time: "14:18"),
-    AnomalyItem(title: "价差异常扩大", time: "13:55"),
 ]
 
 #endif

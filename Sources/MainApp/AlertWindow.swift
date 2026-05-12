@@ -476,15 +476,33 @@ struct AlertWindow: View {
         }
     }
 
-    /// 注册 5 个 LoggingNotificationChannel · Mac 切机时把 .systemNotice / .sound 替换为真实 channel
+    /// 注册全部 channel · v17.82 · .systemNotice 接 UNUserNotificationCenter · .sound 接 NSSound
+    /// 其他 kind（inApp / console / file / webhook）仍走 Logging 占位（UI 层可后续接 InAppOverlay）
     private func registerChannels() async {
         for kind in NotificationChannelKind.allCases {
-            let channel = LoggingNotificationChannel(kind: kind) { msg in
-                Task { @MainActor in
-                    appendConsoleLog("[\(kind.rawValue)] \(msg)")
+            switch kind {
+            case .systemNotice:
+                let channel = SystemNoticeChannel { msg in
+                    Task { @MainActor in
+                        appendConsoleLog("[systemNotice] \(msg)")
+                    }
                 }
+                await dispatcher.register(channel)
+            case .sound:
+                let channel = SoundChannel { msg in
+                    Task { @MainActor in
+                        appendConsoleLog("[sound] \(msg)")
+                    }
+                }
+                await dispatcher.register(channel)
+            default:
+                let channel = LoggingNotificationChannel(kind: kind) { msg in
+                    Task { @MainActor in
+                        appendConsoleLog("[\(kind.rawValue)] \(msg)")
+                    }
+                }
+                await dispatcher.register(channel)
             }
-            await dispatcher.register(channel)
         }
     }
 

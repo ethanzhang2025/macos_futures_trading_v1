@@ -2218,6 +2218,15 @@ struct ChartContentView: View {
 
     /// v15.19 batch30 · 快捷测距锚点（⌘⇧M 设 · 再按取消）· 配合 hoverDataPoint 实时显示距离
     @State var measureAnchor: DrawingPoint?
+
+    /// v17.79 · 副图光标位置（本地主图 hover 优先 · 跨 Pane shellExternalCrosshair 作 fallback）
+    /// 让 trader 在本图 hover 主图时 · 副图也显示同 bar 位置的浅蓝虚线（同 group 兄弟广播时同效）
+    var effectiveSubChartCursorTime: Date? {
+        if let dp = hoverDataPoint, dp.barIndex >= 0, dp.barIndex < bars.count {
+            return bars[dp.barIndex].openTime
+        }
+        return shellExternalCrosshair
+    }
     /// v15.19 batch51 · 副图显隐切换（⌘. · 默认显示）· trader 专注主图分析时清屏
     @State var showSubCharts: Bool = true
     /// v15.19 batch52 · 画线 overlay 显隐切换（⌘\ · 默认显示）· trader 看裸 K 线时隐藏所有画线
@@ -2391,7 +2400,7 @@ struct ChartContentView: View {
                                 chartTheme: chartTheme,
                                 onClearOverride: { onClearSubSlot(idx) },
                                 hasOverride: subParamsOverrides[idx] != nil,
-                                externalTime: shellExternalCrosshair   // v17.71 · 副图跨周期共振 · 与主图 KLineCrosshairView 同步
+                                externalTime: effectiveSubChartCursorTime   // v17.79 · 本地 hover 优先 · 跨 Pane 共振作 fallback
                             )
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             chartTheme.background

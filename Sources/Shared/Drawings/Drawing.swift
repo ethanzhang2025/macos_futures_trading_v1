@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 · v15.89 江恩扇形 · v15.90 斐波那契时间区 · v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 · v17.17 斐波弧 · v17.18 斐波通道 · v17.126 江恩单角度线 / 江恩九方 · v17.127 江恩盒 = 25 种
+/// 画线类型 v1（Stage A 6 种）· v13.13 椭圆 · v13.14 测量 · v13.17 Pitchfork · v13.31 多边形 · v15.87 斐波那契扇形 · v15.88 价格区域 · v15.89 江恩扇形 · v15.90 斐波那契时间区 · v17.8 垂直线 · v17.10 射线 · v17.11 通道线 · v17.14 箭头 · v17.15 价格标签 · v17.16 斐波扩展 · v17.17 斐波弧 · v17.18 斐波通道 · v17.126 江恩单角度线 / 江恩九方 · v17.127 江恩盒 · v17.128 艾略特冲击浪 / 调整浪 = 27 种
 public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case trendLine          // 趋势线（两点）
     case horizontalLine     // 水平线（单点价格）
@@ -31,6 +31,8 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
     case gannAngle          // 江恩 1×1 单角度线（v17.126 · 两点定 1×1 单位 · 仅画 1×1 主角度延伸射线 · 比 gannFan 简洁单线版）
     case gannSquare         // 江恩九方（v17.126 · 两点定对角矩形 · 内部 3×3 网格 = 2 条横线 + 2 条竖线均分）
     case gannBox            // 江恩盒（v17.127 · 两点定对角矩形 · 内部时间 5 等分 + 价格 5 等分 + 对角线 = 时间×价格 5×5 框架 · 江恩派核心 time-price 分析框架）
+    case elliottImpulse     // 艾略特冲击浪 / 5 浪（v17.128 · 6 点序列 0→1→2→3→4→5 · 折线 + 标号 · 国内技术派核心趋势分析）
+    case elliottCorrection  // 艾略特调整浪 / ABC 浪（v17.128 · 4 点序列 0→A→B→C · 折线 + 字母标号 · 配 5 浪反向调整）
 
     /// 完成画线所需的点数 · v13.31 polygon 用 0 表示动态（用户主动触发完成）
     public var pointsNeeded: Int {
@@ -38,6 +40,8 @@ public enum DrawingType: String, Sendable, Codable, CaseIterable {
         case .horizontalLine, .verticalLine, .priceLabel, .text: return 1
         case .trendLine, .ray, .arrow, .rectangle, .parallelChannel, .channel, .fibonacci, .fibonacciExtension, .fibonacciArc, .fibonacciChannel, .fibonacciFan, .ellipse, .ruler, .priceZone, .gannFan, .fibonacciTimeZone, .gannAngle, .gannSquare, .gannBox: return 2
         case .pitchfork: return 3
+        case .elliottCorrection: return 4   // v17.128 · 0/A/B/C 4 点固定
+        case .elliottImpulse: return 6      // v17.128 · 0/1/2/3/4/5 6 点固定
         case .polygon: return 0  // 0 = 动态点数 · 用户点 N 次后主动触发完成
         }
     }
@@ -272,5 +276,25 @@ extension Drawing {
     /// 江恩盒（v17.127 · 两点定对角矩形 · 内部 5×5 时间/价格等分 + 对角线 · 江恩派 time-price 分析框架）
     public static func gannBox(from start: DrawingPoint, to end: DrawingPoint) -> Drawing {
         Drawing(type: .gannBox, startPoint: start, endPoint: end)
+    }
+
+    /// 艾略特冲击浪 5 浪（v17.128 · points 必须 6 个：0/1/2/3/4/5 · startPoint = 第 1 点 · extraPoints = 第 2~6 点）
+    public static func elliottImpulse(points: [DrawingPoint]) -> Drawing? {
+        guard points.count == 6 else { return nil }
+        return Drawing(
+            type: .elliottImpulse,
+            startPoint: points[0],
+            extraPoints: Array(points.dropFirst())
+        )
+    }
+
+    /// 艾略特调整浪 ABC（v17.128 · points 必须 4 个：0/A/B/C · startPoint = 0 起点 · extraPoints = [A, B, C]）
+    public static func elliottCorrection(points: [DrawingPoint]) -> Drawing? {
+        guard points.count == 4 else { return nil }
+        return Drawing(
+            type: .elliottCorrection,
+            startPoint: points[0],
+            extraPoints: Array(points.dropFirst())
+        )
     }
 }

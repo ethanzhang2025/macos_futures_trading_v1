@@ -103,6 +103,8 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .gannAngle:         return "江恩 1×1 角度线"
     case .gannSquare:        return "江恩九方"
     case .gannBox:           return "江恩盒"
+    case .elliottImpulse:    return "艾略特 5 浪"
+    case .elliottCorrection: return "艾略特 ABC 浪"
     }
 }
 
@@ -1002,6 +1004,8 @@ struct ChartScene: View {
             drawingToolButton(icon: "ruler", tool: .ruler, help: "测量工具（双点 · 显示价格差/百分比/bar 数）")
             drawingToolButton(icon: "tuningfork", tool: .pitchfork, help: "Andrew's Pitchfork（3 点 · 中线 + 上下平行轨）")
             drawingToolButton(icon: "hexagon", tool: .polygon, help: "多边形（任意 N≥3 点 · 工具栏'完成'触发闭合）")
+            drawingToolButton(icon: "waveform.path.ecg", tool: .elliottImpulse, help: "艾略特 5 浪（6 点序列 0→1→2→3→4→5 · 主升/主跌趋势分析 · 点完 6 点自动完成）")
+            drawingToolButton(icon: "waveform.path", tool: .elliottCorrection, help: "艾略特 ABC 调整浪（4 点序列 0→A→B→C · 配 5 浪反向调整波 · 点完 4 点自动完成）")
             // v15.85 · 文字工具用 "Aa" 替代 textformat SF Symbol · 更直观
             drawingTextToolButton(help: "文字标注（一点）")
             // v15.85 · 字号 Stepper 紧跟"Aa"按钮（视觉关联 · 仅 .text 激活时显示）
@@ -1328,6 +1332,8 @@ struct ChartScene: View {
         case .gannAngle:        return .channel
         case .gannSquare:       return .keyLevel
         case .gannBox:          return .keyLevel
+        case .elliottImpulse:   return .trend
+        case .elliottCorrection:return .trend
         case .fibonacciTimeZone:return .channel
         case .priceZone:        return .keyLevel
         case .text:             return .annotation
@@ -4407,6 +4413,17 @@ struct ChartContentView: View {
             }
             return minDist
 
+        case .elliottImpulse, .elliottCorrection:
+            // v17.128 · 艾略特浪 · N 点开口折线（不闭合 · 不连首尾）· 取所有相邻边最小距离
+            guard let extras = drawing.extraPoints, !extras.isEmpty else { return .infinity }
+            let allPoints = [drawing.startPoint] + extras
+            let screenPts = allPoints.map { screenPoint($0) }
+            var minDist: CGFloat = .infinity
+            for i in 0..<(screenPts.count - 1) {
+                minDist = min(minDist, Self.pointToSegmentDistance(p, screenPts[i], screenPts[i + 1]))
+            }
+            return minDist
+
         case .pitchfork:
             // v13.17 3 条线段距离最小（中线 / 上轨 / 下轨 · 与 DrawingsOverlayView 渲染共用同一 t · 保证 hit-test = 可见范围）
             guard let upper = drawing.endPoint,
@@ -4621,6 +4638,10 @@ struct ChartContentView: View {
             // v13.31 实时预览：起点 + 已点 extraPoints + hover 当前位置 → 闭合多边形虚线
             let extrasWithHover = pendingExtraPoints + [hoverPoint]
             return Drawing(type: .polygon, startPoint: firstPoint, extraPoints: extrasWithHover)
+        case .elliottImpulse, .elliottCorrection:
+            // v17.128 · 实时预览 N 点折线：起点 + 已点 + hover 当前位置（开口折线 · 不闭合）
+            let extrasWithHover = pendingExtraPoints + [hoverPoint]
+            return Drawing(type: tool, startPoint: firstPoint, extraPoints: extrasWithHover)
         default:
             return nil
         }
@@ -4677,6 +4698,31 @@ struct ChartContentView: View {
                 pendingDrawingPoint = point
             } else {
                 pendingExtraPoints.append(point)
+            }
+            return
+        }
+
+        // v17.128 · 艾略特浪 N 点固定序列（5 浪 6 点 / ABC 4 点）· 复用 polygon 收集机制 · 达到 pointsNeeded 自动完成
+        if tool == .elliottImpulse || tool == .elliottCorrection {
+            if pendingDrawingPoint == nil {
+                pendingDrawingPoint = point
+            } else {
+                pendingExtraPoints.append(point)
+            }
+            let totalPoints = (pendingDrawingPoint != nil ? 1 : 0) + pendingExtraPoints.count
+            if totalPoints >= tool.pointsNeeded, let start = pendingDrawingPoint {
+                let drawing = Drawing(
+                    type: tool,
+                    startPoint: start,
+                    strokeColorHex: Self.hexString(from: currentStrokeColor),
+                    strokeWidth: currentStrokeWidth,
+                    strokeOpacity: Self.alphaComponent(from: currentStrokeColor),
+                    extraPoints: pendingExtraPoints
+                )
+                addUserDrawing(drawing)
+                pendingDrawingPoint = nil
+                pendingExtraPoints = []
+                activeDrawingTool = nil
             }
             return
         }

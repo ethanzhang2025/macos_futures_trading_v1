@@ -149,6 +149,8 @@ public struct DrawingsOverlayView: View {
         case .gannAngle:        drawGannAngle(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .gannSquare:       drawGannSquare(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .gannBox:          drawGannBox(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
+        case .elliottImpulse:   drawElliottWave(drawing, ctx, size, baseColor, lineWidth, dash, opacity, labels: ["0", "1", "2", "3", "4", "5"])
+        case .elliottCorrection:drawElliottWave(drawing, ctx, size, baseColor, lineWidth, dash, opacity, labels: ["0", "A", "B", "C"])
         }
 
         if isSelected, !isPending {
@@ -498,6 +500,35 @@ public struct DrawingsOverlayView: View {
         ctx.draw(label, at: CGPoint(x: rayEnd.x - 14, y: rayEnd.y - 6))
     }
 
+    /// v17.128 · 艾略特浪 · N 点开口折线 + 锚点圆 + 标号（0/1/2/3/4/5 或 0/A/B/C）· 复用 5 浪 + ABC 同一渲染
+    private func drawElliottWave(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double, labels: [String]) {
+        guard let extras = d.extraPoints, !extras.isEmpty else { return }
+        let allPoints = [d.startPoint] + extras
+        let screenPts = allPoints.map { CGPoint(x: xForBar($0.barIndex, size: size), y: yForPrice($0.price, size: size)) }
+        guard screenPts.count >= 2 else { return }
+        // 开口折线（不闭合 · 不连首尾）
+        var linePath = Path()
+        linePath.move(to: screenPts[0])
+        for i in 1..<screenPts.count {
+            linePath.addLine(to: screenPts[i])
+        }
+        ctx.stroke(linePath, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: width, dash: dash))
+        // 各锚点小圆 + 标号
+        for (idx, pt) in screenPts.enumerated() {
+            let r: CGFloat = 3
+            let circle = Path(ellipseIn: CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2))
+            ctx.fill(circle, with: .color(color.opacity(opacity)))
+            // 标号（idx 内取 labels[idx] 或回退 idx 字符串）
+            let label = idx < labels.count ? labels[idx] : String(idx)
+            // 标号偏移：奇数点上偏 / 偶数点下偏（避免与折线重叠）
+            let yOffset: CGFloat = (idx % 2 == 0) ? -14 : 10
+            let text = Text(label)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(color)
+            ctx.draw(text, at: CGPoint(x: pt.x, y: pt.y + yOffset))
+        }
+    }
+
     /// v17.127 · 江恩盒 · 两点定对角矩形 · 矩形 + 内部 5×5 等分网格（4 横 + 4 竖）+ 2 对角线 · 江恩派 time-price 分析核心框架
     private func drawGannBox(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
         guard let end = d.endPoint else { return }
@@ -783,6 +814,8 @@ public struct DrawingsOverlayView: View {
         case .gannAngle:       return Color(red: 0.30, green: 0.75, blue: 0.95)  // 天蓝（v17.126 · 江恩系 · 较 gannFan 靛蓝更亮 · 单角度醒目）
         case .gannSquare:      return Color(red: 0.55, green: 0.70, blue: 0.85)  // 雾蓝（v17.126 · 江恩系 · 网格类用较冷低饱和度 · 不抢矩形/通道）
         case .gannBox:         return Color(red: 0.45, green: 0.65, blue: 0.90)  // 钢蓝（v17.127 · 江恩系 · gannSquare 与 gannFan 之间 · 5×5 分析核心）
+        case .elliottImpulse:  return Color(red: 0.95, green: 0.55, blue: 0.20)  // 橙红（v17.128 · 艾略特冲击浪 · 趋势波 · 与 fibonacci 橙系协调但更暖）
+        case .elliottCorrection: return Color(red: 0.55, green: 0.40, blue: 0.85) // 紫罗兰（v17.128 · 艾略特调整浪 · 反向调整 · 冷色与 elliottImpulse 暖橙对比）
         }
     }
 

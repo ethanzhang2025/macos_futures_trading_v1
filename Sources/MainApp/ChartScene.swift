@@ -2662,7 +2662,8 @@ struct ChartContentView: View {
                 tooltipPrimaryText: chartTheme.textPrimary,
                 tooltipSecondaryText: chartTheme.textSecondary,
                 crosshairLineColor: chartTheme.textSecondary.opacity(0.7),
-                externalTime: shellExternalCrosshair
+                externalTime: shellExternalCrosshair,
+                priceDigits: effectivePriceDigits
             )
             // v15.19 batch35 · 昨结算线（trader 关键参考位 · 商品昨结算 / 金融昨收 · price 在线上下分歧情绪不同）
             preSettlementLine

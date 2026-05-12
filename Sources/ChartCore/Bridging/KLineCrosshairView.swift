@@ -27,6 +27,10 @@ public struct KLineCrosshairView: View {
     /// nil 时不渲染外部光标 · 非 nil 时画蓝色虚线竖线 + 顶部 🎯 tag（仅时间维度跨周期共振）
     public let externalTime: Date?
 
+    /// v17.99 · 价格小数位（由父级 ChartScene 算出 · 含 PricePrecisionMode.auto 跟合约 priceTick 推断）
+    /// 默认 2 位（兼容旧调用 · 不传时与之前行为一致）
+    public let priceDigits: Int
+
     @State private var hoverPoint: CGPoint?
 
     /// 时间格式按周期动态（v12.11 折衷方案）：
@@ -55,7 +59,8 @@ public struct KLineCrosshairView: View {
         tooltipPrimaryText: Color = .white,
         tooltipSecondaryText: Color = Color.white.opacity(0.7),
         crosshairLineColor: Color = Color.white.opacity(0.5),
-        externalTime: Date? = nil
+        externalTime: Date? = nil,
+        priceDigits: Int = 2
     ) {
         self.bars = bars
         self.viewport = viewport
@@ -66,6 +71,7 @@ public struct KLineCrosshairView: View {
         self.tooltipSecondaryText = tooltipSecondaryText
         self.crosshairLineColor = crosshairLineColor
         self.externalTime = externalTime
+        self.priceDigits = priceDigits
     }
 
     public var body: some View {
@@ -153,7 +159,7 @@ public struct KLineCrosshairView: View {
 
     /// 右边价格浮标（贴主图右沿 · 黄底黑字 · 文华标准）
     private func rightPriceTag(price: Decimal, at pt: CGPoint, in size: CGSize) -> some View {
-        Text(String(format: "%.2f", NSDecimalNumber(decimal: price).doubleValue))
+        Text(String(format: "%.\(priceDigits)f", NSDecimalNumber(decimal: price).doubleValue))
             .font(.system(size: 10, weight: .bold, design: .monospaced))
             .foregroundColor(.black)
             .padding(.horizontal, 4)

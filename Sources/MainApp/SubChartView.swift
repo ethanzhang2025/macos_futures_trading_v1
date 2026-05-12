@@ -181,6 +181,8 @@ struct SubChartView: View {
     var externalTime: Date? = nil
     /// v17.80 · 本地主图 hover 时间（ChartContentView 传入 · 副图画黄白虚线 · 与主图 KLineCrosshairView 本地光标风格一致）
     var localTime: Date? = nil
+    /// v17.104 · 价格精度（VolumeProfile POC/VAH/VAL 等价格 HUD 用 · 父级传 effectivePriceDigits · 默认 2 兼容老 caller）
+    var priceDigits: Int = 2
 
     // MARK: - 主题响应的 instance computed 颜色（v15.9 替换原 static 单一深色）
 
@@ -505,7 +507,7 @@ struct SubChartView: View {
                     let poc = NSDecimalNumber(decimal: va.pocPrice).doubleValue
                     let vah = NSDecimalNumber(decimal: va.vahPrice).doubleValue
                     let val = NSDecimalNumber(decimal: va.valPrice).doubleValue
-                    Text("POC \(String(format: "%.2f", poc)) · VAH \(String(format: "%.2f", vah)) · VAL \(String(format: "%.2f", val))")
+                    Text("POC \(String(format: "%.\(priceDigits)f", poc)) · VAH \(String(format: "%.\(priceDigits)f", vah)) · VAL \(String(format: "%.\(priceDigits)f", val))")
                         .foregroundColor(Self.purpleColor)
                 } else {
                     Text("VP 加载中").foregroundColor(.secondary)

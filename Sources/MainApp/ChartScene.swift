@@ -2425,7 +2425,8 @@ struct ChartContentView: View {
                                 onClearOverride: { onClearSubSlot(idx) },
                                 hasOverride: subParamsOverrides[idx] != nil,
                                 externalTime: shellExternalCrosshair,   // v17.80 · 跨 Pane 共振 · 浅蓝虚线
-                                localTime: localSubChartCursorTime      // v17.80 · 本地 hover · 黄白虚线（同主图风格）
+                                localTime: localSubChartCursorTime,     // v17.80 · 本地 hover · 黄白虚线（同主图风格）
+                                priceDigits: effectivePriceDigits       // v17.104 · VolumeProfile POC/VAH/VAL 价格精度（价格主题收口尾巴）
                             )
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             chartTheme.background

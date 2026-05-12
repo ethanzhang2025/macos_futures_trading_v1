@@ -1099,7 +1099,7 @@ struct WatchlistWindow: View {
             .tooltip("点击按\(title)排序 · 再点切升降序 · 拖拽行自动切回手动（v17.131 · 每组独立）")
     }
 
-    /// v15.20 batch59 · 按 sortField + sortAscending 排序合约 ID（v15.38 V2 加 filter preset + 分组搜索 · v17.132 加标签筛选）
+    /// v15.20 batch59 · 按 sortField + sortAscending 排序合约 ID（v15.38 V2 加 filter preset + 分组搜索 · v17.132 加标签筛选 · v17.133 加置顶分段）
     private func sortedInstrumentIDs(for group: Watchlist) -> [String] {
         // 先 filter（preset + 关键词 + 标签）· 再 sort
         let filtered = WatchlistFilter.filter(
@@ -1114,12 +1114,19 @@ struct WatchlistWindow: View {
         // v17.131 · 每组独立排序（fallback 全局）
         let f = effectiveSortField(for: group)
         let a = effectiveSortAscending(for: group)
-        return WatchlistSorter.sort(
+        let sorted = WatchlistSorter.sort(
             ids: tagFiltered,
             field: f,
             ascending: a,
             keyForID: { keyForInstrument($0, field: f) }
         )
+        // v17.133 · 置顶分段：pinned 部分按 group.pinnedInstrumentIDs 顺序在前 · 其余原排序
+        let pins = group.pinnedInstrumentIDs ?? []
+        guard !pins.isEmpty else { return sorted }
+        let pinSet = Set(pins)
+        let pinnedInResult = pins.filter { sorted.contains($0) }      // 保持 pin 数组顺序
+        let rest = sorted.filter { !pinSet.contains($0) }
+        return pinnedInResult + rest
     }
 
     /// v15.20 batch59 · 数值字段 closure（v15.38 V2 扩展 volume/change/amplitude）
@@ -1313,11 +1320,22 @@ struct WatchlistWindow: View {
         let note = noteStore.note(for: id)
         // v17.132 · 当前合约多标签（持久化 InstrumentTagStore · 跨窗口同步）
         let tags = tagStore.tags(for: id)
+        // v17.133 · 当前合约置顶状态（per-group · 仅在分组视图生效 · 聚合视图按全局排序）
+        let isPinned = book.isPinned(id, in: groupID)
+        let pinCount = book.group(id: groupID)?.pinnedInstrumentIDs?.count ?? 0
         return HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.5))
                 .frame(width: 24)
             HStack(spacing: 4) {
+                // v17.133 · 置顶 📌 标识（permanent · trader 主力合约视觉锚点）
+                if isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 9 + chartFontSize.sizeDelta))
+                        .foregroundColor(.orange.opacity(0.85))
+                        .rotationEffect(.degrees(45))
+                        .tooltip("已置顶 · 永远在组内顶部")
+                }
                 if flag != .none {
                     Text(flag.emoji)
                         .font(.system(size: 11 + chartFontSize.sizeDelta))
@@ -1446,6 +1464,19 @@ struct WatchlistWindow: View {
                     tagStore.setTags([], for: id)
                     flagsRevision += 1
                 }
+            }
+            // v17.133 · 置顶（per-group · 每组 ≤ 3）· trader 主力合约永远在顶
+            if isPinned {
+                Button("📌 取消置顶") {
+                    _ = book.unpinInstrument(id, in: groupID)
+                }
+            } else if pinCount < Watchlist.maxPinnedPerGroup {
+                Button("📌 置顶到组顶部") {
+                    _ = book.pinInstrument(id, in: groupID)
+                }
+            } else {
+                Button("📌 置顶（已满 \(Watchlist.maxPinnedPerGroup)/\(Watchlist.maxPinnedPerGroup) · 先取消其他）") {}
+                    .disabled(true)
             }
             // v17.42 C1 · 列自定义（toggle 持仓 / 成交量 / 价差% · UserDefaults 跨窗口同步）
             columnVisibilityMenu()

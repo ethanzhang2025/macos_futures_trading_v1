@@ -116,9 +116,9 @@
 |---|------|------|-------|------|---------|------|
 | D1 | 公式回测引擎（FormulaEngine + ReplayDriver 接入）| 回测 | 3-5d | 🟦 | v17.37 | SimpleBacktestEngine 骨架 ✅（IndicatorCore/Backtest · long-only · close 撮合）· ReplayDriver 接入留 v2 |
 | D2 | 回测报告（Profit/DD/Sharpe/Sortino/Calmar/WR/Expectancy）| 回测 | 2-3d | 🟦 | v17.37 | 6 指标 ✅（endingPnL/maxDD/sharpe/winRate/expectancy/trade count）· Sortino/Calmar 留 v2 |
-| D3 | 回测可视化（equity / trades / DD curve）| 回测 | 1-2d | ⬜ | — | 新窗口 BacktestWindow |
+| D3 | 回测可视化（equity / trades / DD curve）| 回测 | 1-2d | ✅ | v17.41 | BacktestWindow ⌘⌥K · equity 曲线 + DD 红阴影 + 进出场 ● + 6 指标 HUD + trades 表 + hover 十字线 |
 | D4 | 多公式参数扫描（grid search）| 回测 | 2-3d | 🟦 | v17.38 | GridSearchEngine ✅（笛卡尔积 + 模板替换 + metric 注入排序）· UI optimize 入口留 v2 |
-| D5 | 回测 → 月报 cross-ref | 回测 | 0.5d | ⬜ | — | 与训练评分联动 |
+| D5 | 回测 → 月报 cross-ref | 回测 | 0.5d | ✅ | v17.40-41 | BacktestHistoryStore（UserDefaults JSON）+ BacktestMarkdownReport.generateMonthlyAnnex · ReviewWindow.exportMonthlyReport 拼接 D5 annex |
 
 ---
 
@@ -154,9 +154,9 @@
 | A · 图表 + 画线 | 21 | 15 | **71%** |
 | B · 警报 + Volume | 3 | 3 | **100% ✅** |
 | C · 自选 + 期权 | 5 | 4.5 | **90%**（C1 颜色 ✅ · 列自定义 v2）|
-| D · Strategy Tester | 5 | 3 | **60%**（D1/D2/D4 骨架 v17.37-38 · D3 可视化 + D5 月报联动 留后续）|
+| D · Strategy Tester | 5 | 5 | **100% ✅**（D1/D2/D4 骨架 v17.37-38 · D3 可视化 v17.41 · D5 月报 cross-ref v17.40-41）|
 | E · 麦语言生态 | 4 | 4 | **100% ✅** · 355 函数远超目标 |
-| **总计** | **38** | **29.5** | **~78%** |
+| **总计** | **38** | **31.5** | **~83%** |
 
 A 段实际可完成项已 100%（剩 6 项均阻塞：Metal renderer 改动 / Apple 设备验证 / 等用户反馈）。
 
@@ -176,6 +176,7 @@ A 段实际可完成项已 100%（剩 6 项均阻塞：Metal renderer 改动 / A
 
 ## 修订日志
 
+- 2026-05-11 · v17.40-41 · D3 BacktestWindow + D5 月报 cross-ref · D 段 100% · 总进度 ~78% → ~83%
 - 2026-05-11 · v17.30 · B1 趋势线突破预警完成 · 总进度 ~2% → ~42%
 - 2026-05-11 · v17.18-19 · A 段一气呵成 9 项 · 总进度 ~2% → 71%（A 段）
 - 2026-05-11 · 初版（v16.215 启动）· 来源 TradingView 对比分析

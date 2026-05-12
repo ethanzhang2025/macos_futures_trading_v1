@@ -47,14 +47,14 @@ struct ShellCommandPalette: View {
 
     private var commandList: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(filteredCommands.enumerated()), id: \.element.id) { _, cmd in
-                commandRow(cmd)
+            ForEach(Array(filteredCommands.enumerated()), id: \.element.cmd.id) { _, item in
+                commandRow(item.cmd, highlightRange: item.range)
             }
         }
         .padding(.vertical, 4)
     }
 
-    private func commandRow(_ cmd: PaletteCommand) -> some View {
+    private func commandRow(_ cmd: PaletteCommand, highlightRange: Range<String.Index>?) -> some View {
         Button {
             shellVM.recordPaletteCommandUsage(cmd.title)  // v17.29 · LRU 记录
             cmd.action()
@@ -63,7 +63,7 @@ struct ShellCommandPalette: View {
             HStack(spacing: 10) {
                 Text(cmd.emoji).font(.system(size: 14))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(cmd.title)
+                    Self.highlightedTitle(cmd.title, range: highlightRange)
                         .font(.system(size: 13))
                         .foregroundColor(.primary)
                     if let subtitle = cmd.subtitle {
@@ -88,6 +88,17 @@ struct ShellCommandPalette: View {
         .onHover { _ in }
     }
 
+    /// v17.69 · matchedRange 内字符 bold + accent 色（无 range 时整段 primary）
+    private static func highlightedTitle(_ title: String, range: Range<String.Index>?) -> Text {
+        guard let range = range else { return Text(title) }
+        let pre = String(title[title.startIndex..<range.lowerBound])
+        let mid = String(title[range])
+        let post = String(title[range.upperBound..<title.endIndex])
+        return Text(pre)
+            + Text(mid).bold().foregroundColor(.accentColor)
+            + Text(post)
+    }
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Text("🔍").font(.system(size: 32))
@@ -102,8 +113,8 @@ struct ShellCommandPalette: View {
 
     private func executeFirst() {
         if let first = filteredCommands.first {
-            shellVM.recordPaletteCommandUsage(first.title)  // v17.29 · LRU 记录
-            first.action()
+            shellVM.recordPaletteCommandUsage(first.cmd.title)  // v17.29 · LRU 记录
+            first.cmd.action()
             isPresented = false
         }
     }
@@ -298,21 +309,58 @@ struct ShellCommandPalette: View {
         return list
     }
 
-    private var filteredCommands: [PaletteCommand] {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    /// v17.69 · 模糊匹配 + 排名 + 高亮 range
+    /// 排序：score desc / title.count asc tiebreaker
+    /// score: 100 exact / 90 prefix / 70 substring / 50 subsequence / 30 subtitle substring
+    private var filteredCommands: [(cmd: PaletteCommand, range: Range<String.Index>?)] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if q.isEmpty {
-            // v17.29 · query 为空时：最近用过的 + 其他常用 · 拼到前 20 个
             let recents = shellVM.recentPaletteCommands.compactMap { title in
                 allCommands.first { $0.title == title }
             }
             let recentTitles = Set(recents.map(\.title))
             let others = allCommands.filter { !recentTitles.contains($0.title) }
-            return Array((recents + others).prefix(20))
+            return Array((recents + others).prefix(20)).map { ($0, nil) }
         }
-        return allCommands.filter {
-            $0.title.lowercased().contains(q)
-                || ($0.subtitle?.lowercased().contains(q) ?? false)
+        let matched: [(cmd: PaletteCommand, score: Int, range: Range<String.Index>?)] = allCommands.compactMap { cmd in
+            guard let m = Self.matchScore(for: cmd, query: q) else { return nil }
+            return (cmd, m.score, m.range)
         }
+        .sorted { lhs, rhs in
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            return lhs.cmd.title.count < rhs.cmd.title.count
+        }
+        return matched.map { ($0.cmd, $0.range) }
+    }
+
+    /// v17.69 · 单个 command 的 match score + highlight range（仅连续匹配段 · subsequence 无 range）
+    private static func matchScore(for cmd: PaletteCommand, query q: String) -> (score: Int, range: Range<String.Index>?)? {
+        let title = cmd.title
+        if let r = title.range(of: q, options: .caseInsensitive) {
+            let isExact = (r.lowerBound == title.startIndex && r.upperBound == title.endIndex)
+            let isPrefix = (r.lowerBound == title.startIndex)
+            return (isExact ? 100 : (isPrefix ? 90 : 70), r)
+        }
+        if Self.isSubsequence(query: q.lowercased(), in: title.lowercased()) {
+            return (50, nil)
+        }
+        if let sub = cmd.subtitle, sub.range(of: q, options: .caseInsensitive) != nil {
+            return (30, nil)
+        }
+        return nil
+    }
+
+    /// query 字符按序在 title 中出现即匹配（中间可跳）· "nfd" 匹配 "**N**ew **F**older **D**ialog"
+    private static func isSubsequence(query q: String, in lower: String) -> Bool {
+        guard !q.isEmpty else { return true }
+        var qi = q.startIndex
+        for c in lower {
+            if c == q[qi] {
+                qi = q.index(after: qi)
+                if qi == q.endIndex { return true }
+            }
+        }
+        return false
     }
 }
 

@@ -184,25 +184,64 @@ struct ShellSidebar: View {
         return WatchItem(symbol: symbol, price: "\(priceVal)", change: change)
     }
 
-    // MARK: - 板块
+    // MARK: - 板块（v17.90 · 接 SectorPresets 真数据 · 11 板块按 |avg Δ%| desc 取前 6）
+
+    private struct SectorRow: Identifiable {
+        let sector: Sector
+        let avgChangePct: Double
+        var id: String { sector.id }
+    }
+
+    private var topSectorRows: [SectorRow] {
+        let rows: [SectorRow] = Sector.allCases.compactMap { sec in
+            let list = SectorPresets.instruments(in: sec)
+            guard !list.isEmpty else { return nil }
+            let avg = list.map(\.changePct).reduce(0, +) / Double(list.count)
+            return SectorRow(sector: sec, avgChangePct: avg)
+        }
+        return Array(rows.sorted { abs($0.avgChangePct) > abs($1.avgChangePct) }.prefix(6))
+    }
 
     private var sectorSection: some View {
         Section {
-            ForEach(mockSectors, id: \.name) { sec in
-                HStack(spacing: 6) {
-                    Text(sec.emoji)
-                    Text(sec.name).font(.system(size: 12))
-                    Spacer()
-                    Text(sec.change)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(sec.change.hasPrefix("+") ? .red : .green)
+            ForEach(topSectorRows) { row in
+                Button {
+                    openWindow(id: "sector")
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: row.sector.icon)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        Text(row.sector.displayName).font(.system(size: 12))
+                        Spacer()
+                        Text(Self.formatSectorChange(row.avgChangePct))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(row.avgChangePct >= 0 ? .red : .green)
+                    }
+                    .padding(.vertical, 1)
+                    .contentShape(Rectangle())
                 }
-                .padding(.vertical, 1)
+                .buttonStyle(.plain)
+                .help("\(row.sector.displayName) 板块均涨幅 \(Self.formatSectorChange(row.avgChangePct)) · 点击打开板块联动窗口")
             }
         } header: {
-            Label("板块", systemImage: "square.grid.2x2.fill")
-                .foregroundColor(.blue)
+            HStack(spacing: 4) {
+                Label("板块 (\(topSectorRows.count))", systemImage: "square.grid.2x2.fill")
+                    .foregroundColor(.blue)
+                Text("真")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 3).padding(.vertical, 1)
+                    .background(Color.green.opacity(0.18))
+                    .foregroundColor(.green)
+                    .cornerRadius(2)
+            }
         }
+    }
+
+    /// 板块涨跌幅显示（+0.42% / -0.18%）
+    private static func formatSectorChange(_ pct: Double) -> String {
+        let sign = pct >= 0 ? "+" : ""
+        return "\(sign)\(String(format: "%.2f", pct))%"
     }
 
     // MARK: - 持仓速览（v17.21 接 SimulatedTradingStore 真实数据）
@@ -474,7 +513,6 @@ struct ShellSidebar: View {
 // MARK: - Mock 数据（v17.0 PoC Step 6 · v17.1+ 接真实 ViewModel）
 
 private struct WatchItem { let symbol: String; let price: String; let change: String }
-private struct SectorItem { let emoji: String; let name: String; let change: String }
 
 private let mockWatchlist: [WatchItem] = [
     WatchItem(symbol: "rb2510",   price: "3225",   change: "+0.78%"),
@@ -482,13 +520,6 @@ private let mockWatchlist: [WatchItem] = [
     WatchItem(symbol: "i2510",    price: "780.5",  change: "+1.23%"),
     WatchItem(symbol: "ag2510",   price: "8520",   change: "+0.31%"),
     WatchItem(symbol: "MA2510",   price: "2450",   change: "-0.18%"),
-]
-
-private let mockSectors: [SectorItem] = [
-    SectorItem(emoji: "⚙️", name: "黑色",   change: "+0.65%"),
-    SectorItem(emoji: "🔧", name: "有色",   change: "+0.20%"),
-    SectorItem(emoji: "🌾", name: "农产品", change: "-0.42%"),
-    SectorItem(emoji: "🛢", name: "能化",   change: "+0.88%"),
 ]
 
 #endif

@@ -1643,15 +1643,22 @@ struct WatchlistWindow: View {
         }
     }
 
-    /// 最新价文本 · 真值 fallback Mock
+    /// v17.103 · 价格小数位（PricePrecisionMode + 合约 priceTick · 每合约各自精度）
+    private func priceDigits(for id: String) -> Int {
+        let mode = ChartSettingsStore.loadPricePrecision()
+        if let d = mode.digits { return d }
+        return ChineseFuturesProducts.priceTickDigits(forInstrumentID: id) ?? 2
+    }
+
+    /// 最新价文本 · 真值 fallback Mock · v17.103 接 PricePrecisionMode
     private func priceText(for id: String) -> String {
         if let q = quotes[id] {
-            return String(format: "%.2f", NSDecimalNumber(decimal: q.lastPrice).doubleValue)
+            return String(format: "%.\(priceDigits(for: id))f", NSDecimalNumber(decimal: q.lastPrice).doubleValue)
         }
         return MockQuote.price(for: id)
     }
 
-    /// v15.21 batch133 · row 涨跌幅 hover 提示（绝对涨跌 + 振幅 + 昨结算 · v17.33 加 Bid/Ask/spread）
+    /// v15.21 batch133 · row 涨跌幅 hover 提示（绝对涨跌 + 振幅 + 昨结算 · v17.33 加 Bid/Ask/spread · v17.103 接 priceDigits）
     private func detailedChangeText(for id: String) -> String {
         guard let q = quotes[id] else { return "（无实时数据 · 仅 Mock 价格）" }
         let abs = NSDecimalNumber(decimal: q.change).doubleValue
@@ -1659,17 +1666,18 @@ struct WatchlistWindow: View {
             ? NSDecimalNumber(decimal: (q.high - q.low) / q.preSettlement).doubleValue * 100
             : 0
         let pre = NSDecimalNumber(decimal: q.preSettlement).doubleValue
+        let d = priceDigits(for: id)
         let bidAskLine: String
         if q.bidPrice > 0, q.askPrice > 0, q.lastPrice > 0 {
             let bid = NSDecimalNumber(decimal: q.bidPrice).doubleValue
             let ask = NSDecimalNumber(decimal: q.askPrice).doubleValue
             let last = NSDecimalNumber(decimal: q.lastPrice).doubleValue
             let spreadPct = (ask - bid) / last * 100
-            bidAskLine = String(format: " · 买 %.2f / 卖 %.2f · 价差 %.3f%%", bid, ask, spreadPct)
+            bidAskLine = String(format: " · 买 %.\(d)f / 卖 %.\(d)f · 价差 %.3f%%", bid, ask, spreadPct)
         } else {
             bidAskLine = ""
         }
-        return String(format: "绝对涨跌：%+.2f · 振幅：%.2f%% · 昨结算：%.2f%@", abs, amp, pre, bidAskLine)
+        return String(format: "绝对涨跌：%+.\(d)f · 振幅：%.2f%% · 昨结算：%.\(d)f%@", abs, amp, pre, bidAskLine)
     }
 
     /// v15.19 batch48 · 右键一键创建单个预警预设（联动 AlertPreset + alertAddedFromChart 通知）

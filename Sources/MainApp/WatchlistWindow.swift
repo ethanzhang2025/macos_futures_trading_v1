@@ -90,6 +90,9 @@ struct WatchlistWindow: View {
     /// v17.134 · 待编辑别名的合约
     @State private var pendingAliasInstrumentID: NoteEditTarget?
 
+    /// v17.135 · 批量备注 sheet 目标（多选时一次写同一备注给 N 个合约）
+    @State private var pendingBatchNoteTarget: BatchNoteTarget?
+
     /// v17.42 C1 · 列可见性（持仓量 / 成交量 / 价差%）· 右键 📋 显示列 toggle · UserDefaults 跨窗口同步
     @State private var visibleColumns: Set<WatchlistColumn> = WatchlistColumnPreferences.load()
 
@@ -334,6 +337,15 @@ struct WatchlistWindow: View {
                 initialAlias: aliasStore.alias(for: target.id) ?? ""
             ) { newAlias in
                 aliasStore.setAlias(newAlias, for: target.id)
+                flagsRevision += 1
+            }
+        }
+        // v17.135 · 批量备注 sheet（多选时一次给 N 个合约写同一备注）
+        .sheet(item: $pendingBatchNoteTarget) { target in
+            BatchNoteEditSheet(instrumentIDs: target.instrumentIDs) { newNote in
+                for id in target.instrumentIDs {
+                    noteStore.setNote(newNote, for: id)
+                }
                 flagsRevision += 1
             }
         }
@@ -1018,6 +1030,12 @@ struct WatchlistWindow: View {
                                     flagsRevision += 1
                                 }
                             }
+                        }
+                    }
+                    // v17.135 · 批量备注（多选时一次给 N 个合约写同一备注 · 套利组 / 板块联动场景）
+                    if ids.count >= 2 {
+                        Button("📝 批量加备注 \(ids.count) 个 →") {
+                            pendingBatchNoteTarget = BatchNoteTarget(instrumentIDs: Array(ids))
                         }
                     }
                     if let label = removeMenuLabel(for: ids) {
@@ -2253,6 +2271,17 @@ private struct NoteEditTarget: Identifiable, Hashable {
     let id: String  // instrumentID 自身就是 id
 }
 
+/// v17.135 · 批量备注编辑 sheet 目标 · 一次性给 N 个合约写同一备注
+private struct BatchNoteTarget: Identifiable, Hashable {
+    let id: String   // 用 sorted-join 作为 Identifiable id（变化即重建 sheet）
+    let instrumentIDs: [String]
+
+    init(instrumentIDs: [String]) {
+        self.instrumentIDs = instrumentIDs
+        self.id = instrumentIDs.sorted().joined(separator: ",")
+    }
+}
+
 // MARK: - Notification.Name · 跨窗口联动
 
 extension Notification.Name {
@@ -2629,6 +2658,73 @@ private struct AliasEditSheet: View {
     private func submit() {
         onSubmit(aliasText)
         dismiss()
+    }
+}
+
+// MARK: - Sheet · 批量备注编辑（v17.135 · 多选 N 个合约写同一备注 · 套利组 / 板块联动场景）
+
+private struct BatchNoteEditSheet: View {
+
+    let instrumentIDs: [String]
+    let onSubmit: (String?) -> Void   // nil / 空 → 清除所有 N 个
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var noteText: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("📝 批量备注 \(instrumentIDs.count) 个合约").font(.title2).bold()
+            Text("一次给所有选中合约写同一备注 · 覆盖各自原备注 · 留空将清除全部")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // 列出受影响合约（≤ 10 全列 · > 10 截断 + "等 N 个"）
+            let displayList = instrumentIDs.sorted()
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(displayList.prefix(10), id: \.self) { id in
+                        Text(id)
+                            .font(.system(size: 11, design: .monospaced))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+                    if displayList.count > 10 {
+                        Text("等 \(displayList.count) 个")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .frame(height: 28)
+
+            TextEditor(text: $noteText)
+                .font(.system(.body, design: .default))
+                .frame(width: 460, height: 160)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                )
+                .background(Color.gray.opacity(0.05))
+
+            HStack {
+                Text("\(noteText.trimmingCharacters(in: .whitespacesAndNewlines).count) 字 · 留空将清除 \(instrumentIDs.count) 个合约的备注")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("应用到 \(instrumentIDs.count) 个") {
+                    onSubmit(noteText)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 500, height: 380)
     }
 }
 

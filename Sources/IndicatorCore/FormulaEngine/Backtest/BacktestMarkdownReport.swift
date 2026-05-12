@@ -45,7 +45,11 @@ public enum BacktestMarkdownReport {
 
         md += "- 区间内保存次数：**\(count)**\n"
         md += "- 平均 endingPnL：**\(String(format: "%+.2f", avgPnL))**（最佳 \(String(format: "%+.2f", bestPnL)) · 最差 \(String(format: "%+.2f", worstPnL))）\n"
-        md += "- 平均 Sharpe：**\(String(format: "%.2f", avgSharpe))** · Sortino：**\(String(format: "%.2f", avgSortino))** · Calmar：**\(String(format: "%.2f", avgCalmar))** · 胜率：**\(String(format: "%.0f%%", avgWinRate * 100))**\n\n"
+        md += "- 平均 Sharpe：**\(String(format: "%.2f", avgSharpe))** · Sortino：**\(String(format: "%.2f", avgSortino))** · Calmar：**\(String(format: "%.2f", avgCalmar))** · 胜率：**\(String(format: "%.0f%%", avgWinRate * 100))**\n"
+        // v17.48 · 成本配置概览（含成本的条目数 + 含 short 的条目数 · trader 知道这批是"理论"还是"含成本"）
+        let withCost = entries.filter { ($0.commission as NSDecimalNumber).doubleValue > 0 || ($0.slippage as NSDecimalNumber).doubleValue > 0 }.count
+        let withShort = entries.filter { $0.allowShort }.count
+        md += "- 含成本（commission/slippage > 0）：**\(withCost) / \(count)** · 双向（allowShort）：**\(withShort) / \(count)**\n\n"
 
         // 明细表（按时间倒序 · 截 rowLimit）
         md += "### 明细（最近 \(min(rowLimit, count)) 条）\n\n"

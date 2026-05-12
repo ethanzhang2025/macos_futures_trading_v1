@@ -25,12 +25,17 @@ public struct BacktestHistoryEntry: Identifiable, Codable, Sendable, Equatable {
     public let winRate: Double
     public let expectancy: Decimal
     public let tradeCount: Int
+    /// v17.48 · 成本配置快照（trader 月报回看时知道当时跑的什么模型 · 老 JSON 默认 0/false）
+    public let commission: Decimal
+    public let slippage: Decimal
+    public let allowShort: Bool
 
     public init(id: UUID, createdAt: Date, signalLineName: String,
                 trajectoryRaw: String, barCount: Int, initialEquity: Decimal,
                 endingPnL: Decimal, maxDrawdown: Decimal, sharpe: Double,
                 sortino: Double = 0, calmar: Double = 0,
-                winRate: Double, expectancy: Decimal, tradeCount: Int) {
+                winRate: Double, expectancy: Decimal, tradeCount: Int,
+                commission: Decimal = 0, slippage: Decimal = 0, allowShort: Bool = false) {
         self.id = id
         self.createdAt = createdAt
         self.signalLineName = signalLineName
@@ -45,9 +50,12 @@ public struct BacktestHistoryEntry: Identifiable, Codable, Sendable, Equatable {
         self.winRate = winRate
         self.expectancy = expectancy
         self.tradeCount = tradeCount
+        self.commission = commission
+        self.slippage = slippage
+        self.allowShort = allowShort
     }
 
-    /// 兼容老 JSON · sortino/calmar 缺失时回退 0（trader v17.39-44 期间保存的历史）
+    /// 兼容老 JSON · 新字段缺失时回退（trader v17.39-47 期间保存的历史）
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -64,6 +72,9 @@ public struct BacktestHistoryEntry: Identifiable, Codable, Sendable, Equatable {
         winRate = try c.decode(Double.self, forKey: .winRate)
         expectancy = try c.decode(Decimal.self, forKey: .expectancy)
         tradeCount = try c.decode(Int.self, forKey: .tradeCount)
+        commission = try c.decodeIfPresent(Decimal.self, forKey: .commission) ?? 0
+        slippage = try c.decodeIfPresent(Decimal.self, forKey: .slippage) ?? 0
+        allowShort = try c.decodeIfPresent(Bool.self, forKey: .allowShort) ?? false
     }
 
     /// 月报展示用的简短日期标签（MM-dd HH:mm · Asia/Shanghai）

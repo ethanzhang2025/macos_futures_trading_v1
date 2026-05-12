@@ -749,7 +749,10 @@ public struct BacktestWindow: View {
             calmar: r.calmar,
             winRate: r.winRate,
             expectancy: r.expectancy,
-            tradeCount: r.trades.count
+            tradeCount: r.trades.count,
+            commission: Decimal(commission),
+            slippage: Decimal(slippage),
+            allowShort: allowShort
         )
         BacktestHistoryStore.append(entry)
         historyRevision &+= 1

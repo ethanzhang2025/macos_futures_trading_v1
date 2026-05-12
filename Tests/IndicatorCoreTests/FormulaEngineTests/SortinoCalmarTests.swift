@@ -81,7 +81,7 @@ struct SortinoCalmarTests {
     }
 }
 
-@Suite("BacktestHistoryEntry · Codable 兼容老 JSON（v17.39-44）· v17.45 D2 v2")
+@Suite("BacktestHistoryEntry · Codable 兼容老 JSON（v17.39-47）· v17.45-48 D2 v2")
 struct BacktestHistoryEntryV2CompatTests {
 
     @Test("老 JSON（无 sortino/calmar 字段）· 解出 sortino=0 + calmar=0")
@@ -106,11 +106,42 @@ struct BacktestHistoryEntryV2CompatTests {
         let decoded = try JSONDecoder().decode(BacktestHistoryEntry.self, from: oldJson)
         #expect(decoded.sortino == 0)
         #expect(decoded.calmar == 0)
+        #expect(decoded.commission == 0)
+        #expect(decoded.slippage == 0)
+        #expect(decoded.allowShort == false)
         #expect(decoded.signalLineName == "BUY")
         #expect(decoded.sharpe == 0.8)
     }
 
-    @Test("新 JSON · 含 sortino + calmar · round-trip 保值")
+    @Test("中代 JSON（v17.45-47 · 含 sortino/calmar 但无 commission/slippage/allowShort）")
+    func decodeMidJsonFallback() throws {
+        let midJson = """
+        {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "createdAt": 780000000.0,
+            "signalLineName": "BUY",
+            "trajectoryRaw": "up",
+            "barCount": 100,
+            "initialEquity": 100000,
+            "endingPnL": 800,
+            "maxDrawdown": 150,
+            "sharpe": 1.1,
+            "sortino": 1.4,
+            "calmar": 5.3,
+            "winRate": 0.65,
+            "expectancy": 80,
+            "tradeCount": 10
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(BacktestHistoryEntry.self, from: midJson)
+        #expect(decoded.sortino == 1.4)
+        #expect(decoded.calmar == 5.3)
+        #expect(decoded.commission == 0)
+        #expect(decoded.slippage == 0)
+        #expect(decoded.allowShort == false)
+    }
+
+    @Test("新 JSON · 含全字段（含成本配置）· round-trip 保值")
     func decodeNewJsonRoundTrip() throws {
         let entry = BacktestHistoryEntry(
             id: UUID(), createdAt: Date(),
@@ -118,12 +149,44 @@ struct BacktestHistoryEntryV2CompatTests {
             barCount: 100, initialEquity: 100_000,
             endingPnL: 1000, maxDrawdown: 200,
             sharpe: 1.2, sortino: 1.5, calmar: 5.0,
-            winRate: 0.7, expectancy: 100, tradeCount: 10
+            winRate: 0.7, expectancy: 100, tradeCount: 10,
+            commission: 3, slippage: 1, allowShort: true
         )
         let data = try JSONEncoder().encode(entry)
         let decoded = try JSONDecoder().decode(BacktestHistoryEntry.self, from: data)
         #expect(decoded == entry)
-        #expect(decoded.sortino == 1.5)
-        #expect(decoded.calmar == 5.0)
+        #expect(decoded.commission == 3)
+        #expect(decoded.slippage == 1)
+        #expect(decoded.allowShort == true)
+    }
+}
+
+@Suite("BacktestMarkdownReport · 成本配置概览 · v17.48 D5 v2")
+struct BacktestMarkdownReportV2Tests {
+
+    @Test("有混合成本条目 · 概览显示 含成本 N/M · 双向 K/M")
+    func costSummaryRendered() {
+        let log = BacktestHistoryLog(entries: [
+            BacktestHistoryEntry(id: UUID(), createdAt: Date(),
+                                  signalLineName: "BUY", trajectoryRaw: "up",
+                                  barCount: 100, initialEquity: 100_000,
+                                  endingPnL: 500, maxDrawdown: 100, sharpe: 1.0,
+                                  sortino: 1.2, calmar: 5.0,
+                                  winRate: 0.6, expectancy: 50, tradeCount: 10,
+                                  commission: 3, slippage: 1, allowShort: true),
+            BacktestHistoryEntry(id: UUID(), createdAt: Date(),
+                                  signalLineName: "BUY", trajectoryRaw: "up",
+                                  barCount: 100, initialEquity: 100_000,
+                                  endingPnL: 200, maxDrawdown: 50, sharpe: 0.5,
+                                  sortino: 0.6, calmar: 4.0,
+                                  winRate: 0.5, expectancy: 20, tradeCount: 10,
+                                  commission: 0, slippage: 0, allowShort: false),
+        ])
+        let start = Date().addingTimeInterval(-3600)
+        let end = Date().addingTimeInterval(3600)
+        let md = BacktestMarkdownReport.generateMonthlyAnnex(log, start: start, end: end)
+        #expect(md.contains("含成本"))
+        #expect(md.contains("1 / 2"))   // 1 含成本 / 2 总数
+        // 双向 1/2
     }
 }

@@ -32,9 +32,16 @@ struct CalendarSpreadWindow: View {
     @State private var hoverPoint: CGPoint?
     @Environment(\.openWindow) private var openWindow
 
+    /// v17.106 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
     private var selectedPair: CalendarSpreadPair {
         CalendarSpreadPresets.byID[selectedPairID] ?? CalendarSpreadPresets.all.first!
     }
+
+    // v17.106 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
 
     /// 当前是 contango 还是 backwardation
     private var spreadStructure: SpreadStructure {
@@ -45,18 +52,19 @@ struct CalendarSpreadWindow: View {
         return .neutral
     }
 
+    /// v17.106 · spreadStructure 配色 · 跟 candleColorMode swap（远 > 近 ≈ 涨色 · 远 < 近 ≈ 跌色）
+    private var spreadStructureColor: Color {
+        switch spreadStructure {
+        case .contango:        return chartLoss      // 远 > 近 · 跌色（持有成本损耗）
+        case .backwardation:   return chartProfit    // 远 < 近 · 涨色（现货紧张溢价）
+        case .neutral:         return .secondary
+        }
+    }
+
     enum SpreadStructure: String {
         case contango = "Contango（升水）"
         case backwardation = "Backwardation（贴水）"
         case neutral = "中性"
-
-        var color: Color {
-            switch self {
-            case .contango:        return ChartTheme.chartLoss      // 远 > 近 · 红
-            case .backwardation:   return ChartTheme.chartProfit    // 远 < 近 · 绿
-            case .neutral:         return .secondary
-            }
-        }
 
         var description: String {
             switch self {
@@ -98,6 +106,11 @@ struct CalendarSpreadWindow: View {
                match.id != selectedPairID {
                 selectedPairID = match.id
             }
+        }
+        // v17.106 · 同步用户 K 线配色偏好（Settings → 国际习惯 → PnL 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
         }
     }
 
@@ -176,11 +189,11 @@ struct CalendarSpreadWindow: View {
                 Text("结构").font(.caption2).foregroundColor(.secondary)
                 Text(spreadStructure.rawValue)
                     .font(.callout.bold())
-                    .foregroundColor(spreadStructure.color)
+                    .foregroundColor(spreadStructureColor)
             }
             statBlock("近月", String(format: "%.2f", lastNear), color: .primary)
             statBlock("远月", String(format: "%.2f", lastFar), color: .primary)
-            statBlock("价差", String(format: "%+.2f", lastSpread), color: spreadStructure.color)
+            statBlock("价差", String(format: "%+.2f", lastSpread), color: spreadStructureColor)
             statBlock("年化成本", String(format: "%+.2f%%", costPct * 12), color: .secondary)
             Spacer()
             Text(spreadStructure.description)
@@ -189,7 +202,7 @@ struct CalendarSpreadWindow: View {
                 .frame(maxWidth: 280, alignment: .trailing)
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
-        .background(spreadStructure.color.opacity(0.08))
+        .background(spreadStructureColor.opacity(0.08))
     }
 
     // MARK: - 统计 HUD（复用 SpreadStatistics）
@@ -316,8 +329,8 @@ struct CalendarSpreadWindow: View {
             var seg = Path()
             seg.move(to: CGPoint(x: x1, y: yFor(v1)))
             seg.addLine(to: CGPoint(x: x2, y: yFor(v2)))
-            let color: Color = (v1 >= 0 && v2 >= 0) ? ChartTheme.chartLoss
-                              : (v1 < 0 && v2 < 0) ? ChartTheme.chartProfit
+            let color: Color = (v1 >= 0 && v2 >= 0) ? chartLoss
+                              : (v1 < 0 && v2 < 0) ? chartProfit
                               : ChartTheme.chartTransition
             ctx.stroke(seg, with: .color(color.opacity(0.85)),
                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
@@ -327,7 +340,7 @@ struct CalendarSpreadWindow: View {
         let lastIdx = values.count - 1
         let lastPt = CGPoint(x: CGFloat(lastIdx) * step, y: yFor(values[lastIdx]))
         let dot = Path(ellipseIn: CGRect(x: lastPt.x - 4, y: lastPt.y - 4, width: 8, height: 8))
-        ctx.fill(dot, with: .color(spreadStructure.color))
+        ctx.fill(dot, with: .color(spreadStructureColor))
     }
 
     // MARK: - 滚动 Z 副图
@@ -426,8 +439,8 @@ struct CalendarSpreadWindow: View {
     private func hoverTooltip(info: HoverInfo) -> some View {
         let zText: String = info.zScore.map { String(format: "%.2f", $0) } ?? "—"
         let zColor: Color = info.zScore.map { abs($0) >= 2 ? .orange : ChartTheme.tooltipSecondary } ?? .secondary
-        let structureColor: Color = info.value > 1 ? ChartTheme.chartLoss
-                                  : (info.value < -1 ? ChartTheme.chartProfit : .secondary)
+        let structureColor: Color = info.value > 1 ? chartLoss
+                                  : (info.value < -1 ? chartProfit : .secondary)
         let structureText: String = info.value > 1 ? "升水" : (info.value < -1 ? "贴水" : "中性")
         let costPct = info.nearPrice > 0 ? (info.value / info.nearPrice * 100) : 0
         let f = DateFormatter()

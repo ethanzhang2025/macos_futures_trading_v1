@@ -36,6 +36,15 @@ struct SpreadBacktestSheet: View {
     /// v15.40 · 累积 PnL 图 hover
     @State private var cumPnLHoverPoint: CGPoint?
 
+    /// v17.106 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
+    // v17.106 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
+    private var chartProfitEmphasized: Color { chartProfitEmphasizedColor(mode: candleColorMode) }
+    private var chartLossEmphasized: Color { chartLossEmphasizedColor(mode: candleColorMode) }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -48,6 +57,11 @@ struct SpreadBacktestSheet: View {
         }
         .frame(width: 1080, height: 660)
         .onAppear { runBacktest() }
+        // v17.106 · 同步用户 K 线配色偏好（Settings → 国际习惯 → PnL 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
+        }
     }
 
     private var header: some View {
@@ -239,8 +253,8 @@ struct SpreadBacktestSheet: View {
     }
 
     private func cumPnLHoverTooltip(info: CumPnLHoverInfo) -> some View {
-        let cumColor: Color = info.cumPnL > 0 ? ChartTheme.chartProfit
-                            : (info.cumPnL < 0 ? ChartTheme.chartLoss : ChartTheme.chartTransition)
+        let cumColor: Color = info.cumPnL > 0 ? chartProfit
+                            : (info.cumPnL < 0 ? chartLoss : ChartTheme.chartTransition)
         return VStack(alignment: .leading, spacing: 4) {
             Text(info.index == 0 ? "起点" : "第 \(info.index) 笔后")
                 .font(ChartTheme.fontValue)
@@ -249,9 +263,9 @@ struct SpreadBacktestSheet: View {
             cumPnLRow("累积 PnL", String(format: "%+.2f", info.cumPnL), color: cumColor)
             if let t = info.trade {
                 let pnl = NSDecimalNumber(decimal: t.pnl).doubleValue
-                let pnlColor: Color = t.isWin ? ChartTheme.chartProfit : ChartTheme.chartLoss
+                let pnlColor: Color = t.isWin ? chartProfit : chartLoss
                 let sideText = t.side == .long ? "做多" : "做空"
-                let sideColor: Color = t.side == .long ? ChartTheme.chartProfit : ChartTheme.chartLoss
+                let sideColor: Color = t.side == .long ? chartProfit : chartLoss
                 Divider().background(ChartTheme.tooltipDivider)
                 cumPnLRow("方向", sideText, color: sideColor)
                 cumPnLRow("单笔", String(format: "%+.2f", pnl), color: pnlColor)
@@ -325,7 +339,7 @@ struct SpreadBacktestSheet: View {
             seg.move(to: CGPoint(x: x1, y: yFor(cum[i])))
             seg.addLine(to: CGPoint(x: x2, y: yFor(cum[i + 1])))
             let isUp = cum[i + 1] >= cum[i]
-            ctx.stroke(seg, with: .color(isUp ? ChartTheme.chartProfitEmphasized : ChartTheme.chartLossEmphasized),
+            ctx.stroke(seg, with: .color(isUp ? chartProfitEmphasized : chartLossEmphasized),
                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
         }
 
@@ -334,13 +348,13 @@ struct SpreadBacktestSheet: View {
             let x = CGFloat(peakIdx) * xStep
             let y = yFor(cum[peakIdx])
             ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: y - 3, width: 6, height: 6)),
-                     with: .color(ChartTheme.chartProfit))
+                     with: .color(chartProfit))
         }
         if let troughIdx = cum.firstIndex(of: cum.min()!) {
             let x = CGFloat(troughIdx) * xStep
             let y = yFor(cum[troughIdx])
             ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: y - 3, width: 6, height: 6)),
-                     with: .color(ChartTheme.chartLoss))
+                     with: .color(chartLoss))
         }
 
         let title = Text("累积 PnL（绿涨段 · 红跌段 · ● peak/trough）")

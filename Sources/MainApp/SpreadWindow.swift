@@ -40,12 +40,19 @@ struct SpreadWindow: View {
     /// v15.40 · 主图 hover 点（鼠标在 spreadChart 内的像素坐标 · nil = 鼠标已离开）
     @State private var spreadHoverPoint: CGPoint?
 
+    /// v17.106 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · PnL 盈亏色 swap 用）
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+
     /// v17.95 · 单击两腿 label → openWindow("chart") + post 切主图
     @Environment(\.openWindow) private var openWindow
 
     private var selectedPair: SpreadPair {
         SpreadPresets.byID[selectedPairID] ?? SpreadPresets.all.first!
     }
+
+    // v17.106 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
+    private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
+    private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
 
     enum SubChartMode: String, CaseIterable, Identifiable {
         case none, histogram, rollingZ
@@ -90,6 +97,11 @@ struct SpreadWindow: View {
                match.id != selectedPairID {
                 selectedPairID = match.id
             }
+        }
+        // v17.106 · 同步用户 K 线配色偏好（Settings → 国际习惯 → PnL 涨跌色 swap）
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newMode = ChartSettingsStore.loadCandleColorMode()
+            if newMode != candleColorMode { candleColorMode = newMode }
         }
         .sheet(isPresented: $backtestSheetPresented) {
             SpreadBacktestSheet(
@@ -316,7 +328,7 @@ struct SpreadWindow: View {
             let action = s.action == .entry ? "进场" : "出场"
             let side = s.side == .long ? "做多" : "做空"
             sigText = "\(side) · \(action)"
-            sigColor = s.side == .long ? ChartTheme.chartProfit : ChartTheme.chartLoss
+            sigColor = s.side == .long ? chartProfit : chartLoss
         } else {
             sigText = nil
             sigColor = .secondary
@@ -341,7 +353,7 @@ struct SpreadWindow: View {
             tooltipRow("+2σ", String(format: "%.2f", upper), color: ChartTheme.chartBandLineEmphasized)
             tooltipRow("-2σ", String(format: "%.2f", lower), color: ChartTheme.chartBandLineEmphasized)
             tooltipRow("距均", String(format: "%+.2f", info.value - mean),
-                       color: info.value >= mean ? ChartTheme.chartProfit : ChartTheme.chartLoss)
+                       color: info.value >= mean ? chartProfit : chartLoss)
             if let s = sigText {
                 Divider().background(ChartTheme.tooltipDivider)
                 tooltipRow("信号", s, color: sigColor)
@@ -466,8 +478,8 @@ struct SpreadWindow: View {
     private func drawSignalMarker(ctx: GraphicsContext, at point: CGPoint, signal: SpreadSignal) {
         let color: Color
         switch signal.side {
-        case .long:  color = ChartTheme.chartProfit
-        case .short: color = ChartTheme.chartLoss
+        case .long:  color = chartProfit
+        case .short: color = chartLoss
         }
         var path = Path()
         let size: CGFloat = 6

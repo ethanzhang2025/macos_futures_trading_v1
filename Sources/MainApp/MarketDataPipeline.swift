@@ -59,9 +59,11 @@ final class MarketDataPipeline {
         ChineseFuturesProducts.allSupportedInstrumentIDs
     }
 
-    /// 主图可切换的周期清单（spike 保守 6 个 · 秒级/周月 spike 阶段不暴露）
-    /// Sina API 拉 tick · KLineBuilder 客户端合成任意周期 · UI 仅放主流分钟+日
+    /// 主图可切换的周期清单
+    /// Sina API 拉 tick · KLineBuilder 客户端合成任意周期
+    /// v17.42 · TradingView 对齐 A2.3 · 暴露 5s/15s/30s（短线 scalper 节奏）
     static let supportedPeriods: [KLinePeriod] = [
+        .second5, .second15, .second30,
         .minute1, .minute5, .minute15, .minute30, .hour1, .daily
     ]
 

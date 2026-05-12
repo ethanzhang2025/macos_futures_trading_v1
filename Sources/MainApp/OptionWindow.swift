@@ -127,6 +127,14 @@ struct OptionWindow: View {
         .frame(minWidth: 1100, minHeight: 720)
         .onChange(of: selectedUnderlyingID) { _ in resetForNewUnderlying() }
         .onChange(of: selectedStrategyType) { newType in remapStrikesForStrategy(newType) }
+        // v17.95 · 接 watchlistInstrumentSelected · 当主图切到 IO / m / SR 等期权标的时同步
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
+            guard let id = note.object as? String,
+                  OptionPresets.byUnderlyingID[id] != nil,
+                  id != selectedUnderlyingID
+            else { return }
+            selectedUnderlyingID = id
+        }
         // v15.36 · Phase 6.4 · 回测 sheet
         .sheet(isPresented: $backtestSheetPresented) {
             if let s = currentStrategy {

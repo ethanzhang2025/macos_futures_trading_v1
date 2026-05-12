@@ -40,6 +40,9 @@ struct SpreadWindow: View {
     /// v15.40 · 主图 hover 点（鼠标在 spreadChart 内的像素坐标 · nil = 鼠标已离开）
     @State private var spreadHoverPoint: CGPoint?
 
+    /// v17.95 · 单击两腿 label → openWindow("chart") + post 切主图
+    @Environment(\.openWindow) private var openWindow
+
     private var selectedPair: SpreadPair {
         SpreadPresets.byID[selectedPairID] ?? SpreadPresets.all.first!
     }
@@ -77,6 +80,17 @@ struct SpreadWindow: View {
         .frame(minWidth: 920, minHeight: 600)
         .task(id: selectedPairID) { reload() }
         .onChange(of: rollingWindow) { _ in recomputeV2() }
+        // v17.95 · 接 watchlistInstrumentSelected · 主图切到某合约时 · 自动找含该腿的套利对（保持当前对若已含）
+        .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
+            guard let id = note.object as? String else { return }
+            // 当前对已含 → 不切（避免来回跳）
+            if selectedPair.leg1.instrumentID == id || selectedPair.leg2.instrumentID == id { return }
+            // 找首个含 id 的预设对
+            if let match = SpreadPresets.all.first(where: { $0.leg1.instrumentID == id || $0.leg2.instrumentID == id }),
+               match.id != selectedPairID {
+                selectedPairID = match.id
+            }
+        }
         .sheet(isPresented: $backtestSheetPresented) {
             SpreadBacktestSheet(
                 pair: selectedPair,
@@ -143,9 +157,12 @@ struct SpreadWindow: View {
 
             Spacer()
 
-            Text("\(selectedPair.leg1.ratio > 0 ? "+" : "")\(selectedPair.leg1.ratio)·\(selectedPair.leg1.instrumentID) / \(selectedPair.leg2.ratio > 0 ? "+" : "")\(selectedPair.leg2.ratio)·\(selectedPair.leg2.instrumentID)")
-                .font(.caption.monospaced())
-                .foregroundColor(.secondary)
+            // v17.95 · 两腿合约可点击 · 单击切主图 K 线（与其他 6 窗口一致 · 跨窗口分析闭环）
+            HStack(spacing: 6) {
+                legChipButton(leg: selectedPair.leg1)
+                Text("/").foregroundColor(.secondary.opacity(0.5)).font(.caption.monospaced())
+                legChipButton(leg: selectedPair.leg2)
+            }
 
             Button {
                 backtestSheetPresented = true
@@ -163,6 +180,22 @@ struct SpreadWindow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    /// v17.95 · 两腿合约可点击 chip（与 CalendarSpreadWindow 切主图风格一致）
+    @ViewBuilder
+    private func legChipButton(leg: SpreadLeg) -> some View {
+        let sign = leg.ratio > 0 ? "+" : ""
+        Button {
+            openWindow(id: "chart")
+            NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: leg.instrumentID)
+        } label: {
+            Text("\(sign)\(leg.ratio)·\(leg.instrumentID)")
+                .font(.caption.monospaced())
+                .foregroundColor(.accentColor)
+        }
+        .buttonStyle(.plain)
+        .help("切主图 K 线：\(leg.instrumentID)")
     }
 
     // MARK: - 统计 HUD

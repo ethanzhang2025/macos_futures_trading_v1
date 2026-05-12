@@ -154,6 +154,25 @@ struct MetalKLineRendererRenderTests {
         #expect(stats.visibleBarCount == 50)
         #expect(stats.drawCallCount == 2)
     }
+
+    // v17.94 · 切换涨跌配色后 render 仍走通（buffer 重建路径 · stats 不变）
+    @Test("setCandleColorMode redUpGreenDown → greenUpRedDown · 切换后 render 仍返回 drawCall = 2")
+    func setCandleColorModeSwitches() async throws {
+        guard let r = try makeRendererOrSkip() else { return }
+        let bars = makeKLines(100)
+        _ = await r.render(KLineRenderInput(bars: bars,
+            viewport: RenderViewport(startIndex: 0, visibleCount: 100)))
+        r.setCandleColorMode(.greenUpRedDown)
+        let stats = await r.render(KLineRenderInput(bars: bars,
+            viewport: RenderViewport(startIndex: 0, visibleCount: 100)))
+        #expect(stats.drawCallCount == 2)
+        #expect(stats.visibleBarCount == 100)
+        // 切回 redUpGreenDown · buffer 再次重建 · 仍正确
+        r.setCandleColorMode(.redUpGreenDown)
+        let stats2 = await r.render(KLineRenderInput(bars: bars,
+            viewport: RenderViewport(startIndex: 0, visibleCount: 100)))
+        #expect(stats2.drawCallCount == 2)
+    }
 }
 
 #endif  // canImport(Metal)

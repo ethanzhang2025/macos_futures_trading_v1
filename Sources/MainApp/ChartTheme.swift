@@ -14,6 +14,7 @@
 
 import SwiftUI
 import Foundation
+import Shared
 
 /// K 线主图主题
 enum ChartTheme: String, CaseIterable, Identifiable, Codable {
@@ -89,6 +90,26 @@ enum ChartTheme: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .dark:  return Color(red: 0.18, green: 0.74, blue: 0.42)
         case .light: return Color(red: 0.10, green: 0.55, blue: 0.30)
+        }
+    }
+
+    // v17.94 · K 线"涨/跌"语义色（按 CandleColorMode 切换 redUp / greenUp）
+    // 历史：candleBull(red) / candleBear(green) 写死中国习惯 · 调用方意图都是"涨"/"跌" 而非"红"/"绿"
+    // 改造：调用方改用 candleUp(mode:) / candleDown(mode:) · ChartSettingsStore.loadCandleColorMode 决定 swap
+
+    /// 涨色（按用户偏好 mode 决定红/绿）
+    func candleUp(mode: CandleColorMode) -> Color {
+        switch mode {
+        case .redUpGreenDown: return candleBull   // 中国习惯：涨红
+        case .greenUpRedDown: return candleBear   // 国际习惯：涨绿
+        }
+    }
+
+    /// 跌色（按用户偏好 mode 决定绿/红）
+    func candleDown(mode: CandleColorMode) -> Color {
+        switch mode {
+        case .redUpGreenDown: return candleBear   // 中国习惯：跌绿
+        case .greenUpRedDown: return candleBull   // 国际习惯：跌红
         }
     }
 

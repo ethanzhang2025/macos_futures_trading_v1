@@ -222,6 +222,10 @@ struct ChartScene: View {
     /// v15.8 主图主题（深色 / 浅色）· UserDefaults 全局共享
     @State private var chartTheme: ChartTheme = .dark
     @State private var isChartThemeLoaded: Bool = false
+    /// v17.94 · K 线涨跌配色（中国 红涨 / 国际 绿涨）· Settings 图表 tab 持久化 · UserDefaults 全局共享
+    @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
+    /// v17.94 · 价格精度（auto = 跟合约 stepSize · fixed2/3/4 = 用户固定）· Settings 图表 tab 持久化
+    @State private var pricePrecisionMode: PricePrecisionMode = ChartSettingsStore.loadPricePrecision()
     /// v17.13 A1.1 · 主图图表类型（candlestick / heikinAshi）· UserDefaults 全局共享
     @State private var chartType: ChartType = .candlestick
     @State private var isChartTypeLoaded: Bool = false
@@ -643,6 +647,16 @@ struct ChartScene: View {
            list != drawingTemplates {
             drawingTemplates = list
         }
+        // v17.94 · 图表 Settings tab：K 线配色 + 价格精度（多窗口同步）
+        let newCandleMode = ChartSettingsStore.loadCandleColorMode()
+        if newCandleMode != candleColorMode {
+            candleColorMode = newCandleMode
+            renderer?.setCandleColorMode(newCandleMode)
+        }
+        let newPriceMode = ChartSettingsStore.loadPricePrecision()
+        if newPriceMode != pricePrecisionMode {
+            pricePrecisionMode = newPriceMode
+        }
     }
 
     /// v15.17 · InAppOverlayChannel toast 信息（NotificationCenter userInfo 解码）
@@ -751,7 +765,7 @@ struct ChartScene: View {
         VStack(spacing: 4) {
             HStack(spacing: 8) {
                 Image(systemName: "bell.fill")
-                    .foregroundColor(chartTheme.candleBull)
+                    .foregroundColor(chartTheme.candleUp(mode: candleColorMode))
                 Text(toast.alertName)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(chartTheme.textPrimary)
@@ -785,7 +799,7 @@ struct ChartScene: View {
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(chartTheme.candleBull.opacity(0.35), lineWidth: 1)
+                .stroke(chartTheme.candleUp(mode: candleColorMode).opacity(0.35), lineWidth: 1)
         )
     }
 
@@ -1640,6 +1654,8 @@ struct ChartScene: View {
                 onEditSubSlot: { slot in editingSubSlot = slot },
                 onClearSubSlot: { slot in subParamsOverrides[slot] = nil },  // v15.17 · 父级清除 override
                 chartTheme: chartTheme,
+                candleColorMode: candleColorMode,
+                pricePrecisionMode: pricePrecisionMode,
                 chartType: chartType,
                 hudFields: hudFields,
                 drawings: $drawings,
@@ -2093,6 +2109,8 @@ struct ChartScene: View {
             renderer = try await Task.detached(priority: .userInitiated) {
                 try MetalKLineRenderer()
             }.value
+            // v17.94 · 渲染器涨跌色对齐 Settings 偏好（默认中国 redUp · 用户切换走 syncFromUserDefaults）
+            renderer?.setCandleColorMode(candleColorMode)
             return true
         } catch {
             loadError = "渲染器初始化失败：\(error)"
@@ -2177,6 +2195,10 @@ struct ChartContentView: View {
     let onClearSubSlot: (Int) -> Void
     /// v15.8 主图主题（深色 / 浅色）· 影响背景 / 文字 / 网格 / candle 配色
     let chartTheme: ChartTheme
+    /// v17.94 · K 线涨跌配色（redUp / greenUp · Settings 图表 tab 持久化）· 由 ChartScene 父级注入
+    let candleColorMode: CandleColorMode
+    /// v17.94 · 价格精度（auto = 跟合约 stepSize · fixed2/3/4 = 用户固定）· 由 ChartScene 父级注入
+    let pricePrecisionMode: PricePrecisionMode
     /// v17.13 A1.1 图表类型（candlestick / heikinAshi · 仅 candle 渲染层使用 · HUD/hover/indicator 仍用原始 bars）
     let chartType: ChartType
     /// v15.14 HUD 自定义字段（按 fields 渲染各可选项）
@@ -2275,6 +2297,8 @@ struct ChartContentView: View {
         onEditSubSlot: @escaping (Int) -> Void,
         onClearSubSlot: @escaping (Int) -> Void,
         chartTheme: ChartTheme,
+        candleColorMode: CandleColorMode,
+        pricePrecisionMode: PricePrecisionMode,
         chartType: ChartType,
         hudFields: HUDFieldsBook,
         drawings: Binding<[Drawing]>,
@@ -2302,6 +2326,8 @@ struct ChartContentView: View {
         self.onEditSubSlot = onEditSubSlot
         self.onClearSubSlot = onClearSubSlot
         self.chartTheme = chartTheme
+        self.candleColorMode = candleColorMode
+        self.pricePrecisionMode = pricePrecisionMode
         self.chartType = chartType
         self.hudFields = hudFields
         self._drawings = drawings
@@ -2613,7 +2639,8 @@ struct ChartContentView: View {
                     priceRange: currentPriceRange,
                     chartType: chartType,
                     theme: chartTheme,
-                    options: chartTypeOptions
+                    options: chartTypeOptions,
+                    candleColorMode: candleColorMode
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(chartTheme.background)
@@ -3023,7 +3050,7 @@ struct ChartContentView: View {
 
                 // 起点 marker（candleBear 起色 · 中国跌色作起点 · 与 batch94 HUD 配色一致）+ 价位标签
                 // v15.21 batch121 · marker 配色 chartTheme 化（跟随 trader 自定义涨跌色）
-                let anchorColor = chartTheme.candleBear
+                let anchorColor = chartTheme.candleDown(mode: candleColorMode)
                 Circle()
                     .strokeBorder(anchorColor, lineWidth: 2)
                     .background(Circle().fill(chartTheme.background.opacity(0.85)))
@@ -3037,7 +3064,7 @@ struct ChartContentView: View {
 
                 if let endPos, let end = endpoint {
                     // 终点色：locked 时 candleBull（红 · 锁定 = 终点确定）· following 时 textSecondary（中性 · 仍跟随）
-                    let endColor: Color = isLocked ? chartTheme.candleBull : chartTheme.textSecondary
+                    let endColor: Color = isLocked ? chartTheme.candleUp(mode: candleColorMode) : chartTheme.textSecondary
                     // 中间连接虚线
                     Path { p in
                         p.move(to: anchorPos)
@@ -3130,7 +3157,7 @@ struct ChartContentView: View {
                 let isHigh = swing.kind == .high
                 let markerY = isHigh ? y - 12 : y + 12
                 // v15.21 batch89 · 配色与 chartTheme 集成（深色主题适配 · 与 K 线 candleBull/Bear 一致）
-                let swingColor = isHigh ? chartTheme.candleBull : chartTheme.candleBear
+                let swingColor = isHigh ? chartTheme.candleUp(mode: candleColorMode) : chartTheme.candleDown(mode: candleColorMode)
                 Image(systemName: "triangle.fill")
                     .rotationEffect(.degrees(isHigh ? 0 : 180))
                     .foregroundColor(swingColor.opacity(0.85))
@@ -3185,7 +3212,7 @@ struct ChartContentView: View {
                 HStack(spacing: 6) {
                     Text(isLocked ? "📏 测距 · 已锁定" : "📏 测距 · 跟随")
                         .fontWeight(.semibold)
-                        .foregroundColor(isLocked ? chartTheme.candleBull : chartTheme.textPrimary)
+                        .foregroundColor(isLocked ? chartTheme.candleUp(mode: candleColorMode) : chartTheme.textPrimary)
                     Spacer()
                     Button {
                         measureAnchor = nil
@@ -3204,7 +3231,7 @@ struct ChartContentView: View {
                     let barDiff = end.barIndex - anchor.barIndex
                     let arrow = priceDiff >= 0 ? "↑" : "↓"
                     // v15.21 batch94 · 配色与 chartTheme 集成（与 batch89 swing 一致 · 涨 candleBull / 跌 candleBear）
-                    let priceColor: Color = priceDiff >= 0 ? chartTheme.candleBull : chartTheme.candleBear
+                    let priceColor: Color = priceDiff >= 0 ? chartTheme.candleUp(mode: candleColorMode) : chartTheme.candleDown(mode: candleColorMode)
                     Group {
                         Text("起 \(formatPrice(anchor.price)) → \(isLocked ? "终" : "现") \(formatPrice(end.price))")
                         Text("\(arrow) \(formatPriceDiff(priceDiff)) (\(String(format: "%+.2f%%", pct)))")
@@ -3229,12 +3256,6 @@ struct ChartContentView: View {
             .cornerRadius(6)
             .padding(12)
         }
-    }
-
-    /// 测距 helper · 价差格式化（保留小数）
-    private func formatPriceDiff(_ diff: Decimal) -> String {
-        let n = NSDecimalNumber(decimal: diff).doubleValue
-        return String(format: "%+.2f", n)
     }
 
     /// v13.6 选中画线 Inspector 浮窗 · v13.9 多选适配（≥2 显示数量 / 1 显示详情）
@@ -3330,8 +3351,17 @@ struct ChartContentView: View {
 
     // v15.x · drawingTypeLabel 提到 file scope · ChartContentView 内调用直接用 file 顶部 fileprivate 函数
 
+    /// v17.94 · 价格格式化（PricePrecisionMode 持久化）
+    /// auto 时取 stepSize 推算（暂回退 fixed 2 · 后续接合约 stepSize 后用真值）· fixed2/3/4 用用户指定
     private func formatPrice(_ p: Decimal) -> String {
-        String(format: "%.2f", NSDecimalNumber(decimal: p).doubleValue)
+        let d = pricePrecisionMode.digits ?? 2
+        return String(format: "%.\(d)f", NSDecimalNumber(decimal: p).doubleValue)
+    }
+
+    /// v17.94 · 价差格式化（与 formatPrice 共用精度 · 带符号）
+    private func formatPriceDiff(_ diff: Decimal) -> String {
+        let d = pricePrecisionMode.digits ?? 2
+        return String(format: "%+.\(d)f", NSDecimalNumber(decimal: diff).doubleValue)
     }
 
     /// v13.5 画线右键上下文菜单 · v13.6 加复制 · v13.9 多选 · v13.8 改颜色/线宽 · v13.11 锁定/解锁
@@ -4635,13 +4665,14 @@ struct ChartContentView: View {
                 let diff = close - baseline
                 let pct = baseline > 0 ? diff / baseline * 100 : 0
                 let isUp = diff >= 0
-                let color: Color = isUp ? chartTheme.candleBull : chartTheme.candleBear
-                Text(String(format: "%.2f", close))
+                let color: Color = isUp ? chartTheme.candleUp(mode: candleColorMode) : chartTheme.candleDown(mode: candleColorMode)
+                let digits = pricePrecisionMode.digits ?? 2
+                Text(String(format: "%.\(digits)f", close))
                     .font(.system(size: 22, weight: .bold, design: .monospaced))
                     .foregroundColor(color)
                 if !hudFields.fields.contains(.change) {
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text("\(isUp ? "▲" : "▼") \(String(format: "%+.2f", diff))")
+                        Text("\(isUp ? "▲" : "▼") \(String(format: "%+.\(digits)f", diff))")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(color)
                         Text(String(format: "%+.2f%%", pct))
@@ -4755,7 +4786,7 @@ struct ChartContentView: View {
                     let diff = lastBar.close - baseline
                     let pct = baseline != 0 ? (NSDecimalNumber(decimal: diff).doubleValue / NSDecimalNumber(decimal: baseline).doubleValue * 100) : 0
                     Text("涨跌 \(fmt(diff)) (\(String(format: "%+.2f%%", pct)))")
-                        .foregroundColor(diff >= 0 ? chartTheme.candleBull : chartTheme.candleBear)
+                        .foregroundColor(diff >= 0 ? chartTheme.candleUp(mode: candleColorMode) : chartTheme.candleDown(mode: candleColorMode))
                 }
                 if hudFields.fields.contains(.amplitude), let amp = visibleAmplitudePct {
                     Text("振幅 \(String(format: "%.2f%%", amp))")
@@ -4765,8 +4796,8 @@ struct ChartContentView: View {
                 }
                 if hudFields.fields.contains(.volumeRatio), let ratio = volumeRatio {
                     Text("量比 \(String(format: "%.2f", ratio))")
-                        .foregroundColor(ratio >= 1.5 ? chartTheme.candleBull
-                            : (ratio < 0.7 ? chartTheme.candleBear : chartTheme.textPrimary))
+                        .foregroundColor(ratio >= 1.5 ? chartTheme.candleUp(mode: candleColorMode)
+                            : (ratio < 0.7 ? chartTheme.candleDown(mode: candleColorMode) : chartTheme.textPrimary))
                 }
                 if hudFields.fields.contains(.openInterest) {
                     Text("持仓 \(fmt(lastBar.openInterest))")
@@ -4778,12 +4809,12 @@ struct ChartContentView: View {
             // v15.56 板块归属（trader 横向感知 · 找到当前合约在板块内的位置）
             if hudFields.fields.contains(.sectorInfo), let info = sectorInfo {
                 Text(info.headline)
-                    .foregroundColor(info.bullBias >= 0 ? chartTheme.candleBull : chartTheme.candleBear)
+                    .foregroundColor(info.bullBias >= 0 ? chartTheme.candleUp(mode: candleColorMode) : chartTheme.candleDown(mode: candleColorMode))
                 if let leader = info.leaderText {
-                    Text(leader).foregroundColor(chartTheme.candleBull)
+                    Text(leader).foregroundColor(chartTheme.candleUp(mode: candleColorMode))
                 }
                 if let lagger = info.laggerText {
-                    Text(lagger).foregroundColor(chartTheme.candleBear)
+                    Text(lagger).foregroundColor(chartTheme.candleDown(mode: candleColorMode))
                 }
             }
             // v15.73 组合异常（≥3 类同时命中 · 不命中时整行隐藏避免冗余）
@@ -4792,7 +4823,7 @@ struct ChartContentView: View {
                 Text(combo.headline)
                     .foregroundColor(comboHUDColor(combo.severityLevel))
                 Text(combo.subline)
-                    .foregroundColor(combo.isTop ? chartTheme.candleBear : chartTheme.textSecondary)
+                    .foregroundColor(combo.isTop ? chartTheme.candleDown(mode: candleColorMode) : chartTheme.textSecondary)
                     .font(.system(size: 10, design: .monospaced))
             }
             // 视觉迭代第 4 项：调试信息（视野/帧时）· v15.14 用户可关 · 默认开
@@ -4859,7 +4890,7 @@ struct ChartContentView: View {
     /// v15.73 · combo HUD 颜色 · 5 类红 · 4 类橙 · 3 类黄
     private func comboHUDColor(_ level: ComboHUDInfo.SeverityLevel) -> Color {
         switch level {
-        case .high: return chartTheme.candleBear
+        case .high: return chartTheme.candleDown(mode: candleColorMode)
         case .mid:  return .orange
         case .low:  return .yellow
         }
@@ -4882,9 +4913,10 @@ struct ChartContentView: View {
         return last
     }
 
-    /// v15.14 价格 / OI 数字格式（保 2 位小数）
+    /// v15.14 价格 / OI 数字格式 · v17.94 接 PricePrecisionMode
     private func fmt(_ d: Decimal) -> String {
-        String(format: "%.2f", NSDecimalNumber(decimal: d).doubleValue)
+        let digits = pricePrecisionMode.digits ?? 2
+        return String(format: "%.\(digits)f", NSDecimalNumber(decimal: d).doubleValue)
     }
 
     /// v15.14 K 线时间戳格式（按 period 跨度选不同格式 · 与 KLineCrosshairView 风格对齐）

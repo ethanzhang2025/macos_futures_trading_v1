@@ -26,6 +26,11 @@ struct AlternativeChartCanvas: View {
     let theme: ChartTheme
     /// v17.60 · Renko / P&F / Kagi 算法参数（trader 可调 · 默认 hardcoded）
     var options: ChartTypeOptions = .default
+    /// v17.94 · K 线涨跌配色（默认中国习惯 · ChartSettingsStore 持久化 · ChartScene 注入）
+    var candleColorMode: CandleColorMode = .redUpGreenDown
+
+    private var candleUp: Color   { theme.candleUp(mode: candleColorMode) }
+    private var candleDown: Color { theme.candleDown(mode: candleColorMode) }
 
     var body: some View {
         Canvas { ctx, size in
@@ -82,8 +87,8 @@ struct AlternativeChartCanvas: View {
         for i in 1..<slice.count {
             path.addLine(to: CGPoint(x: xCenter(i), y: yFor(slice[i].close)))
         }
-        let bullColor = theme.candleBull
-        let bearColor = theme.candleBear
+        let bullColor = candleUp
+        let bearColor = candleDown
 
         switch mode {
         case .line:
@@ -149,7 +154,7 @@ struct AlternativeChartCanvas: View {
             let yHigh = yFor(bar.high)
             let yLow = yFor(bar.low)
             let bullish = bar.close >= bar.open
-            let color = bullish ? theme.candleBull : theme.candleBear
+            let color = bullish ? candleUp : candleDown
             // 影线
             var wick = Path()
             wick.move(to: CGPoint(x: cx, y: yHigh))
@@ -179,7 +184,7 @@ struct AlternativeChartCanvas: View {
             let yHigh = yFor(bar.high)
             let yLow = yFor(bar.low)
             let bullish = bar.close >= bar.open
-            let color = bullish ? theme.candleBull : theme.candleBear
+            let color = bullish ? candleUp : candleDown
             // 主竖线（high-low）
             var hi = Path()
             hi.move(to: CGPoint(x: cx, y: yHigh))
@@ -252,7 +257,7 @@ struct AlternativeChartCanvas: View {
         let colW = size.width / CGFloat(cols.count)
 
         for (i, c) in cols.enumerated() {
-            let color = c.isX ? theme.candleBull : theme.candleBear
+            let color = c.isX ? candleUp : candleDown
             let cx = (CGFloat(i) + 0.5) * colW
             for b in c.low...c.high {
                 let yMid = size.height - (CGFloat(b - minBox) + 0.5) * boxH
@@ -322,7 +327,7 @@ struct AlternativeChartCanvas: View {
             var p = Path()
             p.move(to: CGPoint(x: 0, y: y))
             p.addLine(to: CGPoint(x: size.width, y: y))
-            ctx.stroke(p, with: .color(theme.candleBull), lineWidth: 1.4)
+            ctx.stroke(p, with: .color(candleUp), lineWidth: 1.4)
             return
         }
         let stepX = size.width / CGFloat(segs.count - 1)
@@ -332,7 +337,7 @@ struct AlternativeChartCanvas: View {
             let y0 = yFor(segs[i - 1].price)
             let y1 = yFor(segs[i].price)
             let isUp = segs[i].dir >= 0
-            let color = isUp ? theme.candleBull : theme.candleBear
+            let color = isUp ? candleUp : candleDown
             let lw: CGFloat = isUp ? 2.0 : 1.2
             // 垂直段（前点 → 当前价）
             var v = Path()

@@ -77,10 +77,16 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
         }
     }
 
-    // MARK: - 涨跌色（中国期货约定：涨红跌绿）
+    // MARK: - 涨跌色（中国期货约定：涨红跌绿 · v17.94 可由 CandleColorMode swap）
 
-    private static let upColor = SIMD4<Float>(0.96, 0.27, 0.27, 1.0)   // #F54545
-    private static let downColor = SIMD4<Float>(0.18, 0.74, 0.42, 1.0)  // #2DBC6B
+    /// 涨红跌绿基线（与 SwiftUI ChartTheme.candleBull/.candleBear 数值对齐）
+    private static let redColor = SIMD4<Float>(0.96, 0.27, 0.27, 1.0)   // #F54545
+    private static let greenColor = SIMD4<Float>(0.18, 0.74, 0.42, 1.0) // #2DBC6B
+
+    /// 实例可变涨跌色（NSLock 保护 · setCandleColorMode 切换）
+    /// 默认中国习惯：涨红 / 跌绿
+    private var upColor: SIMD4<Float> = Self.redColor
+    private var downColor: SIMD4<Float> = Self.greenColor
 
     /// 指标折线调色板（按 input.indicators 顺序循环取色 · 专业图表配色）
     /// 0 黄 #FFC72E  1 紫 #A06CD5  2 蓝 #3498DB  3 橙 #F39C12  4 粉 #E84B8C
@@ -169,6 +175,24 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
 
     public func setQuality(_ quality: RenderQuality) async {
         writeQuality(quality)
+    }
+
+    /// v17.94 · 切换涨跌配色（redUpGreenDown = 中国习惯 · greenUpRedDown = 国际/TradingView）
+    /// 改色后需让 vertex buffer 重建 · 这里 invalidate cachedVertexHash 触发下次 render rebuild
+    public func setCandleColorMode(_ mode: CandleColorMode) {
+        stateLock.lock(); defer { stateLock.unlock() }
+        switch mode {
+        case .redUpGreenDown:
+            upColor = Self.redColor
+            downColor = Self.greenColor
+        case .greenUpRedDown:
+            upColor = Self.greenColor
+            downColor = Self.redColor
+        }
+        // 强制下次 render rebuild buffer · 让新颜色生效（顶点 color 写在 buffer 内）
+        cachedVertexHash = 0
+        bodyVertexBuffer = nil
+        wickVertexBuffer = nil
     }
 
     private func readQuality() -> RenderQuality {
@@ -338,7 +362,7 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
             let closeF = Self.float(k.close)
             let highF = Self.float(k.high)
             let lowF = Self.float(k.low)
-            let color = closeF >= openF ? Self.upColor : Self.downColor
+            let color = closeF >= openF ? upColor : downColor
             let yTop = max(openF, closeF)
             let yBot = min(openF, closeF)
             // 实体矩形 · 2 三角形 · triangleList 共 6 顶点

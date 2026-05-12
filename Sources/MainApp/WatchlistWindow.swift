@@ -74,6 +74,9 @@ struct WatchlistWindow: View {
     /// 旗标版本号 · UserDefaults 变化时 +1 触发 row 重渲（@State 不能直接观察 flagStore · 用 tick）
     @State private var flagsRevision: Int = 0
 
+    /// v17.42 C1 · 列可见性（持仓量 / 成交量 / 价差%）· 右键 📋 显示列 toggle · UserDefaults 跨窗口同步
+    @State private var visibleColumns: Set<WatchlistColumn> = WatchlistColumnPreferences.load()
+
     /// v15.78 · combo 异常周期 fetch · 30s 间隔（detector 是纯函数 · 不发网络请求）
     @State private var comboFetchTask: Task<Void, Never>?
 
@@ -162,8 +165,10 @@ struct WatchlistWindow: View {
             comboFetchTask = nil
         }
         // v17.34 C5 · 跨窗口旗标同步（与 ChartTheme / SimulatedTradingStore 同模式）
+        // v17.42 C1 · 列可见性也跨窗口同步（同一 UserDefaults.didChangeNotification）
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             flagsRevision += 1
+            visibleColumns = WatchlistColumnPreferences.load()
         }
         .onChange(of: book) { newValue in
             // M5 自动持久化：每次 book 变化异步 save · isLoaded 守卫避免初始 Mock 误写覆盖真数据
@@ -725,11 +730,8 @@ struct WatchlistWindow: View {
                 .foregroundColor(Self.priceColor(pctValue))
                 .frame(width: 80, alignment: .trailing)
                 .tooltip(detailedChangeText(for: id))   // v15.21 batch133 · hover 显示绝对涨跌 + 振幅
-            Spacer().frame(width: 16)
-            Text(openInterestText(for: id))
-                .font(.system(.body, design: .monospaced))
-                .foregroundColor(.secondary)
-                .frame(width: 80, alignment: .trailing)
+            // v17.42 C1 · 可选列（与 instrumentRow 同款 · 跨视图统一）
+            extraColumnsCells(for: id)
             Spacer().frame(width: 12)
             // v15.78 · combo 徽章（聚合视图同款 · 跨视图统一）
             comboWatchlistBadge(for: id)
@@ -765,6 +767,8 @@ struct WatchlistWindow: View {
                     }
                 }
             }
+            // v17.42 C1 · 列自定义（与 instrumentRow 同款 · 跨视图统一）
+            columnVisibilityMenu()
         }
     }
 
@@ -852,17 +856,12 @@ struct WatchlistWindow: View {
             sortableHeaderCell(L("最新价"), field: .lastPrice, width: 90, alignment: .trailing)
             Spacer().frame(width: 16)
             sortableHeaderCell(L("涨跌幅"), field: .changePct, width: 80, alignment: .trailing)
-            Spacer().frame(width: 16)
-            sortableHeaderCell(L("持仓量"), field: .openInterest, width: 80, alignment: .trailing)
+            // v17.42 C1 · 可选列 header（持仓 / 成交量 / 价差%）· 与 extraColumnsCells 同步可见
+            extraColumnsHeader()
             // v15.38 V2 · 隐藏排序触发器（不占视觉空间 · 只供菜单/快捷键调用）
-            sortableHeaderCell(L("成交量"), field: .volume, width: 0, alignment: .trailing)
-                .hidden()
             sortableHeaderCell(L("涨跌"), field: .change, width: 0, alignment: .trailing)
                 .hidden()
             sortableHeaderCell(L("振幅"), field: .amplitude, width: 0, alignment: .trailing)
-                .hidden()
-            // v17.33 C4 · Bid-Ask 价差 hidden sort header（仅菜单触发 · row 见 tooltip）
-            sortableHeaderCell(L("买卖价差"), field: .spread, width: 0, alignment: .trailing)
                 .hidden()
             Spacer()
             // v15.38 V2 · 排序菜单（一键切到隐藏字段）
@@ -1118,11 +1117,8 @@ struct WatchlistWindow: View {
                 .foregroundColor(Self.priceColor(pctValue))
                 .frame(width: 80, alignment: .trailing)
                 .tooltip(detailedChangeText(for: id))   // v15.21 batch133 · hover 显示绝对涨跌 + 振幅
-            Spacer().frame(width: 16)
-            Text(openInterestText(for: id))
-                .font(.system(.body, design: .monospaced))
-                .foregroundColor(.secondary)
-                .frame(width: 80, alignment: .trailing)
+            // v17.42 C1 · 可选列（持仓 / 成交量 / 价差%）· 右键 📋 显示列 toggle
+            extraColumnsCells(for: id)
             Spacer().frame(width: 12)
             // v15.78 · combo 徽章（命中才显示 · 跨窗口视觉与 ⌘⌥H/B/N 一致）
             comboWatchlistBadge(for: id)
@@ -1191,6 +1187,8 @@ struct WatchlistWindow: View {
                     createAllAlertPresets(instrumentID: id)
                 }
             }
+            // v17.42 C1 · 列自定义（toggle 持仓 / 成交量 / 价差% · UserDefaults 跨窗口同步）
+            columnVisibilityMenu()
         }
         .overlay(alignment: .top) { insertionIndicator(at: groupID, index: index) }
         .draggable(WatchlistInstrumentRef(sourceGroupID: groupID, instrumentID: id)) {
@@ -1757,6 +1755,89 @@ struct WatchlistWindow: View {
             return String(oi)
         }
         return MockQuote.openInterest(for: id)
+    }
+
+    /// v17.42 C1 · 成交量文本（≥1M 用 M / ≥1K 用 K · 无报价 → "—"）
+    private func volumeText(for id: String) -> String {
+        guard let q = quotes[id] else { return "—" }
+        let v = q.volume
+        if v >= 1_000_000 { return String(format: "%.2fM", Double(v) / 1_000_000) }
+        if v >= 1_000 { return String(format: "%.0fK", Double(v) / 1_000) }
+        return String(v)
+    }
+
+    /// v17.42 C1 · 买卖价差%（(ask-bid)/last · 缺值 / 无报价 → "—"）
+    private func spreadText(for id: String) -> String {
+        guard let q = quotes[id], q.bidPrice > 0, q.askPrice > 0, q.lastPrice > 0 else { return "—" }
+        let bid = NSDecimalNumber(decimal: q.bidPrice).doubleValue
+        let ask = NSDecimalNumber(decimal: q.askPrice).doubleValue
+        let last = NSDecimalNumber(decimal: q.lastPrice).doubleValue
+        return String(format: "%.3f%%", (ask - bid) / last * 100)
+    }
+
+    /// v17.42 C1 · 可选列 cells（持仓 / 成交量 / 价差%）· instrumentRow + aggregatedRow 共用
+    @ViewBuilder
+    private func extraColumnsCells(for id: String) -> some View {
+        if visibleColumns.contains(.openInterest) {
+            Spacer().frame(width: 16)
+            Text(openInterestText(for: id))
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: WatchlistColumn.openInterest.width, alignment: .trailing)
+        }
+        if visibleColumns.contains(.volume) {
+            Spacer().frame(width: 16)
+            Text(volumeText(for: id))
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: WatchlistColumn.volume.width, alignment: .trailing)
+                .tooltip("成交量（M=百万 · K=千）")
+        }
+        if visibleColumns.contains(.spread) {
+            Spacer().frame(width: 16)
+            Text(spreadText(for: id))
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: WatchlistColumn.spread.width, alignment: .trailing)
+                .tooltip("买卖价差 % = (ask - bid) / last")
+        }
+    }
+
+    /// v17.42 C1 · 可选列 sortable header（与 extraColumnsCells 列宽对位）
+    @ViewBuilder
+    private func extraColumnsHeader() -> some View {
+        if visibleColumns.contains(.openInterest) {
+            Spacer().frame(width: 16)
+            sortableHeaderCell(L("持仓量"), field: .openInterest,
+                              width: WatchlistColumn.openInterest.width, alignment: .trailing)
+        }
+        if visibleColumns.contains(.volume) {
+            Spacer().frame(width: 16)
+            sortableHeaderCell(L("成交量"), field: .volume,
+                              width: WatchlistColumn.volume.width, alignment: .trailing)
+        }
+        if visibleColumns.contains(.spread) {
+            Spacer().frame(width: 16)
+            sortableHeaderCell(L("买卖价差%"), field: .spread,
+                              width: WatchlistColumn.spread.width, alignment: .trailing)
+        }
+    }
+
+    /// v17.42 C1 · 右键菜单"📋 显示列"submenu（toggle 持久化 · 跨窗口立即同步）
+    @ViewBuilder
+    private func columnVisibilityMenu() -> some View {
+        Menu("📋 显示列") {
+            ForEach(WatchlistColumn.allCases) { col in
+                Button {
+                    visibleColumns = WatchlistColumnPreferences.toggle(col)
+                } label: {
+                    HStack {
+                        Image(systemName: visibleColumns.contains(col) ? "checkmark.square" : "square")
+                        Text(col.displayName)
+                    }
+                }
+            }
+        }
     }
 }
 

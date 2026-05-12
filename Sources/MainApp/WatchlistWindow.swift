@@ -606,6 +606,11 @@ struct WatchlistWindow: View {
                     }
                 }
             }
+            // v17.130 · 导出当前组为 CSV（trader 分享给客户 / 同事 / Excel 二次分析）
+            Button("💾 导出 CSV") {
+                exportGroupCSV(group)
+            }
+            .disabled(group.instrumentIDs.isEmpty)
             Divider()
             Button("删除分组", role: .destructive) {
                 pendingDeleteGroup = group
@@ -865,7 +870,37 @@ struct WatchlistWindow: View {
                 }
                 .listStyle(.inset)
                 .contextMenu(forSelectionType: String.self) { ids in
+                    // v17.130 · 批量移动到其他组（仅多选时显示 · 单选走 row 右键单独菜单）
+                    if ids.count >= 1 {
+                        let otherGroups = book.groups.filter { $0.id != group.id && $0.deletedAt == nil }
+                        if !otherGroups.isEmpty {
+                            Menu(ids.count == 1 ? "📁 移动到 →" : "📁 移动 \(ids.count) 个到 →") {
+                                ForEach(otherGroups) { target in
+                                    Button(target.name) {
+                                        moveInstrumentsToGroup(ids, from: group.id, to: target.id)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // v17.130 · 批量旗标（多选时一次设全选）
+                    if ids.count >= 2 {
+                        Menu("🚩 批量旗标 \(ids.count) 个 →") {
+                            ForEach(InstrumentFlag.allCases, id: \.self) { f in
+                                Button {
+                                    for id in ids { flagStore.setFlag(f, for: id) }
+                                    flagsRevision += 1
+                                } label: {
+                                    HStack {
+                                        Text(f.emoji.isEmpty ? "—" : f.emoji)
+                                        Text(f.displayName)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if let label = removeMenuLabel(for: ids) {
+                        Divider()
                         Button(label, role: .destructive) {
                             removeInstruments(ids, from: group.id)
                         }
@@ -1386,6 +1421,60 @@ struct WatchlistWindow: View {
         }
         book.addInstrument(trimmed, to: groupID)
         Toast.info("已添加", "\(trimmed) → 「\(group.name)」")
+    }
+
+    /// v17.130 · 导出分组为 CSV · trader 分享 / 二次分析（Excel 可直接打开 · UTF-8 BOM 防中文乱码）
+    private func exportGroupCSV(_ group: Watchlist) {
+        let panel = NSSavePanel()
+        panel.title = "保存分组 CSV"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyyMMdd"
+        panel.nameFieldStringValue = "自选_\(group.name)_\(dateFmt.string(from: Date())).csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        var rows: [String] = ["合约,最新价,涨跌幅,持仓量,旗标,备注"]
+        for id in group.instrumentIDs {
+            let price = priceText(for: id)
+            let change = changePctText(for: id)
+            let oi = openInterestText(for: id)
+            let flag = flagStore.flag(for: id).displayName
+            let note = (noteStore.note(for: id) ?? "").replacingOccurrences(of: "\"", with: "\"\"")
+            // CSV 字段含 , 或 " 需双引号包裹 · 备注可能含逗号
+            rows.append("\(id),\(price),\(change),\(oi),\(flag),\"\(note)\"")
+        }
+        let csv = rows.joined(separator: "\n")
+        let bom = Data([0xEF, 0xBB, 0xBF])  // UTF-8 BOM · 让 Excel 正确识别中文
+        guard let data = csv.data(using: .utf8) else {
+            Toast.errorBody("导出失败", "CSV 编码失败")
+            return
+        }
+        do {
+            try (bom + data).write(to: url, options: .atomic)
+            Toast.info("导出成功", "已保存 \(url.lastPathComponent) · \(group.instrumentIDs.count) 行")
+        } catch {
+            Toast.error("保存失败", error)
+        }
+    }
+
+    /// v17.130 · 批量移动选中合约到其他分组（同组去重 · 跨组转移）
+    private func moveInstrumentsToGroup(_ ids: Set<String>, from sourceGroupID: UUID, to targetGroupID: UUID) {
+        guard let targetGroup = book.group(id: targetGroupID) else { return }
+        var moved = 0
+        var skipped = 0
+        for id in ids {
+            if book.moveInstrument(id, from: sourceGroupID, to: targetGroupID) {
+                moved += 1
+            } else {
+                skipped += 1
+            }
+        }
+        selectedInstruments.subtract(ids)
+        if moved > 0 {
+            Toast.info("已移动 \(moved) 个", "→「\(targetGroup.name)」\(skipped > 0 ? " · 跳过 \(skipped) 个（已存在 / 错误）" : "")")
+        } else {
+            Toast.info("未移动", "目标组已有这些合约")
+        }
     }
 
     private func removeInstruments(_ ids: Set<String>, from groupID: UUID) {

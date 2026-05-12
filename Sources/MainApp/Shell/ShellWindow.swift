@@ -6,6 +6,7 @@
 
 #if canImport(SwiftUI) && os(macOS)
 import SwiftUI
+import AlertCore
 
 public struct ShellWindow: View {
 
@@ -14,6 +15,10 @@ public struct ShellWindow: View {
     @EnvironmentObject private var shellVM: ShellViewModel
     /// v17.66 · 启动恢复 detached NSWindow（每个 paneID openWindow 一次）
     @Environment(\.openWindow) private var openWindow
+
+    /// v17.84 · 当前显示的预警 banner（5s 自动消失 · 点击 → 打开预警窗口）
+    @State private var alertBanner: NotificationEvent?
+    @State private var alertBannerDismissTask: Task<Void, Never>?
 
     public init() {}
 
@@ -79,6 +84,26 @@ public struct ShellWindow: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: shellVM.fKeyToast)
+        // v17.84 · 预警 InApp banner overlay（NotificationEvent 触发 · 5s 自动消失 · 点击切预警窗口）
+        .overlay(alignment: .topTrailing) {
+            if let banner = alertBanner {
+                alertBannerView(banner)
+                    .padding(.top, 56)
+                    .padding(.trailing, 12)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: alertBanner?.alertID)
+        .onReceive(NotificationCenter.default.publisher(for: .alertInAppOverlay)) { note in
+            guard let event = note.object as? NotificationEvent else { return }
+            alertBanner = event
+            alertBannerDismissTask?.cancel()
+            alertBannerDismissTask = Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard !Task.isCancelled else { return }
+                await MainActor.run { alertBanner = nil }
+            }
+        }
         .followingChartTheme()  // v17.12 A2.1 · Shell 跟随主图主题（dark/light · UserDefaults chartTheme.v1）
         // v17.66 · App 进程启动后第一次 Shell render · 自动 openWindow 恢复重启前 detached 的 Pane
         // 用 hasRestoredDetachedWindows 防多 ShellWindow 实例重复触发
@@ -93,6 +118,61 @@ public struct ShellWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
             shellVM.isApplicationTerminating = true
         }
+    }
+
+    // MARK: - v17.84 · 预警 InApp banner（顶部右侧 · 5s 消失 · 点击 → 预警窗口）
+
+    @ViewBuilder
+    private func alertBannerView(_ event: NotificationEvent) -> some View {
+        Button {
+            openWindow(id: "alert")
+            NotificationCenter.default.post(name: .alertWindowFilterToInstrument, object: event.instrumentID)
+            alertBannerDismissTask?.cancel()
+            alertBanner = nil
+        } label: {
+            HStack(spacing: 10) {
+                Text("🔔").font(.system(size: 18))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(event.alertName)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        Text(event.instrumentID)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.white.opacity(0.18))
+                            .cornerRadius(3)
+                    }
+                    Text(event.message)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.85))
+                        .lineLimit(2)
+                    Text("@ \(NSDecimalNumber(decimal: event.triggerPrice).stringValue) · 点击打开预警窗口")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.55))
+                }
+                Button {
+                    alertBannerDismissTask?.cancel()
+                    alertBanner = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(width: 320, alignment: .leading)
+            .background(LinearGradient(
+                colors: [Color.red.opacity(0.92), Color.orange.opacity(0.92)],
+                startPoint: .topLeading, endPoint: .bottomTrailing))
+            .cornerRadius(10)
+            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Pane 容器（Step 3 ✅ · ChartScene 真实嵌入 · Step 5 全 18 view 接入）

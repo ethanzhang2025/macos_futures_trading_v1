@@ -477,10 +477,14 @@ struct AlertWindow: View {
     }
 
     /// 注册全部 channel · v17.82 · .systemNotice 接 UNUserNotificationCenter · .sound 接 NSSound
-    /// 其他 kind（inApp / console / file / webhook）仍走 Logging 占位（UI 层可后续接 InAppOverlay）
+    /// v17.84 · .inApp 接 InAppOverlayChannel（NotificationCenter broadcast · ShellWindow banner 订阅）
+    /// 其他 kind（console / file / webhook）仍走 Logging 占位
     private func registerChannels() async {
         for kind in NotificationChannelKind.allCases {
             switch kind {
+            case .inApp:
+                let channel = InAppOverlayChannel()
+                await dispatcher.register(channel)
             case .systemNotice:
                 let channel = SystemNoticeChannel { msg in
                     Task { @MainActor in

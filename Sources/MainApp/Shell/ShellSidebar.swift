@@ -33,6 +33,9 @@ struct ShellSidebar: View {
     /// Timer publisher · 30s 一次触发 anomaly 重新扫描（trader 看"系统活着"）
     private let anomalyTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
+    /// v17.89 · 自选合约真数据（接续 v17.77 ⌘K · 同 SQLiteWatchlistBookStore 数据源 · 最多 5 条）
+    @State private var sidebarWatchSymbols: [String] = []
+
     var body: some View {
         List {
             ForEach(sidebarLayout.visibleSections, id: \.self) { sec in
@@ -69,6 +72,7 @@ struct ShellSidebar: View {
         // v17.70 · 预警 mini section 启动加载（用户切回 Shell 时自然刷新）
         .task {
             await refreshAlertsAsync()
+            await refreshWatchlistAsync()
         }
         // v17.88 · 启动时扫一次 + Timer 30s tick
         .onAppear {
@@ -85,6 +89,16 @@ struct ShellSidebar: View {
         lastAnomalyScanAt = Date()
     }
 
+    /// v17.89 · 加载 watchlistBook 第一个 group 的合约（取前 5 · 与 ⌘K 命令面板同数据源）
+    private func refreshWatchlistAsync() async {
+        guard let store = storeManager?.watchlistBook else { return }
+        let book = (try? await store.load()) ?? nil
+        guard let book else { return }
+        let firstGroupSymbols = book.groups.first?.instrumentIDs ?? []
+        let top = Array(firstGroupSymbols.prefix(5))
+        await MainActor.run { sidebarWatchSymbols = top }
+    }
+
     @ViewBuilder
     private func section(for sec: SidebarSection) -> some View {
         switch sec {
@@ -99,25 +113,52 @@ struct ShellSidebar: View {
 
     // MARK: - 自选 mini
 
+    /// v17.89 · 自选 mini 实际显示数据（优先 watchlistBook 真自选 · 空时 fallback mock）
+    private var effectiveWatchlist: [WatchItem] {
+        if !sidebarWatchSymbols.isEmpty {
+            // 真自选合约 · price/change 仍 mock（CTP 接入前无真行情 · 占位与 mockWatchlist 同风格）
+            return sidebarWatchSymbols.map { sym in
+                Self.fallbackWatchItem(for: sym)
+            }
+        }
+        return mockWatchlist
+    }
+
     private var watchlistSection: some View {
         Section {
-            ForEach(mockWatchlist, id: \.symbol) { item in
-                HStack(spacing: 6) {
-                    Text(item.symbol)
-                        .font(.system(size: 12, design: .monospaced))
-                    Spacer()
-                    Text(item.price)
-                        .font(.system(size: 11, design: .monospaced))
-                    Text(item.change)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(item.change.hasPrefix("+") ? .red : .green)
+            ForEach(effectiveWatchlist, id: \.symbol) { item in
+                Button {
+                    openWindow(id: "chart")
+                    NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: item.symbol)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(item.symbol)
+                            .font(.system(size: 12, design: .monospaced))
+                        Spacer()
+                        Text(item.price)
+                            .font(.system(size: 11, design: .monospaced))
+                        Text(item.change)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(item.change.hasPrefix("+") ? .red : .green)
+                    }
+                    .padding(.vertical, 1)
+                    .contentShape(Rectangle())
                 }
-                .padding(.vertical, 1)
+                .buttonStyle(.plain)
+                .help("\(item.symbol) · 点击切主图")
             }
         } header: {
             HStack {
-                Label("自选", systemImage: "star.fill")
+                Label("自选 (\(effectiveWatchlist.count))", systemImage: "star.fill")
                     .foregroundColor(.orange)
+                if !sidebarWatchSymbols.isEmpty {
+                    Text("真")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 3).padding(.vertical, 1)
+                        .background(Color.green.opacity(0.18))
+                        .foregroundColor(.green)
+                        .cornerRadius(2)
+                }
                 if watchlistHighlight {
                     Text("F6")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -130,6 +171,17 @@ struct ShellSidebar: View {
             }
             .animation(.easeInOut(duration: 0.2), value: watchlistHighlight)
         }
+    }
+
+    /// v17.89 · 真自选合约的 mock 价格占位（CTP 接入前 · 与 mockWatchlist 同风格）
+    /// hash 派生稳定值 · 同合约每次显示一致 · 避免 view re-eval 抖动
+    private static func fallbackWatchItem(for symbol: String) -> WatchItem {
+        let hash = abs(symbol.hashValue)
+        let priceVal = 1000 + (hash % 8000)
+        let changeRaw = Double((hash % 400) - 200) / 100.0    // -2.00% ~ +2.00%
+        let sign = changeRaw >= 0 ? "+" : ""
+        let change = "\(sign)\(String(format: "%.2f", changeRaw))%"
+        return WatchItem(symbol: symbol, price: "\(priceVal)", change: change)
     }
 
     // MARK: - 板块

@@ -4,6 +4,8 @@
 
 #if canImport(SwiftUI) && os(macOS)
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 struct WorkspacePresetPickerSheet: View {
 
@@ -270,12 +272,95 @@ struct WorkspacePresetPickerSheet: View {
 
     private var footer: some View {
         HStack {
+            // v17.137 · 导出/导入用户预设（备份 / 分享 / 跨机迁移）
+            Button {
+                exportUserPresets()
+            } label: {
+                Label("导出全部 (\(shellVM.userPresets.count))", systemImage: "square.and.arrow.up")
+                    .font(.caption)
+            }
+            .disabled(shellVM.userPresets.isEmpty)
+            .tooltip("导出全部用户预设为 .json 文件 · 备份 / 分享 / 跨机器迁移")
+
+            Button {
+                importUserPresets()
+            } label: {
+                Label("导入...", systemImage: "square.and.arrow.down")
+                    .font(.caption)
+            }
+            .tooltip("从 .json 文件导入用户预设 · 默认追加 · 可选全量替换")
+
             Spacer()
             Button("关闭") { isPresented = false }
                 .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - v17.137 · 导出 / 导入 用户预设
+
+    private func exportUserPresets() {
+        guard let data = shellVM.exportUserPresets() else {
+            Toast.warn("导出失败", "无法序列化预设")
+            return
+        }
+        let panel = NSSavePanel()
+        panel.title = "导出用户 Workspace 预设"
+        panel.allowedContentTypes = [.json]
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyyMMdd"
+        panel.nameFieldStringValue = "workspace_presets_\(fmt.string(from: Date())).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try data.write(to: url)
+            Toast.info("已导出", "\(shellVM.userPresets.count) 个预设 → \(url.lastPathComponent)")
+        } catch {
+            Toast.warn("导出失败", error.localizedDescription)
+        }
+    }
+
+    private func importUserPresets() {
+        let panel = NSOpenPanel()
+        panel.title = "导入用户 Workspace 预设"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) else { return }
+        // 已有预设时询问追加 / 替换 · 取消则中止
+        guard let mode = chooseImportMode(currentCount: shellVM.userPresets.count) else { return }
+        do {
+            let result = try shellVM.importUserPresets(data: data, mode: mode)
+            Toast.info(
+                mode == .replaceAll ? "已替换为导入数据" : "已追加导入",
+                "导入 \(result.importedCount) 个 · 当前共 \(result.totalAfterImport) 个"
+            )
+        } catch WorkspacePresetImportError.fileEmpty {
+            Toast.warn("导入失败", "文件为空")
+        } catch WorkspacePresetImportError.invalidJSON(let msg) {
+            Toast.warn("导入失败", "JSON 格式不识别：\(msg)")
+        } catch WorkspacePresetImportError.unsupportedSchemaVersion(let v) {
+            Toast.warn("导入失败", "版本不支持（文件 v\(v) · 本机支持 ≤ v\(UserWorkspacePresetTransfer.currentSchemaVersion) · 升级应用后重试）")
+        } catch {
+            Toast.warn("导入失败", error.localizedDescription)
+        }
+    }
+
+    /// 已有预设时弹 NSAlert 让用户选 append / replaceAll · 无预设直接 replaceAll（语义一致）· 取消返回 nil
+    private func chooseImportMode(currentCount: Int) -> WorkspacePresetImportMode? {
+        guard currentCount > 0 else { return .replaceAll }
+        let alert = NSAlert()
+        alert.messageText = "如何导入？"
+        alert.informativeText = "当前已有 \(currentCount) 个用户预设。"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "追加到现有")
+        alert.addButton(withTitle: "全量替换")
+        alert.addButton(withTitle: "取消")
+        let resp = alert.runModal()
+        switch resp {
+        case .alertFirstButtonReturn:  return .append
+        case .alertSecondButtonReturn: return .replaceAll
+        default:                        return nil   // 取消
+        }
     }
 
     // v17.85 · 重命名 sheet（双击 userCard 触发）

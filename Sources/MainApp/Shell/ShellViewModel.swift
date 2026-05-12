@@ -277,6 +277,44 @@ public final class ShellViewModel: ObservableObject {
         persistUserPresets()
     }
 
+    /// v17.137 · 导出当前所有用户预设为 Data（带 schema version 容器 · 写文件用）
+    public func exportUserPresets() -> Data? {
+        let transfer = UserWorkspacePresetTransfer(presets: userPresets)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try? encoder.encode(transfer)
+    }
+
+    /// v17.137 · 从 Data 导入用户预设 · append 追加 / replaceAll 覆盖 · 新生成 UUID 防 id 碰撞
+    /// - Returns: 导入结果（成败 + 数量） · throws 时 UI 显示具体错误
+    @discardableResult
+    public func importUserPresets(data: Data, mode: WorkspacePresetImportMode) throws -> WorkspacePresetImportResult {
+        guard !data.isEmpty else { throw WorkspacePresetImportError.fileEmpty }
+        let transfer: UserWorkspacePresetTransfer
+        do {
+            transfer = try JSONDecoder().decode(UserWorkspacePresetTransfer.self, from: data)
+        } catch {
+            throw WorkspacePresetImportError.invalidJSON(error.localizedDescription)
+        }
+        guard transfer.schemaVersion <= UserWorkspacePresetTransfer.currentSchemaVersion else {
+            throw WorkspacePresetImportError.unsupportedSchemaVersion(transfer.schemaVersion)
+        }
+        // 导入时全部重新生成 UUID 防与现有 / 文件内重复
+        let regenerated = transfer.presets.map { preset -> UserWorkspacePreset in
+            var copy = preset
+            copy.id = UUID()
+            return copy
+        }
+        switch mode {
+        case .append:
+            userPresets.append(contentsOf: regenerated)
+        case .replaceAll:
+            userPresets = regenerated
+        }
+        persistUserPresets()
+        return WorkspacePresetImportResult(importedCount: regenerated.count, totalAfterImport: userPresets.count)
+    }
+
     /// v17.85 · 用户预设拖拽排序（移到 targetIndex · 拍平 clamp）
     public func moveUserPreset(_ id: UUID, to targetIndex: Int) {
         guard let srcIdx = userPresets.firstIndex(where: { $0.id == id }) else { return }

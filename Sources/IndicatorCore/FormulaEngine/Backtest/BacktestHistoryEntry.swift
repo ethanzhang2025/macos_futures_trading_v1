@@ -18,6 +18,10 @@ public struct BacktestHistoryEntry: Identifiable, Codable, Sendable, Equatable {
     public let endingPnL: Decimal
     public let maxDrawdown: Decimal
     public let sharpe: Double
+    /// v17.45 D2 v2 · Sortino 比率（老 JSON 缺失 → decode 默认 0 · 升级零侵入）
+    public let sortino: Double
+    /// v17.45 D2 v2 · Calmar 比率（老 JSON 缺失 → decode 默认 0 · 升级零侵入）
+    public let calmar: Double
     public let winRate: Double
     public let expectancy: Decimal
     public let tradeCount: Int
@@ -25,6 +29,7 @@ public struct BacktestHistoryEntry: Identifiable, Codable, Sendable, Equatable {
     public init(id: UUID, createdAt: Date, signalLineName: String,
                 trajectoryRaw: String, barCount: Int, initialEquity: Decimal,
                 endingPnL: Decimal, maxDrawdown: Decimal, sharpe: Double,
+                sortino: Double = 0, calmar: Double = 0,
                 winRate: Double, expectancy: Decimal, tradeCount: Int) {
         self.id = id
         self.createdAt = createdAt
@@ -35,9 +40,30 @@ public struct BacktestHistoryEntry: Identifiable, Codable, Sendable, Equatable {
         self.endingPnL = endingPnL
         self.maxDrawdown = maxDrawdown
         self.sharpe = sharpe
+        self.sortino = sortino
+        self.calmar = calmar
         self.winRate = winRate
         self.expectancy = expectancy
         self.tradeCount = tradeCount
+    }
+
+    /// 兼容老 JSON · sortino/calmar 缺失时回退 0（trader v17.39-44 期间保存的历史）
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        signalLineName = try c.decode(String.self, forKey: .signalLineName)
+        trajectoryRaw = try c.decode(String.self, forKey: .trajectoryRaw)
+        barCount = try c.decode(Int.self, forKey: .barCount)
+        initialEquity = try c.decode(Decimal.self, forKey: .initialEquity)
+        endingPnL = try c.decode(Decimal.self, forKey: .endingPnL)
+        maxDrawdown = try c.decode(Decimal.self, forKey: .maxDrawdown)
+        sharpe = try c.decode(Double.self, forKey: .sharpe)
+        sortino = try c.decodeIfPresent(Double.self, forKey: .sortino) ?? 0
+        calmar = try c.decodeIfPresent(Double.self, forKey: .calmar) ?? 0
+        winRate = try c.decode(Double.self, forKey: .winRate)
+        expectancy = try c.decode(Decimal.self, forKey: .expectancy)
+        tradeCount = try c.decode(Int.self, forKey: .tradeCount)
     }
 
     /// 月报展示用的简短日期标签（MM-dd HH:mm · Asia/Shanghai）

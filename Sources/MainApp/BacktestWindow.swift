@@ -325,12 +325,16 @@ public struct BacktestWindow: View {
         let endingD = (r.endingPnL as NSDecimalNumber).doubleValue
         let ddD = (r.maxDrawdown as NSDecimalNumber).doubleValue
         let expD = (r.expectancy as NSDecimalNumber).doubleValue
-        return HStack(spacing: 16) {
+        return HStack(spacing: 14) {
             statBlock("末日 PnL", String(format: "%+.2f", endingD),
                      color: endingD >= 0 ? .green : .red)
             statBlock("最大回撤", String(format: "%.2f", ddD), color: .red)
             statBlock("Sharpe", String(format: "%.2f", r.sharpe),
                      color: r.sharpe >= 1 ? .green : .secondary)
+            statBlock("Sortino", String(format: "%.2f", r.sortino),
+                     color: r.sortino >= 1 ? .green : .secondary)
+            statBlock("Calmar", String(format: "%.2f", r.calmar),
+                     color: r.calmar >= 1 ? .green : .secondary)
             statBlock("胜率", String(format: "%.0f%%", r.winRate * 100),
                      color: r.winRate >= 0.5 ? .green : .secondary)
             statBlock("交易数", "\(r.trades.count)", color: .primary)
@@ -716,6 +720,8 @@ public struct BacktestWindow: View {
             endingPnL: r.endingPnL,
             maxDrawdown: r.maxDrawdown,
             sharpe: r.sharpe,
+            sortino: r.sortino,
+            calmar: r.calmar,
             winRate: r.winRate,
             expectancy: r.expectancy,
             tradeCount: r.trades.count

@@ -39,16 +39,18 @@ public enum BacktestMarkdownReport {
         let bestPnL = pnls.max() ?? 0
         let worstPnL = pnls.min() ?? 0
         let avgSharpe = entries.map { $0.sharpe }.reduce(0, +) / Double(count)
+        let avgSortino = entries.map { $0.sortino }.reduce(0, +) / Double(count)
+        let avgCalmar = entries.map { $0.calmar }.reduce(0, +) / Double(count)
         let avgWinRate = entries.map { $0.winRate }.reduce(0, +) / Double(count)
 
         md += "- 区间内保存次数：**\(count)**\n"
         md += "- 平均 endingPnL：**\(String(format: "%+.2f", avgPnL))**（最佳 \(String(format: "%+.2f", bestPnL)) · 最差 \(String(format: "%+.2f", worstPnL))）\n"
-        md += "- 平均 Sharpe：**\(String(format: "%.2f", avgSharpe))** · 平均胜率：**\(String(format: "%.0f%%", avgWinRate * 100))**\n\n"
+        md += "- 平均 Sharpe：**\(String(format: "%.2f", avgSharpe))** · Sortino：**\(String(format: "%.2f", avgSortino))** · Calmar：**\(String(format: "%.2f", avgCalmar))** · 胜率：**\(String(format: "%.0f%%", avgWinRate * 100))**\n\n"
 
         // 明细表（按时间倒序 · 截 rowLimit）
         md += "### 明细（最近 \(min(rowLimit, count)) 条）\n\n"
-        md += "| 时间 | 信号 | 标的轨迹 | bars | trades | endingPnL | maxDD | Sharpe | 胜率 | 期望/笔 |\n"
-        md += "|------|------|---------|------|--------|-----------|-------|--------|------|---------|\n"
+        md += "| 时间 | 信号 | 标的 | bars | trades | endingPnL | maxDD | Sharpe | Sortino | Calmar | 胜率 | 期望/笔 |\n"
+        md += "|------|------|------|------|--------|-----------|-------|--------|---------|--------|------|---------|\n"
         for e in entries.prefix(rowLimit) {
             let pnl = (e.endingPnL as NSDecimalNumber).doubleValue
             let dd = (e.maxDrawdown as NSDecimalNumber).doubleValue
@@ -61,6 +63,8 @@ public enum BacktestMarkdownReport {
             md += " | \(String(format: "%+.2f", pnl))"
             md += " | \(String(format: "%.2f", dd))"
             md += " | \(String(format: "%.2f", e.sharpe))"
+            md += " | \(String(format: "%.2f", e.sortino))"
+            md += " | \(String(format: "%.2f", e.calmar))"
             md += " | \(String(format: "%.0f%%", e.winRate * 100))"
             md += " | \(String(format: "%+.2f", exp)) |\n"
         }

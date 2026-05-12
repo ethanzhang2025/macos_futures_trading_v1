@@ -45,6 +45,10 @@ public struct BacktestResult: Sendable, Equatable {
     public let maxDrawdown: Decimal
     /// 夏普比率（按 bar 收益序列 · 无风险利率假定为 0 · 不年化 · 简单版）
     public let sharpe: Double
+    /// v17.45 D2 v2 · Sortino 比率（mean / 下行偏差 · 仅算负收益的 std · ≥ 0 时返 0）
+    public let sortino: Double
+    /// v17.45 D2 v2 · Calmar 比率（endingPnL / maxDrawdown · maxDD = 0 时返 0 避 NaN）
+    public let calmar: Double
     /// 胜率（盈利 trade / 总 trade · 无 trade → 0）
     public let winRate: Double
     /// 期望值（平均每 trade PnL · 无 trade → 0）
@@ -53,13 +57,16 @@ public struct BacktestResult: Sendable, Equatable {
 
     public init(trades: [BacktestTrade], equityCurve: [Decimal],
                 endingPnL: Decimal, maxDrawdown: Decimal,
-                sharpe: Double, winRate: Double, expectancy: Decimal,
+                sharpe: Double, sortino: Double = 0, calmar: Double = 0,
+                winRate: Double, expectancy: Decimal,
                 initialEquity: Decimal) {
         self.trades = trades
         self.equityCurve = equityCurve
         self.endingPnL = endingPnL
         self.maxDrawdown = maxDrawdown
         self.sharpe = sharpe
+        self.sortino = sortino
+        self.calmar = calmar
         self.winRate = winRate
         self.expectancy = expectancy
         self.initialEquity = initialEquity
@@ -156,6 +163,8 @@ public enum SimpleBacktestEngine {
             endingPnL: endingPnL,
             maxDrawdown: metrics.maxDD,
             sharpe: metrics.sharpe,
+            sortino: metrics.sortino,
+            calmar: metrics.calmar,
             winRate: metrics.winRate,
             expectancy: metrics.expectancy,
             initialEquity: initialEquity
@@ -167,18 +176,25 @@ public enum SimpleBacktestEngine {
     private struct Metrics {
         let maxDD: Decimal
         let sharpe: Double
+        let sortino: Double
+        let calmar: Double
         let winRate: Double
         let expectancy: Decimal
     }
 
     private static func computeMetrics(equityCurve: [Decimal], trades: [BacktestTrade], initialEquity: Decimal) -> Metrics {
         let maxDD = maxDrawdown(equityCurve: equityCurve)
-        let sharpe = barReturnsSharpe(equityCurve: equityCurve)
+        let returns = barReturns(equityCurve: equityCurve)
+        let sharpe = sharpeRatio(returns: returns)
+        let sortino = sortinoRatio(returns: returns)
+        let endingPnL = (equityCurve.last ?? initialEquity) - initialEquity
+        let calmar = calmarRatio(endingPnL: endingPnL, maxDD: maxDD)
         let wins = trades.filter { $0.isWin }.count
         let winRate = trades.isEmpty ? 0 : Double(wins) / Double(trades.count)
         let totalPnL = trades.reduce(Decimal(0)) { $0 + $1.pnl }
         let expectancy = trades.isEmpty ? Decimal(0) : totalPnL / Decimal(trades.count)
-        return Metrics(maxDD: maxDD, sharpe: sharpe, winRate: winRate, expectancy: expectancy)
+        return Metrics(maxDD: maxDD, sharpe: sharpe, sortino: sortino,
+                       calmar: calmar, winRate: winRate, expectancy: expectancy)
     }
 
     /// 最大回撤 = max(peak - current) · 不归一化
@@ -193,13 +209,18 @@ public enum SimpleBacktestEngine {
         return maxDD
     }
 
-    /// Sharpe（v1 简化）：每 bar 增量收益序列 · mean/std · 不年化 · 收益 = equity[i] - equity[i-1]
-    /// 标准差为 0 → 返回 0（避免 NaN）
-    private static func barReturnsSharpe(equityCurve: [Decimal]) -> Double {
-        guard equityCurve.count >= 2 else { return 0 }
-        let returns: [Double] = (1..<equityCurve.count).map { i in
+    /// 每 bar 增量收益序列（equity[i] - equity[i-1]）· 用 Double 避免 Decimal 算 std 复杂
+    /// equity 长度 < 2 → 空数组（调用方自处理）
+    private static func barReturns(equityCurve: [Decimal]) -> [Double] {
+        guard equityCurve.count >= 2 else { return [] }
+        return (1..<equityCurve.count).map { i in
             NSDecimalNumber(decimal: equityCurve[i] - equityCurve[i - 1]).doubleValue
         }
+    }
+
+    /// Sharpe = mean / std · 无风险利率假定 0 · 不年化 · std=0 返 0 避 NaN
+    private static func sharpeRatio(returns: [Double]) -> Double {
+        guard !returns.isEmpty else { return 0 }
         let n = Double(returns.count)
         let mean = returns.reduce(0, +) / n
         let variance = returns.reduce(0) { acc, r in acc + (r - mean) * (r - mean) } / n
@@ -208,10 +229,35 @@ public enum SimpleBacktestEngine {
         return mean / std
     }
 
+    /// v17.45 D2 v2 · Sortino = mean / 下行偏差（仅算负 returns 的 std）· 下行 std=0 返 0 避 NaN
+    /// 与 Sharpe 区别：分母仅惩罚负向波动（trader 更在意亏损起伏 · 上行波动不算"风险"）
+    private static func sortinoRatio(returns: [Double]) -> Double {
+        guard !returns.isEmpty else { return 0 }
+        let n = Double(returns.count)
+        let mean = returns.reduce(0, +) / n
+        let downside = returns.filter { $0 < 0 }
+        guard !downside.isEmpty else { return 0 }
+        let dN = Double(downside.count)
+        let downVariance = downside.reduce(0) { acc, r in acc + r * r } / dN
+        let downStd = downVariance.squareRoot()
+        guard downStd > 1e-12 else { return 0 }
+        return mean / downStd
+    }
+
+    /// v17.45 D2 v2 · Calmar = endingPnL / maxDrawdown · maxDD=0 返 0 避 NaN
+    /// 与 Sharpe/Sortino 区别：分母是最大回撤（极端尾部风险）· trader 看"赚多少 vs 最差几把"
+    private static func calmarRatio(endingPnL: Decimal, maxDD: Decimal) -> Double {
+        let pnlD = (endingPnL as NSDecimalNumber).doubleValue
+        let ddD = (maxDD as NSDecimalNumber).doubleValue
+        guard ddD > 1e-12 else { return 0 }
+        return pnlD / ddD
+    }
+
     private static func empty(initialEquity: Decimal) -> BacktestResult {
         BacktestResult(trades: [], equityCurve: [],
                         endingPnL: 0, maxDrawdown: 0,
-                        sharpe: 0, winRate: 0, expectancy: 0,
+                        sharpe: 0, sortino: 0, calmar: 0,
+                        winRate: 0, expectancy: 0,
                         initialEquity: initialEquity)
     }
 }

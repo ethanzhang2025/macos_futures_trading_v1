@@ -177,6 +177,8 @@ struct SubChartView: View {
     var onClearOverride: (() -> Void)? = nil
     /// v15.17 是否当前 slot 有 override（菜单项显示禁用与否的视觉提示）
     var hasOverride: Bool = false
+    /// v17.71 · 跨周期共振外部光标时间（同 group 兄弟 Pane 广播 · 副图也画浅蓝竖线 · 与主图 KLineCrosshairView 对齐）
+    var externalTime: Date? = nil
 
     // MARK: - 主题响应的 instance computed 颜色（v15.9 替换原 static 单一深色）
 
@@ -209,6 +211,19 @@ struct SubChartView: View {
             bgColor
             Canvas { ctx, size in drawChart(ctx, size: size) }
             hud
+            // v17.71 · 跨周期共振外部光标（接 ChartScene shellExternalCrosshair env · 副图与主图同步显示）
+            if let ext = externalTime {
+                GeometryReader { geom in
+                    if let x = externalBarX(time: ext, in: geom.size) {
+                        Path { p in
+                            p.move(to: CGPoint(x: x, y: 0))
+                            p.addLine(to: CGPoint(x: x, y: geom.size.height))
+                        }
+                        .stroke(Color.cyan.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                        .allowsHitTesting(false)
+                    }
+                }
+            }
         }
         .task(id: ComputeKey(barCount: bars.count, kind: kind, params: params, vpModeRaw: volumeProfileModeRaw)) {
             await compute()
@@ -235,6 +250,14 @@ struct SubChartView: View {
                 }
             }
         }
+    }
+
+    // MARK: - v17.71 · 外部光标 bar 定位（跨周期共振 · 与 KLineCrosshairView.externalBarX 同算法）
+
+    private func externalBarX(time: Date, in size: CGSize) -> CGFloat? {
+        guard !bars.isEmpty,
+              let idx = bars.lastIndex(where: { $0.openTime <= time }) else { return nil }
+        return ChartHitTester.xPosition(forBarIndex: idx, width: size.width, viewport: viewport)
     }
 
     /// 触发重算的复合 key（bars 增量 + 切副图 + 改参数都要重算）

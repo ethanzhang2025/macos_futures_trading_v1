@@ -2154,6 +2154,8 @@ struct ChartContentView: View {
 
     @Environment(\.openWindow) private var openWindow
     @Environment(\.analytics) private var analytics
+    /// v17.71 · 跨周期共振外部光标（ChartScene 透传 · 副图 SubChartView 渲染浅蓝竖线）
+    @Environment(\.shellExternalCrosshair) private var shellExternalCrosshair
 
     let renderer: MetalKLineRenderer
     let bars: [KLine]
@@ -2388,7 +2390,8 @@ struct ChartContentView: View {
                                 onEditParams: { onEditSubSlot(idx) },
                                 chartTheme: chartTheme,
                                 onClearOverride: { onClearSubSlot(idx) },
-                                hasOverride: subParamsOverrides[idx] != nil
+                                hasOverride: subParamsOverrides[idx] != nil,
+                                externalTime: shellExternalCrosshair   // v17.71 · 副图跨周期共振 · 与主图 KLineCrosshairView 同步
                             )
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             chartTheme.background

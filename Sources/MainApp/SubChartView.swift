@@ -198,6 +198,11 @@ struct SubChartView: View {
     @State private var profileBins: [VolumeProfile.Bin] = []
     /// v17.30 B2 · Value Area（POC + VAH + VAL · 70% 成交量带）
     @State private var profileValueArea: VolumeProfile.ValueArea?
+    /// v17.63 · Volume Profile 模式（Full / Visible / Session / Fixed · TradingView 对齐）
+    @AppStorage("volumeProfile.mode.v1") private var volumeProfileModeRaw: String = VolumeProfileMode.fullRange.rawValue
+    private var volumeProfileMode: VolumeProfileMode {
+        VolumeProfileMode(rawValue: volumeProfileModeRaw) ?? .fullRange
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -205,7 +210,7 @@ struct SubChartView: View {
             Canvas { ctx, size in drawChart(ctx, size: size) }
             hud
         }
-        .task(id: ComputeKey(barCount: bars.count, kind: kind, params: params)) {
+        .task(id: ComputeKey(barCount: bars.count, kind: kind, params: params, vpModeRaw: volumeProfileModeRaw)) {
             await compute()
         }
         .contextMenu {
@@ -215,14 +220,30 @@ struct SubChartView: View {
             if hasOverride, let onClear = onClearOverride {
                 Button("恢复全局参数（清除本副图 override）") { onClear() }
             }
+            // v17.63 · Volume Profile 模式切换（仅 .volumeProfile 副图显示）
+            if kind == .volumeProfile {
+                Divider()
+                Menu("VP 模式：\(volumeProfileMode.displayName)") {
+                    ForEach(VolumeProfileMode.allCases, id: \.self) { m in
+                        Button {
+                            volumeProfileModeRaw = m.rawValue
+                        } label: {
+                            Label("\(volumeProfileMode == m ? "✓ " : "  ")\(m.displayName)",
+                                  systemImage: volumeProfileMode == m ? "checkmark" : "")
+                        }
+                    }
+                }
+            }
         }
     }
 
     /// 触发重算的复合 key（bars 增量 + 切副图 + 改参数都要重算）
+    /// v17.63 · 加 vpModeRaw 让 VP 模式切换触发重算
     private struct ComputeKey: Equatable {
         let barCount: Int
         let kind: SubIndicatorKind
         let params: IndicatorParamsBook
+        let vpModeRaw: String
     }
 
     // MARK: - 计算（按 kind 分发 · 后台 detached 跑 · 末尾一次性桥接 Decimal → Double）
@@ -328,8 +349,25 @@ struct SubChartView: View {
             seriesB = []
             seriesC = []
         case .volumeProfile:
-            // 全量 bars 计算 VP（trader 视角"永久价格分布" · 不随视口变化）· bin=24
-            profileBins = VolumeProfile.compute(bars: bars, binCount: 24)
+            // v17.63 · 按模式切分 bars（Full/Visible/Session/Fixed · TradingView 对齐）
+            // 注：visibleRange/fixedRange 模式 v1 用比例近似（visible=后半 · session=后 ¼ · fixed=后 ⅓）
+            //     v2 接 viewport / Fixed Range 双锚 sheet 时再走真实 startIndex/endIndex
+            let mode = volumeProfileMode
+            let total = bars.count
+            switch mode {
+            case .fullRange:
+                profileBins = VolumeProfile.compute(bars: bars, binCount: 24)
+            case .visibleRange:
+                let s = max(0, total / 2)
+                let vr: (Int, Int) = (s, total)
+                profileBins = VolumeProfile.compute(bars: bars, mode: .visibleRange, visibleRange: vr, binCount: 24)
+            case .session:
+                profileBins = VolumeProfile.compute(bars: bars, mode: .session, sessionBarCount: max(1, total / 4), binCount: 24)
+            case .fixedRange:
+                let s = max(0, total * 2 / 3)
+                let fr: (Int, Int) = (s, total)
+                profileBins = VolumeProfile.compute(bars: bars, mode: .fixedRange, fixedRange: fr, binCount: 24)
+            }
             profileValueArea = VolumeProfile.valueArea(bins: profileBins, percent: 0.7)
             seriesA = profileBins.map { Optional($0.volume) }
             seriesB = []

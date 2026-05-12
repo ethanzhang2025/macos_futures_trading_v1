@@ -320,6 +320,52 @@ public final class ShellViewModel: ObservableObject {
         UserDefaults.standard.set(list, forKey: "shell.v1.recentPaletteCommands")
     }
 
+    // MARK: - v17.62 · Workspace 导入 / 导出 JSON（v17.0 设计 §13.2 v17.5）
+
+    /// 导出指定 Workspace 为 JSON Data（不含 id · 导入端重生 UUID 防冲突）
+    public func exportWorkspace(_ id: UUID) -> Data? {
+        guard let ws = workspaces.first(where: { $0.id == id }) else { return nil }
+        // 序列化时清掉 id 让导入端重生（防主键冲突 + panes 嵌套 id 同步重生）
+        var copy = ws
+        copy.id = UUID()  // 占位 · 导入端会再换
+        copy.panes = copy.panes.map { p in
+            var np = p
+            np.id = UUID()
+            return np
+        }
+        copy.createdAt = ws.createdAt  // 保留原创建时间作为 metadata
+        copy.lastUsedAt = Date()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return try? encoder.encode(copy)
+    }
+
+    /// 从 JSON Data 导入 Workspace（新 UUID · 追加到末尾 · 自动激活）
+    @discardableResult
+    public func importWorkspace(from data: Data) -> Bool {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard var ws = try? decoder.decode(Workspace.self, from: data) else { return false }
+        ws.id = UUID()
+        ws.panes = ws.panes.map { p in
+            var np = p
+            np.id = UUID()
+            // 清 group color 避免与现有 group 互相污染
+            np.groupColor = nil
+            return np
+        }
+        ws.lastUsedAt = Date()
+        if !ws.name.contains("(导入)") {
+            ws.name = "\(ws.name) (导入)"
+        }
+        workspaces.append(ws)
+        activeWorkspaceID = ws.id
+        primaryTab = ws.primaryTab
+        persistWorkspaces()
+        return true
+    }
+
     /// 复制 Workspace（panes + layout 全复制 · name = "原名 副本"·新 UUID · 紧跟原 ws 之后插入并激活）
     public func duplicateWorkspace(_ id: UUID) {
         guard let idx = workspaces.firstIndex(where: { $0.id == id }) else { return }

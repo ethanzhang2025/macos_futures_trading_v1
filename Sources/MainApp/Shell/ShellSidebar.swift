@@ -16,19 +16,32 @@ struct ShellSidebar: View {
     /// v17.57 · F6 跳焦自选 高亮反馈（1.5s 自动消失）
     @State private var watchlistHighlight: Bool = false
     @State private var watchlistHighlightTask: Task<Void, Never>?
+    /// v17.64 · sidebar 5 section 自定义顺序/显隐
+    @State private var sidebarLayout: SidebarLayoutSettings = SidebarLayoutStore.load()
+    @State private var showSidebarLayoutSheet: Bool = false
 
     var body: some View {
         List {
-            watchlistSection
-            sectorSection
-            positionSection
-            anomalySection
-            trainingSection
+            ForEach(sidebarLayout.visibleSections, id: \.self) { sec in
+                section(for: sec)
+            }
         }
         .listStyle(.sidebar)
+        .contextMenu {
+            Button("📋 自定义 section…") { showSidebarLayoutSheet = true }
+        }
+        .sheet(isPresented: $showSidebarLayoutSheet) {
+            ShellSidebarLayoutSheet(
+                isPresented: $showSidebarLayoutSheet,
+                onApply: { sidebarLayout = $0 }
+            )
+        }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             // v17.21 · TradingWindow 改持仓时 Sidebar 实时跟（与 chartTheme/HUD 同模式）
             if let snap = SimulatedTradingStore.load() { tradingSnapshot = snap }
+            // v17.64 · 跨窗口 sidebar 设置同步
+            let layout = SidebarLayoutStore.load()
+            if layout != sidebarLayout { sidebarLayout = layout }
         }
         // v17.57 · F6 跳焦反馈：自选 section 临时高亮 1.5s
         .onChange(of: shellVM.sidebarFocusTrigger) { _ in
@@ -39,6 +52,17 @@ struct ShellSidebar: View {
                 guard !Task.isCancelled else { return }
                 await MainActor.run { watchlistHighlight = false }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func section(for sec: SidebarSection) -> some View {
+        switch sec {
+        case .watchlist: watchlistSection
+        case .sector:    sectorSection
+        case .position:  positionSection
+        case .anomaly:   anomalySection
+        case .training:  trainingSection
         }
     }
 

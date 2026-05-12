@@ -4,6 +4,8 @@
 
 #if canImport(SwiftUI) && os(macOS)
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 struct WorkspaceTabBar: View {
     @EnvironmentObject var shellVM: ShellViewModel
@@ -115,13 +117,51 @@ struct WorkspaceTabBar: View {
             Button("复制 Workspace") {
                 shellVM.duplicateWorkspace(ws.id)
             }
+            Divider()
+            // v17.62 · Workspace 导入 / 导出 JSON（trader 分享布局）
+            Button("📤 导出为 JSON…") {
+                exportWorkspace(ws)
+            }
+            Button("📥 从 JSON 导入…") {
+                importWorkspace()
+            }
             if visibleWorkspaces.count > 1 {
+                Divider()
                 Button("关闭") {
                     shellVM.closeWorkspace(ws.id)
                 }
             }
             Divider()
             Text("Pane 布局：\(ws.paneLayout.emoji) \(ws.paneLayout.displayName) · \(ws.panes.count) Pane")
+        }
+    }
+
+    // MARK: - v17.62 · 导入 / 导出（NSSavePanel / NSOpenPanel · macOS 原生）
+
+    private func exportWorkspace(_ ws: Workspace) {
+        guard let data = shellVM.exportWorkspace(ws.id) else { return }
+        let savePanel = NSSavePanel()
+        savePanel.nameFieldStringValue = "\(ws.name).workspace.json"
+        savePanel.allowedContentTypes = [.json]
+        savePanel.canCreateDirectories = true
+        savePanel.title = "导出 Workspace"
+        savePanel.message = "选择保存位置（其他 trader 可通过\"导入\"加载此布局）"
+        if savePanel.runModal() == .OK, let url = savePanel.url {
+            try? data.write(to: url)
+        }
+    }
+
+    private func importWorkspace() {
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = [.json]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = false
+        openPanel.title = "导入 Workspace"
+        openPanel.message = "选择 .workspace.json 文件（导入后 group 联动自动重置 · 防与现有冲突）"
+        if openPanel.runModal() == .OK, let url = openPanel.url,
+           let data = try? Data(contentsOf: url) {
+            _ = shellVM.importWorkspace(from: data)
         }
     }
 

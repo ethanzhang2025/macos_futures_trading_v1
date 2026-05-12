@@ -13,6 +13,29 @@
 
 import Foundation
 
+// MARK: - v17.63 · VP 模式（TradingView Visible Range / Session / Fixed Range）
+
+/// Volume Profile 计算范围模式
+public enum VolumeProfileMode: String, Sendable, Codable, CaseIterable {
+    /// 全量 bars（默认 · 长期价格分布 · 与 v17.31 一致）
+    case fullRange
+    /// Visible Range · 仅当前视口可见 bars（trader 局部分析）
+    case visibleRange
+    /// Session · 最近 1 个交易日 bars（近似按周期估算 bar 数）
+    case session
+    /// Fixed Range · 用户指定 bar 范围（startIndex / endIndex）
+    case fixedRange
+
+    public var displayName: String {
+        switch self {
+        case .fullRange:    return "全量 Full"
+        case .visibleRange: return "可见 Visible"
+        case .session:      return "本交易日 Session"
+        case .fixedRange:   return "区间 Fixed"
+        }
+    }
+}
+
 public enum VolumeProfile {
 
     public struct Bin: Sendable, Equatable {
@@ -28,6 +51,49 @@ public enum VolumeProfile {
         public var priceCenter: Decimal {
             (priceLow + priceHigh) / Decimal(2)
         }
+    }
+
+    /// v17.63 · 按模式切分 bars 后计算 VP（TradingView 4 模式对齐）
+    /// - Parameters:
+    ///   - bars: 全量 bars（数据源 · 由调用方提供）
+    ///   - mode: 模式（fullRange / visibleRange / session / fixedRange）
+    ///   - visibleRange: visibleRange 模式需要的可见区间（startIndex, endIndex 闭区间 · half-open 风格）
+    ///   - sessionBarCount: session 模式取最后 N 根 bars（默认 240 · 1m × 240 ≈ 4h 交易日近似）
+    ///   - fixedRange: fixedRange 模式的 (startIndex, endIndex) · 与 visibleRange 同义
+    ///   - binCount: 价格分桶数（默认 24）
+    public static func compute(
+        bars: [KLine],
+        mode: VolumeProfileMode,
+        visibleRange: (start: Int, end: Int)? = nil,
+        sessionBarCount: Int = 240,
+        fixedRange: (start: Int, end: Int)? = nil,
+        binCount: Int = 24
+    ) -> [Bin] {
+        let slice: [KLine]
+        switch mode {
+        case .fullRange:
+            slice = bars
+        case .visibleRange:
+            if let r = visibleRange {
+                let s = max(0, min(bars.count, r.start))
+                let e = max(s, min(bars.count, r.end))
+                slice = Array(bars[s..<e])
+            } else {
+                slice = bars
+            }
+        case .session:
+            let n = min(bars.count, max(1, sessionBarCount))
+            slice = Array(bars.suffix(n))
+        case .fixedRange:
+            if let r = fixedRange {
+                let s = max(0, min(bars.count, r.start))
+                let e = max(s, min(bars.count, r.end))
+                slice = Array(bars[s..<e])
+            } else {
+                slice = bars
+            }
+        }
+        return compute(bars: slice, binCount: binCount)
     }
 
     /// 计算 Volume Profile

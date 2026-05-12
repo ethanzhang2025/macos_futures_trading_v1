@@ -2249,11 +2249,11 @@ struct ChartContentView: View {
     /// v13.22 viewport 持久化 key（按 instrumentID + period 隔离）· onChange viewport 写 UserDefaults
     let viewportSaveKey: String
     /// v13.22 viewport save 节流 · 1s 间隔最多 1 次（避免 panGesture 60Hz 写盘）
-    @State var lastViewportSaveTime: Date = .distantPast
+    @State private var lastViewportSaveTime: Date = .distantPast
     /// v13.3 hover 跟踪 · 双点画线第二点 hover 预览（虚线）
-    @State var hoverDataPoint: DrawingPoint?
+    @State private var hoverDataPoint: DrawingPoint?
     /// 主图实时尺寸（GeometryReader 抓取 · 供右键"在此价位创建预警"反算价格）
-    @State var chartMainAreaSize: CGSize = .zero
+    @State private var chartMainAreaSize: CGSize = .zero
     /// v15.20 batch63 · 测距固定终点（双锚点 · ⌘⇧M 第二次按下时固定）
     @State private var measureFinal: DrawingPoint?
 
@@ -2268,7 +2268,7 @@ struct ChartContentView: View {
     @State private var toggleNoticeTask: Task<Void, Never>?
 
     /// v15.19 batch30 · 快捷测距锚点（⌘⇧M 设 · 再按取消）· 配合 hoverDataPoint 实时显示距离
-    @State var measureAnchor: DrawingPoint?
+    @State private var measureAnchor: DrawingPoint?
 
     /// v17.80 · 副图本地 hover bar 时间（黄白虚线 · 与主图 KLineCrosshairView 本地光标风格一致）
     /// 跨 Pane 共振时间走 SubChartView.externalTime（浅蓝虚线 · 视觉区分）
@@ -2277,13 +2277,13 @@ struct ChartContentView: View {
         return bars[dp.barIndex].openTime
     }
     /// v15.19 batch51 · 副图显隐切换（⌘. · 默认显示）· trader 专注主图分析时清屏
-    @State var showSubCharts: Bool = true
+    @State private var showSubCharts: Bool = true
     /// v15.19 batch52 · 画线 overlay 显隐切换（⌘\ · 默认显示）· trader 看裸 K 线时隐藏所有画线
-    @State var showDrawings: Bool = true
+    @State private var showDrawings: Bool = true
     /// v13.20 副图区总高度 · 用户拖分割条调整 · 范围 80~480pt（默认 160 = subChartHeight 单副图）
     /// v15.16 hotfix #13：init 时同步 load · 防 ChartContentView 切合约重建时 onAppear 异步加载导致 160→保存值闪烁
     /// v17.114 · 用户未拖动过时 · 默认高度跟 SubChartDefaultRatio 偏好（slim/normal/tall ≈ 107/160/213pt）
-    @State var subChartTotalHeight: CGFloat = {
+    @State private var subChartTotalHeight: CGFloat = {
         let h = UserDefaults.standard.double(forKey: ChartContentView.subChartHeightKey)
         if h >= SubChart.minHeight && h <= SubChart.maxHeight {
             return CGFloat(h)
@@ -2294,22 +2294,22 @@ struct ChartContentView: View {
         return max(SubChart.minHeight, min(SubChart.maxHeight, scaled))
     }()
     /// v13.20 拖分割条时的起始高度 · onChanged 累加 translation 算新高度
-    @State var dragStartSubHeight: CGFloat?
+    @State private var dragStartSubHeight: CGFloat?
     /// v17.118 P1-2 · 用户是否拖过分割条 · false 时副图默认高跟 SubChartDefaultRatio 偏好实时同步；true 后走 subChartHeight.v1 持久化
     @State private var hasUserDraggedSubHeight: Bool = (UserDefaults.standard.object(forKey: ChartContentView.subChartHeightKey) != nil)
     /// v13.10 anchor 拖动目标 · onChanged 第一次落 · 释放清空
-    @State var anchorDragTarget: AnchorDragTarget?
+    @State private var anchorDragTarget: AnchorDragTarget?
     /// v13.10 拖动状态 · 距离 ≥ 4 像素 + anchor 命中后置 true · 释放时 false 视为 tap
-    @State var isDraggingAnchor: Bool = false
+    @State private var isDraggingAnchor: Bool = false
     /// v13.30 HUD 显隐切换（⌘⇧H · 截图前暂时隐藏可让画面更干净）· 默认显示
-    @State var showHUD: Bool = true
+    @State private var showHUD: Bool = true
     /// v13.34 HUD 显示位置（4 角切换 · @Binding 来自 ChartScene · UserDefaults 持久化）
     @Binding var hudCorner: HUDCorner
-    @State var viewport: RenderViewport
-    @State var lastFrameMs: Double = 0
-    @State var dragStartViewport: RenderViewport?
-    @State var zoomStartViewport: RenderViewport?
-    @State var inertiaTask: Task<Void, Never>?
+    @State private var viewport: RenderViewport
+    @State private var lastFrameMs: Double = 0
+    @State private var dragStartViewport: RenderViewport?
+    @State private var zoomStartViewport: RenderViewport?
+    @State private var inertiaTask: Task<Void, Never>?
 
     /// v13.10 拖动目标 · 唯一定位某 drawing 的某 anchor（startPoint vs endPoint）
     /// v13.33 加 extraIndex 支持 extraPoints[i] 拖动（多边形 N 顶点 / Pitchfork C 点）
@@ -2879,7 +2879,7 @@ struct ChartContentView: View {
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(color)
                     .padding(.horizontal, 3).padding(.vertical, 1)
-                    .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.85))
+                    .background(chartTheme.hudBackground(mode: hudOpacityMode))
                     .cornerRadius(2)
                     .position(x: labelX, y: y)
             }
@@ -2912,7 +2912,7 @@ struct ChartContentView: View {
                 .font(.system(size: 10, design: .monospaced))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
-                .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.85))
+                .background(chartTheme.hudBackground(mode: hudOpacityMode))
                 .cornerRadius(4)
                 .padding(.top, 60)    // 偏移 priceTopBar 下方
                 .padding(.trailing, 12)
@@ -3162,7 +3162,7 @@ struct ChartContentView: View {
             .foregroundColor(color)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.92))
+            .background(chartTheme.hudBackground(mode: hudOpacityMode))
             .cornerRadius(3)
             .position(position)
     }
@@ -3224,7 +3224,7 @@ struct ChartContentView: View {
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundColor(swingColor)
                     .padding(.horizontal, 2)
-                    .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.85))
+                    .background(chartTheme.hudBackground(mode: hudOpacityMode))
                     .cornerRadius(2)
                     .position(x: x, y: isHigh ? markerY - 12 : markerY + 12)
                 // v15.21 batch130 · 距上次同向 swing 的 bar 数 + 价差%（趋势强度可视化）
@@ -3239,7 +3239,7 @@ struct ChartContentView: View {
                         .font(.system(size: 8, design: .monospaced))
                         .foregroundColor(swingColor.opacity(0.7))
                         .padding(.horizontal, 2)
-                        .background(chartTheme.hudBackground(mode: hudOpacityMode).opacity(0.7))
+                        .background(chartTheme.hudBackground(mode: hudOpacityMode))
                         .cornerRadius(2)
                         .position(x: x, y: isHigh ? markerY - 24 : markerY + 24)
                 }

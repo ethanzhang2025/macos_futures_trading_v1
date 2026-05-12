@@ -76,6 +76,8 @@ struct WorkspaceTabBar: View {
                     .font(.system(size: 12,
                                   weight: isActive ? .semibold : .regular))
                     .foregroundColor(isActive ? .primary : .secondary)
+                // v17.93 · paneCount badge（一眼看 workspace 有几个 pane）
+                paneBadge(for: ws, isActive: isActive)
                 if visibleWorkspaces.count > 1 {
                     Button {
                         shellVM.closeWorkspace(ws.id)
@@ -217,6 +219,27 @@ struct WorkspaceTabBar: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("新建 workspace · 空白（⌘T）或从预设")
+    }
+
+    /// v17.93 · paneCount badge · paneLayout.emoji + paneCount
+    @ViewBuilder
+    private func paneBadge(for ws: Workspace, isActive: Bool) -> some View {
+        HStack(spacing: 2) {
+            Text(ws.paneLayout.emoji)
+            Text("\(ws.panes.count)")
+                .font(.system(size: 9, design: .monospaced))
+        }
+        .font(.system(size: 9))
+        .foregroundColor(isActive ? .secondary : .secondary.opacity(0.6))
+        .padding(.horizontal, 3)
+        .padding(.vertical, 1)
+        .background(
+            isActive
+                ? Color.secondary.opacity(0.15)
+                : Color.secondary.opacity(0.08)
+        )
+        .cornerRadius(2)
+        .help("\(ws.paneLayout.displayName) · \(ws.panes.count) Pane")
     }
 
     private func commitRename() {

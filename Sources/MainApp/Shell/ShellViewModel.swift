@@ -459,20 +459,6 @@ public final class ShellViewModel: ObservableObject {
         persistWorkspaces()
     }
 
-    /// v17.68 · 复制当前 active Workspace（命令面板"复制 Workspace"）· name 加"副本"后缀
-    public func duplicateActiveWorkspace() {
-        guard let ws = activeWorkspace else { return }
-        let copy = Workspace(
-            name: "\(ws.name) 副本",
-            primaryTab: ws.primaryTab,
-            paneLayout: ws.paneLayout,
-            panes: ws.panes.map { PaneConfig(kind: $0.kind, symbol: $0.symbol, periodRaw: $0.periodRaw, groupColor: $0.groupColor, extraJSON: $0.extraJSON) }
-        )
-        workspaces.append(copy)
-        activeWorkspaceID = copy.id
-        persistWorkspaces()
-    }
-
     /// v17.68 · 切换 Inspector 显隐（命令面板 + ⌘⌥I 快捷键 二入口）
     public func toggleInspector() {
         layout.inspectorVisible.toggle()

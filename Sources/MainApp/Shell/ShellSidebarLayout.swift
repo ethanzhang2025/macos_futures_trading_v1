@@ -21,26 +21,29 @@ public enum SidebarSection: String, CaseIterable, Codable, Identifiable, Sendabl
     case position
     case anomaly
     case training
+    case alertHistory   // v17.70 · 预警历史 mini section（接 SQLiteAlertHistoryStore）
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .watchlist: return "自选"
-        case .sector:    return "板块"
-        case .position:  return "持仓"
-        case .anomaly:   return "异动"
-        case .training:  return "训练"
+        case .watchlist:    return "自选"
+        case .sector:       return "板块"
+        case .position:     return "持仓"
+        case .anomaly:      return "异动"
+        case .training:     return "训练"
+        case .alertHistory: return "预警"
         }
     }
 
     public var emoji: String {
         switch self {
-        case .watchlist: return "⭐"
-        case .sector:    return "🗂"
-        case .position:  return "💼"
-        case .anomaly:   return "⚠️"
-        case .training:  return "🎯"
+        case .watchlist:    return "⭐"
+        case .sector:       return "🗂"
+        case .position:     return "💼"
+        case .anomaly:      return "⚠️"
+        case .training:     return "🎯"
+        case .alertHistory: return "🔔"
         }
     }
 }

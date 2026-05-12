@@ -205,7 +205,7 @@ struct ShellCommandPalette: View {
                 subtitle: "\(ws.name) → \(ws.name) 副本",
                 emoji: "📑",
                 category: .action,
-                action: { shellVM.duplicateActiveWorkspace() }
+                action: { shellVM.duplicateWorkspace(ws.id) }
             ))
             if shellVM.workspaces.count > 1 {
                 list.append(PaletteCommand(

@@ -6,9 +6,12 @@
 import SwiftUI
 import TradingCore
 import Shared
+import AlertCore
 
 struct ShellSidebar: View {
     @EnvironmentObject var shellVM: ShellViewModel
+    /// v17.70 · 预警历史 store（mini section · 5 条最近触发）
+    @Environment(\.storeManager) private var storeManager
     /// v17.3 · 训练 log 真实数据（启动时一次性加载 · 后续重启刷新）
     @State private var trainingLog: TrainingSessionLog = TrainingLogPersistence.load()
     /// v17.21 · 模拟交易 snapshot 真实数据（持仓 + 现价 · UserDefaults didChange 跟随）
@@ -19,6 +22,8 @@ struct ShellSidebar: View {
     /// v17.64 · sidebar 5 section 自定义顺序/显隐
     @State private var sidebarLayout: SidebarLayoutSettings = SidebarLayoutStore.load()
     @State private var showSidebarLayoutSheet: Bool = false
+    /// v17.70 · 预警历史最近 5 条（启动 + UserDefaults didChange 刷新）
+    @State private var recentAlerts: [AlertHistoryEntry] = []
 
     var body: some View {
         List {
@@ -53,16 +58,21 @@ struct ShellSidebar: View {
                 await MainActor.run { watchlistHighlight = false }
             }
         }
+        // v17.70 · 预警 mini section 启动加载（用户切回 Shell 时自然刷新）
+        .task {
+            await refreshAlertsAsync()
+        }
     }
 
     @ViewBuilder
     private func section(for sec: SidebarSection) -> some View {
         switch sec {
-        case .watchlist: watchlistSection
-        case .sector:    sectorSection
-        case .position:  positionSection
-        case .anomaly:   anomalySection
-        case .training:  trainingSection
+        case .watchlist:    watchlistSection
+        case .sector:       sectorSection
+        case .position:     positionSection
+        case .anomaly:      anomalySection
+        case .training:     trainingSection
+        case .alertHistory: alertHistorySection
         }
     }
 
@@ -179,6 +189,58 @@ struct ShellSidebar: View {
                 }
             }
         }
+    }
+
+    // MARK: - 预警历史（v17.70 · 接 SQLiteAlertHistoryStore 真实数据 · 5 条最近）
+
+    private var alertHistorySection: some View {
+        Section {
+            if recentAlerts.isEmpty {
+                Text("尚无触发记录").font(.caption).foregroundColor(.secondary)
+            } else {
+                ForEach(recentAlerts) { entry in
+                    HStack(spacing: 6) {
+                        Text("🔔").font(.system(size: 10))
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 4) {
+                                Text(entry.instrumentID)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.accentColor)
+                                Text(entry.alertName)
+                                    .font(.system(size: 11))
+                                    .lineLimit(1)
+                            }
+                            Text(Self.alertTimeFormatter.string(from: entry.triggeredAt))
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Text(NSDecimalNumber(decimal: entry.triggerPrice).stringValue)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 1)
+                    .help(entry.message)
+                }
+            }
+        } header: {
+            Label("预警 (\(recentAlerts.count))", systemImage: "bell.fill")
+                .foregroundColor(.red)
+        }
+    }
+
+    private static let alertTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MM-dd HH:mm"
+        f.locale = Locale(identifier: "zh_CN")
+        return f
+    }()
+
+    private func refreshAlertsAsync() async {
+        guard let store = storeManager?.alertHistory,
+              let all = try? await store.allHistory() else { return }
+        let top = Array(all.prefix(5))
+        await MainActor.run { recentAlerts = top }
     }
 
     // MARK: - 异动

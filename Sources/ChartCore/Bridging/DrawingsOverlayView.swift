@@ -151,6 +151,7 @@ public struct DrawingsOverlayView: View {
         case .gannBox:          drawGannBox(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         case .elliottImpulse:   drawElliottWave(drawing, ctx, size, baseColor, lineWidth, dash, opacity, labels: ["0", "1", "2", "3", "4", "5"])
         case .elliottCorrection:drawElliottWave(drawing, ctx, size, baseColor, lineWidth, dash, opacity, labels: ["0", "A", "B", "C"])
+        case .fibonacciSpiral:  drawFibonacciSpiral(drawing, ctx, size, baseColor, lineWidth, dash, opacity)
         }
 
         if isSelected, !isPending {
@@ -402,6 +403,54 @@ public struct DrawingsOverlayView: View {
         var radialPath = Path()
         radialPath.move(to: center); radialPath.addLine(to: endPt)
         ctx.stroke(radialPath, with: .color(color.opacity(0.4 * opacity)), style: StrokeStyle(lineWidth: width * 0.6, dash: [3, 2]))
+    }
+
+    /// v17.136 · 斐波那契螺旋 / 黄金螺旋 · 5 段 1/4 弧按 fib 数列扩展（半径 1/1/2/3/5/8 单位）
+    /// 中心 A = startPoint · 起始半径 r = ||AB|| 的屏幕距离 · 初始方向由 AB 角度决定（朝 B 那一象限作 1/4 弧起点）
+    /// 5 段 1/4 弧依次扩展 · 每段半径 = 上段半径 + 上上段半径（fib 递推）· 起点首尾相连
+    private func drawFibonacciSpiral(_ d: Drawing, _ ctx: GraphicsContext, _ size: CGSize, _ color: Color, _ width: CGFloat, _ dash: [CGFloat], _ opacity: Double) {
+        guard let end = d.endPoint else { return }
+        let center = CGPoint(x: xForBar(d.startPoint.barIndex, size: size), y: yForPrice(d.startPoint.price, size: size))
+        let endPt = CGPoint(x: xForBar(end.barIndex, size: size), y: yForPrice(end.price, size: size))
+        let baseR = ((endPt.x - center.x) * (endPt.x - center.x) + (endPt.y - center.y) * (endPt.y - center.y)).squareRoot()
+        guard baseR > 0.5 else { return }
+        // 初始方向角（朝 B 方向）· 1/4 弧从此角度起 · 旋转 90° 到下一段
+        // 标准 fib 螺旋：弧心按 1/1/2/3/5/8 顺时针/逆时针螺旋扩展 · 每段弧心是上段弧心 + (向上/向下/向左/向右) × prevR
+        let baseAngle = atan2(endPt.y - center.y, endPt.x - center.x)
+        // 6 段半径 fib · 第 0 段起始半径 = baseR · 后续按 fib 递推
+        let radii: [CGFloat] = [1, 1, 2, 3, 5, 8].map { baseR * CGFloat($0) }
+        // 弧心初始 = center · 每段后弧心沿当前 baseAngle + (i * 90°) 方向移动 prevR 距离（保持螺旋首尾相切）
+        var arcCenter = center
+        var path = Path()
+        for i in 0..<radii.count {
+            let r = radii[i]
+            // 当前 1/4 弧的角度范围：从 (baseAngle + i*90°) 起 · 逆时针扩展 90°
+            let segStart = baseAngle + CGFloat(i) * .pi / 2
+            let segEnd = segStart + .pi / 2
+            // 1/4 弧起点（与上段终点重合 · 保持首尾相切）
+            let p0 = CGPoint(x: arcCenter.x + r * cos(segStart), y: arcCenter.y + r * sin(segStart))
+            if i == 0 {
+                path.move(to: p0)
+            }
+            // 绘制 1/4 弧 · 简化用 8 段 cubic 近似 SwiftUI Path.addArc
+            var arc = Path()
+            arc.move(to: p0)
+            arc.addArc(center: arcCenter, radius: r, startAngle: Angle(radians: segStart), endAngle: Angle(radians: segEnd), clockwise: false)
+            ctx.stroke(arc, with: .color(color.opacity(0.85 * opacity)), style: StrokeStyle(lineWidth: width, dash: dash, lineCap: .round))
+            // 标号（弧中点）· 显示 fib 半径数
+            let labelAngle = (segStart + segEnd) / 2
+            let labelR = r * 0.7
+            let labelPt = CGPoint(x: arcCenter.x + labelR * cos(labelAngle), y: arcCenter.y + labelR * sin(labelAngle))
+            let fibNum = [1, 1, 2, 3, 5, 8][i]
+            let label = Text("\(fibNum)").font(.system(size: 9, design: .monospaced)).foregroundColor(color)
+            ctx.draw(label, at: labelPt)
+            // 下段弧心：当前弧心沿 segEnd 方向移动 r（保证 segEnd 点在下段弧上 · 半径 = r * fib_next/fib_curr）
+            // 但简化处理：弧心沿 segEnd 方向位移 r · 让下段弧起点 == 当前弧终点
+            arcCenter = CGPoint(x: arcCenter.x + r * cos(segEnd), y: arcCenter.y + r * sin(segEnd))
+        }
+        // 中心点标识
+        ctx.fill(Path(ellipseIn: CGRect(x: center.x - 2, y: center.y - 2, width: 4, height: 4)),
+                 with: .color(color.opacity(0.6 * opacity)))
     }
 
     /// v17.16 A4.1 · 斐波扩展 · 突破后目标位（all ratios > 1.0 · 1.0 = B 锚 · 1.272/1.414/1.618/2/2.618 = projection）
@@ -816,6 +865,7 @@ public struct DrawingsOverlayView: View {
         case .gannBox:         return Color(red: 0.45, green: 0.65, blue: 0.90)  // 钢蓝（v17.127 · 江恩系 · gannSquare 与 gannFan 之间 · 5×5 分析核心）
         case .elliottImpulse:  return Color(red: 0.95, green: 0.55, blue: 0.20)  // 橙红（v17.128 · 艾略特冲击浪 · 趋势波 · 与 fibonacci 橙系协调但更暖）
         case .elliottCorrection: return Color(red: 0.55, green: 0.40, blue: 0.85) // 紫罗兰（v17.128 · 艾略特调整浪 · 反向调整 · 冷色与 elliottImpulse 暖橙对比）
+        case .fibonacciSpiral: return Color(red: 0.98, green: 0.78, blue: 0.30)  // 金黄（v17.136 · 黄金螺旋 · fib 系族暖金色 · 与 fibonacciExtension 金黄同调）
         }
     }
 

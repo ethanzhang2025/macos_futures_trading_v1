@@ -11,7 +11,7 @@ private func point(_ bar: Int, _ price: Int) -> DrawingPoint {
 
 @Suite("Drawing 创建与类型契约")
 struct DrawingFactoryTests {
-    @Test("27 种 factory 类型正确（v17.126-128 加江恩 3 + 艾略特 2 · 22 → 27）")
+    @Test("28 种 factory 类型正确（v17.136 加 fibonacciSpiral · 27 → 28 · fib 7 件套收口）")
     func factoryTypes() {
         #expect(Drawing.trendLine(from: point(0, 100), to: point(10, 110)).type == .trendLine)
         #expect(Drawing.horizontalLine(price: 100).type == .horizontalLine)
@@ -36,6 +36,8 @@ struct DrawingFactoryTests {
         #expect(Drawing.priceZone(from: point(0, 110), to: point(0, 100)).type == .priceZone)
         #expect(Drawing.gannFan(from: point(0, 100), to: point(10, 110)).type == .gannFan)
         #expect(Drawing.fibonacciTimeZone(from: point(0, 100), to: point(10, 100)).type == .fibonacciTimeZone)
+        // v17.136 · fib 7 件套收口
+        #expect(Drawing.fibonacciSpiral(from: point(0, 100), to: point(10, 110)).type == .fibonacciSpiral)
     }
 
     @Test("v13.31 多边形 factory · 至少 3 点 / 少于 3 返回 nil / startPoint+extraPoints 映射")
@@ -54,7 +56,7 @@ struct DrawingFactoryTests {
         #expect(pentagon?.extraPoints?.count == 4)
     }
 
-    @Test("pointsNeeded 契约（27 类全覆盖 · v17.128 加江恩 3 + 艾略特 2）")
+    @Test("pointsNeeded 契约（28 类全覆盖 · v17.136 加 fibonacciSpiral · 27 → 28）")
     func pointsNeededContract() {
         // 1 点（v17.8 加 verticalLine · v17.15 加 priceLabel）
         #expect(DrawingType.horizontalLine.pointsNeeded == 1)
@@ -81,6 +83,7 @@ struct DrawingFactoryTests {
         #expect(DrawingType.gannAngle.pointsNeeded == 2)     // v17.126
         #expect(DrawingType.gannSquare.pointsNeeded == 2)    // v17.126
         #expect(DrawingType.gannBox.pointsNeeded == 2)       // v17.127
+        #expect(DrawingType.fibonacciSpiral.pointsNeeded == 2) // v17.136
         // 3 点
         #expect(DrawingType.pitchfork.pointsNeeded == 3)
         // 4 点（v17.128 · 艾略特 ABC 调整浪）
@@ -91,7 +94,7 @@ struct DrawingFactoryTests {
         #expect(DrawingType.polygon.pointsNeeded == 0)
 
         // 全覆盖防漏 · 加新 case 但忘记加 pointsNeeded 时此测试会失败
-        let coveredCount = 4 + 19 + 1 + 1 + 1 + 1  // 1 点 4 + 2 点 19 + 3 点 1 + 4 点 1 + 6 点 1 + 0 点 1
+        let coveredCount = 4 + 20 + 1 + 1 + 1 + 1  // 1 点 4 + 2 点 20（v17.136 +1）+ 3 点 1 + 4 点 1 + 6 点 1 + 0 点 1
         #expect(coveredCount == DrawingType.allCases.count)
 
         // needsTwoPoints 兼容入口（pointsNeeded == 2）
@@ -120,7 +123,7 @@ struct DrawingFactoryTests {
 
 @Suite("Drawing Codable 往返")
 struct DrawingCodableTests {
-    @Test("27 种序列化 + 反序列化等价（v17.128 加江恩 3 + 艾略特 2）")
+    @Test("28 种序列化 + 反序列化等价（v17.136 加 fibonacciSpiral · 27 → 28）")
     func roundTrip() throws {
         let drawings: [Drawing] = [
             Drawing.trendLine(from: point(0, 100), to: point(10, 120)),
@@ -157,7 +160,9 @@ struct DrawingCodableTests {
             ])!,
             Drawing.elliottCorrection(points: [
                 point(10, 130), point(12, 120), point(14, 125), point(16, 115)
-            ])!
+            ])!,
+            // v17.136 · 斐波那契螺旋（fib 7 件套收口）
+            Drawing.fibonacciSpiral(from: point(0, 100), to: point(5, 110))
         ]
         #expect(drawings.count == DrawingType.allCases.count, "Codable 往返应覆盖全部 \(DrawingType.allCases.count) 种 DrawingType")
         let encoder = JSONEncoder()

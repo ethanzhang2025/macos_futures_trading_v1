@@ -105,6 +105,7 @@ fileprivate func drawingTypeLabel(_ type: DrawingType) -> String {
     case .gannBox:           return "江恩盒"
     case .elliottImpulse:    return "艾略特 5 浪"
     case .elliottCorrection: return "艾略特 ABC 浪"
+    case .fibonacciSpiral:   return "斐波那契螺旋"
     }
 }
 
@@ -995,6 +996,7 @@ struct ChartScene: View {
             drawingToolButton(icon: "rectangle.split.3x1", tool: .fibonacciChannel, help: "斐波通道（双点主轴 + 默认 offset · 内部 7 fib 比例平行线分层）")
             drawingToolButton(icon: "wand.and.rays", tool: .fibonacciFan, help: "斐波那契扇形（双点 · 38.2/50/61.8 三射线）")
             drawingToolButton(icon: "calendar.badge.clock", tool: .fibonacciTimeZone, help: "斐波那契时间区（双点定 1 fib 间隔 · 8 条垂直线 F1/F2/F3/F5/F8/F13/F21/F34）")
+            drawingToolButton(icon: "tornado", tool: .fibonacciSpiral, help: "斐波那契螺旋 / 黄金螺旋（双点定圆心 + 起始 1/4 弧 · 5 段 1/4 弧按 fib 数列 1/1/2/3/5/8 扩展 · 强迫症 fib 7 件套收口）")
             drawingToolButton(icon: "fanblades", tool: .gannFan, help: "江恩扇形（双点定 1×1 · 9 角度射线 1×8/1×4/1×3/1×2/1×1/2×1/3×1/4×1/8×1）")
             drawingToolButton(icon: "arrow.up.right.square", tool: .gannAngle, help: "江恩 1×1 角度线（双点定 1×1 单位 · 单角度射线 · gannFan 简洁单线版）")
             drawingToolButton(icon: "square.grid.3x3", tool: .gannSquare, help: "江恩九方（双点定对角 · 内部 3×3 网格均分 · time × price 等分分析）")
@@ -1334,6 +1336,7 @@ struct ChartScene: View {
         case .gannBox:          return .keyLevel
         case .elliottImpulse:   return .trend
         case .elliottCorrection:return .trend
+        case .fibonacciSpiral:  return .channel
         case .fibonacciTimeZone:return .channel
         case .priceZone:        return .keyLevel
         case .text:             return .annotation
@@ -4599,6 +4602,8 @@ struct ChartContentView: View {
             return Drawing.fibonacciExtension(from: firstPoint, to: hoverPoint)
         case .fibonacciArc:
             return Drawing.fibonacciArc(from: firstPoint, to: hoverPoint)
+        case .fibonacciSpiral:
+            return Drawing.fibonacciSpiral(from: firstPoint, to: hoverPoint)
         case .fibonacciChannel:
             let offset = (currentPriceRange.upperBound - currentPriceRange.lowerBound) * Decimal(string: "0.05")!
             return Drawing.fibonacciChannel(from: firstPoint, to: hoverPoint, offset: offset)

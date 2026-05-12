@@ -10,9 +10,13 @@ struct ShellCommandPalette: View {
     @EnvironmentObject var shellVM: ShellViewModel
     /// v17.73 · 独立窗口快速打开（trader 不记 ⌘⌥X 快捷键 · ⌘K 搜功能名直接开）
     @Environment(\.openWindow) private var openWindow
+    /// v17.77 · 接 watchlistBook 真自选合约（合并 mockSymbols 常用主力）
+    @Environment(\.storeManager) private var storeManager
     @Binding var isPresented: Bool
     @State private var query: String = ""
     @FocusState private var queryFocused: Bool
+    /// v17.77 · 从 SQLiteWatchlistBookStore 加载的 trader 自选 symbols（去重并集）
+    @State private var loadedSymbols: [String] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +33,19 @@ struct ShellCommandPalette: View {
         .frame(width: 640, height: 480)
         .background(.regularMaterial)
         .onAppear { queryFocused = true }
+        // v17.77 · 启动时 / 每次打开 ⌘K 时刷新 watchlistBook · 让 trader 自选实时可搜
+        .task {
+            await loadWatchlistSymbolsAsync()
+        }
+    }
+
+    /// v17.77 · 从 SQLiteWatchlistBookStore 加载所有 group 的 instrumentIDs 并去重排序
+    private func loadWatchlistSymbolsAsync() async {
+        guard let store = storeManager?.watchlistBook else { return }
+        let book = (try? await store.load()) ?? nil
+        guard let book else { return }
+        let all = Array(Set(book.groups.flatMap(\.instrumentIDs))).sorted()
+        await MainActor.run { loadedSymbols = all }
     }
 
     private var searchField: some View {
@@ -153,7 +170,7 @@ struct ShellCommandPalette: View {
             ))
         }
 
-        // 合约 mock list（v17.x 接 WatchlistStore）
+        // 合约 mock 常用主力 list（v17.77 · 同时接 watchlistBook 真自选）
         for sym in mockSymbols {
             list.append(PaletteCommand(
                 title: sym.symbol,
@@ -161,10 +178,25 @@ struct ShellCommandPalette: View {
                 emoji: "📊",
                 category: .symbol,
                 action: {
-                    // 把 symbol 设到当前 active Pane（首个 chart Pane）
                     if let ws = shellVM.activeWorkspace,
                        let chartPane = ws.panes.first(where: { $0.kind == .chart }) {
                         shellVM.setPaneSymbol(paneID: chartPane.id, symbol: sym.symbol)
+                    }
+                }
+            ))
+        }
+        // v17.77 · trader 自选合约（仅追加 mock 没覆盖的 · name 留空显 "自选合约"）
+        let mockSet = Set(mockSymbols.map(\.symbol))
+        for s in loadedSymbols where !mockSet.contains(s) {
+            list.append(PaletteCommand(
+                title: s,
+                subtitle: "自选合约",
+                emoji: "⭐",
+                category: .symbol,
+                action: {
+                    if let ws = shellVM.activeWorkspace,
+                       let chartPane = ws.panes.first(where: { $0.kind == .chart }) {
+                        shellVM.setPaneSymbol(paneID: chartPane.id, symbol: s)
                     }
                 }
             ))

@@ -73,6 +73,10 @@ struct WatchlistWindow: View {
     private let flagStore = InstrumentFlagStore()
     /// 旗标版本号 · UserDefaults 变化时 +1 触发 row 重渲（@State 不能直接观察 flagStore · 用 tick）
     @State private var flagsRevision: Int = 0
+    /// v17.129 · 合约备注 store · UserDefaults 持久化 · didChangeNotification 跨窗口同步（与 flagStore 同模式）
+    private let noteStore = InstrumentNoteStore()
+    /// v17.129 · 待编辑备注的合约 · Identifiable 包装让 .sheet(item:) 兼容
+    @State private var pendingNoteInstrumentID: NoteEditTarget?
 
     /// v17.42 C1 · 列可见性（持仓量 / 成交量 / 价差%）· 右键 📋 显示列 toggle · UserDefaults 跨窗口同步
     @State private var visibleColumns: Set<WatchlistColumn> = WatchlistColumnPreferences.load()
@@ -227,6 +231,16 @@ struct WatchlistWindow: View {
                 InstrumentIDSheet(groupName: groupName) { id in
                     addInstrument(id, to: groupID)
                 }
+            }
+        }
+        // v17.129 · 备注编辑 sheet（独立 binding 避免与 sheetState enum 重构）
+        .sheet(item: $pendingNoteInstrumentID) { target in
+            NoteEditSheet(
+                instrumentID: target.id,
+                initialNote: noteStore.note(for: target.id) ?? ""
+            ) { newNote in
+                noteStore.setNote(newNote, for: target.id)
+                flagsRevision += 1   // 复用 tick 触发 row 重渲（@State 不能直接观察 noteStore）
             }
         }
         .confirmationDialog(
@@ -1106,6 +1120,8 @@ struct WatchlistWindow: View {
         let isExtreme = abs(pctValue ?? 0) >= 9
         // v17.34 C5 · 当前合约旗标（持久化 InstrumentFlagStore · UserDefaults 跨窗口同步）
         let flag = flagStore.flag(for: id)
+        // v17.129 · 当前合约备注（持久化 InstrumentNoteStore · 跨窗口同步）
+        let note = noteStore.note(for: id)
         return HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.5))
@@ -1119,6 +1135,13 @@ struct WatchlistWindow: View {
                 Text(id)
                     .font(.system(.body, design: .monospaced))
                     .fontWeight(.medium)
+                // v17.129 · 备注 📝 小标识 · hover tooltip 显完整内容
+                if let n = note {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 10 + chartFontSize.sizeDelta))
+                        .foregroundColor(.accentColor.opacity(0.85))
+                        .tooltip(n)
+                }
             }
                 .frame(width: 100, alignment: .leading)
             Text(priceText(for: id))
@@ -1200,6 +1223,16 @@ struct WatchlistWindow: View {
                 Divider()
                 Button("全部 6 类一次创建") {
                     createAllAlertPresets(instrumentID: id)
+                }
+            }
+            // v17.129 · 备注编辑（trader 个人笔记 · 全局持久化 · 跨窗口同步）
+            Button(note == nil ? "📝 添加备注" : "📝 编辑备注") {
+                pendingNoteInstrumentID = NoteEditTarget(id: id)
+            }
+            if note != nil {
+                Button("📝 删除备注") {
+                    noteStore.setNote(nil, for: id)
+                    flagsRevision += 1  // 复用 tick 触发 row 重渲
                 }
             }
             // v17.42 C1 · 列自定义（toggle 持仓 / 成交量 / 价差% · UserDefaults 跨窗口同步）
@@ -1881,6 +1914,11 @@ private struct WatchlistInstrumentRef: Codable, Hashable, Transferable {
     }
 }
 
+/// v17.129 · 备注编辑 sheet 目标 · Identifiable 包装 instrumentID 让 .sheet(item:) 兼容
+private struct NoteEditTarget: Identifiable, Hashable {
+    let id: String  // instrumentID 自身就是 id
+}
+
 // MARK: - Notification.Name · 跨窗口联动
 
 extension Notification.Name {
@@ -1989,6 +2027,59 @@ private struct InstrumentIDSheet: View {
         }
         .padding(20)
         .frame(width: 380, height: 280)
+    }
+}
+
+// MARK: - Sheet · 合约备注编辑（v17.129 · trader 个人笔记 · 全局持久化 InstrumentNoteStore）
+
+private struct NoteEditSheet: View {
+
+    let instrumentID: String
+    let initialNote: String
+    let onSubmit: (String?) -> Void   // nil / 空字符串 → 删除
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var noteText: String
+
+    init(instrumentID: String, initialNote: String, onSubmit: @escaping (String?) -> Void) {
+        self.instrumentID = instrumentID
+        self.initialNote = initialNote
+        self.onSubmit = onSubmit
+        self._noteText = State(initialValue: initialNote)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("📝 \(instrumentID) 备注").font(.title2).bold()
+            Text("trader 个人笔记 · 跨日跨周保留 · 跨窗口同步 · 全 instrument 共享一条")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            TextEditor(text: $noteText)
+                .font(.system(.body, design: .default))
+                .frame(width: 460, height: 160)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                )
+                .background(Color.gray.opacity(0.05))
+
+            HStack {
+                Text("\(noteText.trimmingCharacters(in: .whitespacesAndNewlines).count) 字 · 留空将删除备注")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") {
+                    onSubmit(noteText)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 500, height: 320)
     }
 }
 

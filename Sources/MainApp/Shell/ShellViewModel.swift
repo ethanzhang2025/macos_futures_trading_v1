@@ -449,6 +449,35 @@ public final class ShellViewModel: ObservableObject {
         persistWorkspaces()
     }
 
+    /// v17.68 · 添加 Pane 到当前 active Workspace（命令面板"新建 Pane"接通）
+    /// 自动扩大 paneLayout 容纳新 Pane · paneCount 已满则 no-op（提示用户切大布局）
+    public func addPaneToActiveWorkspace(kind: PaneKind) {
+        guard let wsIdx = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else { return }
+        let target = workspaces[wsIdx].paneLayout.paneCount
+        guard target > 0, workspaces[wsIdx].panes.count < target else { return }
+        workspaces[wsIdx].panes.append(PaneConfig(kind: kind))
+        persistWorkspaces()
+    }
+
+    /// v17.68 · 复制当前 active Workspace（命令面板"复制 Workspace"）· name 加"副本"后缀
+    public func duplicateActiveWorkspace() {
+        guard let ws = activeWorkspace else { return }
+        let copy = Workspace(
+            name: "\(ws.name) 副本",
+            primaryTab: ws.primaryTab,
+            paneLayout: ws.paneLayout,
+            panes: ws.panes.map { PaneConfig(kind: $0.kind, symbol: $0.symbol, periodRaw: $0.periodRaw, groupColor: $0.groupColor, extraJSON: $0.extraJSON) }
+        )
+        workspaces.append(copy)
+        activeWorkspaceID = copy.id
+        persistWorkspaces()
+    }
+
+    /// v17.68 · 切换 Inspector 显隐（命令面板 + ⌘⌥I 快捷键 二入口）
+    public func toggleInspector() {
+        layout.inspectorVisible.toggle()
+    }
+
     /// 重置 Pane 配置（清 symbol / period / group · 保留 kind）· 用于"恢复初始状态"
     public func resetPaneConfig(paneID: UUID) {
         guard let wsIdx = workspaceIndexContainingPane(paneID),

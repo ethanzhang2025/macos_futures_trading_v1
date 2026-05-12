@@ -157,19 +157,132 @@ struct ShellCommandPalette: View {
             ))
         }
 
-        // 新建 Pane（按 kind）
+        // 新建 Pane（按 kind）· v17.68 · 接通 ShellViewModel.addPaneToActiveWorkspace
         let popularKinds: [PaneKind] = [.chart, .spread, .option, .review, .training, .formulaEditor]
         for kind in popularKinds {
             list.append(PaletteCommand(
                 title: "新建 \(kind.displayName)",
-                subtitle: "添加为当前 Workspace 的新 Pane",
+                subtitle: "添加为当前 Workspace 的新 Pane（布局已满会被忽略）",
                 emoji: kind.emoji,
                 category: .action,
-                action: {
-                    // v17.x · 加 ShellViewModel.addPaneToActiveWorkspace 实现
-                }
+                action: { shellVM.addPaneToActiveWorkspace(kind: kind) }
             ))
         }
+
+        // v17.68 · Workspace 5 预设新建（接 v17.67 WorkspacePreset）
+        for preset in WorkspacePreset.allCases {
+            list.append(PaletteCommand(
+                title: "新建预设：\(preset.displayName)",
+                subtitle: preset.subtitle,
+                emoji: preset.emoji,
+                category: .action,
+                action: { shellVM.newWorkspace(from: preset) }
+            ))
+        }
+        list.append(PaletteCommand(
+            title: "全部 Workspace 预设…",
+            subtitle: "打开预设 picker sheet · 卡片视图浏览全部",
+            emoji: "📋",
+            category: .action,
+            action: { shellVM.showPresetPickerSheet = true }
+        ))
+
+        // v17.68 · Workspace 复制 / 删除
+        if let ws = shellVM.activeWorkspace {
+            list.append(PaletteCommand(
+                title: "复制当前 Workspace",
+                subtitle: "\(ws.name) → \(ws.name) 副本",
+                emoji: "📑",
+                category: .action,
+                action: { shellVM.duplicateActiveWorkspace() }
+            ))
+            if shellVM.workspaces.count > 1 {
+                list.append(PaletteCommand(
+                    title: "删除当前 Workspace",
+                    subtitle: "\(ws.name) · 此操作不可撤销（至少保留 1 个）",
+                    emoji: "🗑",
+                    category: .action,
+                    action: { shellVM.closeWorkspace(ws.id) }
+                ))
+            }
+        }
+
+        // v17.68 · Pane 布局切换（接 ShellViewModel.setPaneLayout · 6 预设 + 不含 custom）
+        for paneLayout in PaneLayout.allCases where paneLayout != .custom {
+            list.append(PaletteCommand(
+                title: "切布局：\(paneLayout.displayName)",
+                subtitle: "当前 Workspace 切到 \(paneLayout.paneCount) Pane（\(paneLayout.emoji)）",
+                emoji: paneLayout.emoji,
+                category: .action,
+                action: { shellVM.setPaneLayout(paneLayout) }
+            ))
+        }
+
+        // v17.68 · Pane 最大化 / 退出最大化（接 v17.5 toggleMaximize / exitMaximize）
+        if shellVM.maximizedPaneID != nil {
+            list.append(PaletteCommand(
+                title: "退出 Pane 最大化",
+                subtitle: "Esc · 恢复多 Pane 布局",
+                emoji: "🔲",
+                category: .action,
+                action: { shellVM.exitMaximize() }
+            ))
+        } else if let firstPane = shellVM.activeWorkspace?.panes.first {
+            list.append(PaletteCommand(
+                title: "最大化第一个 Pane",
+                subtitle: "\(firstPane.kind.emoji) \(firstPane.kind.displayName) · 双击 PaneHeader 同效",
+                emoji: "🔳",
+                category: .action,
+                action: { shellVM.toggleMaximize(firstPane.id) }
+            ))
+        }
+
+        // v17.68 · Inspector 切换
+        list.append(PaletteCommand(
+            title: shellVM.layout.inspectorVisible ? "隐藏右辅助 Inspector" : "显示右辅助 Inspector",
+            subtitle: "⌘⌥I · 盘口 5 档 / 分时 mini / Tick 流 / 异动池",
+            emoji: "🧭",
+            category: .action,
+            action: { shellVM.toggleInspector() }
+        ))
+        // Sidebar 自定义入口暂走右键菜单（@State 在 ShellSidebar 内 · 命令面板入口 v17.69+ 评估）
+
+        // v17.68 · F 键全套（接 v17.57 + v17.61 已有方法）
+        list.append(PaletteCommand(
+            title: "F6 · 聚焦 Sidebar",
+            subtitle: "光标移到左 Sidebar 搜索框",
+            emoji: "🔍",
+            category: .action,
+            action: { shellVM.focusSidebar() }
+        ))
+        list.append(PaletteCommand(
+            title: "F8 · 切换周期",
+            subtitle: "当前 active Pane 周期循环（1m→5m→15m→…）",
+            emoji: "⏱",
+            category: .action,
+            action: { shellVM.cyclePeriodOnActivePane() }
+        ))
+        list.append(PaletteCommand(
+            title: "F10 · 合约资料",
+            subtitle: "弹出当前 active Pane symbol 资料 sheet",
+            emoji: "🪪",
+            category: .action,
+            action: { shellVM.openInstrumentInfo() }
+        ))
+        list.append(PaletteCommand(
+            title: "F12 · 画线工具提示",
+            subtitle: "Pane 内画线工具入口提示",
+            emoji: "✏️",
+            category: .action,
+            action: { shellVM.hintDrawingTool() }
+        ))
+        list.append(PaletteCommand(
+            title: "空格 · 快捷下单",
+            subtitle: "Stage A 占位 · v2 接 SimulatedTradingEngine",
+            emoji: "⌨️",
+            category: .action,
+            action: { shellVM.openQuickOrder() }
+        ))
 
         // v17.12 A2.1 · 主题切换
         let current = ChartThemeStore.load() ?? .dark

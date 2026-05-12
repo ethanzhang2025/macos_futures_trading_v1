@@ -8,6 +8,8 @@ import SwiftUI
 
 struct ShellCommandPalette: View {
     @EnvironmentObject var shellVM: ShellViewModel
+    /// v17.73 · 独立窗口快速打开（trader 不记 ⌘⌥X 快捷键 · ⌘K 搜功能名直接开）
+    @Environment(\.openWindow) private var openWindow
     @Binding var isPresented: Bool
     @State private var query: String = ""
     @FocusState private var queryFocused: Bool
@@ -294,6 +296,42 @@ struct ShellCommandPalette: View {
             category: .action,
             action: { shellVM.openQuickOrder() }
         ))
+
+        // v17.73 · 独立窗口快速打开（trader 不记 ⌘⌥X 快捷键 · ⌘K 搜功能名直接开）
+        let windowEntries: [(id: String, title: String, emoji: String, hint: String)] = [
+            ("watchlist",          "打开 自选合约 窗口",     "⭐", "⌘⌥W · 独立窗口模式"),
+            ("chart",              "打开 K 线图表 窗口",     "📊", "⌘N · 多图表对照"),
+            ("review",             "打开 复盘工作台 窗口",   "📝", "⌘⌥R · 复盘工作台"),
+            ("alert",              "打开 预警 窗口",         "🔔", "⌘⌥A · 价格 / 指标预警"),
+            ("journal",            "打开 交易日志 窗口",     "📓", "⌘⌥J · 复盘日志"),
+            ("trading",            "打开 模拟交易 窗口",     "💼", "⌘⌥T · Stage A 模拟"),
+            ("training",           "打开 训练 窗口",         "🎯", "⌘⇧T · 训练模式"),
+            ("multichart",         "打开 多图表 窗口",       "📊", "⌘⌥M · 4-Pane"),
+            ("formulaEditor",      "打开 公式编辑器 窗口",   "🧮", "⌘⌥F · 麦语言"),
+            ("spread",             "打开 跨期套利 窗口",     "💱", "⌘⌥S · 价差分析"),
+            ("option",             "打开 期权工作台 窗口",   "📈", "⌘⌥O · 期权链"),
+            ("sector",             "打开 板块联动 窗口",     "🗂", "⌘⌥B · 板块"),
+            ("heatmap",            "打开 热力地图 窗口",     "🔥", "⌘⌥H · 板块热力"),
+            ("position",           "打开 多空持仓 窗口",     "💼", "⌘⌥P · 持仓分析"),
+            ("correlation",        "打开 相关性矩阵 窗口",   "🔗", "⌘⌥C · 相关性"),
+            ("moneyflow",          "打开 资金流向 窗口",     "💧", "资金流"),
+            ("calendarSpread",     "打开 日历套利 窗口",     "💱", "calendar spread"),
+            ("instrumentDashboard","打开 品种深度 窗口",     "🧭", "instrument dashboard"),
+            ("sessionCompare",     "打开 时段对比 窗口",     "⏱", "session compare"),
+            ("anomalyMonitor",     "打开 异常监控 窗口",     "⚠️", "anomaly monitor"),
+            ("spreadAlert",        "打开 价差告警 窗口",     "🔔", "spread alert"),
+            ("workspace",          "打开 工作空间 窗口",     "🗂", "⌘⌥Y · workspace 管理"),
+            ("backtest",           "打开 公式回测 窗口",     "🧪", "⌘⌥K · 回测"),
+        ]
+        for entry in windowEntries {
+            list.append(PaletteCommand(
+                title: entry.title,
+                subtitle: entry.hint,
+                emoji: entry.emoji,
+                category: .action,
+                action: { openWindow(id: entry.id) }
+            ))
+        }
 
         // v17.12 A2.1 · 主题切换
         let current = ChartThemeStore.load() ?? .dark

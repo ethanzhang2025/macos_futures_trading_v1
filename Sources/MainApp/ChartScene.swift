@@ -221,6 +221,8 @@ struct ChartScene: View {
     @State private var showIndicatorParamsSheet: Bool = false
     /// v17.151 · 主图叠加参数 sheet 显隐（SuperTrend/Ichimoku/Donchian/Keltner 4 种 overlay 参数）
     @State private var showMainChartOverlayParamsSheet: Bool = false
+    /// v17.165 · 形态识别清单 sheet 显隐（⌘⇧L 触发 · 列出当前 K 线全部检出形态）
+    @State private var showPatternsListSheet: Bool = false
     /// v17.139 · 主图叠加偏好（VWAP / Pivot / SuperTrend）· UserDefaults 全局共享 · 默认全关
     @State private var overlayBook: MainChartOverlayBook = MainChartOverlayStore.load() ?? .default
     /// v15.7 副图独立参数 overrides · key = 副图槽位 0~3 · 缺失 = 用全局 indicatorParams
@@ -553,6 +555,24 @@ struct ChartScene: View {
         // v17.151 · 主图叠加参数 sheet（SuperTrend/Ichimoku/Donchian/Keltner 4 种 · trader 弹此调参）
         .sheet(isPresented: $showMainChartOverlayParamsSheet) {
             MainChartOverlayParamsSheet(book: $overlayBook)
+        }
+        // v17.165 · 形态识别清单 sheet（⌘⇧L · 列当前 K 线全部检出形态 · 点行跳转 viewport）
+        .sheet(isPresented: $showPatternsListSheet) {
+            let kline = KLineSeries(
+                opens: bars.map(\.open),
+                highs: bars.map(\.high),
+                lows: bars.map(\.low),
+                closes: bars.map(\.close),
+                volumes: bars.map(\.volume),
+                openInterests: bars.map { _ in 0 }
+            )
+            let patterns = (try? PatternDetector.detect(kline: kline)) ?? []
+            PatternsListSheet(
+                patterns: patterns,
+                chartTheme: chartTheme,
+                candleColorMode: candleColorMode,
+                onJumpTo: { idx in jumpViewport(toBarIndex: idx) }
+            )
         }
         .onChange(of: overlayBook) { newValue in
             // v17.151 · overlayBook 改（toggle / sheet 保存）→ 持久化 + 重算 indicators · sheet 内"还原默认"也走这里
@@ -2743,6 +2763,11 @@ struct ChartContentView: View {
                 presentToggleNotice("形态识别：\(showPatterns ? "显示" : "隐藏")")
             }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+            // v17.165 · ⌘⇧L 弹形态清单 sheet（当前 K 线全部检出形态 · trader 看完整清单 + 跳转）
+            Button("") {
+                showPatternsListSheet = true
+            }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.end, modifiers: [.command])
             Button("", action: jumpToLatestBar)
@@ -3156,6 +3181,14 @@ struct ChartContentView: View {
             startIndex: max(0, bars.count - visible),
             visibleCount: visible
         )
+    }
+
+    /// v17.165 · 跳转 viewport 让指定 bar index 居中（形态清单点击行用）
+    private func jumpViewport(toBarIndex idx: Int) {
+        inertiaTask?.cancel()
+        let visible = max(1, viewport.visibleCount)
+        let centered = max(0, min(bars.count - visible, idx - visible / 2))
+        viewport = RenderViewport(startIndex: centered, visibleCount: visible)
     }
 
     /// v15.20 batch74 · 主图快捷键提示浮窗（⌘/ 切换 · trader 不记快捷键时随时查询）

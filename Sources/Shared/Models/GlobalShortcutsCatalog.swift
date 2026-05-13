@@ -138,6 +138,7 @@ public enum GlobalShortcutsCatalog {
                 ShortcutEntry("⌘⇧X", "复制测距详情到剪贴板"),
                 ShortcutEntry("⌘⇧W", "Swing High/Low 显隐"),
                 ShortcutEntry("⌘⇧P", "形态识别 overlay 显隐（v17.164 头肩顶/底 + 双顶/底）"),
+                ShortcutEntry("⌘⇧L", "形态识别清单 sheet（v17.165 当前 K 线全部检出形态）"),
             ]),
             ShortcutGroup("显隐切换", [
                 ShortcutEntry("⌘.", "副图 显隐"),

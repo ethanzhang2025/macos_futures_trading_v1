@@ -85,8 +85,9 @@ public final class MetalKLineRenderer: KLineRenderer, @unchecked Sendable {
 
     /// 实例可变涨跌色（NSLock 保护 · setCandleColorMode 切换）
     /// 默认中国习惯：涨红 / 跌绿
-    private var upColor: SIMD4<Float> = Self.redColor
-    private var downColor: SIMD4<Float> = Self.greenColor
+    /// v17.190 · macOS swift 6.3.2 严格 · covariant Self 不能在 stored property initializer · 显式类名引用
+    private var upColor: SIMD4<Float> = MetalKLineRenderer.redColor
+    private var downColor: SIMD4<Float> = MetalKLineRenderer.greenColor
 
     /// 指标折线调色板（按 input.indicators 顺序循环取色 · 专业图表配色）
     /// 0 黄 #FFC72E  1 紫 #A06CD5  2 蓝 #3498DB  3 橙 #F39C12  4 粉 #E84B8C

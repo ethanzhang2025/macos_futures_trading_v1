@@ -436,7 +436,8 @@ public struct DrawingsOverlayView: View {
             var arc = Path()
             arc.move(to: p0)
             arc.addArc(center: arcCenter, radius: r, startAngle: Angle(radians: segStart), endAngle: Angle(radians: segEnd), clockwise: false)
-            ctx.stroke(arc, with: .color(color.opacity(0.85 * opacity)), style: StrokeStyle(lineWidth: width, dash: dash, lineCap: .round))
+            // v17.190 · macOS 26 严格 · StrokeStyle 参数顺序 lineCap 必先于 dash
+            ctx.stroke(arc, with: .color(color.opacity(0.85 * opacity)), style: StrokeStyle(lineWidth: width, lineCap: .round, dash: dash))
             // 标号（弧中点）· 显示 fib 半径数
             let labelAngle = (segStart + segEnd) / 2
             let labelR = r * 0.7

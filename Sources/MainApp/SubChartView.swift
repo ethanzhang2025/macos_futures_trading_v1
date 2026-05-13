@@ -40,6 +40,11 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
     case atrp        // ATR% · 单线 · 0 基线 · 视野 visible max · % 单位
     // v15.19 batch25 · 成交量分布（trader 支撑阻力区分析）
     case volumeProfile  // 横轴 = 价格 bin · 纵轴 = 累计成交量 · visible 范围内分桶
+    // v17.143 · 4 个国际派常用副图（IndicatorCore 已有算法 · v1 hardcoded 默认参数 · 后续 ParamsBook 加可调）
+    case trix     // TRIX(12) 三重 EMA 趋势 · 单线 · 上下对称视野 · 0 参考线
+    case cmf      // Chaikin Money Flow(20) 资金流向 · 单线 · 上下对称视野 · ±0.05 参考线
+    case pvt      // Price Volume Trend 累积价量趋势 · 单线 · auto 视野（同 OBV pattern）
+    case vr       // Volume Ratio(26) 成交量比 · 单线 · auto baseline + 100 参考线
 
     var id: String { rawValue }
 
@@ -66,6 +71,11 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .bbw:         return "BBW \(params.bbwParams[0])/\(params.bbwParams[1])"
         case .atrp:        return "ATRP \(params.atrpPeriod)"
         case .volumeProfile: return "成交量分布"
+        // v17.143 · hardcoded 默认参数 · 不读 ParamsBook
+        case .trix:   return "TRIX 12"
+        case .cmf:    return "CMF 20"
+        case .pvt:    return "PVT"
+        case .vr:     return "VR 26"
         }
     }
 
@@ -92,6 +102,10 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .bbw:         return "BBW"
         case .atrp:        return "ATRP"
         case .volumeProfile: return "VP"
+        case .trix:   return "TRIX"
+        case .cmf:    return "CMF"
+        case .pvt:    return "PVT"
+        case .vr:     return "VR"
         }
     }
 }
@@ -339,6 +353,15 @@ struct SubChartView: View {
                 return (try? BollingerBandwidth.calculate(kline: series, params: paramsCopy.bbwParamsDecimal)) ?? []
             case .atrp:
                 return (try? ATRPercent.calculate(kline: series, params: paramsCopy.atrpParamsDecimal)) ?? []
+            // v17.143 · 4 个国际派常用副图 · v1 hardcoded 默认参数（trader 标准 · v2 接 ParamsBook 加可调）
+            case .trix:
+                return (try? TRIX.calculate(kline: series, params: [Decimal(12)])) ?? []
+            case .cmf:
+                return (try? CMF.calculate(kline: series, params: [Decimal(20)])) ?? []
+            case .pvt:
+                return (try? PVT.calculate(kline: series, params: [])) ?? []
+            case .vr:
+                return (try? VR.calculate(kline: series, params: [Decimal(26)])) ?? []
             case .volume, .oi, .volumeProfile:
                 return []  // 直读 bars · 不走 Indicator 计算
             }
@@ -353,7 +376,7 @@ struct SubChartView: View {
             seriesA = doublesOf(result, name: "K")
             seriesB = doublesOf(result, name: "D")
             seriesC = doublesOf(result, name: "J")
-        case .rsi, .obv, .cci, .wr, .roc, .bias, .stc, .choppiness, .forceIndex, .bbw, .atrp:
+        case .rsi, .obv, .cci, .wr, .roc, .bias, .stc, .choppiness, .forceIndex, .bbw, .atrp, .trix, .cmf, .pvt, .vr:
             // 单线副图：取首个 series（输出名带参数 · 不依赖 name 匹配 · 直接首项）
             let firstSeries = result.first?.values ?? []
             seriesA = firstSeries.map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
@@ -502,6 +525,24 @@ struct SubChartView: View {
             // BBW（squeeze 信号）/ ATRP（跨品种波动率）· 单位 %
             case .bbw, .atrp:
                 Text("\(kind.shortName) \(fmt(aLast))%").foregroundColor(Self.yellowColor)
+            // v17.143 · TRIX %（>0 多头 / <0 空头 · 0 阈值）
+            case .trix:
+                Text("TRIX \(fmt(aLast))%").foregroundColor(
+                    aLast.map { $0 >= 0 ? Self.bullColor : Self.bearColor } ?? .secondary
+                )
+            // v17.143 · CMF（>0.05 强多 · <-0.05 强空 · 中间黄）
+            case .cmf:
+                Text("CMF \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 0.05 ? Self.bullColor : ($0 <= -0.05 ? Self.bearColor : Self.yellowColor) } ?? .secondary
+                )
+            // v17.143 · PVT（累积值 · 用蓝色 · 与 OBV 同模式）
+            case .pvt:
+                Text("PVT \(fmtVolume(aLast))").foregroundColor(Self.blueColor)
+            // v17.143 · VR（>150 强 · <70 弱 · 100 中性参考）
+            case .vr:
+                Text("VR \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 150 ? Self.bullColor : ($0 <= 70 ? Self.bearColor : Self.yellowColor) } ?? .secondary
+                )
             // v15.19 batch25 · Volume Profile · HUD 显示 POC + VAH + VAL（trader 一眼看支撑阻力位 + 70% 区）
             // v17.30 B2 · 加 Value Area · POC / VAH / VAL 三价位
             case .volumeProfile:
@@ -630,6 +671,36 @@ struct SubChartView: View {
                              ctx: ctx, size: size,
                              visibleStart: visibleStart, visibleEnd: visibleEnd,
                              barWidth: barWidth, xOffset: xOffset)
+        // v17.143 · TRIX % 单线 · 上下对称视野 · 0 参考（同 ROC pattern）
+        case .trix:
+            drawAutoLine(seriesA, color: Self.yellowColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [0])
+        // v17.143 · CMF 单线 · 上下对称视野 · ±0.05 弱档 + 0 中线（资金流核心阈值）
+        case .cmf:
+            drawAutoLine(seriesA, color: Self.yellowColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [0.05, 0, -0.05],
+                         minHalfSpan: 0.15)
+        // v17.143 · PVT 累积值（与 OBV 同 pattern · 视野自动 · 0 参考）
+        case .pvt:
+            drawAutoLine(seriesA, color: Self.blueColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [0])
+        // v17.143 · VR 单线 · auto baseline + 100 中线（VR 特有 = 多头/空头 100% 平衡点）
+        case .vr:
+            drawAutoLine(seriesA, color: Self.yellowColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [150, 100, 70],
+                         minHalfSpan: 80)
         // v15.19 batch25 · Volume Profile · 水平柱状（y=价格 bin · x=累计成交量 · 从左生长）
         case .volumeProfile:
             drawVolumeProfile(ctx, size: size)

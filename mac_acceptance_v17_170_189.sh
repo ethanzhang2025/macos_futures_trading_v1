@@ -100,11 +100,13 @@ capture_step() {
         q|Q) exit 0 ;;
     esac
     rm -f "${target}" 2>/dev/null
-    screencapture -i -o "${target}"
+    # -iW = interactive + window 模式 · 默认相机光标 · 鼠标点窗口=截整窗 · 按空格切回十字拖框
+    # -o = 截窗口时不带 drop shadow（更清爽 + 文件更小）
+    screencapture -iW -o "${target}"
     if [[ -f "${target}" ]]; then
         echo "  ✅ ${name}.png ($(stat -f '%z' "${target}") bytes)"
     else
-        echo "  ⚠️ 取消"
+        echo "  ⚠️ 取消（如果意外 → 默认相机 · 点窗口截 · 按空格切十字拖框）"
     fi
 }
 

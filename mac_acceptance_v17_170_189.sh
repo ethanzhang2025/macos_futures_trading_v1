@@ -86,43 +86,25 @@ mkdir -p "${SHOTS_DIR}"
 rm -f "${SHOTS_DIR}"/*.png 2>/dev/null
 
 # capture_step <name> <prompt>
-# 方案 D：screencapture -i 交互模式（v17.194）
-# 用户回车 → 光标变十字拖框 或 按空格变相机点窗口 → 截图直接落 SHOTS_DIR
-# macOS 原生交互 · 完全不依赖焦点 · 不需要扫 ~/Desktop
+# 极简：回车 → screencapture -i → 用户鼠标点窗口/拖框 → 完成
 capture_step() {
     local name="$1"
     local prompt="$2"
     local target="${SHOTS_DIR}/${name}.png"
 
     echo ""
-    echo "═══════════════════════════════════════════════"
-    echo "📸 ${name}"
-    echo "  操作：${prompt}"
-    echo "  截图：回车启动 macOS 交互截图（光标变十字）"
-    echo "    · 拖框：选区截图"
-    echo "    · 空格：切换到相机模式 · 鼠标点主程序窗口 = 截整窗"
-    echo "    · ESC：取消本张"
-    echo "═══════════════════════════════════════════════"
-
-    while true; do
-        read -p "  ▸ 主程序里 overlay/sheet 已就绪 → 回车进入截图 / s 跳过 / r 重看 / q 退出: " ans
-        case "${ans}" in
-            s|S) echo "  ⏭  跳过 ${name}"; return 0 ;;
-            q|Q) echo "  🚪 退出"; exit 0 ;;
-            r|R) echo "  操作：${prompt}"; continue ;;
-            *) break ;;
-        esac
-    done
-
+    echo "📸 ${name} · ${prompt}"
+    read -p "▸ 回车截图 / s 跳过 / q 退出: " ans
+    case "${ans}" in
+        s|S) echo "  ⏭  跳过"; return 0 ;;
+        q|Q) exit 0 ;;
+    esac
     rm -f "${target}" 2>/dev/null
-    # -i 交互模式 · -o 截窗口时不带 drop shadow（更小） · 用户 ESC 取消则文件不生成
     screencapture -i -o "${target}"
     if [[ -f "${target}" ]]; then
-        local size
-        size=$(stat -f '%z' "${target}" 2>/dev/null || echo 0)
-        echo "  ✅ ${name}.png (${size} bytes)"
+        echo "  ✅ ${name}.png ($(stat -f '%z' "${target}") bytes)"
     else
-        echo "  ⚠️ 截图取消或失败（${name}.png 未生成）"
+        echo "  ⚠️ 取消"
     fi
 }
 

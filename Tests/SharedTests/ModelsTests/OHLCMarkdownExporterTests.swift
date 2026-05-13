@@ -86,6 +86,41 @@ struct OHLCMarkdownExporterTests {
         #expect(shortDataRow.contains(":"))              // 时分冒号
     }
 
+    @Test("v17.185 · renderWithAnnotations · 空 annotations · 形态列为空")
+    func annotationsEmpty() {
+        let bar = makeBar(open: 100, high: 110, low: 95, close: 105)
+        let md = OHLCMarkdownExporter.renderWithAnnotations([bar], annotations: [:])
+        let lines = md.split(separator: "\n").map(String.init)
+        #expect(lines.count == 3)
+        #expect(lines[0].contains("形态"))
+        // 数据行末尾 "| |"（空形态列）
+        #expect(lines[2].hasSuffix("|  |"))
+    }
+
+    @Test("v17.185 · renderWithAnnotations · 命中形态写入对应 # 行")
+    func annotationsPopulated() {
+        let bars = [
+            makeBar(open: 100, high: 110, low: 95, close: 105),
+            makeBar(open: 105, high: 112, low: 103, close: 108),
+            makeBar(open: 108, high: 115, low: 106, close: 110)
+        ]
+        let md = OHLCMarkdownExporter.renderWithAnnotations(
+            bars,
+            annotations: [1: "双顶", 2: "头肩顶;矩形"]
+        )
+        let lines = md.split(separator: "\n").map(String.init)
+        #expect(lines[2].contains("| 0 |"))
+        #expect(lines[2].hasSuffix("|  |"))         // 第 0 行无形态
+        #expect(lines[3].contains("| 1 |"))
+        #expect(lines[3].contains("双顶"))
+        #expect(lines[4].contains("头肩顶;矩形"))
+    }
+
+    @Test("v17.185 · renderWithAnnotations · 空 bars · 空字符串")
+    func annotationsEmptyBars() {
+        #expect(OHLCMarkdownExporter.renderWithAnnotations([], annotations: [:]).isEmpty)
+    }
+
     @Test("多根 K 线全部展现 + 持仓量列存在")
     func multipleBars() {
         let bars = [

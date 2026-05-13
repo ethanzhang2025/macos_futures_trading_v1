@@ -32,4 +32,31 @@ public enum OHLCMarkdownExporter {
         let sign = pct > 0 ? "+" : (pct < 0 ? "" : "")  // 负值 String(format) 自带 "-"
         return String(format: "\(sign)%.2f%%", pct)
     }
+
+    /// v17.185 · 带标注列（形态识别命中等）· trader 复盘聊天时连"双顶/头肩顶"也一起发
+    /// - Parameter annotations: barIndex → 标注字符串（多标注由 caller 自行 join 如 "双顶;头肩顶"）
+    public static func renderWithAnnotations(
+        _ bars: [KLine],
+        annotations: [Int: String],
+        dateFormat: String = "yyyy-MM-dd HH:mm"
+    ) -> String {
+        guard !bars.isEmpty else { return "" }
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = dateFormat
+        var lines: [String] = []
+        lines.append("| # | 时间 | 开 | 高 | 低 | 收 | 量 | 持仓 | 涨跌% | 形态 |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|")
+        for (i, bar) in bars.enumerated() {
+            let t = dateFmt.string(from: bar.openTime)
+            let o = NSDecimalNumber(decimal: bar.open).stringValue
+            let h = NSDecimalNumber(decimal: bar.high).stringValue
+            let l = NSDecimalNumber(decimal: bar.low).stringValue
+            let c = NSDecimalNumber(decimal: bar.close).stringValue
+            let oi = NSDecimalNumber(decimal: bar.openInterest).stringValue
+            let pct = formatChangePercent(open: bar.open, close: bar.close)
+            let note = annotations[i] ?? ""
+            lines.append("| \(i) | \(t) | \(o) | \(h) | \(l) | \(c) | \(bar.volume) | \(oi) | \(pct) | \(note) |")
+        }
+        return lines.joined(separator: "\n")
+    }
 }

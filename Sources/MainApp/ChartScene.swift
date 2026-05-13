@@ -5312,11 +5312,9 @@ fileprivate struct ChartIndicatorRunner {
     /// N 条 MA 的增量 state（按 params.mainMAPeriods 顺序 · 默认 [5, 20, 60] = 3 条）
     var maStates: [MA.IncrementalState]
     var boll: BOLL.IncrementalState
-    /// v17.139 · 主图叠加偏好（VWAP/Pivot/SuperTrend）· 决定 series 末尾追加哪些 overlay
-    var overlayBook: MainChartOverlayBook
-    /// v17.139 · 当前已消化的 history bars（用于 overlay 全量重算 · v1 简化 · 后续可加 overlay IncrementalState）
-    var historyBars: [KLine]
-    /// 核心列数（MA + BOLL UPPER/LOWER · 增量推进维护这些 · 末尾 overlay 列每步全量重算）
+    /// v17.156 · 9 overlay IncrementalState 聚合（替代 v17.139 historyBars + 全量 MainChartOverlayCompute.compute 每步）
+    var overlayStates: OverlayIncrementalStates
+    /// 核心列数（MA + BOLL UPPER/LOWER · 增量推进维护这些 · 末尾 overlay 列同样增量推进 · v17.156）
     let coreCount: Int
     private(set) var series: [IndicatorSeries]   // 与 ChartScene.indicators 同步快照
 
@@ -5337,40 +5335,42 @@ fileprivate struct ChartIndicatorRunner {
         }
         let coreSeries = MockKLineData.computeIndicators(bars: bars, params: params)
         let overlaySeries = MainChartOverlayCompute.compute(bars: bars, book: overlay)
+        let overlayStates = OverlayIncrementalStates(history: kline, book: overlay)
         return ChartIndicatorRunner(
             maStates: maStates,
             boll: bollState,
-            overlayBook: overlay,
-            historyBars: bars,
+            overlayStates: overlayStates,
             coreCount: coreSeries.count,
             series: coreSeries + overlaySeries
         )
     }
 
     /// 推进 1 根新 K · 返回更新后的 series
-    /// 顺序：[N 条 MA · BOLL-UPPER · BOLL-LOWER] + [启用的 overlay · 顺序 = MainChartOverlayBook 枚举遍历]
+    /// 顺序：[N 条 MA · BOLL-UPPER · BOLL-LOWER] + [启用的 overlay · 顺序 = MainChartOverlayCompute.compute 列顺序]
     /// - 核心列：增量推进（MA O(1) · BOLL O(N)）
-    /// - overlay 列：全量重算（v1 简化 · 单根/帧成本可接受 · ~50ms@5kbars）
+    /// - overlay 列：增量推进（v17.156 · 9 overlay 各自 IncrementalState · O(period) 或 O(1) per overlay · 5kbars 50ms → ~5ms）
     mutating func step(newBar: KLine) -> [IndicatorSeries] {
         // 1) 核心 MA + BOLL 增量
-        var appended: [Decimal?] = []
+        var coreAppended: [Decimal?] = []
         for i in maStates.indices {
-            appended.append(MA.stepIncremental(state: &maStates[i], newBar: newBar)[0])
+            coreAppended.append(MA.stepIncremental(state: &maStates[i], newBar: newBar)[0])
         }
         let bollVals = BOLL.stepIncremental(state: &boll, newBar: newBar)   // [MID, UPPER, LOWER]
-        appended.append(bollVals[1])
-        appended.append(bollVals[2])
-        precondition(coreCount == appended.count, "core series count must match appended count")
+        coreAppended.append(bollVals[1])
+        coreAppended.append(bollVals[2])
+        precondition(coreCount == coreAppended.count, "core series count must match appended count")
         for i in 0..<coreCount {
-            series[i] = IndicatorSeries(name: series[i].name, values: series[i].values + [appended[i]])
+            series[i] = IndicatorSeries(name: series[i].name, values: series[i].values + [coreAppended[i]])
         }
-        // 2) overlay 全量重算（含本根新 K）· 替换末尾 overlay 段
-        historyBars.append(newBar)
-        let overlaySeries = MainChartOverlayCompute.compute(bars: historyBars, book: overlayBook)
-        if series.count > coreCount {
-            series.removeSubrange(coreCount..<series.count)
+        // 2) overlay 增量推进（v17.156 · 替代 v17.139 全量 MainChartOverlayCompute.compute）
+        let overlayAppended = overlayStates.step(newBar: newBar)
+        let overlayCount = series.count - coreCount
+        precondition(overlayCount == overlayAppended.count,
+                     "overlay series count must match incremental output count (book changed between prime and step?)")
+        for j in 0..<overlayCount {
+            let i = coreCount + j
+            series[i] = IndicatorSeries(name: series[i].name, values: series[i].values + [overlayAppended[j]])
         }
-        series.append(contentsOf: overlaySeries)
         return series
     }
 
@@ -5386,96 +5386,7 @@ fileprivate struct ChartIndicatorRunner {
     }
 }
 
-// MARK: - v17.139 · 主图 overlay 计算（VWAP / Pivot / SuperTrend · 全量重算 helper）
-
-fileprivate enum MainChartOverlayCompute {
-
-    /// 按 overlayBook.enabled 顺序计算 · 输出顺序：VWAP → Pivot 7 线 → SuperTrend 主线
-    /// SuperTrend-DIR 不输出（HUD 不显方向数字 · 后续渲染层若要色彩区分可单独读 series.first(.name == "SUPERTREND-DIR")）
-    static func compute(bars: [KLine], book: MainChartOverlayBook) -> [IndicatorSeries] {
-        guard book.anyEnabled, !bars.isEmpty else { return [] }
-        let kline = KLineSeries(
-            opens: bars.map(\.open),
-            highs: bars.map(\.high),
-            lows: bars.map(\.low),
-            closes: bars.map(\.close),
-            volumes: bars.map(\.volume),
-            openInterests: bars.map { _ in 0 }
-        )
-        var out: [IndicatorSeries] = []
-        if book.isEnabled(.vwap) {
-            out.append(contentsOf: (try? VWAP.calculate(kline: kline, params: [])) ?? [])
-        }
-        if book.isEnabled(.pivot) {
-            let result = (try? PivotPoints.calculate(kline: kline, params: [])) ?? []
-            // v17.150 · 只取 5 线 P/R1/S1/R2/S2（IndicatorCore PivotPoints 输出 7 列含 R3/S3 极端阈值）
-            // trader 多数 platform 5 线惯例 · R3/S3 极端阈值很少触及 · HUD 7 行过冗余
-            // v2 可加 ParamsBook 字段 showPivotR3S3 让用户选完整 7 线
-            let kept: Set<String> = ["P", "R1", "S1", "R2", "S2"]
-            out.append(contentsOf: result.filter { kept.contains($0.name) })
-        }
-        if book.isEnabled(.superTrend) {
-            let result = (try? SuperTrend.calculate(
-                kline: kline,
-                params: [Decimal(book.superTrendPeriod), book.superTrendMultiplier]
-            )) ?? []
-            // 只取主线 SUPERTREND（drop SUPERTREND-DIR · trader HUD 不需方向 ±1 数字 · 后续渲染层独立处理色彩）
-            if let st = result.first(where: { $0.name == "SUPERTREND" }) {
-                out.append(st)
-            }
-        }
-        if book.isEnabled(.ichimoku) {
-            let result = (try? Ichimoku.calculate(
-                kline: kline,
-                params: [Decimal(book.ichimokuTenkan), Decimal(book.ichimokuKijun), Decimal(book.ichimokuSenkou)]
-            )) ?? []
-            // 输出 4 条主线：TENKAN / KIJUN / SENKOU-A / SENKOU-B
-            // 不输出 CHIKOU（用未来 close 后移 · trader 看主图同周期没意义 · 等 v2 加支持滞后绘制再开）
-            for name in ["TENKAN", "KIJUN", "SENKOU-A", "SENKOU-B"] {
-                if let s = result.first(where: { $0.name == name }) {
-                    out.append(s)
-                }
-            }
-        }
-        if book.isEnabled(.sar) {
-            // SAR 输出 1 列「SAR」· trader 抛物线止损点（多/空翻转视觉）
-            out.append(contentsOf: (try? SAR.calculate(kline: kline, params: [book.sarStep, book.sarMax])) ?? [])
-        }
-        if book.isEnabled(.priceChannel) {
-            // PriceChannel 输出 2 线 PC-UPPER / PC-LOWER（close 极值通道 · 突破信号）
-            out.append(contentsOf: (try? PriceChannel.calculate(kline: kline, params: [Decimal(book.priceChannelPeriod)])) ?? [])
-        }
-        if book.isEnabled(.envelopes) {
-            // Envelopes 输出 3 线 ENV-MID / ENV-UPPER / ENV-LOWER（MA ± k% · 经典支撑阻力）
-            out.append(contentsOf: (try? Envelopes.calculate(kline: kline, params: [Decimal(book.envelopesPeriod), book.envelopesPercent])) ?? [])
-        }
-        if book.isEnabled(.donchian) {
-            let result = (try? Donchian.calculate(
-                kline: kline,
-                params: [Decimal(book.donchianPeriod)]
-            )) ?? []
-            // 输出 3 线：DC-UPPER / DC-MID / DC-LOWER
-            for name in ["DC-UPPER", "DC-MID", "DC-LOWER"] {
-                if let s = result.first(where: { $0.name == name }) {
-                    out.append(s)
-                }
-            }
-        }
-        if book.isEnabled(.keltner) {
-            let result = (try? KC.calculate(
-                kline: kline,
-                params: [Decimal(book.keltnerEMA), Decimal(book.keltnerATR), book.keltnerMultiplier]
-            )) ?? []
-            // 输出 3 线：KC-UPPER / KC-MID / KC-LOWER
-            for name in ["KC-UPPER", "KC-MID", "KC-LOWER"] {
-                if let s = result.first(where: { $0.name == name }) {
-                    out.append(s)
-                }
-            }
-        }
-        return out
-    }
-}
+// v17.156 · MainChartOverlayCompute 已移至 Sources/MainApp/OverlayIncrementalStates.swift（Linux 跨平台 + 单测可达）
 
 // MARK: - Mock 数据生成（spike 占位 · 后续 WP 接 MarketDataProvider）
 

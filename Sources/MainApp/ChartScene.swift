@@ -1586,28 +1586,40 @@ struct ChartScene: View {
             .frame(width: 90)
             .tooltip("副图指标多选（至少 1 · 最多 4 · 点空白关闭弹窗）")
             .popover(isPresented: $showSubIndicatorPicker, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("副图（多选 · 点空白关闭）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Divider()
-                    ForEach(SubIndicatorKind.allCases) { k in
-                        Toggle(k.shortName, isOn: Binding(
-                            get: { selectedSubIndicators.contains(k) },
-                            set: { isOn in
-                                if isOn {
-                                    selectedSubIndicators.insert(k)
-                                } else if selectedSubIndicators.count > 1 {
-                                    // 至少保留 1 个 · 防 UI 空白
-                                    selectedSubIndicators.remove(k)
+                // v17.158 · 按 IndicatorCategory 分组（30 项平铺 → 6 大类紧凑分段 · trader 浏览效率提升）
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("副图（多选 · 点空白关闭）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Divider()
+                        ForEach(IndicatorCategory.allCases, id: \.self) { cat in
+                            let items = SubIndicatorKind.allCases.filter { $0.category == cat }
+                            if !items.isEmpty {
+                                Text(SubIndicatorPickerCategoryLabel.title(cat))
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 4)
+                                ForEach(items) { k in
+                                    Toggle(k.shortName, isOn: Binding(
+                                        get: { selectedSubIndicators.contains(k) },
+                                        set: { isOn in
+                                            if isOn {
+                                                selectedSubIndicators.insert(k)
+                                            } else if selectedSubIndicators.count > 1 {
+                                                selectedSubIndicators.remove(k)
+                                            }
+                                        }
+                                    ))
+                                    .toggleStyle(.checkbox)
+                                    .padding(.leading, 8)
                                 }
                             }
-                        ))
-                        .toggleStyle(.checkbox)
+                        }
                     }
+                    .padding(12)
                 }
-                .padding(12)
-                .frame(width: 180)
+                .frame(width: 200, height: 460)
             }
 
             Divider().frame(height: 16)

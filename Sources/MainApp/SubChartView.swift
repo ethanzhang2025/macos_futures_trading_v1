@@ -89,6 +89,20 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// v17.158 · 分类（与 IndicatorCore.IndicatorCategory 同步 · trader 副图 picker 按 6 大类分组下拉）
+    /// 映射来自 IndicatorCore canonical category：MACD/DMI/TRIX/CMO 等都属 oscillator · MFI/CMF/VR/PVT/ADL 都属 volume
+    var category: IndicatorCategory {
+        switch self {
+        case .macd, .kdj, .rsi, .cci, .wr, .dmi, .stoch, .roc, .bias,
+             .elderRay, .choppiness, .trix, .cmo:        return .oscillator
+        case .volume, .obv, .forceIndex, .cmf, .pvt, .vr, .adl, .mfi: return .volume
+        case .aroon, .stc, .adx:                          return .trend
+        case .bbw, .atrp:                                 return .volatility
+        case .volumeProfile:                              return .structure
+        case .oi:                                         return .futures
+        }
+    }
+
     /// 短名（Picker 紧凑显示）
     var shortName: String {
         switch self {
@@ -120,6 +134,20 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .adl:    return "ADL"
         case .mfi:    return "MFI"
         case .cmo:    return "CMO"
+        }
+    }
+}
+
+// v17.158 · 副图 picker 分类中文标签（仅 UI 显示用 · 不污染 IndicatorCore.IndicatorCategory）
+enum SubIndicatorPickerCategoryLabel {
+    static func title(_ cat: IndicatorCategory) -> String {
+        switch cat {
+        case .trend:       return "趋势"
+        case .oscillator:  return "震荡"
+        case .volume:      return "量价"
+        case .volatility:  return "波动率"
+        case .structure:   return "结构"
+        case .futures:     return "期货"
         }
     }
 }

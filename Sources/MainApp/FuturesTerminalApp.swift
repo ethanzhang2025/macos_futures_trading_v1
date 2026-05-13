@@ -841,25 +841,57 @@ private struct OpenGlobalShortcutsButton: View {
 /// v12.18 文华 .wh 公式批量导入（WP-63 commit 4 · 完整真闭环）
 /// 工具菜单 → 选 .wh 文件 → WhImporter.importAll → NSAlert 显示编译报告
 // v17.169 · CSV K 线导入按钮（工具菜单 · ⌘⇧⌥I 触发）
+// v17.176 · v2 闭环：解析后实际 append 到 storeManager.kline（SQLite K 线缓存）· 主图 reload 即可看见
 private struct OpenCSVImportButton: View {
     @State private var showSheet = false
+    @Environment(\.storeManager) private var storeManager
     var body: some View {
         Button("导入 K 线 CSV...") { showSheet = true }
             .keyboardShortcut("i", modifiers: [.command, .shift, .option])
             .sheet(isPresented: $showSheet) {
                 KLineCSVImportSheet { result, instrumentID, period in
-                    // v1 简化：导入完成后用 NSAlert 通知 · 不入 SQLite（caller v2 接 SQLite store 持久化）
-                    let alert = NSAlert()
-                    alert.messageText = "CSV 导入完成"
-                    alert.informativeText = """
-                    合约 \(instrumentID) · 周期 \(period.rawValue)
-                    解析 \(result.bars.count) 根 · 跳过 \(result.errors.count) 行
-                    时间格式 \(result.detectedFormat)
+                    let store = storeManager
+                    Task { @MainActor in
+                        var importedCount = 0
+                        var saveError: String? = nil
+                        if let store = store, !result.bars.isEmpty {
+                            do {
+                                // 与 instrumentID/period 重新打标（CSV 可能默认 RB0/.minute1 · trader 选了别的）
+                                let tagged: [KLine] = result.bars.map { bar in
+                                    KLine(
+                                        instrumentID: instrumentID, period: period,
+                                        openTime: bar.openTime,
+                                        open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+                                        volume: bar.volume,
+                                        openInterest: bar.openInterest,
+                                        turnover: bar.turnover
+                                    )
+                                }
+                                try await store.kline.append(tagged, instrumentID: instrumentID, period: period, maxBars: 0)
+                                importedCount = tagged.count
+                            } catch {
+                                saveError = "\(error)"
+                            }
+                        } else if store == nil {
+                            saveError = "StoreManager 未启动 · 数据停留在内存（重启 App 后丢失）"
+                        }
+                        let alert = NSAlert()
+                        alert.messageText = "CSV 导入完成"
+                        alert.informativeText = """
+                        合约 \(instrumentID) · 周期 \(period.rawValue)
+                        解析 \(result.bars.count) 根 · 跳过 \(result.errors.count) 行
+                        时间格式 \(result.detectedFormat)
+                        SQLite 入库 \(importedCount) 根\(saveError.map { " · 失败 \($0)" } ?? "")
 
-                    （v1：数据存内存 · 后续 v2 接 SQLiteKLineStore 持久化 + 加载到主图回测）
-                    """
-                    alert.alertStyle = result.errors.isEmpty ? .informational : .warning
-                    alert.runModal()
+                        重新打开主图（合约 \(instrumentID) · \(period.displayName)）即可加载。
+                        """
+                        if saveError != nil {
+                            alert.alertStyle = .warning
+                        } else {
+                            alert.alertStyle = result.errors.isEmpty ? .informational : .warning
+                        }
+                        alert.runModal()
+                    }
                 }
             }
     }

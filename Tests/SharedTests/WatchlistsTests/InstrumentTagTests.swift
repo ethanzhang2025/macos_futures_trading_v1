@@ -115,4 +115,82 @@ struct InstrumentTagStoreTests {
         #expect(b.tags(for: "RB0").isEmpty)
         #expect(b.allInstrumentTags().isEmpty)
     }
+
+    // MARK: - v17.152 · 全工程批量管理（rename / merge / delete）
+
+    @Test("v17.152 · renameTagGlobally · 多 instrument 上的标签全部重命名")
+    func renameGlobally() {
+        let (store, _) = makeStore()
+        store.setTags(["主力", "日内"], for: "RB0")
+        store.setTags(["主力", "波段"], for: "AU0")
+        store.setTags(["对冲腿"],     for: "I0")   // 不含 oldTag
+        let affected = store.renameTagGlobally(oldTag: "主力", newTag: "主力合约")
+        #expect(affected == 2)
+        #expect(store.tags(for: "RB0") == ["主力合约", "日内"])   // 顺序保留
+        #expect(store.tags(for: "AU0") == ["主力合约", "波段"])
+        #expect(store.tags(for: "I0") == ["对冲腿"])              // 未影响
+    }
+
+    @Test("v17.152 · renameTagGlobally · merge 语义（newTag 已存在 · 去重保留 newTag）")
+    func renameMergesIntoExistingTag() {
+        let (store, _) = makeStore()
+        store.setTags(["波段", "长线"], for: "RB0")   // 同时含 oldTag(波段) 和 newTag(长线)
+        let affected = store.renameTagGlobally(oldTag: "波段", newTag: "长线")
+        #expect(affected == 1)
+        #expect(store.tags(for: "RB0") == ["长线"])   // 去重 · 保留 newTag
+    }
+
+    @Test("v17.152 · renameTagGlobally · oldTag 不存在 → 0 affected · 数据不变")
+    func renameUnknownTagReturnsZero() {
+        let (store, _) = makeStore()
+        store.setTags(["主力"], for: "RB0")
+        let affected = store.renameTagGlobally(oldTag: "不存在", newTag: "新名")
+        #expect(affected == 0)
+        #expect(store.tags(for: "RB0") == ["主力"])
+    }
+
+    @Test("v17.152 · renameTagGlobally · oldTag == newTag 或空 · 0 affected 拒绝")
+    func renameRejectsEmptyOrSame() {
+        let (store, _) = makeStore()
+        store.setTags(["主力"], for: "RB0")
+        #expect(store.renameTagGlobally(oldTag: "", newTag: "新") == 0)
+        #expect(store.renameTagGlobally(oldTag: "主力", newTag: "") == 0)
+        #expect(store.renameTagGlobally(oldTag: "主力", newTag: "主力") == 0)
+    }
+
+    @Test("v17.152 · deleteTagGlobally · 多 instrument 上的标签全部移除 · 空 entry 紧凑")
+    func deleteGlobally() {
+        let (store, _) = makeStore()
+        store.setTags(["主力", "日内"], for: "RB0")
+        store.setTags(["主力"],         for: "AU0")   // 仅一个标签
+        store.setTags(["对冲腿"],       for: "I0")
+        let affected = store.deleteTagGlobally("主力")
+        #expect(affected == 2)
+        #expect(store.tags(for: "RB0") == ["日内"])
+        #expect(store.tags(for: "AU0").isEmpty)        // 仅一个标签 → 空数组 · entry 移除
+        #expect(store.tags(for: "I0") == ["对冲腿"])
+        // 全局快照不再含 "主力"
+        #expect(!store.allTagsAcrossInstruments().contains("主力"))
+    }
+
+    @Test("v17.152 · deleteTagGlobally · 不存在标签 → 0 affected")
+    func deleteUnknownReturnsZero() {
+        let (store, _) = makeStore()
+        store.setTags(["主力"], for: "RB0")
+        #expect(store.deleteTagGlobally("不存在") == 0)
+        #expect(store.tags(for: "RB0") == ["主力"])
+    }
+
+    @Test("v17.152 · instrumentCountFor · rename/delete 前预览影响数")
+    func instrumentCountPreview() {
+        let (store, _) = makeStore()
+        store.setTags(["主力", "日内"], for: "RB0")
+        store.setTags(["主力"],         for: "AU0")
+        store.setTags(["波段"],         for: "I0")
+        #expect(store.instrumentCountFor(tag: "主力") == 2)
+        #expect(store.instrumentCountFor(tag: "波段") == 1)
+        #expect(store.instrumentCountFor(tag: "日内") == 1)
+        #expect(store.instrumentCountFor(tag: "不存在") == 0)
+        #expect(store.instrumentCountFor(tag: "") == 0)
+    }
 }

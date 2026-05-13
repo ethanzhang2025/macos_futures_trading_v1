@@ -84,6 +84,8 @@ struct WatchlistWindow: View {
     @State private var pendingTagInstrumentID: NoteEditTarget?
     /// v17.132 · 标签筛选 · CSV string · 空 = 不筛选 · 多标签 OR 关系（含任一即匹配） · 跨重启保留
     @AppStorage("viewState.v1.watchlist.tagFilterRaw") private var tagFilterRaw: String = ""
+    /// v17.152 · 标签全工程批量管理 sheet 显隐（rename / delete · trader 标签整理）
+    @State private var showTagManagerSheet: Bool = false
 
     /// v17.134 · 合约别名 store · trader 自定义名（"豆粕 0509" 替代 m2509）· UserDefaults 持久化
     private let aliasStore = InstrumentAliasStore()
@@ -332,6 +334,12 @@ struct WatchlistWindow: View {
             ) { newTags in
                 tagStore.setTags(newTags, for: target.id)
                 flagsRevision += 1   // 复用 tick 触发 row 重渲
+            }
+        }
+        // v17.152 · 标签全工程批量管理 sheet（rename / delete · trader 标签整理）
+        .sheet(isPresented: $showTagManagerSheet) {
+            TagManagerSheet(tagStore: tagStore) {
+                flagsRevision += 1   // 改完触发 row 重渲（含筛选器实时更新）
             }
         }
         // v17.134 · 别名编辑 sheet
@@ -1277,12 +1285,19 @@ struct WatchlistWindow: View {
                     Button("清空标签筛选（\(active.count)）") { clearTagFilter() }
                 }
             }
+            // v17.152 · 全工程批量管理（rename / delete）
+            if !known.isEmpty {
+                Divider()
+                Button("⚙️ 管理标签...（重命名 / 删除）") {
+                    showTagManagerSheet = true
+                }
+            }
         } label: {
             Label(active.isEmpty ? "标签" : "标签（\(active.count)）",
                   systemImage: active.isEmpty ? "tag" : "tag.fill")
                 .foregroundColor(active.isEmpty ? .primary : .accentColor)
         }
-        .tooltip("按合约标签筛选 · 多选 OR 关系（含任一即匹配）· v17.132")
+        .tooltip("按合约标签筛选 · 多选 OR 关系（含任一即匹配）· v17.132 · v17.152 加批量管理")
     }
 
     /// v17.147 · 已存档显隐 toggle 按钮（trader 默认显示灰色降级 · 关闭后只看活跃合约）
@@ -3008,6 +3023,149 @@ private enum MockQuote {
     static func price(for id: String) -> String { table[id]?.price ?? "—" }
     static func changePct(for id: String) -> String { table[id]?.changePct ?? "—" }
     static func openInterest(for id: String) -> String { table[id]?.openInt ?? "—" }
+}
+
+// MARK: - Sheet · 标签全工程批量管理（v17.152 · trader 标签整理 · rename / delete 全合约生效）
+
+private struct TagManagerSheet: View {
+
+    let tagStore: InstrumentTagStore
+    let onChange: () -> Void   // 改完触发父级 row 重渲（filter 下拉同步刷新）
+
+    @Environment(\.dismiss) private var dismiss
+    /// 标签列表 + 影响合约数（refresh 时重算 · sheet 内 inline 编辑后再 refresh）
+    @State private var entries: [(tag: String, count: Int)] = []
+    @State private var renameTarget: String? = nil   // 当前正在 inline 重命名的标签
+    @State private var renameDraft: String = ""
+    @State private var deleteConfirm: String? = nil   // 删除确认对话框目标
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("⚙️ 标签管理（v17.152）").font(.title2).bold()
+                Spacer()
+                Button("关闭") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            Text("trader 全工程标签整理 · 重命名 = 所有合约该标签同步更新（含 merge 去重）· 删除 = 所有合约移除该标签")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            if entries.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "tag")
+                        .font(.system(size: 32))
+                        .foregroundColor(.secondary.opacity(0.6))
+                    Text("当前无标签 · 在合约右键「🏷️ 添加标签」创建后即可在此管理")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(entries, id: \.tag) { entry in
+                            row(for: entry)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 540, height: 480)
+        .onAppear { refresh() }
+        .confirmationDialog(
+            "删除标签",
+            isPresented: deleteConfirmBinding,
+            titleVisibility: .visible,
+            presenting: deleteConfirm
+        ) { tag in
+            Button("删除「#\(tag)」（影响 \(tagStore.instrumentCountFor(tag: tag)) 个合约）", role: .destructive) {
+                let affected = tagStore.deleteTagGlobally(tag)
+                if affected > 0 { onChange() }
+                refresh()
+            }
+            Button("取消", role: .cancel) {}
+        } message: { tag in
+            Text("将从所有合约移除「#\(tag)」标签 · 不可撤销")
+        }
+    }
+
+    @ViewBuilder
+    private func row(for entry: (tag: String, count: Int)) -> some View {
+        HStack(spacing: 8) {
+            if renameTarget == entry.tag {
+                // inline 重命名输入
+                TextField("新标签名", text: $renameDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
+                    .onSubmit { commitRename(from: entry.tag) }
+                Button("✓ 确定") { commitRename(from: entry.tag) }
+                    .keyboardShortcut(.defaultAction)
+                Button("✗ 取消") { renameTarget = nil }
+                    .buttonStyle(.borderless)
+            } else {
+                Text("#\(entry.tag)")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(.accentColor)
+                    .frame(maxWidth: 200, alignment: .leading)
+                Text("\(entry.count) 个合约")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button {
+                    renameTarget = entry.tag
+                    renameDraft = entry.tag
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .buttonStyle(.borderless)
+                .tooltip("重命名（merge 语义 · 若新名已存在则去重保留新名）")
+                Button {
+                    deleteConfirm = entry.tag
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.borderless)
+                .tooltip("从所有 \(entry.count) 个合约移除该标签")
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.secondary.opacity(0.06))
+        )
+    }
+
+    private var deleteConfirmBinding: Binding<Bool> {
+        Binding(
+            get: { deleteConfirm != nil },
+            set: { if !$0 { deleteConfirm = nil } }
+        )
+    }
+
+    private func commitRename(from oldTag: String) {
+        let new = renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !new.isEmpty, new != oldTag else {
+            renameTarget = nil
+            return
+        }
+        let affected = tagStore.renameTagGlobally(oldTag: oldTag, newTag: new)
+        if affected > 0 { onChange() }
+        renameTarget = nil
+        refresh()
+    }
+
+    private func refresh() {
+        let known = tagStore.allTagsAcrossInstruments()
+        entries = known.map { ($0, tagStore.instrumentCountFor(tag: $0)) }
+    }
 }
 
 #endif

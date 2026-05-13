@@ -106,6 +106,64 @@ public struct InstrumentTagStore {
         defaults.removeObject(forKey: Self.defaultsKey)
     }
 
+    // MARK: - v17.152 · 全工程批量管理（rename / merge / delete · trader 标签整理）
+
+    /// 全局重命名标签 · 所有 instrument 上的 oldTag 都改成 newTag
+    /// merge 语义：若 instrument 同时有 oldTag 和 newTag · rename 后去重（保留 newTag · 删 oldTag）
+    /// - Returns: 受影响的 instrument 数量（0 = 未匹配 · oldTag 不存在或 newTag 非法）
+    @discardableResult
+    public func renameTagGlobally(oldTag: String, newTag: String) -> Int {
+        let oldTrim = trimAndClip(oldTag)
+        let newTrim = trimAndClip(newTag)
+        guard !oldTrim.isEmpty, !newTrim.isEmpty, oldTrim != newTrim else { return 0 }
+        var dict = allInstrumentTags()
+        var affected = 0
+        for (id, tags) in dict {
+            guard let idx = tags.firstIndex(of: oldTrim) else { continue }
+            var copy = tags
+            copy.remove(at: idx)
+            // merge：newTrim 已存在则去重 · 否则插入到原位（保留语义顺序）
+            if !copy.contains(newTrim) {
+                copy.insert(newTrim, at: idx)
+            }
+            dict[id] = copy
+            affected += 1
+        }
+        guard affected > 0 else { return 0 }
+        defaults.set(dict, forKey: Self.defaultsKey)
+        return affected
+    }
+
+    /// 全局删除标签 · 所有 instrument 上的此标签都移除
+    /// - Returns: 受影响的 instrument 数量
+    @discardableResult
+    public func deleteTagGlobally(_ tag: String) -> Int {
+        let trim = trimAndClip(tag)
+        guard !trim.isEmpty else { return 0 }
+        var dict = allInstrumentTags()
+        var affected = 0
+        for (id, tags) in dict {
+            guard tags.contains(trim) else { continue }
+            let filtered = tags.filter { $0 != trim }
+            if filtered.isEmpty {
+                dict.removeValue(forKey: id)   // 清空 → 移除 entry 紧凑
+            } else {
+                dict[id] = filtered
+            }
+            affected += 1
+        }
+        guard affected > 0 else { return 0 }
+        defaults.set(dict, forKey: Self.defaultsKey)
+        return affected
+    }
+
+    /// 该标签影响的 instrument 数（rename / delete 前预览用 · "影响 N 个合约"提示）
+    public func instrumentCountFor(tag: String) -> Int {
+        let trim = trimAndClip(tag)
+        guard !trim.isEmpty else { return 0 }
+        return allInstrumentTags().values.reduce(0) { $0 + ($1.contains(trim) ? 1 : 0) }
+    }
+
     // MARK: - helpers
 
     private func trimAndClip(_ s: String) -> String {

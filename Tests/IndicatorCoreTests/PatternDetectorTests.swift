@@ -139,6 +139,90 @@ struct PatternDetectorTests {
         #expect(Set(ends).count == ends.count, "dedup 后 endIndex 不重复 · 实际 \(ends)")
     }
 
+    // MARK: - v17.173 · 三角 / 矩形
+
+    @Test("上升三角 · 两顶 ≈ 水平 + 底逐步抬升 · 检出 direction +1")
+    func detectAscendingTriangle() throws {
+        // 4 pivot：低 100 / 高 120 / 低 110 / 高 121
+        // 顶水平差 = 1/121 ≈ 0.83% ≤ 2% ✓ · 底抬升 = 10/100 = 10% ≥ 1.5% ✓
+        let prices: [Double] = [100, 100, 120, 120, 110, 110, 121, 121, 115]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        let asc = detected.filter { $0.kind == .ascendingTriangle }
+        #expect(asc.count >= 1, "应至少检出 1 个上升三角 · detected=\(detected.map { ($0.kind, $0.confidence) })")
+        if let p = asc.first {
+            #expect(p.kind.direction == 1)
+            #expect(p.pivotPrices.count == 4)
+        }
+    }
+
+    @Test("下降三角 · 两底 ≈ 水平 + 顶逐步下压 · 检出 direction -1")
+    func detectDescendingTriangle() throws {
+        // 4 pivot：高 120 / 低 100 / 高 110 / 低 101
+        // 底水平差 = 1/100 = 1% ≤ 2% ✓ · 顶下压 = 10/120 ≈ 8.3% ≥ 1.5% ✓
+        let prices: [Double] = [120, 120, 100, 100, 110, 110, 101, 101, 105]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        let desc = detected.filter { $0.kind == .descendingTriangle }
+        #expect(desc.count >= 1)
+        if let p = desc.first {
+            #expect(p.kind.direction == -1)
+        }
+    }
+
+    @Test("矩形 · 顶底都水平 + range 足够 · 检出 direction 0（中性）")
+    func detectRectangle() throws {
+        // 4 pivot peak-trough-peak-trough：120/100/121/101
+        // 顶差 = 1/121 ≈ 0.83% · 底差 = 1/100 = 1% · 都 ≤ 2% ✓
+        // range = (120.5-100.5)/100.5 ≈ 19.9% · 远 ≥ 2% ✓
+        let prices: [Double] = [120, 120, 100, 100, 121, 121, 101, 101, 110]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        let rect = detected.filter { $0.kind == .rectangle }
+        #expect(rect.count >= 1)
+        if let p = rect.first {
+            #expect(p.kind.direction == 0)
+        }
+    }
+
+    @Test("上升三角 · 底没抬升（10 持平）· 不应识别")
+    func ascendingTriangleRejectsFlatLow() throws {
+        // 4 pivot：低 100 / 高 120 / 低 100.5 / 高 121
+        // 底抬升 = 0.5/100 = 0.5% < 1.5% 阈值 · 拒
+        let prices: [Double] = [100, 100, 120, 120, 100.5, 100.5, 121, 121, 115]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        #expect(detected.filter { $0.kind == .ascendingTriangle }.isEmpty)
+    }
+
+    @Test("矩形 · range 太小（≤ 2%）· 不应识别")
+    func rectangleRejectsThinRange() throws {
+        // 4 pivot peak-trough-peak-trough：101/100/100.8/100.2
+        // 顶底水平 OK · 但 range = 0.4/100.2 ≈ 0.4% < 2% · 拒
+        let prices: [Double] = [101, 101, 100, 100, 100.8, 100.8, 100.2, 100.2, 100.5]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        #expect(detected.filter { $0.kind == .rectangle }.isEmpty)
+    }
+
+    @Test("下降三角 · 两底不水平（差 6%）· 不应识别")
+    func descendingTriangleRejectsAsymmetricBottoms() throws {
+        // 4 pivot：高 120 / 低 100 / 高 110 / 低 106  · 底差 = 6/100 = 6% > 2% 阈值
+        let prices: [Double] = [120, 120, 100, 100, 110, 110, 106, 106, 105]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        #expect(detected.filter { $0.kind == .descendingTriangle }.isEmpty)
+    }
+
+    @Test("PatternKind allCases · v17.173 后扩到 7 case")
+    func patternKindAllCasesCount() {
+        #expect(PatternKind.allCases.count == 7)
+        let kinds = Set(PatternKind.allCases)
+        #expect(kinds.contains(.ascendingTriangle))
+        #expect(kinds.contains(.descendingTriangle))
+        #expect(kinds.contains(.rectangle))
+    }
+
     // MARK: - 排序
 
     @Test("结果按 startIndex 升序")

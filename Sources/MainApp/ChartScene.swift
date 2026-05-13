@@ -3667,10 +3667,14 @@ struct ChartContentView: View {
             let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
             let span = max(0.0001, hi - lo)
             ForEach(Array(visiblePatterns.enumerated()), id: \.offset) { _, pattern in
-                let isBull = pattern.kind.direction > 0
-                let patternColor = isBull
-                    ? chartTheme.candleUp(mode: candleColorMode)
-                    : chartTheme.candleDown(mode: candleColorMode)
+                let dir = pattern.kind.direction
+                let isBull = dir > 0
+                // v17.173 · direction == 0（矩形等中性）渲染灰色 · 与 candleUp/Down 区分
+                let patternColor: Color = dir == 0
+                    ? Color.gray
+                    : (isBull
+                        ? chartTheme.candleUp(mode: candleColorMode)
+                        : chartTheme.candleDown(mode: candleColorMode))
                 // 1. 连接 pivots 的折线（指示形态形状）
                 Path { path in
                     var started = false

@@ -28,6 +28,10 @@ public enum PatternKind: String, Sendable, Codable, CaseIterable {
     case headAndShouldersBottom   // 头肩底（底部反转 · 看多）
     case doubleTop                 // 双顶（顶部反转 · 看空）
     case doubleBottom              // 双底（底部反转 · 看多）
+    // v17.173 · 三角/矩形继续形态扩展
+    case ascendingTriangle        // 上升三角（顶部水平 · 底部抬升 · 看多突破）
+    case descendingTriangle       // 下降三角（底部水平 · 顶部下压 · 看空击穿）
+    case rectangle                // 矩形整理（顶底都水平 · 中性等突破）
 
     public var displayName: String {
         switch self {
@@ -35,14 +39,18 @@ public enum PatternKind: String, Sendable, Codable, CaseIterable {
         case .headAndShouldersBottom: return "头肩底"
         case .doubleTop:              return "双顶"
         case .doubleBottom:           return "双底"
+        case .ascendingTriangle:      return "上升三角"
+        case .descendingTriangle:     return "下降三角"
+        case .rectangle:              return "矩形整理"
         }
     }
 
-    /// 信号方向 · +1 = 看多反转 · -1 = 看空反转
+    /// 信号方向 · +1 = 看多反转/突破 · -1 = 看空反转/击穿 · 0 = 中性等突破方向
     public var direction: Int {
         switch self {
-        case .headAndShouldersBottom, .doubleBottom: return 1
-        case .headAndShouldersTop, .doubleTop:       return -1
+        case .headAndShouldersBottom, .doubleBottom, .ascendingTriangle: return 1
+        case .headAndShouldersTop, .doubleTop, .descendingTriangle:      return -1
+        case .rectangle:                                                  return 0
         }
     }
 
@@ -53,6 +61,9 @@ public enum PatternKind: String, Sendable, Codable, CaseIterable {
         case .headAndShouldersBottom: return "triangle.fill"
         case .doubleTop:              return "m.circle"
         case .doubleBottom:           return "w.circle"
+        case .ascendingTriangle:      return "arrow.up.right.circle"
+        case .descendingTriangle:     return "arrow.down.right.circle"
+        case .rectangle:              return "rectangle"
         }
     }
 }
@@ -92,6 +103,12 @@ public struct PatternDetectorParams: Sendable, Equatable {
     public var doubleTopTolerance: Double
     /// 双顶/底 · 中间回撤最少占顶部价格比例（默认 0.02 = 2%）· 防"假双顶"
     public var doubleTopMidRetracementMin: Double
+    /// v17.173 · 三角/矩形 · 水平线对齐容忍（默认 0.02 = 2%）· "几乎水平"判定
+    public var triangleHorizontalTolerance: Double
+    /// v17.173 · 三角 · 抬升/下压斜线最小斜率（trough 价差占低端比例 · 默认 0.015 = 1.5%）
+    public var triangleSlopingMin: Double
+    /// v17.173 · 矩形 · range 最少占下边界比例（默认 0.02 = 2%）· 防"扁平假矩形"
+    public var rectangleRangeMin: Double
 
     public init(
         zigzagPercent: Decimal = 3,
@@ -99,7 +116,10 @@ public struct PatternDetectorParams: Sendable, Equatable {
         headProminenceMin: Double = 0.03,
         necklineTolerance: Double = 0.10,
         doubleTopTolerance: Double = 0.03,
-        doubleTopMidRetracementMin: Double = 0.02
+        doubleTopMidRetracementMin: Double = 0.02,
+        triangleHorizontalTolerance: Double = 0.02,
+        triangleSlopingMin: Double = 0.015,
+        rectangleRangeMin: Double = 0.02
     ) {
         self.zigzagPercent = zigzagPercent
         self.shoulderSymmetryTolerance = shoulderSymmetryTolerance
@@ -107,6 +127,9 @@ public struct PatternDetectorParams: Sendable, Equatable {
         self.necklineTolerance = necklineTolerance
         self.doubleTopTolerance = doubleTopTolerance
         self.doubleTopMidRetracementMin = doubleTopMidRetracementMin
+        self.triangleHorizontalTolerance = triangleHorizontalTolerance
+        self.triangleSlopingMin = triangleSlopingMin
+        self.rectangleRangeMin = rectangleRangeMin
     }
 
     public static let `default` = PatternDetectorParams()
@@ -149,7 +172,128 @@ public enum PatternDetector {
             }
         }
 
+        // v17.173 · 滑动 4 pivot 窗口 · 检 三角形 + 矩形
+        if pivots.count >= 4 {
+            for i in 0...(pivots.count - 4) {
+                let window = Array(pivots[i..<(i + 4)])
+                if let p = checkAscendingTriangle(window, params: params) {
+                    detected.append(p)
+                }
+                if let p = checkDescendingTriangle(window, params: params) {
+                    detected.append(p)
+                }
+                if let p = checkRectangle(window, params: params) {
+                    detected.append(p)
+                }
+            }
+        }
+
         return dedupByEndIndex(detected)
+    }
+
+    // MARK: - v17.173 · 三角 / 矩形匹配模板（4 pivot 窗口）
+
+    /// 上升三角（顶水平 · 底抬升 · 看多突破）
+    /// pivot 模式 trough-peak-trough-peak：底逐步抬高 · 两顶接近水平
+    private static func checkAscendingTriangle(
+        _ p: [(idx: Int, price: Decimal)],
+        params: PatternDetectorParams
+    ) -> DetectedPattern? {
+        guard p.count == 4 else { return nil }
+        guard p[0].price < p[1].price,
+              p[1].price > p[2].price,
+              p[2].price < p[3].price else { return nil }
+        let lo1 = doubleValue(p[0].price)
+        let hi1 = doubleValue(p[1].price)
+        let lo2 = doubleValue(p[2].price)
+        let hi2 = doubleValue(p[3].price)
+        // 两顶水平容忍
+        let topDiff = abs(hi1 - hi2) / max(hi1, hi2)
+        guard topDiff <= params.triangleHorizontalTolerance else { return nil }
+        // 底必须抬升（lo2 > lo1）+ 斜率达标
+        guard lo2 > lo1 else { return nil }
+        let slope = (lo2 - lo1) / lo1
+        guard slope >= params.triangleSlopingMin else { return nil }
+        let confidence = (1 - topDiff / params.triangleHorizontalTolerance) * 0.6
+                       + min(1, slope / (params.triangleSlopingMin * 3)) * 0.4
+        return DetectedPattern(
+            kind: .ascendingTriangle,
+            pivotIndices: p.map(\.idx),
+            pivotPrices: p.map(\.price),
+            confidence: clamp01(confidence)
+        )
+    }
+
+    /// 下降三角（底水平 · 顶下压 · 看空击穿）
+    /// pivot 模式 peak-trough-peak-trough：顶逐步下压 · 两底接近水平
+    private static func checkDescendingTriangle(
+        _ p: [(idx: Int, price: Decimal)],
+        params: PatternDetectorParams
+    ) -> DetectedPattern? {
+        guard p.count == 4 else { return nil }
+        guard p[0].price > p[1].price,
+              p[1].price < p[2].price,
+              p[2].price > p[3].price else { return nil }
+        let hi1 = doubleValue(p[0].price)
+        let lo1 = doubleValue(p[1].price)
+        let hi2 = doubleValue(p[2].price)
+        let lo2 = doubleValue(p[3].price)
+        // 两底水平容忍
+        let bottomDiff = abs(lo1 - lo2) / min(lo1, lo2)
+        guard bottomDiff <= params.triangleHorizontalTolerance else { return nil }
+        // 顶必须下压（hi2 < hi1）+ 斜率达标
+        guard hi2 < hi1 else { return nil }
+        let slope = (hi1 - hi2) / hi1
+        guard slope >= params.triangleSlopingMin else { return nil }
+        let confidence = (1 - bottomDiff / params.triangleHorizontalTolerance) * 0.6
+                       + min(1, slope / (params.triangleSlopingMin * 3)) * 0.4
+        return DetectedPattern(
+            kind: .descendingTriangle,
+            pivotIndices: p.map(\.idx),
+            pivotPrices: p.map(\.price),
+            confidence: clamp01(confidence)
+        )
+    }
+
+    /// 矩形整理（顶底都水平 · 中性等突破方向）
+    /// 4 pivot 接受两种模式 peak-trough-peak-trough 或 trough-peak-trough-peak（同 4 边界）
+    private static func checkRectangle(
+        _ p: [(idx: Int, price: Decimal)],
+        params: PatternDetectorParams
+    ) -> DetectedPattern? {
+        guard p.count == 4 else { return nil }
+        let highs: [Double]
+        let lows: [Double]
+        // peak-trough-peak-trough（开头高）
+        if p[0].price > p[1].price && p[2].price > p[3].price && p[1].price < p[2].price {
+            highs = [doubleValue(p[0].price), doubleValue(p[2].price)]
+            lows  = [doubleValue(p[1].price), doubleValue(p[3].price)]
+        }
+        // trough-peak-trough-peak（开头低）
+        else if p[0].price < p[1].price && p[2].price < p[3].price && p[1].price > p[2].price {
+            highs = [doubleValue(p[1].price), doubleValue(p[3].price)]
+            lows  = [doubleValue(p[0].price), doubleValue(p[2].price)]
+        } else {
+            return nil
+        }
+        let highDiff = abs(highs[0] - highs[1]) / max(highs[0], highs[1])
+        let lowDiff = abs(lows[0] - lows[1]) / min(lows[0], lows[1])
+        guard highDiff <= params.triangleHorizontalTolerance,
+              lowDiff <= params.triangleHorizontalTolerance else { return nil }
+        let avgHigh = (highs[0] + highs[1]) / 2
+        let avgLow = (lows[0] + lows[1]) / 2
+        let rangeRatio = (avgHigh - avgLow) / avgLow
+        guard rangeRatio >= params.rectangleRangeMin else { return nil }
+        // 矩形 confidence：顶底越水平 + range 越显著（最高 1.0）
+        let confidence = (1 - highDiff / params.triangleHorizontalTolerance) * 0.35
+                       + (1 - lowDiff / params.triangleHorizontalTolerance) * 0.35
+                       + min(1, rangeRatio / (params.rectangleRangeMin * 4)) * 0.3
+        return DetectedPattern(
+            kind: .rectangle,
+            pivotIndices: p.map(\.idx),
+            pivotPrices: p.map(\.price),
+            confidence: clamp01(confidence)
+        )
     }
 
     // MARK: - Pivot 抽取
@@ -295,13 +439,15 @@ public enum PatternDetector {
 
     // MARK: - helpers
 
-    /// 同 endIndex 多形态命中 · 保留 confidence 最高一个
-    /// 典型场景：双顶 + 头肩顶 由相邻窗口重叠命中 · 保留更复杂（confidence 通常更高）的形态
+    /// 同 endIndex 多形态命中 · 先按 pivot 数量优先（结构更长更具体 · v17.173 改进）· 同长度再按 confidence
+    /// 典型场景：4-pivot 上升三角的内含 3-pivot 双顶在同一 endIndex · 偏好三角（结构更长）
     private static func dedupByEndIndex(_ list: [DetectedPattern]) -> [DetectedPattern] {
         var byEnd: [Int: DetectedPattern] = [:]
         for p in list {
             if let existing = byEnd[p.endIndex] {
-                if p.confidence > existing.confidence {
+                let pLen = p.pivotIndices.count
+                let exLen = existing.pivotIndices.count
+                if pLen > exLen || (pLen == exLen && p.confidence > existing.confidence) {
                     byEnd[p.endIndex] = p
                 }
             } else {

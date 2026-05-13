@@ -28,6 +28,9 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
     public var sortAscending: Bool?
     /// v17.133 · 置顶合约 ID 列表（每组 ≤ 3 · 永远在排序结果前 · nil/空 = 无置顶）· 向后兼容旧 JSON
     public var pinnedInstrumentIDs: [String]?
+    /// v17.145 · 已存档合约 ID 列表（trader 已平仓/历史合约不想看到但不删 · nil/空 = 无存档）· 向后兼容旧 JSON
+    /// 语义：archived 合约默认从排序结果隐藏 · UI 单独"显示存档"toggle · pin/archive 互斥
+    public var archivedInstrumentIDs: [String]?
 
     /// v17.133 · 每组最多置顶合约数（trader 主力/次主力/对冲腿 三档即够）
     public static let maxPinnedPerGroup: Int = 3
@@ -44,7 +47,8 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         colorIndex: Int? = nil,
         sortFieldRaw: String? = nil,
         sortAscending: Bool? = nil,
-        pinnedInstrumentIDs: [String]? = nil
+        pinnedInstrumentIDs: [String]? = nil,
+        archivedInstrumentIDs: [String]? = nil
     ) {
         self.id = id
         self.name = name
@@ -58,6 +62,7 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         self.sortFieldRaw = sortFieldRaw
         self.sortAscending = sortAscending
         self.pinnedInstrumentIDs = pinnedInstrumentIDs
+        self.archivedInstrumentIDs = archivedInstrumentIDs
     }
 
     /// 空分组工厂
@@ -72,6 +77,7 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         case colorIndex
         case sortFieldRaw, sortAscending   // v17.131
         case pinnedInstrumentIDs           // v17.133
+        case archivedInstrumentIDs         // v17.145
     }
 
     public init(from decoder: Decoder) throws {
@@ -88,6 +94,7 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         self.sortFieldRaw = try c.decodeIfPresent(String.self, forKey: .sortFieldRaw)
         self.sortAscending = try c.decodeIfPresent(Bool.self, forKey: .sortAscending)
         self.pinnedInstrumentIDs = try c.decodeIfPresent([String].self, forKey: .pinnedInstrumentIDs)
+        self.archivedInstrumentIDs = try c.decodeIfPresent([String].self, forKey: .archivedInstrumentIDs)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -104,6 +111,7 @@ public struct Watchlist: Sendable, Codable, Equatable, Identifiable, Hashable {
         try c.encodeIfPresent(sortFieldRaw, forKey: .sortFieldRaw)
         try c.encodeIfPresent(sortAscending, forKey: .sortAscending)
         try c.encodeIfPresent(pinnedInstrumentIDs, forKey: .pinnedInstrumentIDs)
+        try c.encodeIfPresent(archivedInstrumentIDs, forKey: .archivedInstrumentIDs)
     }
 }
 
@@ -178,11 +186,13 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
     }
 
     /// v17.133 · 置顶合约到分组顶部（每组 ≤ Watchlist.maxPinnedPerGroup · 已置顶幂等 · 上限拒绝）
-    /// - Returns: 是否实际新增置顶（false = 已置顶 / 上限满 / 分组或合约不存在）
+    /// - Returns: 是否实际新增置顶（false = 已置顶 / 上限满 / 分组或合约不存在 / v17.145 已存档）
     @discardableResult
     public mutating func pinInstrument(_ instrumentID: String, in groupID: UUID, now: Date = Date()) -> Bool {
         guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return false }
         guard groups[index].instrumentIDs.contains(instrumentID) else { return false }
+        // v17.145 · pin/archive 互斥 · 已存档不可置顶（trader 不想看到的合约不该再置顶）
+        if groups[index].archivedInstrumentIDs?.contains(instrumentID) == true { return false }
         var pins = groups[index].pinnedInstrumentIDs ?? []
         guard !pins.contains(instrumentID) else { return false }
         guard pins.count < Watchlist.maxPinnedPerGroup else { return false }
@@ -210,6 +220,46 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
     /// v17.133 · 是否置顶
     public func isPinned(_ instrumentID: String, in groupID: UUID) -> Bool {
         group(id: groupID)?.pinnedInstrumentIDs?.contains(instrumentID) ?? false
+    }
+
+    /// v17.145 · 存档合约（trader 已平仓 / 历史合约 · 默认从排序结果隐藏）
+    /// archive 与 pin 互斥：archive 时若已 pin 则同步 unpin（语义：archive 优先级高 · trader 既然不想看就不该置顶）
+    /// - Returns: 是否实际新增存档（false = 已存档 / 分组或合约不存在）
+    @discardableResult
+    public mutating func archiveInstrument(_ instrumentID: String, in groupID: UUID, now: Date = Date()) -> Bool {
+        guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return false }
+        guard groups[index].instrumentIDs.contains(instrumentID) else { return false }
+        var archived = groups[index].archivedInstrumentIDs ?? []
+        guard !archived.contains(instrumentID) else { return false }
+        archived.append(instrumentID)
+        groups[index].archivedInstrumentIDs = archived
+        // archive 时同步清掉置顶（互斥语义）
+        if var pins = groups[index].pinnedInstrumentIDs, let p = pins.firstIndex(of: instrumentID) {
+            pins.remove(at: p)
+            groups[index].pinnedInstrumentIDs = pins.isEmpty ? nil : pins
+        }
+        groups[index].updatedAt = now
+        groups[index].version += 1
+        return true
+    }
+
+    /// v17.145 · 取消存档 · 空数组写回 nil（紧凑存储）
+    /// - Returns: 是否实际移除
+    @discardableResult
+    public mutating func unarchiveInstrument(_ instrumentID: String, in groupID: UUID, now: Date = Date()) -> Bool {
+        guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return false }
+        var archived = groups[index].archivedInstrumentIDs ?? []
+        guard let pos = archived.firstIndex(of: instrumentID) else { return false }
+        archived.remove(at: pos)
+        groups[index].archivedInstrumentIDs = archived.isEmpty ? nil : archived
+        groups[index].updatedAt = now
+        groups[index].version += 1
+        return true
+    }
+
+    /// v17.145 · 是否已存档
+    public func isArchived(_ instrumentID: String, in groupID: UUID) -> Bool {
+        group(id: groupID)?.archivedInstrumentIDs?.contains(instrumentID) ?? false
     }
 
     /// 删除分组
@@ -257,6 +307,11 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
             pins.remove(at: p)
             groups[index].pinnedInstrumentIDs = pins.isEmpty ? nil : pins
         }
+        // v17.145 · 移除时同步清掉存档引用（防 stale）
+        if var archived = groups[index].archivedInstrumentIDs, let a = archived.firstIndex(of: instrumentID) {
+            archived.remove(at: a)
+            groups[index].archivedInstrumentIDs = archived.isEmpty ? nil : archived
+        }
         groups[index].updatedAt = now
         groups[index].version += 1
         return true
@@ -295,6 +350,12 @@ public struct WatchlistBook: Sendable, Codable, Equatable {
            let p = pins.firstIndex(of: instrumentID) {
             pins.remove(at: p)
             groups[sourceIdx].pinnedInstrumentIDs = pins.isEmpty ? nil : pins
+        }
+        // v17.145 · 跨组移动时清掉源组存档引用（同 pin 语义 · 不携带到目标组）
+        if sourceIdx != targetIdx, var archived = groups[sourceIdx].archivedInstrumentIDs,
+           let a = archived.firstIndex(of: instrumentID) {
+            archived.remove(at: a)
+            groups[sourceIdx].archivedInstrumentIDs = archived.isEmpty ? nil : archived
         }
         groups[sourceIdx].updatedAt = now
         groups[sourceIdx].version += 1

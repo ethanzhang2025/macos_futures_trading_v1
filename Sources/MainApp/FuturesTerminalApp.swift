@@ -468,6 +468,13 @@ struct FuturesTerminalApp: App {
         }
         .defaultSize(width: 920, height: 640)
 
+        // v17.202 真修 · CSV K 线导入独立窗口（⌘⇧⌥I）· 原 CommandMenu 内 .sheet 永不弹
+        WindowGroup("导入 K 线 CSV", id: "csvImport") {
+            CSVImportWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 720, height: 560)
+
         // v15.27 · WP-套利分析（⌘⌥S · 12 经典对 + 价差图 + ±2σ 通道 + Z-score 统计）
         WindowGroup("套利分析", id: "spread") {
             SpreadWindow()
@@ -841,59 +848,68 @@ private struct OpenGlobalShortcutsButton: View {
 /// v12.18 文华 .wh 公式批量导入（WP-63 commit 4 · 完整真闭环）
 /// 工具菜单 → 选 .wh 文件 → WhImporter.importAll → NSAlert 显示编译报告
 // v17.169 · CSV K 线导入按钮（工具菜单 · ⌘⇧⌥I 触发）
-// v17.176 · v2 闭环：解析后实际 append 到 storeManager.kline（SQLite K 线缓存）· 主图 reload 即可看见
+// v17.176 · v2 闭环：解析后 append 到 storeManager.kline（SQLite K 线缓存）
+// v17.202 真修 · 原 @State + .sheet 在 CommandMenu 内 menu Button 不渲染 view tree · sheet 永远不弹
+//   改用 openWindow(id: "csvImport") 弹独立 WindowGroup · 同 OpenFormulaEditorButton 模式
 private struct OpenCSVImportButton: View {
-    @State private var showSheet = false
-    @Environment(\.storeManager) private var storeManager
+    @Environment(\.openWindow) private var openWindow
     var body: some View {
-        Button("导入 K 线 CSV...") { showSheet = true }
+        Button("导入 K 线 CSV...") { openWindow(id: "csvImport") }
             .keyboardShortcut("i", modifiers: [.command, .shift, .option])
-            .sheet(isPresented: $showSheet) {
-                KLineCSVImportSheet { result, instrumentID, period in
-                    let store = storeManager
-                    Task { @MainActor in
-                        var importedCount = 0
-                        var saveError: String? = nil
-                        if let store, !result.bars.isEmpty {
-                            do {
-                                // 与 instrumentID/period 重新打标（CSV 可能默认 RB0/.minute1 · trader 选了别的）
-                                let tagged: [KLine] = result.bars.map { bar in
-                                    KLine(
-                                        instrumentID: instrumentID, period: period,
-                                        openTime: bar.openTime,
-                                        open: bar.open, high: bar.high, low: bar.low, close: bar.close,
-                                        volume: bar.volume,
-                                        openInterest: bar.openInterest,
-                                        turnover: bar.turnover
-                                    )
-                                }
-                                try await store.kline.append(tagged, instrumentID: instrumentID, period: period, maxBars: 0)
-                                importedCount = tagged.count
-                            } catch {
-                                saveError = "\(error)"
-                            }
-                        } else if store == nil {
-                            saveError = "StoreManager 未启动 · 数据停留在内存（重启 App 后丢失）"
-                        }
-                        let alert = NSAlert()
-                        alert.messageText = "CSV 导入完成"
-                        alert.informativeText = """
-                        合约 \(instrumentID) · 周期 \(period.rawValue)
-                        解析 \(result.bars.count) 根 · 跳过 \(result.errors.count) 行
-                        时间格式 \(result.detectedFormat)
-                        SQLite 入库 \(importedCount) 根\(saveError.map { " · 失败 \($0)" } ?? "")
+    }
+}
 
-                        重新打开主图（合约 \(instrumentID) · \(period.displayName)）即可加载。
-                        """
-                        if saveError != nil || !result.errors.isEmpty {
-                            alert.alertStyle = .warning
-                        } else {
-                            alert.alertStyle = .informational
+/// v17.202 · CSV 导入独立窗口 · WindowGroup id "csvImport" 内嵌
+/// 包装 KLineCSVImportSheet + 处理 storeManager append + NSAlert 反馈
+struct CSVImportWindow: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.storeManager) private var storeManager
+
+    var body: some View {
+        KLineCSVImportSheet { result, instrumentID, period in
+            let store = storeManager
+            Task { @MainActor in
+                var importedCount = 0
+                var saveError: String? = nil
+                if let store, !result.bars.isEmpty {
+                    do {
+                        let tagged: [KLine] = result.bars.map { bar in
+                            KLine(
+                                instrumentID: instrumentID, period: period,
+                                openTime: bar.openTime,
+                                open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+                                volume: bar.volume,
+                                openInterest: bar.openInterest,
+                                turnover: bar.turnover
+                            )
                         }
-                        alert.runModal()
+                        try await store.kline.append(tagged, instrumentID: instrumentID, period: period, maxBars: 0)
+                        importedCount = tagged.count
+                    } catch {
+                        saveError = "\(error)"
                     }
+                } else if store == nil {
+                    saveError = "StoreManager 未启动 · 数据停留在内存（重启 App 后丢失）"
                 }
+                let alert = NSAlert()
+                alert.messageText = "CSV 导入完成"
+                alert.informativeText = """
+                合约 \(instrumentID) · 周期 \(period.rawValue)
+                解析 \(result.bars.count) 根 · 跳过 \(result.errors.count) 行
+                时间格式 \(result.detectedFormat)
+                SQLite 入库 \(importedCount) 根\(saveError.map { " · 失败 \($0)" } ?? "")
+
+                重新打开主图（合约 \(instrumentID) · \(period.displayName)）即可加载。
+                """
+                if saveError != nil || !result.errors.isEmpty {
+                    alert.alertStyle = .warning
+                } else {
+                    alert.alertStyle = .informational
+                }
+                alert.runModal()
+                dismiss()
             }
+        }
     }
 }
 

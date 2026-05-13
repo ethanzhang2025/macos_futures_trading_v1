@@ -45,6 +45,9 @@ if [[ -n "${ONLY_SHOT}" ]]; then
     SKIP_SHOTS=0
     if [[ "${ONLY_SHOT}" == "manual" ]]; then
         ONLY_SHOT="29,30,31,32"
+    elif [[ "${ONLY_SHOT}" == "shell" ]]; then
+        # v17.203 · Shell + PaneHeader 8 项核心交互
+        ONLY_SHOT="35,36,37,38,39,40,41,42"
     fi
     echo "▶ 选择性截图模式：仅截 step ${ONLY_SHOT}"
 fi
@@ -248,6 +251,32 @@ want_shot 32 && capture_step "32_CSV导入_⌘⇧⌥I_filepicker" \
 # v17.200 · 诊断 step · 截整个 chart window 让 Claude 看 toolbar 布局
 want_shot 33 && capture_step "33_chart_整窗诊断_toolbar位置" \
     "什么都不做 · 直接截【chart 完整 window 含顶部 toolbar】让 Claude 看 实盘/回放 picker 在哪 · 截图时点击 chart 窗口即可"
+
+# === Phase 2c · v17.203 Shell + PaneHeader 8 项核心交互（用户 --shot shell 一次跑完）===
+
+want_shot 35 && capture_step "35_Shell_7预设布局菜单" \
+    "menu bar → 视图 → 看到 7 个预设布局菜单项（单 chart / 双 chart / 四 chart / 主+三副 / 自选+chart / 价差+chart / 期权+chart）· 截 menu 展开状态"
+
+want_shot 36 && capture_step_timed "36_PaneHeader_双击编辑合约_TextField" \
+    "在 chart Pane Header 上【双击合约 symbol 文字】(如 rb2510) · TextField 弹出可输入新合约 · 倒计时结束截图" 5
+
+want_shot 37 && capture_step_timed "37_PaneHeader_周期inline_menu" \
+    "在 chart Pane Header 上【点周期 menu】(如 5m) · 弹周期列表 · 倒计时结束截图" 5
+
+want_shot 38 && capture_step_timed "38_PaneHeader_group_color_picker" \
+    "在 chart Pane Header 右侧【点 group color 圆点】· 4 色（红/黄/绿/蓝/灰）picker 弹出 · 倒计时结束截图" 5
+
+want_shot 39 && capture_step "39_Pane_最大化_全屏" \
+    "在某 Pane Header 点【⛶ 最大化按钮】或双击 header · Pane 全屏 · 截图后按 Esc 退还原"
+
+want_shot 40 && capture_step "40_Pane_分离独立窗口" \
+    "在某 Pane Header 点【📤 分离按钮】· 弹独立 NSWindow · 截分离后的独立窗口"
+
+want_shot 41 && capture_step_timed "41_跨Pane光标badge" \
+    "至少 2 个 chart Pane 同色 group · 在一个 Pane 上 hover · 看另一个 Pane Header 显示「🎯 14:35:22」badge · 倒计时结束截图" 7
+
+want_shot 42 && capture_step "42_Detached_Pane_持久化" \
+    "前置：step 40 已分离某 Pane · 退出 App（⌘Q）· 重启 swift run MainApp · 看分离 Pane 是否自动恢复 · 截恢复后状态"
 
 # 关 app
 echo ""

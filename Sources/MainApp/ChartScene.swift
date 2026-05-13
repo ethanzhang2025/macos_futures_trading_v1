@@ -184,6 +184,12 @@ struct ChartScene: View {
     @State private var intradayFullBarsBackup: [KLine]? = nil   // nil = 当前未进入盘中复盘
     @State private var showIntradayDatePicker: Bool = false
     @State private var intradayActiveDate: Date? = nil           // 当前已激活的复盘日（HUD 显示用）
+    // v17.189 · 多合约 chart overlay state（副合约 normalized close 叠加主图 · ⌘⌥M 选合约）
+    @State private var showSecondaryInstrumentPicker: Bool = false
+    @State private var showSecondaryOverlay: Bool = false
+    @State private var secondaryInstrumentID: String = ""
+    @State private var secondaryBars: [KLine] = []
+    @State private var secondaryNormalizeMode: MultiInstrumentNormalizer.Mode = .firstBaseline
 
     /// M5 持久化串行写：snapshot save / completedBar append 链式 await · 防多 Task 并发提交导致顺序乱
     /// 风险：高频 completedBar（1 秒级）+ maxBars 截断时 · 无序写入可能丢中间根
@@ -649,6 +655,24 @@ struct ChartScene: View {
                 availableDates: dates,
                 onConfirm: { date in
                     Task { await enterIntradayReplay(date: date) }
+                }
+            )
+        }
+        // v17.189 · 多合约 chart overlay 选副合约 sheet（⌘⌥G）
+        .sheet(isPresented: $showSecondaryInstrumentPicker) {
+            SecondaryInstrumentPickerSheet(
+                primaryInstrumentID: instrumentLabel,
+                currentSecondaryID: secondaryInstrumentID,
+                currentMode: secondaryNormalizeMode,
+                onConfirm: { id, mode in
+                    secondaryNormalizeMode = mode
+                    Task { await loadSecondaryBars(id) }
+                },
+                onClear: {
+                    secondaryInstrumentID = ""
+                    secondaryBars = []
+                    showSecondaryOverlay = false
+                    presentToggleNotice("副合约 overlay：已清除")
                 }
             )
         }
@@ -2360,6 +2384,28 @@ struct ChartScene: View {
         presentToggleNotice("已进入 \(f.string(from: date)) 盘中复盘")
     }
 
+    /// v17.189 · 多合约 chart overlay · 从 SQLite 缓存加载副合约 bars（同主图周期）
+    /// 成功后开启 overlay · 失败给 toggle notice 提示
+    @MainActor
+    private func loadSecondaryBars(_ instrumentID: String) async {
+        let id = instrumentID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty else { return }
+        guard let store = storeManager?.kline,
+              let basePeriod = bars.first?.period else {
+            presentToggleNotice("副合约 overlay：未就绪")
+            return
+        }
+        let cached = (try? await store.load(instrumentID: id, period: basePeriod)) ?? []
+        if cached.isEmpty {
+            presentToggleNotice("副合约 \(id) 无本地数据 · 请先在主图打开过该合约")
+            return
+        }
+        secondaryInstrumentID = id
+        secondaryBars = cached
+        showSecondaryOverlay = true
+        presentToggleNotice("副合约 \(id) 叠加：\(cached.count) 根 · \(secondaryNormalizeMode.displayName)")
+    }
+
     /// 退出盘中复盘 · 还原完整历史 · player.load 还原 · cursor 回到 0
     @MainActor
     private func exitIntradayReplay() async {
@@ -2966,6 +3012,11 @@ struct ChartContentView: View {
                 showResonanceStatsSheet = true
             }
                 .keyboardShortcut("y", modifiers: [.command, .shift, .option])
+            // v17.189 · ⌘⌥G 多合约 chart overlay 选副合约 sheet（G = graph 同图叠加）
+            Button("") {
+                showSecondaryInstrumentPicker = true
+            }
+                .keyboardShortcut("g", modifiers: [.command, .option])
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.end, modifiers: [.command])
             Button("", action: jumpToLatestBar)
@@ -3165,6 +3216,8 @@ struct ChartContentView: View {
             if showMultiTimeframeResonance { multiTimeframeResonanceOverlay }
             // v17.180 · 多周期共振汇总 HUD（左上角 · 偏多/偏空/中性 · 一眼看主基调）
             if showMultiTimeframeResonance { multiTimeframeResonanceHUD }
+            // v17.189 · 多合约 chart overlay（副合约 normalized close 折线 · 橙色虚线 · 右下 label）
+            if showSecondaryOverlay && !secondaryBars.isEmpty { secondaryInstrumentOverlay }
         }
         .overlay(alignment: .topTrailing) {
             // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
@@ -3736,6 +3789,57 @@ struct ChartContentView: View {
                     .position(x: x, y: labelY)
                 }
             }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// v17.189 · 副合约 normalized close 叠加层（橙色虚线 · 右下 label · 与主图同价格刻度）
+    /// 数据流：secondaryBars (cached) → alignByOpenTime(primary=bars, secondary) → primary visible 区 closes 取 baseline → normalize → 渲染 Path
+    private var secondaryInstrumentOverlay: some View {
+        let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
+        let visiblePrimary = Array(bars[viewport.startIndex..<visibleEnd])
+        let (_, alignedSecondary) = MultiInstrumentNormalizer.alignByOpenTime(
+            primary: visiblePrimary,
+            secondary: secondaryBars
+        )
+        let primaryCloses = visiblePrimary.map(\.close)
+        let secondaryCloses = alignedSecondary.map(\.close)
+        let normalizedCloses = MultiInstrumentNormalizer.normalizeToPrimaryScale(
+            primary: primaryCloses,
+            secondary: secondaryCloses,
+            mode: secondaryNormalizeMode
+        )
+        return GeometryReader { geom in
+            let visibleCount = max(1, viewport.visibleCount)
+            let barWidth = geom.size.width / CGFloat(visibleCount)
+            let xOffset = CGFloat(viewport.startOffset)
+            let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+            let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+            let span = max(0.0001, hi - lo)
+            Path { path in
+                var started = false
+                for (i, priceD) in normalizedCloses.enumerated() {
+                    let p = NSDecimalNumber(decimal: priceD).doubleValue
+                    let x = (CGFloat(i) + 0.5 - xOffset) * barWidth
+                    let y = CGFloat((hi - p) / span) * geom.size.height
+                    if started { path.addLine(to: CGPoint(x: x, y: y)) }
+                    else { path.move(to: CGPoint(x: x, y: y)); started = true }
+                }
+            }
+            .stroke(Color.orange.opacity(0.85), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+            // 右下 label 标识副合约 + 模式
+            HStack(spacing: 4) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 9))
+                Text("\(secondaryInstrumentID) · \(secondaryNormalizeMode.displayName)")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.orange.opacity(0.85))
+            .cornerRadius(4)
+            .position(x: geom.size.width - 80, y: geom.size.height - 16)
         }
         .allowsHitTesting(false)
     }

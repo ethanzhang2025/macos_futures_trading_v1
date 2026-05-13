@@ -5395,6 +5395,18 @@ fileprivate enum MainChartOverlayCompute {
                 }
             }
         }
+        if book.isEnabled(.sar) {
+            // SAR 输出 1 列「SAR」· trader 抛物线止损点（多/空翻转视觉）
+            out.append(contentsOf: (try? SAR.calculate(kline: kline, params: [book.sarStep, book.sarMax])) ?? [])
+        }
+        if book.isEnabled(.priceChannel) {
+            // PriceChannel 输出 2 线 PC-UPPER / PC-LOWER（close 极值通道 · 突破信号）
+            out.append(contentsOf: (try? PriceChannel.calculate(kline: kline, params: [Decimal(book.priceChannelPeriod)])) ?? [])
+        }
+        if book.isEnabled(.envelopes) {
+            // Envelopes 输出 3 线 ENV-MID / ENV-UPPER / ENV-LOWER（MA ± k% · 经典支撑阻力）
+            out.append(contentsOf: (try? Envelopes.calculate(kline: kline, params: [Decimal(book.envelopesPeriod), book.envelopesPercent])) ?? [])
+        }
         if book.isEnabled(.donchian) {
             let result = (try? Donchian.calculate(
                 kline: kline,

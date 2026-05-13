@@ -7,7 +7,7 @@ import Foundation
 @Suite("MainChartOverlayBook · 主图叠加偏好（VWAP / Pivot / SuperTrend）")
 struct MainChartOverlayBookTests {
 
-    @Test("default · 全关 · superTrend 10/3 · ichimoku 9/26/52 · donchian 20 · keltner 20/10/2")
+    @Test("default · 全关 · 9 类参数全默认（trader 标准）")
     func defaults() {
         let d = MainChartOverlayBook.default
         #expect(d.enabled.isEmpty)
@@ -21,16 +21,22 @@ struct MainChartOverlayBookTests {
         #expect(d.keltnerEMA == 20)
         #expect(d.keltnerATR == 10)
         #expect(d.keltnerMultiplier == Decimal(2))
+        // v17.153 · 3 个新 overlay 默认
+        #expect(d.sarStep == Decimal(string: "0.02"))
+        #expect(d.sarMax == Decimal(string: "0.2"))
+        #expect(d.priceChannelPeriod == 20)
+        #expect(d.envelopesPeriod == 20)
+        #expect(d.envelopesPercent == Decimal(string: "2.5"))
     }
 
-    @Test("MainChartOverlayKind allCases 6 类完整 · 顺序固定 vwap/pivot/superTrend/ichimoku/donchian/keltner")
+    @Test("MainChartOverlayKind allCases 9 类完整 · 顺序 vwap/pivot/superTrend/ichimoku/donchian/keltner/sar/priceChannel/envelopes")
     func allCases() {
         let cases = MainChartOverlayKind.allCases
-        #expect(cases.count == 6)
-        #expect(cases == [.vwap, .pivot, .superTrend, .ichimoku, .donchian, .keltner])
+        #expect(cases.count == 9)
+        #expect(cases == [.vwap, .pivot, .superTrend, .ichimoku, .donchian, .keltner, .sar, .priceChannel, .envelopes])
     }
 
-    @Test("displayName / icon 六类均非空 · 中文化 trader 友好")
+    @Test("displayName / icon 九类均非空 · 中文化 trader 友好")
     func displayMetadata() {
         for k in MainChartOverlayKind.allCases {
             #expect(!k.displayName.isEmpty)
@@ -42,6 +48,9 @@ struct MainChartOverlayBookTests {
         #expect(MainChartOverlayKind.ichimoku.displayName.contains("Ichimoku"))
         #expect(MainChartOverlayKind.donchian.displayName.contains("Donchian"))
         #expect(MainChartOverlayKind.keltner.displayName.contains("Keltner"))
+        #expect(MainChartOverlayKind.sar.displayName.contains("SAR"))
+        #expect(MainChartOverlayKind.priceChannel.displayName.contains("Price Channel"))
+        #expect(MainChartOverlayKind.envelopes.displayName.contains("Envelopes"))
     }
 
     @Test("setEnabled 切换 · isEnabled 反映状态 · anyEnabled 反映非空")
@@ -213,5 +222,25 @@ struct MainChartOverlayBookTests {
         #expect(a == b)
         #expect(a != c)
         #expect(a != d)
+    }
+
+    @Test("v17.152 旧 JSON 缺 sar/priceChannel/envelopes 字段 · 全部 fallback 默认（v17.153 兼容）")
+    func oldV17_152JSONFallback() throws {
+        let v17_152Book = MainChartOverlayBook(
+            enabled: [.donchian, .keltner],
+            donchianPeriod: 55,
+            keltnerMultiplier: Decimal(3)
+        )
+        let v17_152Encoded = try JSONEncoder().encode(v17_152Book)
+        let decoded = try JSONDecoder().decode(MainChartOverlayBook.self, from: v17_152Encoded)
+        #expect(decoded.enabled == [.donchian, .keltner])
+        #expect(decoded.donchianPeriod == 55)
+        #expect(decoded.keltnerMultiplier == Decimal(3))
+        // v17.153 新字段全 fallback 默认
+        #expect(decoded.sarStep == Decimal(string: "0.02"))
+        #expect(decoded.sarMax == Decimal(string: "0.2"))
+        #expect(decoded.priceChannelPeriod == 20)
+        #expect(decoded.envelopesPeriod == 20)
+        #expect(decoded.envelopesPercent == Decimal(string: "2.5"))
     }
 }

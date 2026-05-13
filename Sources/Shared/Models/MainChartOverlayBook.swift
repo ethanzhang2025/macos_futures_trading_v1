@@ -11,34 +11,43 @@ import Foundation
 /// 主图叠加指标种类（按未来扩展顺序）
 public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Identifiable {
     case vwap         // VWAP · 累积成交量加权均价（trader 日内基准）
-    case pivot        // Pivot Points 7 线（前一根 H/L/C 推算 · daily 周期最适用）
+    case pivot        // Pivot Points 5 线（前一根 H/L/C 推算 · daily 周期最适用 · v17.150 7→5）
     case superTrend   // SuperTrend · ATR 趋势止损线（rolling lock · 与麦语言 SUPERTREND 一致）
     case ichimoku     // Ichimoku 一目均衡表 4 线（Tenkan/Kijun/Senkou-A/Senkou-B · CHIKOU 用未来 close 不画）
     case donchian     // Donchian Channel 唐奇安通道 3 线（HHV/LLV/MID · 海龟交易法核心）
     case keltner      // Keltner Channel 肯特纳通道 3 线（EMA ± mult*ATR · 趋势/挤压识别）
+    case sar          // SAR · Welles Wilder 抛物线转向（趋势止损 · 反向信号 · v17.153）
+    case priceChannel // Price Channel 价格通道 2 线（HHV/LLV close 版 · 趋势突破 · v17.153）
+    case envelopes    // Envelopes 包络线 3 线（MA ± k% · 经典支撑阻力区 · v17.153）
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .vwap:       return "VWAP（成交量加权均价）"
-        case .pivot:      return "Pivot Points（经典支撑阻力 7 线）"
-        case .superTrend: return "SuperTrend（ATR 趋势止损线）"
-        case .ichimoku:   return "Ichimoku（一目均衡表 4 线）"
-        case .donchian:   return "Donchian Channel（唐奇安通道 3 线）"
-        case .keltner:    return "Keltner Channel（肯特纳通道 3 线）"
+        case .vwap:         return "VWAP（成交量加权均价）"
+        case .pivot:        return "Pivot Points（经典支撑阻力 5 线）"
+        case .superTrend:   return "SuperTrend（ATR 趋势止损线）"
+        case .ichimoku:     return "Ichimoku（一目均衡表 4 线）"
+        case .donchian:     return "Donchian Channel（唐奇安通道 3 线）"
+        case .keltner:      return "Keltner Channel（肯特纳通道 3 线）"
+        case .sar:          return "SAR（抛物线转向止损点）"
+        case .priceChannel: return "Price Channel（价格通道 2 线 · close 极值）"
+        case .envelopes:    return "Envelopes（包络线 3 线 · MA ± k%）"
         }
     }
 
     /// SF Symbol 图标
     public var icon: String {
         switch self {
-        case .vwap:       return "chart.line.uptrend.xyaxis"
-        case .pivot:      return "rectangle.split.3x1"
-        case .superTrend: return "arrow.triangle.swap"
-        case .ichimoku:   return "cloud.fill"
-        case .donchian:   return "rectangle.expand.vertical"
-        case .keltner:    return "rectangle.compress.vertical"
+        case .vwap:         return "chart.line.uptrend.xyaxis"
+        case .pivot:        return "rectangle.split.3x1"
+        case .superTrend:   return "arrow.triangle.swap"
+        case .ichimoku:     return "cloud.fill"
+        case .donchian:     return "rectangle.expand.vertical"
+        case .keltner:      return "rectangle.compress.vertical"
+        case .sar:          return "circle.dotted"
+        case .priceChannel: return "rectangle.righthalf.inset.filled"
+        case .envelopes:    return "waveform.path.ecg"
         }
     }
 }
@@ -65,6 +74,16 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
     public var keltnerATR: Int
     /// Keltner multiplier（默认 2 · 标准）
     public var keltnerMultiplier: Decimal
+    /// SAR 加速因子初值（默认 0.02 · Welles Wilder · v17.153）
+    public var sarStep: Decimal
+    /// SAR 加速因子上限（默认 0.2 · v17.153）
+    public var sarMax: Decimal
+    /// PriceChannel 周期（默认 20 · v17.153）
+    public var priceChannelPeriod: Int
+    /// Envelopes 中轴 MA 周期（默认 20 · v17.153）
+    public var envelopesPeriod: Int
+    /// Envelopes 上下偏移百分比（默认 2.5 · v17.153）
+    public var envelopesPercent: Decimal
 
     public init(
         enabled: Set<MainChartOverlayKind> = [],
@@ -76,7 +95,12 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         donchianPeriod: Int = 20,
         keltnerEMA: Int = 20,
         keltnerATR: Int = 10,
-        keltnerMultiplier: Decimal = 2
+        keltnerMultiplier: Decimal = 2,
+        sarStep: Decimal = Decimal(string: "0.02") ?? Decimal(0.02),
+        sarMax: Decimal = Decimal(string: "0.2") ?? Decimal(0.2),
+        priceChannelPeriod: Int = 20,
+        envelopesPeriod: Int = 20,
+        envelopesPercent: Decimal = Decimal(string: "2.5") ?? Decimal(2.5)
     ) {
         self.enabled = enabled
         self.superTrendPeriod = superTrendPeriod
@@ -88,6 +112,11 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.keltnerEMA = keltnerEMA
         self.keltnerATR = keltnerATR
         self.keltnerMultiplier = keltnerMultiplier
+        self.sarStep = sarStep
+        self.sarMax = sarMax
+        self.priceChannelPeriod = priceChannelPeriod
+        self.envelopesPeriod = envelopesPeriod
+        self.envelopesPercent = envelopesPercent
     }
 
     public static let `default` = MainChartOverlayBook()
@@ -109,6 +138,7 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         case enabled, superTrendPeriod, superTrendMultiplier
         case ichimokuTenkan, ichimokuKijun, ichimokuSenkou
         case donchianPeriod, keltnerEMA, keltnerATR, keltnerMultiplier
+        case sarStep, sarMax, priceChannelPeriod, envelopesPeriod, envelopesPercent  // v17.153
     }
 
     public init(from decoder: Decoder) throws {
@@ -123,6 +153,11 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.keltnerEMA           = try c.decodeIfPresent(Int.self, forKey: .keltnerEMA) ?? 20
         self.keltnerATR           = try c.decodeIfPresent(Int.self, forKey: .keltnerATR) ?? 10
         self.keltnerMultiplier    = try c.decodeIfPresent(Decimal.self, forKey: .keltnerMultiplier) ?? 2
+        self.sarStep              = try c.decodeIfPresent(Decimal.self, forKey: .sarStep) ?? Decimal(string: "0.02")!
+        self.sarMax               = try c.decodeIfPresent(Decimal.self, forKey: .sarMax) ?? Decimal(string: "0.2")!
+        self.priceChannelPeriod   = try c.decodeIfPresent(Int.self, forKey: .priceChannelPeriod) ?? 20
+        self.envelopesPeriod      = try c.decodeIfPresent(Int.self, forKey: .envelopesPeriod) ?? 20
+        self.envelopesPercent     = try c.decodeIfPresent(Decimal.self, forKey: .envelopesPercent) ?? Decimal(string: "2.5")!
     }
 }
 

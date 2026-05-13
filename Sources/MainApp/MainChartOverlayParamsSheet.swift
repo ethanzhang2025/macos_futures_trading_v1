@@ -26,7 +26,7 @@ struct MainChartOverlayParamsSheet: View {
             Text("主图叠加参数")
                 .font(.title2).bold()
                 .padding(.bottom, 4)
-            Text("trader 调 SuperTrend / Ichimoku / Donchian / Keltner 4 种主图 overlay 参数 · VWAP / Pivot 无参")
+            Text("trader 调 7 种主图 overlay 参数（VWAP / Pivot 无参）· SuperTrend / Ichimoku / Donchian / Keltner / SAR / PriceChannel / Envelopes")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.bottom, 12)
@@ -53,6 +53,21 @@ struct MainChartOverlayParamsSheet: View {
                         paramField("ATR",  $draft.keltnerATR, leadingPad: true)
                         paramFieldDecimal("mult", $draft.keltnerMultiplier, leadingPad: true)
                     }
+
+                    // v17.153 · 3 个新主图 overlay 参数
+                    paramSection("SAR（抛物线转向止损点）", subtitle: "默认 0.02 / 0.2 · step 加速因子初值 / max 上限 · Welles Wilder 经典") {
+                        paramFieldDecimal("step", $draft.sarStep)
+                        paramFieldDecimal("max",  $draft.sarMax, leadingPad: true)
+                    }
+
+                    paramSection("Price Channel（价格通道 close 版）", subtitle: "默认 20 · close 滚动 N 期 HHV/LLV 上下轨（vs Donchian 用 high/low）") {
+                        paramField("period", $draft.priceChannelPeriod)
+                    }
+
+                    paramSection("Envelopes（包络线）", subtitle: "默认 20 / 2.5% · MA 中轴周期 / 上下偏移百分比 · 经典支撑阻力区") {
+                        paramField("period",  $draft.envelopesPeriod)
+                        paramFieldDecimal("%", $draft.envelopesPercent, leadingPad: true)
+                    }
                 }
                 .formStyle(.grouped)
             }
@@ -72,7 +87,7 @@ struct MainChartOverlayParamsSheet: View {
             .padding(.top, 12)
         }
         .padding(20)
-        .frame(width: 520, height: 480)
+        .frame(width: 540, height: 600)
     }
 
     // MARK: - paramSection / paramField helper（与 IndicatorParamsSheet 同模板）
@@ -116,6 +131,12 @@ struct MainChartOverlayParamsSheet: View {
         guard b.keltnerEMA >= 1 && b.keltnerEMA <= 500 else { return false }
         guard b.keltnerATR >= 1 && b.keltnerATR <= 500 else { return false }
         guard b.keltnerMultiplier >= 1 && b.keltnerMultiplier <= 10 else { return false }
+        // v17.153 · 3 个新参数范围（与 IndicatorCore 对齐）
+        guard b.sarStep > 0 && b.sarStep <= 1 else { return false }
+        guard b.sarMax  > 0 && b.sarMax  <= 1 else { return false }
+        guard b.priceChannelPeriod >= 1 && b.priceChannelPeriod <= 500 else { return false }
+        guard b.envelopesPeriod    >= 1 && b.envelopesPeriod    <= 500 else { return false }
+        guard b.envelopesPercent   > 0 && b.envelopesPercent   <= 50  else { return false }
         return true
     }
 }

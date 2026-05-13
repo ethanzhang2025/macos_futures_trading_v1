@@ -7,9 +7,11 @@
 #   完全消除 applescript 焦点丢失 / 快捷键没生效 / 盲截无效问题
 #
 # 用法：
-#   ./mac_acceptance_v17_170_189.sh              # 全跑（test + 半自动截图）
-#   ./mac_acceptance_v17_170_189.sh --skip-test  # 跳过 test 直接截图
+#   ./mac_acceptance_v17_170_189.sh              # 全跑（test + 5 张截图）
+#   ./mac_acceptance_v17_170_189.sh --skip-test  # 跳过 test 直接 5 张截图
 #   ./mac_acceptance_v17_170_189.sh --skip-shots # 仅跑 test
+#   ./mac_acceptance_v17_170_189.sh --shot 26    # 单张补拍 step 26（同 --only 26 · 跳 test）
+#   有效 step 编号：24 / 25 / 26 / 27 / 28
 
 set -uo pipefail
 
@@ -21,13 +23,26 @@ BUILD_PATH="/tmp/build_v1730_b1"
 
 SKIP_TEST=0
 SKIP_SHOTS=0
+ONLY_SHOT=""   # 仅跑某一步：24/25/26/27/28
+prev_arg=""
 for arg in "$@"; do
+    case "${prev_arg}" in
+        --shot|--only) ONLY_SHOT="${arg}"; prev_arg=""; continue ;;
+    esac
     case "${arg}" in
-        --skip-test)  SKIP_TEST=1 ;;
+        --skip-test)  SKIP_TEST=1; SKIP_SHOTS=0 ;;
         --skip-shots) SKIP_SHOTS=1 ;;
+        --shot|--only) prev_arg="${arg}" ;;
         -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     esac
 done
+
+# --shot N 模式：跳 test · 仅截 N · 跳过其它
+if [[ -n "${ONLY_SHOT}" ]]; then
+    SKIP_TEST=1
+    SKIP_SHOTS=0
+    echo "▶ 单张补拍模式：仅截 step ${ONLY_SHOT}"
+fi
 
 APP_PID=""
 APP_NAME=""
@@ -159,19 +174,24 @@ echo "════════════════════════�
 echo " Phase 2: 5 张截图 · 每张前手动操作 + 回车截图"
 echo "═══════════════════════════════════════════════"
 
-capture_step "24_v17188_patterns_overlay" \
-    "操作：在主图按 ⌘⇧P 打开【形态识别 overlay】(13 种形态高亮)"
+# 用法：want_shot 24 → 单张模式下仅 24 步执行 · 否则全跑
+want_shot() {
+    [[ -z "${ONLY_SHOT}" ]] || [[ "${ONLY_SHOT}" == "$1" ]]
+}
 
-capture_step "25_v17182_patterns_list_sheet" \
-    "操作：先 ⌘⇧P 关掉 overlay · 再按 ⌘⇧L 打开【形态清单 sheet】(含 stats 区)"
+want_shot 24 && capture_step "24_v17188_patterns_overlay" \
+    "操作：在主图按 ⌘⇧P 打开【形态识别 overlay】(13 种形态高亮 · 无形态时仅 HUD 一闪)"
 
-capture_step "26_v17180_resonance_overlay_hud" \
-    "操作：先 ESC 关掉 sheet · 再按 ⌘⇧Y 打开【多周期共振 overlay + 左上 HUD】"
+want_shot 25 && capture_step "25_v17182_patterns_list_sheet" \
+    "操作：先 ⌘⇧P 关 overlay · 再按 ⌘⇧L 打开【形态清单 sheet】(含 stats 区)"
 
-capture_step "27_v17184_resonance_stats_sheet" \
+want_shot 26 && capture_step "26_v17180_resonance_overlay_hud" \
+    "操作：先 ESC 关 sheet · 再按 ⌘⇧Y 打开【多周期共振 overlay + 左上 HUD】"
+
+want_shot 27 && capture_step "27_v17184_resonance_stats_sheet" \
     "操作：保持共振 overlay 开 · 再按 ⌘⌥⇧Y 打开【共振历史回测 sheet】"
 
-capture_step "28_v17189_secondary_picker_sheet" \
+want_shot 28 && capture_step "28_v17189_secondary_picker_sheet" \
     "操作：ESC 关 sheet + ⌘⇧Y 关共振 · 再按 ⌘⌥G 打开【多合约 overlay picker sheet】"
 
 # 关 app

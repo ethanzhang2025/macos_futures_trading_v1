@@ -86,34 +86,59 @@ mkdir -p "${SHOTS_DIR}"
 rm -f "${SHOTS_DIR}"/*.png 2>/dev/null
 
 # capture_step <name> <prompt>
-# 通过 osascript 把 MainApp 拉到前台后截图 · 不依赖 set frontmost 单调用 · 用 activate
+# 方案 C：用户自截 + 脚本 mv 改名
+# 焦点问题彻底消除 · 用户用 ⌘⇧3 全屏 或 ⌘⇧4 拖框 自己截到 ~/Desktop · 脚本只负责改名
 capture_step() {
     local name="$1"
     local prompt="$2"
+    local desktop="${HOME}/Desktop"
+    # 记录此步开始时间 · 后面只接受这之后产生的截图（避免捡到旧 Screen Shot）
+    local started_at
+    started_at=$(date +%s)
+
     echo ""
     echo "═══════════════════════════════════════════════"
     echo "📸 ${name}"
-    echo "  ${prompt}"
+    echo "  ① 操作：${prompt}"
+    echo "  ② 截图：在主程序内按 ⌘⇧3 (全屏) 或 ⌘⇧4 (拖框选区)"
+    echo "     截图会自动保存到 ~/Desktop（系统默认）"
+    echo "  ③ 切回终端按回车 → 我把最新截图 mv 改名为 ${name}.png"
     echo "═══════════════════════════════════════════════"
+
     while true; do
-        read -p "  ▸ 看到目标后按 [回车]截图 / s 跳过 / r 重试提示 / q 退出: " ans
+        read -p "  ▸ 截图已落 ~/Desktop 后按[回车] / s 跳过 / r 重看提示 / q 退出: " ans
         case "${ans}" in
             s|S) echo "  ⏭  跳过 ${name}"; return 0 ;;
-            q|Q) echo "  🚪 用户主动退出"; exit 0 ;;
-            r|R) echo "  ${prompt}"; continue ;;
-            *)   break ;;
+            q|Q) echo "  🚪 退出"; exit 0 ;;
+            r|R)
+                echo "  操作：${prompt}"
+                echo "  截图：⌘⇧3 (全屏) / ⌘⇧4 (拖框) 落 ~/Desktop"
+                continue
+                ;;
+            *) break ;;
         esac
-    done
 
-    # 截图（不切前台 · 用户当前焦点就是 app · screencapture -x 不抢焦点）
-    screencapture -x -o "${SHOTS_DIR}/${name}.png"
-    if [[ -f "${SHOTS_DIR}/${name}.png" ]]; then
+        # 找 ~/Desktop 最新一张 png（mtime 最新 · 必须在 started_at 之后）
+        local latest mtime
+        latest=$(/bin/ls -t "${desktop}"/*.png 2>/dev/null | head -1)
+        if [[ -z "${latest}" || ! -f "${latest}" ]]; then
+            echo "  ⚠️ ~/Desktop 找不到 .png · 你截了吗？(再回车 重试 / s 跳过)"
+            continue
+        fi
+        mtime=$(stat -f '%m' "${latest}" 2>/dev/null || echo 0)
+        if (( mtime < started_at )); then
+            echo "  ⚠️ 最新一张 ${latest##*/} 是本步之前的（mtime=${mtime} < started=${started_at}）"
+            echo "      你这一步还没截图 · 截完再回车"
+            continue
+        fi
+
+        mv "${latest}" "${SHOTS_DIR}/${name}.png"
+        local age=$(( $(date +%s) - mtime ))
         local size
         size=$(stat -f '%z' "${SHOTS_DIR}/${name}.png" 2>/dev/null || echo 0)
-        echo "  ✅ 截 ${name}.png（${size} bytes）"
-    else
-        echo "  ❌ 截图失败"
-    fi
+        echo "  ✅ ${latest##*/} → ${name}.png  (${size} bytes · ${age}s 前截的)"
+        return 0
+    done
 }
 
 echo "════════════════════════════════════════════════════"

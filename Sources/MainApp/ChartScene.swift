@@ -219,6 +219,8 @@ struct ChartScene: View {
     @State private var isIndicatorParamsLoaded: Bool = false
     /// v15.2 指标参数编辑 Sheet 显隐
     @State private var showIndicatorParamsSheet: Bool = false
+    /// v17.139 · 主图叠加偏好（VWAP / Pivot / SuperTrend）· UserDefaults 全局共享 · 默认全关
+    @State private var overlayBook: MainChartOverlayBook = MainChartOverlayStore.load() ?? .default
     /// v15.7 副图独立参数 overrides · key = 副图槽位 0~3 · 缺失 = 用全局 indicatorParams
     @State private var subParamsOverrides: [Int: IndicatorParamsBook] = [:]
     /// v15.7 当前编辑的副图槽位（弹 sheet 时设 · sheet 关闭后清）
@@ -870,7 +872,7 @@ struct ChartScene: View {
     /// 增量推进路径走 stepIndicators(newBar:)
     private func updateIndicatorsFull(_ snap: [KLine]) async {
         indicators = await computeIndicatorsAsync(snap)
-        indicatorRunner = ChartIndicatorRunner.prime(bars: snap, params: indicatorParams)
+        indicatorRunner = ChartIndicatorRunner.prime(bars: snap, params: indicatorParams, overlay: overlayBook)
     }
 
     /// 增量推进 indicators · 仅在新 K 单调追加时调（barEmitted / completedBar 两条路径）
@@ -1611,6 +1613,9 @@ struct ChartScene: View {
             .buttonStyle(.borderless)
             .tooltip("指标参数（MA / BOLL / MACD / KDJ / RSI 周期可调）")
 
+            // v17.139 · 主图叠加菜单（VWAP / Pivot Points / SuperTrend）· 三选 toggle · 持久化
+            mainChartOverlayMenu
+
             // v15.4 · 模拟交易快捷入口（⌘T · 与主菜单 OpenTradingButton 对齐）
             Button {
                 openWindow(id: "trading")
@@ -1673,6 +1678,39 @@ struct ChartScene: View {
         // v15.8 toolbar 背景跟随主题（深 #15171C / 浅 #ECEEF1 · 替代 .bar 系统默认 · 与主图协调）
         .background(chartTheme.toolbarBackground)
         .overlay(alignment: .bottom) { Divider() }
+    }
+
+    /// v17.139 · 主图叠加菜单（VWAP / Pivot / SuperTrend）· 三选 toggle · 角标 N/3 提示当前几个开
+    @ViewBuilder
+    private var mainChartOverlayMenu: some View {
+        let count = overlayBook.enabled.count
+        Menu {
+            ForEach(MainChartOverlayKind.allCases) { kind in
+                Toggle(isOn: Binding(
+                    get: { overlayBook.isEnabled(kind) },
+                    set: { newVal in
+                        overlayBook.setEnabled(kind, newVal)
+                        MainChartOverlayStore.save(overlayBook)
+                        Task { await updateIndicatorsFull(bars) }
+                    }
+                )) {
+                    Label(kind.displayName, systemImage: kind.icon)
+                }
+            }
+        } label: {
+            HStack(spacing: 2) {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.system(size: 13))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(chartTheme.textSecondary)
+                }
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .tooltip("主图叠加（VWAP / Pivot Points / SuperTrend · 当前 \(count)/3）")
     }
 
     @ViewBuilder
@@ -2162,14 +2200,15 @@ struct ChartScene: View {
     /// Sina 不可达兜底：5000 根 random walk Mock
     private func loadMockFallback() async {
         let params = indicatorParams
+        let overlay = overlayBook
         let result = await Task.detached(priority: .userInitiated) {
             let b = MockKLineData.generateBars(5_000)
-            let i = MockKLineData.computeIndicators(bars: b, params: params)
+            let i = MockKLineData.computeIndicators(bars: b, params: params, overlay: overlay)
             return (b, i)
         }.value
         bars = result.0
         indicators = result.1
-        indicatorRunner = ChartIndicatorRunner.prime(bars: result.0, params: indicatorParams)
+        indicatorRunner = ChartIndicatorRunner.prime(bars: result.0, params: indicatorParams, overlay: overlayBook)
         // v15.16 hotfix #12：mock fallback 时同步 periodLabel · 之前 HUD 主标识行显示 "RB0 · — · ..."
         instrumentLabel = currentInstrumentID
         periodLabel = selectedPeriod.displayName
@@ -2179,8 +2218,9 @@ struct ChartScene: View {
     /// 200 根 ~10ms / 5k 根 ~50ms · 8× 回放速度下成为热路径瓶颈，下版本接 IndicatorCore 增量 API
     private func computeIndicatorsAsync(_ snap: [KLine]) async -> [IndicatorSeries] {
         let params = indicatorParams
+        let overlay = overlayBook
         return await Task.detached(priority: .userInitiated) {
-            MockKLineData.computeIndicators(bars: snap, params: params)
+            MockKLineData.computeIndicators(bars: snap, params: params, overlay: overlay)
         }.value
     }
 
@@ -5217,10 +5257,20 @@ fileprivate struct ChartIndicatorRunner {
     /// N 条 MA 的增量 state（按 params.mainMAPeriods 顺序 · 默认 [5, 20, 60] = 3 条）
     var maStates: [MA.IncrementalState]
     var boll: BOLL.IncrementalState
+    /// v17.139 · 主图叠加偏好（VWAP/Pivot/SuperTrend）· 决定 series 末尾追加哪些 overlay
+    var overlayBook: MainChartOverlayBook
+    /// v17.139 · 当前已消化的 history bars（用于 overlay 全量重算 · v1 简化 · 后续可加 overlay IncrementalState）
+    var historyBars: [KLine]
+    /// 核心列数（MA + BOLL UPPER/LOWER · 增量推进维护这些 · 末尾 overlay 列每步全量重算）
+    let coreCount: Int
     private(set) var series: [IndicatorSeries]   // 与 ChartScene.indicators 同步快照
 
-    /// 用 history + params 初始化全部 state 与 series（与 MockKLineData.computeIndicators 完全一致）
-    static func prime(bars: [KLine], params: IndicatorParamsBook = .default) -> ChartIndicatorRunner? {
+    /// 用 history + params + overlay 初始化全部 state 与 series（与 MockKLineData.computeIndicators 完全一致）
+    static func prime(
+        bars: [KLine],
+        params: IndicatorParamsBook = .default,
+        overlay: MainChartOverlayBook = .default
+    ) -> ChartIndicatorRunner? {
         let kline = makeKLineSeries(from: bars)
         var maStates: [MA.IncrementalState] = []
         for p in params.mainMAPeriodsDecimal {
@@ -5230,12 +5280,24 @@ fileprivate struct ChartIndicatorRunner {
         guard let bollState = try? BOLL.makeIncrementalState(kline: kline, params: params.mainBOLLParamsDecimal) else {
             return nil
         }
-        let series = MockKLineData.computeIndicators(bars: bars, params: params)
-        return ChartIndicatorRunner(maStates: maStates, boll: bollState, series: series)
+        let coreSeries = MockKLineData.computeIndicators(bars: bars, params: params)
+        let overlaySeries = MainChartOverlayCompute.compute(bars: bars, book: overlay)
+        return ChartIndicatorRunner(
+            maStates: maStates,
+            boll: bollState,
+            overlayBook: overlay,
+            historyBars: bars,
+            coreCount: coreSeries.count,
+            series: coreSeries + overlaySeries
+        )
     }
 
-    /// 推进 1 根新 K · 返回更新后的 series（顺序：N 条 MA + BOLL-UPPER + BOLL-LOWER · 与 computeIndicators 输出一致）
+    /// 推进 1 根新 K · 返回更新后的 series
+    /// 顺序：[N 条 MA · BOLL-UPPER · BOLL-LOWER] + [启用的 overlay · 顺序 = MainChartOverlayBook 枚举遍历]
+    /// - 核心列：增量推进（MA O(1) · BOLL O(N)）
+    /// - overlay 列：全量重算（v1 简化 · 单根/帧成本可接受 · ~50ms@5kbars）
     mutating func step(newBar: KLine) -> [IndicatorSeries] {
+        // 1) 核心 MA + BOLL 增量
         var appended: [Decimal?] = []
         for i in maStates.indices {
             appended.append(MA.stepIncremental(state: &maStates[i], newBar: newBar)[0])
@@ -5243,10 +5305,17 @@ fileprivate struct ChartIndicatorRunner {
         let bollVals = BOLL.stepIncremental(state: &boll, newBar: newBar)   // [MID, UPPER, LOWER]
         appended.append(bollVals[1])
         appended.append(bollVals[2])
-        precondition(series.count == appended.count, "series count must match appended count")
-        for i in series.indices {
+        precondition(coreCount == appended.count, "core series count must match appended count")
+        for i in 0..<coreCount {
             series[i] = IndicatorSeries(name: series[i].name, values: series[i].values + [appended[i]])
         }
+        // 2) overlay 全量重算（含本根新 K）· 替换末尾 overlay 段
+        historyBars.append(newBar)
+        let overlaySeries = MainChartOverlayCompute.compute(bars: historyBars, book: overlayBook)
+        if series.count > coreCount {
+            series.removeSubrange(coreCount..<series.count)
+        }
+        series.append(contentsOf: overlaySeries)
         return series
     }
 
@@ -5259,6 +5328,43 @@ fileprivate struct ChartIndicatorRunner {
             volumes: bars.map(\.volume),
             openInterests: bars.map { _ in 0 }
         )
+    }
+}
+
+// MARK: - v17.139 · 主图 overlay 计算（VWAP / Pivot / SuperTrend · 全量重算 helper）
+
+fileprivate enum MainChartOverlayCompute {
+
+    /// 按 overlayBook.enabled 顺序计算 · 输出顺序：VWAP → Pivot 7 线 → SuperTrend 主线
+    /// SuperTrend-DIR 不输出（HUD 不显方向数字 · 后续渲染层若要色彩区分可单独读 series.first(.name == "SUPERTREND-DIR")）
+    static func compute(bars: [KLine], book: MainChartOverlayBook) -> [IndicatorSeries] {
+        guard book.anyEnabled, !bars.isEmpty else { return [] }
+        let kline = KLineSeries(
+            opens: bars.map(\.open),
+            highs: bars.map(\.high),
+            lows: bars.map(\.low),
+            closes: bars.map(\.close),
+            volumes: bars.map(\.volume),
+            openInterests: bars.map { _ in 0 }
+        )
+        var out: [IndicatorSeries] = []
+        if book.isEnabled(.vwap) {
+            out.append(contentsOf: (try? VWAP.calculate(kline: kline, params: [])) ?? [])
+        }
+        if book.isEnabled(.pivot) {
+            out.append(contentsOf: (try? PivotPoints.calculate(kline: kline, params: [])) ?? [])
+        }
+        if book.isEnabled(.superTrend) {
+            let result = (try? SuperTrend.calculate(
+                kline: kline,
+                params: [Decimal(book.superTrendPeriod), book.superTrendMultiplier]
+            )) ?? []
+            // 只取主线 SUPERTREND（drop SUPERTREND-DIR · trader HUD 不需方向 ±1 数字 · 后续渲染层独立处理色彩）
+            if let st = result.first(where: { $0.name == "SUPERTREND" }) {
+                out.append(st)
+            }
+        }
+        return out
     }
 }
 
@@ -5295,7 +5401,12 @@ enum MockKLineData {
     }
 
     /// 5 条不重合：3 条 MA（params.mainMAPeriods · 默认 5/20/60）+ BOLL UPPER + BOLL LOWER（过滤 BOLL-MID 与 MA(20) 重合）
-    static func computeIndicators(bars: [KLine], params: IndicatorParamsBook = .default) -> [IndicatorSeries] {
+    /// v17.139 · 末尾追加用户启用的主图 overlay（VWAP / Pivot 7 线 / SuperTrend）· overlay 默认 .default 全关
+    static func computeIndicators(
+        bars: [KLine],
+        params: IndicatorParamsBook = .default,
+        overlay: MainChartOverlayBook = .default
+    ) -> [IndicatorSeries] {
         let series = KLineSeries(
             opens: bars.map(\.open),
             highs: bars.map(\.high),
@@ -5309,7 +5420,8 @@ enum MockKLineData {
         }
         let boll = (try? BOLL.calculate(kline: series, params: params.mainBOLLParamsDecimal)) ?? []
         let bollBands = boll.filter { $0.name != "BOLL-MID" }
-        return maSeries + bollBands
+        let overlaySeries = MainChartOverlayCompute.compute(bars: bars, book: overlay)
+        return maSeries + bollBands + overlaySeries
     }
 }
 

@@ -45,6 +45,11 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
     case cmf      // Chaikin Money Flow(20) 资金流向 · 单线 · 上下对称视野 · ±0.05 参考线
     case pvt      // Price Volume Trend 累积价量趋势 · 单线 · auto 视野（同 OBV pattern）
     case vr       // Volume Ratio(26) 成交量比 · 单线 · auto baseline + 100 参考线
+    // v17.144 · 4 个再补国际派副图（22→30 · 收口）
+    case adx      // ADX(14) 平均趋向指数（DMI 配套趋势强度 · 0~100 · 25/40 阈值）
+    case adl      // Accumulation/Distribution Line 累积分配（与 OBV/PVT 互补 · 累积单线）
+    case mfi      // Money Flow Index(14) 资金流量指数 · 0~100 · 80/50/20（含 volume 的 RSI）
+    case cmo      // Chande Momentum Oscillator(14) 钱德动量 · ±100 · ±50/0（RSI 升级版）
 
     var id: String { rawValue }
 
@@ -76,6 +81,11 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .cmf:    return "CMF 20"
         case .pvt:    return "PVT"
         case .vr:     return "VR 26"
+        // v17.144 · hardcoded 默认参数
+        case .adx:    return "ADX 14"
+        case .adl:    return "ADL"
+        case .mfi:    return "MFI 14"
+        case .cmo:    return "CMO 14"
         }
     }
 
@@ -106,6 +116,10 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .cmf:    return "CMF"
         case .pvt:    return "PVT"
         case .vr:     return "VR"
+        case .adx:    return "ADX"
+        case .adl:    return "ADL"
+        case .mfi:    return "MFI"
+        case .cmo:    return "CMO"
         }
     }
 }
@@ -362,6 +376,16 @@ struct SubChartView: View {
                 return (try? PVT.calculate(kline: series, params: [])) ?? []
             case .vr:
                 return (try? VR.calculate(kline: series, params: [Decimal(26)])) ?? []
+            // v17.144 · 4 个补全副图（趋势强度 / 累积分配 / 资金流量 / 钱德动量）
+            case .adx:
+                // ADX 输出 [+DI, -DI, ADX] 3 列 · 仅取末列 ADX 单线（DMI 已有 +DI/-DI 副图）
+                return (try? ADX.calculate(kline: series, params: [Decimal(14)])) ?? []
+            case .adl:
+                return (try? ADL.calculate(kline: series, params: [])) ?? []
+            case .mfi:
+                return (try? MFI.calculate(kline: series, params: [Decimal(14)])) ?? []
+            case .cmo:
+                return (try? CMO.calculate(kline: series, params: [Decimal(14)])) ?? []
             case .volume, .oi, .volumeProfile:
                 return []  // 直读 bars · 不走 Indicator 计算
             }
@@ -376,7 +400,7 @@ struct SubChartView: View {
             seriesA = doublesOf(result, name: "K")
             seriesB = doublesOf(result, name: "D")
             seriesC = doublesOf(result, name: "J")
-        case .rsi, .obv, .cci, .wr, .roc, .bias, .stc, .choppiness, .forceIndex, .bbw, .atrp, .trix, .cmf, .pvt, .vr:
+        case .rsi, .obv, .cci, .wr, .roc, .bias, .stc, .choppiness, .forceIndex, .bbw, .atrp, .trix, .cmf, .pvt, .vr, .adx, .adl, .mfi, .cmo:
             // 单线副图：取首个 series（输出名带参数 · 不依赖 name 匹配 · 直接首项）
             let firstSeries = result.first?.values ?? []
             seriesA = firstSeries.map { $0.map { NSDecimalNumber(decimal: $0).doubleValue } }
@@ -543,6 +567,24 @@ struct SubChartView: View {
                 Text("VR \(fmt(aLast))").foregroundColor(
                     aLast.map { $0 >= 150 ? Self.bullColor : ($0 <= 70 ? Self.bearColor : Self.yellowColor) } ?? .secondary
                 )
+            // v17.144 · ADX（>40 极强 · 25-40 强 · <25 无趋势 · 黄）
+            case .adx:
+                Text("ADX \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 40 ? Self.bullColor : ($0 <= 25 ? Self.bearColor : Self.yellowColor) } ?? .secondary
+                )
+            // v17.144 · ADL（累积值 · 蓝色）
+            case .adl:
+                Text("ADL \(fmtVolume(aLast))").foregroundColor(Self.blueColor)
+            // v17.144 · MFI（>80 超买 · <20 超卖 · 中间黄 · 同 RSI 染色风格）
+            case .mfi:
+                Text("MFI \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 80 ? Self.bullColor : ($0 <= 20 ? Self.bearColor : Self.yellowColor) } ?? .secondary
+                )
+            // v17.144 · CMO（>50 强多 · <-50 强空 · 中间黄）
+            case .cmo:
+                Text("CMO \(fmt(aLast))").foregroundColor(
+                    aLast.map { $0 >= 50 ? Self.bullColor : ($0 <= -50 ? Self.bearColor : Self.yellowColor) } ?? .secondary
+                )
             // v15.19 batch25 · Volume Profile · HUD 显示 POC + VAH + VAL（trader 一眼看支撑阻力位 + 70% 区）
             // v17.30 B2 · 加 Value Area · POC / VAH / VAL 三价位
             case .volumeProfile:
@@ -701,6 +743,34 @@ struct SubChartView: View {
                          barWidth: barWidth, xOffset: xOffset,
                          guideValues: [150, 100, 70],
                          minHalfSpan: 80)
+        // v17.144 · ADX 0~100 固定视野 · 25/40 趋势强度阈值（< 25 无趋势 / 25-40 强 / > 40 极强）
+        case .adx:
+            drawFixedRange(0...100, guideValues: [40, 25],
+                           seriesAList: [(seriesA, Self.yellowColor)],
+                           ctx: ctx, size: size,
+                           visibleStart: visibleStart, visibleEnd: visibleEnd,
+                           barWidth: barWidth, xOffset: xOffset)
+        // v17.144 · ADL 累积单线（与 OBV/PVT 同 pattern · auto 视野 · 0 参考）
+        case .adl:
+            drawAutoLine(seriesA, color: Self.blueColor,
+                         ctx: ctx, size: size,
+                         visibleStart: visibleStart, visibleEnd: visibleEnd,
+                         barWidth: barWidth, xOffset: xOffset,
+                         guideValues: [0])
+        // v17.144 · MFI 0~100 固定视野 · 80/50/20 三参考（同 RSI · 但更敏感因含 volume）
+        case .mfi:
+            drawFixedRange(0...100, guideValues: [80, 50, 20],
+                           seriesAList: [(seriesA, Self.yellowColor)],
+                           ctx: ctx, size: size,
+                           visibleStart: visibleStart, visibleEnd: visibleEnd,
+                           barWidth: barWidth, xOffset: xOffset)
+        // v17.144 · CMO ±100 固定视野 · ±50/0 强动量阈值（>50 强多 / <-50 强空 / 0 转向参考）
+        case .cmo:
+            drawFixedRange(-100...100, guideValues: [50, 0, -50],
+                           seriesAList: [(seriesA, Self.yellowColor)],
+                           ctx: ctx, size: size,
+                           visibleStart: visibleStart, visibleEnd: visibleEnd,
+                           barWidth: barWidth, xOffset: xOffset)
         // v15.19 batch25 · Volume Profile · 水平柱状（y=价格 bin · x=累计成交量 · 从左生长）
         case .volumeProfile:
             drawVolumeProfile(ctx, size: size)

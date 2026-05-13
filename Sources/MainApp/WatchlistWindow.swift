@@ -131,6 +131,10 @@ struct WatchlistWindow: View {
     /// v15.20 batch76 · @AppStorage 持久化（重启保留 · trader 习惯使用聚合扫盘）
     @AppStorage("viewState.v1.watchlist.showAllAggregated") private var showAllAggregated: Bool = false
 
+    /// v17.147 · 是否显示已存档合约（默认 true 显示 · 与 v17.146 灰色降级行为一致 · trader 关闭后只看活跃）
+    /// AppStorage 持久化（重启保留 · trader 偏好存档隐藏后下次打开仍隐藏）
+    @AppStorage("viewState.v1.watchlist.showArchived") private var showArchived: Bool = true
+
     /// v15.38 V2 · 高级过滤 preset（涨幅/跌幅/涨停/跌停/极端/活跃 · 默认全部）
     @AppStorage("viewState.v1.watchlist.filterPresetRaw") private var filterPresetRaw: String = WatchlistFilterPreset.all.rawValue
     private var filterPreset: WatchlistFilterPreset {
@@ -806,6 +810,8 @@ struct WatchlistWindow: View {
                 filterPresetMenu
                 // v17.132 · 标签筛选 menu（多选 OR 关系）
                 tagFilterMenu
+                // v17.147 · 已存档显隐 toggle（trader 关闭后只看活跃 · AppStorage 持久化）
+                archiveToggleButton
                 Spacer()
                 // v15.20 batch68 · 涨幅/跌幅前 N 一键批量预警（聚合扫盘 + AlertPreset 联动）
                 Menu {
@@ -944,6 +950,8 @@ struct WatchlistWindow: View {
                 filterPresetMenu
                 // v17.132 · 标签筛选 menu（多选 OR 关系）
                 tagFilterMenu
+                // v17.147 · 已存档显隐 toggle（trader 关闭后只看活跃 · AppStorage 持久化）
+                archiveToggleButton
                 Spacer()
                 Button {
                     sheetState = .addInstrument(groupID: group.id, groupName: group.name)
@@ -1144,11 +1152,19 @@ struct WatchlistWindow: View {
         )
         // v17.132 · 标签筛选（OR 关系 · 空筛选全通过）
         let tagFiltered = filtered.filter(passesTagFilter)
+        // v17.147 · 存档筛选（用户关闭"显示已存档"时过滤掉 · 默认显示）
+        let archiveFiltered: [String]
+        if showArchived {
+            archiveFiltered = tagFiltered
+        } else {
+            let archived = Set(group.archivedInstrumentIDs ?? [])
+            archiveFiltered = tagFiltered.filter { !archived.contains($0) }
+        }
         // v17.131 · 每组独立排序（fallback 全局）
         let f = effectiveSortField(for: group)
         let a = effectiveSortAscending(for: group)
         let sorted = WatchlistSorter.sort(
-            ids: tagFiltered,
+            ids: archiveFiltered,
             field: f,
             ascending: a,
             keyForID: { keyForInstrument($0, field: f) }
@@ -1267,6 +1283,21 @@ struct WatchlistWindow: View {
                 .foregroundColor(active.isEmpty ? .primary : .accentColor)
         }
         .tooltip("按合约标签筛选 · 多选 OR 关系（含任一即匹配）· v17.132")
+    }
+
+    /// v17.147 · 已存档显隐 toggle 按钮（trader 默认显示灰色降级 · 关闭后只看活跃合约）
+    /// 已显示时图标 archivebox · 已隐藏时图标 archivebox.fill 强调"被隐藏中"
+    @ViewBuilder
+    private var archiveToggleButton: some View {
+        Button {
+            showArchived.toggle()
+        } label: {
+            Label(showArchived ? "存档" : "存档（已隐）",
+                  systemImage: showArchived ? "archivebox" : "archivebox.fill")
+                .foregroundColor(showArchived ? .primary : .accentColor)
+        }
+        .tooltip(showArchived ? "点击隐藏已存档合约（trader 只看活跃）"
+                              : "点击显示已存档合约（v17.146 灰色降级）")
     }
 
     /// 视图统计 HUD（涨跌家数 + 平均涨幅 + 涨停跌停数 + 极值合约 ID）

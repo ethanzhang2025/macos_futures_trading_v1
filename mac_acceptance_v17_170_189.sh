@@ -38,11 +38,25 @@ for arg in "$@"; do
 done
 
 # --shot N 模式：跳 test · 仅截 N · 跳过其它
+# --shot 29,30,31 支持多张（逗号分）
+# --shot manual = 29,30,31,32（4 项手动验快捷写法）
 if [[ -n "${ONLY_SHOT}" ]]; then
     SKIP_TEST=1
     SKIP_SHOTS=0
-    echo "▶ 单张补拍模式：仅截 step ${ONLY_SHOT}"
+    if [[ "${ONLY_SHOT}" == "manual" ]]; then
+        ONLY_SHOT="29,30,31,32"
+    fi
+    echo "▶ 选择性截图模式：仅截 step ${ONLY_SHOT}"
 fi
+
+# want_shot N → 在选择列表内（或全跑）
+want_shot() {
+    [[ -z "${ONLY_SHOT}" ]] && return 0
+    case ",${ONLY_SHOT}," in
+        *",$1,"*) return 0 ;;
+    esac
+    return 1
+}
 
 APP_PID=""
 APP_NAME=""
@@ -168,31 +182,41 @@ else
     echo "⚠️ 未探测到 MainApp / FuturesTerminal 进程 · 但继续（也许进程名不同）"
 fi
 
-# Phase 2: 半自动截图 5 张
+# Phase 2: 半自动截图（v17.199 · 9 张 = 5 主功能 + 4 项手动验）
 echo ""
 echo "═══════════════════════════════════════════════"
-echo " Phase 2: 5 张截图 · 每张前手动操作 + 回车截图"
+echo " Phase 2: 截图 · 每张前手动操作 + 回车截图"
+echo " 单张/多张：--shot 24,25  / --shot manual = 4 项手动验"
 echo "═══════════════════════════════════════════════"
 
-# 用法：want_shot 24 → 单张模式下仅 24 步执行 · 否则全跑
-want_shot() {
-    [[ -z "${ONLY_SHOT}" ]] || [[ "${ONLY_SHOT}" == "$1" ]]
-}
-
 want_shot 24 && capture_step "24_v17188_patterns_overlay" \
-    "操作：在主图按 ⌘⇧P 打开【形态识别 overlay】(13 种形态高亮 · 无形态时仅 HUD 一闪)"
+    "在主图按 ⌘⇧P 打开【形态识别 overlay】(13 种形态高亮 · 无形态时仅 HUD 一闪)"
 
 want_shot 25 && capture_step "25_v17182_patterns_list_sheet" \
-    "操作：先 ⌘⇧P 关 overlay · 再按 ⌘⇧L 打开【形态清单 sheet】(含 stats 区)"
+    "先 ⌘⇧P 关 overlay · 再按 ⌘⇧L 打开【形态清单 sheet】(含 stats 区)"
 
 want_shot 26 && capture_step "26_v17180_resonance_overlay_hud" \
-    "操作：先 ESC 关 sheet · 再按 ⌘⇧Y 打开【多周期共振 overlay + 左上 HUD】"
+    "先 ESC 关 sheet · 再按 ⌘⇧Y 打开【多周期共振 overlay + 左上 HUD】"
 
 want_shot 27 && capture_step "27_v17184_resonance_stats_sheet" \
-    "操作：保持共振 overlay 开 · 再按 ⌘⌥⇧Y 打开【共振历史回测 sheet】"
+    "保持共振 overlay 开 · 再按 ⌘⌥⇧Y 打开【共振历史回测 sheet】"
 
 want_shot 28 && capture_step "28_v17189_secondary_picker_sheet" \
-    "操作：ESC 关 sheet + ⌘⇧Y 关共振 · 再按 ⌘⌥G 打开【多合约 overlay picker sheet】"
+    "ESC 关 sheet + ⌘⇧Y 关共振 · 再按 ⌘⌥G 打开【多合约 overlay picker sheet】"
+
+# === Phase 2b · 4 项手动验（v17.199 · 用户 --shot manual 一次跑完）===
+
+want_shot 29 && capture_step "29_⌘⌥L_crosslinkage_window" \
+    "按 ⌘⌥L 弹【跨合约联动预警规则管理窗口】· 截整个新弹窗口（不是 chart 主图）"
+
+want_shot 30 && capture_step "30_盘中复盘_calendar_sheet" \
+    "① toolbar 顶部 picker 切到【回放】· ② 底部弹出 replayControlBar · ③ 点 📅 calendar 图标 · ④ 弹出日期选择 sheet 后截图"
+
+want_shot 31 && capture_step "31_右键_OHLC_形态_Markdown_menu" \
+    "在主图 K 线某根 bar 上【右键】· 弹出 context menu 含「复制 OHLC」「复制形态」等 · 截 menu 展开状态"
+
+want_shot 32 && capture_step "32_CSV导入_⌘⇧⌥I_filepicker" \
+    "按 ⌘⇧⌥I · 弹出 macOS 文件选择 sheet 让选 CSV · 截弹出后的文件选择窗口"
 
 # 关 app
 echo ""

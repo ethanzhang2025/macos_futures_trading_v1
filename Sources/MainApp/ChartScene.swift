@@ -2395,7 +2395,7 @@ struct ChartScene: View {
                 }
             }
             .buttonStyle(ReplayBarButtonStyle(active: intradayActiveDate != nil))
-            .tooltip("盘中复盘：选定日期回放当日 K 线（含前 60 根预热）· v17.171")
+            .tooltip("盘中复盘：选定日期回放当日 K 线（含前 60 根预热）· v17.171", edge: .top)
             if intradayActiveDate != nil {
                 Button {
                     Task { await exitIntradayReplay() }

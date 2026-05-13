@@ -224,12 +224,16 @@ else
 
     if [[ "$BUILD_RC" -ne 0 ]]; then
         echo "❌ Build 失败 · 中止后续 · trap 上传精简 extract（不传 01_build.log）"
-        # v17.190 · 极简精炼 · 只留 "X.swift:line:col: error: msg" 行 · 去重 · token 极小
+        # v17.190 · error 行 + 周围 3 行 context（含 note: 解释真根 · token ~3KB）
         {
-            echo "# BUILD 失败 · 仅 error 行（去重）"
-            grep -E "\.swift:[0-9]+:[0-9]+: error:" "$OUT_DIR/01_build.log" 2>/dev/null \
-                | sed 's|.*/Sources/|Sources/|' \
-                | sort -u
+            echo "# BUILD 失败 · error 行 + 上下文 3 行（含 note:）"
+            grep -nE "\.swift:[0-9]+:[0-9]+: error:" "$OUT_DIR/01_build.log" 2>/dev/null \
+                | head -30 \
+                | while IFS=: read -r linenum _; do
+                    awk -v ln="$linenum" 'NR>=ln && NR<=ln+3' "$OUT_DIR/01_build.log"
+                    echo "---"
+                  done \
+                | sed 's|.*/Sources/|Sources/|'
         } > "$OUT_DIR/01_build_error_extract.txt"
         COMPLETED_PHASES="P1 build 失败"
         exit 1

@@ -2700,6 +2700,17 @@ struct ChartContentView: View {
     @AppStorage("viewState.v1.chart.showMultiTimeframeResonance") private var showMultiTimeframeResonance: Bool = false
     /// v17.184 · 多周期共振历史回测 sheet（⌘⌥⇧Y · trader 看哪种信号准）
     @State private var showResonanceStatsSheet: Bool = false
+    /// v17.190 · Mac 6.3 严格 · ChartContentView 内 chartContentShortcuts / viewportShortcuts / secondaryInstrumentOverlay 引用的 sheet/state · 之前缺失致 Mac 编译 30+ cannot find · Linux #if os(macOS) 守内代码不编译漏检
+    @State private var showPatternsListSheet: Bool = false
+    @State private var showSecondaryInstrumentPicker: Bool = false
+    @State private var showChartTypeOptionsSheet: Bool = false
+    @State private var showSecondaryOverlay: Bool = false
+    @State private var secondaryBars: [KLine] = []
+    @State private var secondaryInstrumentID: String = ""
+    @State private var secondaryNormalizeMode: MultiInstrumentNormalizer.Mode = .firstBaseline
+    @State private var chartTypeOptions: ChartTypeOptions = ChartTypeOptionsStore.load()
+    @Environment(\.shellHostedPaneID) private var shellPaneID
+    @Environment(\.shellCrosshairReporter) private var shellCrosshairReporter
 
     /// v15.20 batch84 · 显隐切换瞬态提示（trader 直觉反馈：刚按了 ⌘. ⌘\ 等切换什么）
     @State private var toggleNotice: String?

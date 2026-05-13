@@ -17,7 +17,8 @@ struct ChartTypeOptionsSheet: View {
 
     @Binding var isPresented: Bool
     let chartType: ChartType
-    let onApply: (ChartTypeOptions) -> Void
+    // v17.190 · @MainActor 让 caller closure (ChartScene) 同 isolation
+    let onApply: @MainActor (ChartTypeOptions) -> Void
 
     @State private var options: ChartTypeOptions = ChartTypeOptionsStore.load()
 

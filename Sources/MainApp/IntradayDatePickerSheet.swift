@@ -18,7 +18,8 @@ import Shared
 struct IntradayDatePickerSheet: View {
 
     let availableDates: [Date]
-    let onConfirm: (Date) -> Void
+    // v17.190 · @MainActor 让 caller closure (ChartScene) 同 isolation
+    let onConfirm: @MainActor (Date) -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedDate: Date?

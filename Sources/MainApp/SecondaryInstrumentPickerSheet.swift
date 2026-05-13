@@ -16,8 +16,9 @@ struct SecondaryInstrumentPickerSheet: View {
     let primaryInstrumentID: String
     let currentSecondaryID: String
     let currentMode: MultiInstrumentNormalizer.Mode
-    let onConfirm: (String, MultiInstrumentNormalizer.Mode) -> Void
-    let onClear: () -> Void
+    // v17.190 · Mac 6.3 严格 · @MainActor 让 caller closure (ChartScene) 同 isolation · 避免 cross-actor cannot find
+    let onConfirm: @MainActor (String, MultiInstrumentNormalizer.Mode) -> Void
+    let onClear: @MainActor () -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var inputID: String = ""

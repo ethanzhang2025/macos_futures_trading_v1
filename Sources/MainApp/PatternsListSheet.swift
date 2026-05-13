@@ -22,7 +22,8 @@ struct PatternsListSheet: View {
     let stats: [PatternPerformanceStats]
     let chartTheme: ChartTheme
     let candleColorMode: CandleColorMode
-    let onJumpTo: (Int) -> Void
+    // v17.190 · @MainActor 让 caller closure (ChartScene) 同 isolation
+    let onJumpTo: @MainActor (Int) -> Void
     @Environment(\.dismiss) private var dismiss
 
     /// v17.182 兼容旧 caller（无 stats 参数）
@@ -31,7 +32,7 @@ struct PatternsListSheet: View {
         stats: [PatternPerformanceStats] = [],
         chartTheme: ChartTheme,
         candleColorMode: CandleColorMode,
-        onJumpTo: @escaping (Int) -> Void
+        onJumpTo: @escaping @MainActor (Int) -> Void
     ) {
         self.patterns = patterns
         self.stats = stats

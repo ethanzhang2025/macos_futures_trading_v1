@@ -375,6 +375,8 @@ struct FuturesTerminalApp: App {
                 ImportFormulaButton()
                 Divider()
                 OpenFormulaEditorButton()  // v15.22 batch4 · WP-65 公式编辑器（⌘⌥F）
+                Divider()
+                OpenCSVImportButton()      // v17.169 · CSV 行情导入器
             }
             // v17.141 · 帮助菜单加全局快捷键速查（⌘⇧/ · 任何窗口前台都能触发）
             CommandGroup(replacing: .help) {
@@ -820,6 +822,31 @@ private struct OpenGlobalShortcutsButton: View {
 
 /// v12.18 文华 .wh 公式批量导入（WP-63 commit 4 · 完整真闭环）
 /// 工具菜单 → 选 .wh 文件 → WhImporter.importAll → NSAlert 显示编译报告
+// v17.169 · CSV K 线导入按钮（工具菜单 · ⌘⇧⌥I 触发）
+private struct OpenCSVImportButton: View {
+    @State private var showSheet = false
+    var body: some View {
+        Button("导入 K 线 CSV...") { showSheet = true }
+            .keyboardShortcut("i", modifiers: [.command, .shift, .option])
+            .sheet(isPresented: $showSheet) {
+                KLineCSVImportSheet { result, instrumentID, period in
+                    // v1 简化：导入完成后用 NSAlert 通知 · 不入 SQLite（caller v2 接 SQLite store 持久化）
+                    let alert = NSAlert()
+                    alert.messageText = "CSV 导入完成"
+                    alert.informativeText = """
+                    合约 \(instrumentID) · 周期 \(period.rawValue)
+                    解析 \(result.bars.count) 根 · 跳过 \(result.errors.count) 行
+                    时间格式 \(result.detectedFormat)
+
+                    （v1：数据存内存 · 后续 v2 接 SQLiteKLineStore 持久化 + 加载到主图回测）
+                    """
+                    alert.alertStyle = result.errors.isEmpty ? .informational : .warning
+                    alert.runModal()
+                }
+            }
+    }
+}
+
 private struct ImportFormulaButton: View {
     var body: some View {
         Button("导入文华公式（.wh）") { Self.runImport() }

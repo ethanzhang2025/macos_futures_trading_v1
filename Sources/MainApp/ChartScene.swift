@@ -5352,7 +5352,12 @@ fileprivate enum MainChartOverlayCompute {
             out.append(contentsOf: (try? VWAP.calculate(kline: kline, params: [])) ?? [])
         }
         if book.isEnabled(.pivot) {
-            out.append(contentsOf: (try? PivotPoints.calculate(kline: kline, params: [])) ?? [])
+            let result = (try? PivotPoints.calculate(kline: kline, params: [])) ?? []
+            // v17.150 · 只取 5 线 P/R1/S1/R2/S2（IndicatorCore PivotPoints 输出 7 列含 R3/S3 极端阈值）
+            // trader 多数 platform 5 线惯例 · R3/S3 极端阈值很少触及 · HUD 7 行过冗余
+            // v2 可加 ParamsBook 字段 showPivotR3S3 让用户选完整 7 线
+            let kept: Set<String> = ["P", "R1", "S1", "R2", "S2"]
+            out.append(contentsOf: result.filter { kept.contains($0.name) })
         }
         if book.isEnabled(.superTrend) {
             let result = (try? SuperTrend.calculate(

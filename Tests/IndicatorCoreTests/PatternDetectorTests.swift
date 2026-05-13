@@ -214,13 +214,65 @@ struct PatternDetectorTests {
         #expect(detected.filter { $0.kind == .descendingTriangle }.isEmpty)
     }
 
-    @Test("PatternKind allCases · v17.173 后扩到 7 case")
+    @Test("PatternKind allCases · v17.177 后扩到 9 case（v17.173 7 + 楔形 2）")
     func patternKindAllCasesCount() {
-        #expect(PatternKind.allCases.count == 7)
+        #expect(PatternKind.allCases.count == 9)
         let kinds = Set(PatternKind.allCases)
         #expect(kinds.contains(.ascendingTriangle))
         #expect(kinds.contains(.descendingTriangle))
         #expect(kinds.contains(.rectangle))
+        #expect(kinds.contains(.risingWedge))
+        #expect(kinds.contains(.fallingWedge))
+    }
+
+    // MARK: - v17.177 · 楔形
+
+    @Test("上升楔形 · 3 顶+2 底都升 · 底升更快收敛 · 检出 direction -1（看空反转）")
+    func detectRisingWedge() throws {
+        // 5 pivot 期待：100/80/110/100/112
+        // 顶升 (112-100)/100 = 12% · 底升 (100-80)/80 = 25% · ratio = 25/12 ≈ 2.08 ≥ 1.5
+        let prices: [Double] = [100, 100, 80, 80, 80, 110, 110, 100, 100, 112, 112, 108]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        let wedge = detected.filter { $0.kind == .risingWedge }
+        #expect(wedge.count >= 1, "应至少检出 1 个上升楔形 · detected=\(detected.map { ($0.kind, $0.confidence) })")
+        if let p = wedge.first {
+            #expect(p.kind.direction == -1)
+            #expect(p.pivotPrices.count == 5)
+        }
+    }
+
+    @Test("下降楔形 · 3 底+2 顶都降 · 顶降更快收敛 · 检出 direction +1（看多反转）")
+    func detectFallingWedge() throws {
+        // 5 pivot 期待：110/140/100/105/95
+        // 底降 (110-95)/110 ≈ 13.6% · 顶降 (140-105)/140 = 25% · ratio = 25/13.6 ≈ 1.83 ≥ 1.5
+        let prices: [Double] = [110, 110, 140, 140, 100, 100, 105, 105, 95, 95, 98]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        let wedge = detected.filter { $0.kind == .fallingWedge }
+        #expect(wedge.count >= 1, "应至少检出 1 个下降楔形 · detected=\(detected.map { ($0.kind, $0.confidence) })")
+        if let p = wedge.first {
+            #expect(p.kind.direction == 1)
+            #expect(p.pivotPrices.count == 5)
+        }
+    }
+
+    @Test("上升楔形 · 顶升 = 底升（无收敛）· 不应识别")
+    func risingWedgeRejectsNoConvergence() throws {
+        // 顶 100, 110, 120（slope 20%）· 底 80, 90（slope 12.5%）· ratio = 12.5/20 = 0.625 < 1.5 拒
+        let prices: [Double] = [100, 100, 80, 80, 80, 110, 110, 90, 90, 120, 120, 115]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        #expect(detected.filter { $0.kind == .risingWedge }.isEmpty)
+    }
+
+    @Test("下降楔形 · 底升而非降 · 不应识别（违反 lows 单调下降）")
+    func fallingWedgeRejectsAscendingLows() throws {
+        // 底 100, 105, 110（上升而非下降）· 顶 140, 120
+        let prices: [Double] = [100, 100, 140, 140, 105, 105, 120, 120, 110, 110, 115]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        #expect(detected.filter { $0.kind == .fallingWedge }.isEmpty)
     }
 
     // MARK: - 排序

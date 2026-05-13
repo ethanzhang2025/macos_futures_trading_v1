@@ -32,6 +32,9 @@ public enum PatternKind: String, Sendable, Codable, CaseIterable {
     case ascendingTriangle        // 上升三角（顶部水平 · 底部抬升 · 看多突破）
     case descendingTriangle       // 下降三角（底部水平 · 顶部下压 · 看空击穿）
     case rectangle                // 矩形整理（顶底都水平 · 中性等突破）
+    // v17.177 · 楔形（双线同向但斜率不同 · 收敛形态 · 经典反转）
+    case risingWedge              // 上升楔形（高低都升但底升更快 · 看空反转）
+    case fallingWedge             // 下降楔形（高低都降但顶降更快 · 看多反转）
 
     public var displayName: String {
         switch self {
@@ -42,15 +45,17 @@ public enum PatternKind: String, Sendable, Codable, CaseIterable {
         case .ascendingTriangle:      return "上升三角"
         case .descendingTriangle:     return "下降三角"
         case .rectangle:              return "矩形整理"
+        case .risingWedge:            return "上升楔形"
+        case .fallingWedge:           return "下降楔形"
         }
     }
 
     /// 信号方向 · +1 = 看多反转/突破 · -1 = 看空反转/击穿 · 0 = 中性等突破方向
     public var direction: Int {
         switch self {
-        case .headAndShouldersBottom, .doubleBottom, .ascendingTriangle: return 1
-        case .headAndShouldersTop, .doubleTop, .descendingTriangle:      return -1
-        case .rectangle:                                                  return 0
+        case .headAndShouldersBottom, .doubleBottom, .ascendingTriangle, .fallingWedge: return 1
+        case .headAndShouldersTop, .doubleTop, .descendingTriangle, .risingWedge:       return -1
+        case .rectangle:                                                                 return 0
         }
     }
 
@@ -64,6 +69,8 @@ public enum PatternKind: String, Sendable, Codable, CaseIterable {
         case .ascendingTriangle:      return "arrow.up.right.circle"
         case .descendingTriangle:     return "arrow.down.right.circle"
         case .rectangle:              return "rectangle"
+        case .risingWedge:            return "chevron.up.chevron.down"
+        case .fallingWedge:           return "chevron.down.chevron.up"
         }
     }
 }
@@ -109,6 +116,8 @@ public struct PatternDetectorParams: Sendable, Equatable {
     public var triangleSlopingMin: Double
     /// v17.173 · 矩形 · range 最少占下边界比例（默认 0.02 = 2%）· 防"扁平假矩形"
     public var rectangleRangeMin: Double
+    /// v17.177 · 楔形 · 两线斜率差最少占慢侧斜率比例（默认 1.5）· 收敛判定 · 越大要求收敛越显著
+    public var wedgeConvergenceRatioMin: Double
 
     public init(
         zigzagPercent: Decimal = 3,
@@ -119,7 +128,8 @@ public struct PatternDetectorParams: Sendable, Equatable {
         doubleTopMidRetracementMin: Double = 0.02,
         triangleHorizontalTolerance: Double = 0.02,
         triangleSlopingMin: Double = 0.015,
-        rectangleRangeMin: Double = 0.02
+        rectangleRangeMin: Double = 0.02,
+        wedgeConvergenceRatioMin: Double = 1.5
     ) {
         self.zigzagPercent = zigzagPercent
         self.shoulderSymmetryTolerance = shoulderSymmetryTolerance
@@ -130,6 +140,7 @@ public struct PatternDetectorParams: Sendable, Equatable {
         self.triangleHorizontalTolerance = triangleHorizontalTolerance
         self.triangleSlopingMin = triangleSlopingMin
         self.rectangleRangeMin = rectangleRangeMin
+        self.wedgeConvergenceRatioMin = wedgeConvergenceRatioMin
     }
 
     public static let `default` = PatternDetectorParams()
@@ -188,7 +199,87 @@ public enum PatternDetector {
             }
         }
 
+        // v17.177 · 滑动 5 pivot 窗口 · 检 楔形（HS 同窗口 · 但已在前面检过 · 不冲突）
+        if pivots.count >= 5 {
+            for i in 0...(pivots.count - 5) {
+                let window = Array(pivots[i..<(i + 5)])
+                if let p = checkRisingWedge(window, params: params) {
+                    detected.append(p)
+                }
+                if let p = checkFallingWedge(window, params: params) {
+                    detected.append(p)
+                }
+            }
+        }
+
         return dedupByEndIndex(detected)
+    }
+
+    // MARK: - v17.177 · 楔形匹配模板（5 pivot 窗口）
+
+    /// 上升楔形（peak-trough-peak-trough-peak · 3 顶 + 2 底都升 · 底升速度 > 顶升速度 · 收敛 · 看空）
+    private static func checkRisingWedge(
+        _ p: [(idx: Int, price: Decimal)],
+        params: PatternDetectorParams
+    ) -> DetectedPattern? {
+        guard p.count == 5 else { return nil }
+        // peak-trough-peak-trough-peak 严格交替
+        guard p[0].price > p[1].price,
+              p[1].price < p[2].price,
+              p[2].price > p[3].price,
+              p[3].price < p[4].price else { return nil }
+        let hi1 = doubleValue(p[0].price)
+        let lo1 = doubleValue(p[1].price)
+        let hi2 = doubleValue(p[2].price)
+        let lo2 = doubleValue(p[3].price)
+        let hi3 = doubleValue(p[4].price)
+        // 顶必须上升（hi1 < hi2 < hi3）· 底必须上升（lo1 < lo2）· 底升速度 > 顶升速度 → 收敛
+        guard hi1 < hi2, hi2 < hi3, lo1 < lo2 else { return nil }
+        let highSlope = (hi3 - hi1) / hi1
+        let lowSlope = (lo2 - lo1) / lo1
+        guard highSlope > 0, lowSlope > 0 else { return nil }
+        guard lowSlope >= highSlope * params.wedgeConvergenceRatioMin else { return nil }
+        // confidence：收敛越显著 + 三顶斜率越一致越高（v1 简单：仅收敛比例）
+        let convergence = lowSlope / max(highSlope, 1e-6)
+        let confidence = min(1, (convergence - params.wedgeConvergenceRatioMin) / (params.wedgeConvergenceRatioMin * 2))
+        return DetectedPattern(
+            kind: .risingWedge,
+            pivotIndices: p.map(\.idx),
+            pivotPrices: p.map(\.price),
+            confidence: clamp01(0.5 + confidence * 0.5)  // [0.5, 1.0] 范围
+        )
+    }
+
+    /// 下降楔形（trough-peak-trough-peak-trough · 3 底 + 2 顶都降 · 顶降速度 > 底降速度 · 收敛 · 看多）
+    private static func checkFallingWedge(
+        _ p: [(idx: Int, price: Decimal)],
+        params: PatternDetectorParams
+    ) -> DetectedPattern? {
+        guard p.count == 5 else { return nil }
+        // trough-peak-trough-peak-trough 严格交替
+        guard p[0].price < p[1].price,
+              p[1].price > p[2].price,
+              p[2].price < p[3].price,
+              p[3].price > p[4].price else { return nil }
+        let lo1 = doubleValue(p[0].price)
+        let hi1 = doubleValue(p[1].price)
+        let lo2 = doubleValue(p[2].price)
+        let hi2 = doubleValue(p[3].price)
+        let lo3 = doubleValue(p[4].price)
+        // 底必须下降（lo1 > lo2 > lo3）· 顶必须下降（hi1 > hi2）· 顶降速度 > 底降速度 → 收敛
+        guard lo1 > lo2, lo2 > lo3, hi1 > hi2 else { return nil }
+        let lowSlope = (lo1 - lo3) / lo1
+        let highSlope = (hi1 - hi2) / hi1
+        guard lowSlope > 0, highSlope > 0 else { return nil }
+        guard highSlope >= lowSlope * params.wedgeConvergenceRatioMin else { return nil }
+        let convergence = highSlope / max(lowSlope, 1e-6)
+        let confidence = min(1, (convergence - params.wedgeConvergenceRatioMin) / (params.wedgeConvergenceRatioMin * 2))
+        return DetectedPattern(
+            kind: .fallingWedge,
+            pivotIndices: p.map(\.idx),
+            pivotPrices: p.map(\.price),
+            confidence: clamp01(0.5 + confidence * 0.5)
+        )
     }
 
     // MARK: - v17.173 · 三角 / 矩形匹配模板（4 pivot 窗口）

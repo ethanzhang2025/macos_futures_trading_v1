@@ -2834,7 +2834,17 @@ struct ChartContentView: View {
         currentFontSize: Binding<Double>,
         hudCorner: Binding<HUDCorner>,
         viewportSaveKey: String,
-        initialViewport: RenderViewport
+        initialViewport: RenderViewport,
+        // v17.196 真修 · 9 个 sheet/overlay binding 单一来源 ChartScene
+        showResonanceStatsSheet: Binding<Bool>,
+        showPatternsListSheet: Binding<Bool>,
+        showSecondaryInstrumentPicker: Binding<Bool>,
+        showChartTypeOptionsSheet: Binding<Bool>,
+        showSecondaryOverlay: Binding<Bool>,
+        secondaryBars: Binding<[KLine]>,
+        secondaryInstrumentID: Binding<String>,
+        secondaryNormalizeMode: Binding<MultiInstrumentNormalizer.Mode>,
+        chartTypeOptions: Binding<ChartTypeOptions>
     ) {
         self.renderer = renderer
         self.bars = bars
@@ -2867,6 +2877,16 @@ struct ChartContentView: View {
         self._hudCorner = hudCorner
         self.viewportSaveKey = viewportSaveKey
         self._viewport = State(initialValue: initialViewport)
+        // v17.196 真修 · 9 个 binding
+        self._showResonanceStatsSheet = showResonanceStatsSheet
+        self._showPatternsListSheet = showPatternsListSheet
+        self._showSecondaryInstrumentPicker = showSecondaryInstrumentPicker
+        self._showChartTypeOptionsSheet = showChartTypeOptionsSheet
+        self._showSecondaryOverlay = showSecondaryOverlay
+        self._secondaryBars = secondaryBars
+        self._secondaryInstrumentID = secondaryInstrumentID
+        self._secondaryNormalizeMode = secondaryNormalizeMode
+        self._chartTypeOptions = chartTypeOptions
     }
 
     /// 副图高度（v13.20 改为可拖分割条调整 · subChartTotalHeight @State 替代）

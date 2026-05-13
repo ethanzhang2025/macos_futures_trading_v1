@@ -48,8 +48,11 @@ enum MainChartOverlayCompute {
         }
         if book.isEnabled(.pivot) {
             let result = (try? PivotPoints.calculate(kline: kline, params: [])) ?? []
-            // v17.150 · 只取 5 线 P/R1/S1/R2/S2（IndicatorCore 输出 7 列含 R3/S3 极端阈值 · trader HUD 5 行更紧凑）
-            let kept: Set<String> = ["P", "R1", "S1", "R2", "S2"]
+            // v17.150/162 · 默认 5 线 P/R1/S1/R2/S2 · showPivotR3S3 开启则 7 线（加 R3/S3 极端阈值）
+            let kept: Set<String> = book.showPivotR3S3
+                ? ["P", "R1", "S1", "R2", "S2", "R3", "S3"]
+                : ["P", "R1", "S1", "R2", "S2"]
+            // 保留 IndicatorCore 原顺序 [P, R1, S1, R2, S2, R3, S3]
             out.append(contentsOf: result.filter { kept.contains($0.name) })
         }
         if book.isEnabled(.superTrend) {
@@ -57,8 +60,22 @@ enum MainChartOverlayCompute {
                 kline: kline,
                 params: [Decimal(book.superTrendPeriod), book.superTrendMultiplier]
             )) ?? []
-            // drop SUPERTREND-DIR（trader HUD 不需方向 ±1 数字 · 后续渲染层可独立读取色彩区分）
-            if let st = result.first(where: { $0.name == "SUPERTREND" }) {
+            // v17.162 · showSuperTrendDirectionColor 开启则按 DIR 拆 SUPERTREND-LONG / SUPERTREND-SHORT 两段（多绿/空红 · 渲染层 palette 自动分色）
+            if book.showSuperTrendDirectionColor,
+               let st = result.first(where: { $0.name == "SUPERTREND" }),
+               let dir = result.first(where: { $0.name == "SUPERTREND-DIR" }) {
+                let count = st.values.count
+                var longVals = [Decimal?](repeating: nil, count: count)
+                var shortVals = [Decimal?](repeating: nil, count: count)
+                for i in 0..<count {
+                    guard let s = st.values[i], let d = dir.values[i] else { continue }
+                    if d > 0 { longVals[i] = s }
+                    else if d < 0 { shortVals[i] = s }
+                }
+                out.append(IndicatorSeries(name: "SUPERTREND-LONG",  values: longVals))
+                out.append(IndicatorSeries(name: "SUPERTREND-SHORT", values: shortVals))
+            } else if let st = result.first(where: { $0.name == "SUPERTREND" }) {
+                // 默认单色：drop SUPERTREND-DIR（trader HUD 不需方向 ±1 数字）
                 out.append(st)
             }
         }
@@ -139,6 +156,9 @@ struct OverlayIncrementalStates {
     // v17.161 · CHIKOU 滞后渲染需要的状态（用于 ChartIndicatorRunner.step 退避填充）
     var ichimokuShowChikou: Bool = false
     var ichimokuKijun: Int = 0
+    // v17.162 · Pivot 5/7 + SuperTrend 多空分色状态（影响 step 输出列数与拆分逻辑）
+    var pivotShowR3S3: Bool = false
+    var superTrendShowDirectionColor: Bool = false
 
     /// 用 history KLine 序列消化每个启用 overlay 的 state · 完成后 step(newBar) 输出当前根
     /// makeIncrementalState 失败（try? = nil · 参数非法等）→ 该 overlay 在 step 时跳过 · 与 MainChartOverlayCompute.compute 同款 `?? []` 行为对齐
@@ -148,12 +168,14 @@ struct OverlayIncrementalStates {
         }
         if book.isEnabled(.pivot) {
             pivot = try? PivotPoints.makeIncrementalState(kline: history, params: [])
+            pivotShowR3S3 = book.showPivotR3S3
         }
         if book.isEnabled(.superTrend) {
             superTrend = try? SuperTrend.makeIncrementalState(
                 kline: history,
                 params: [Decimal(book.superTrendPeriod), book.superTrendMultiplier]
             )
+            superTrendShowDirectionColor = book.showSuperTrendDirectionColor
         }
         if book.isEnabled(.ichimoku) {
             ichimoku = try? Ichimoku.makeIncrementalState(
@@ -218,18 +240,34 @@ struct OverlayIncrementalStates {
         if var s = pivot {
             let row = PivotPoints.stepIncremental(state: &s, newBar: newBar)
             pivot = s
-            // PivotPoints stepIncremental 输出 [P, R1, S1, R2, S2, R3, S3] · 7 列 · 取前 5（drop R3/S3 · v17.150）
+            // PivotPoints stepIncremental 输出 [P, R1, S1, R2, S2, R3, S3] · v17.150 默认 5 / v17.162 toggle 开 7
             out.append(row[0])
             out.append(row[1])
             out.append(row[2])
             out.append(row[3])
             out.append(row[4])
+            if pivotShowR3S3 {
+                out.append(row[5])
+                out.append(row[6])
+            }
         }
         if var s = superTrend {
             let row = SuperTrend.stepIncremental(state: &s, newBar: newBar)
             superTrend = s
-            // SuperTrend stepIncremental 输出 [SUPERTREND, SUPERTREND-DIR] · 只取主线 drop DIR
-            out.append(row[0])
+            // v17.162 · 默认单色 1 列（drop DIR）· showSuperTrendDirectionColor 开启拆 LONG/SHORT 2 列（多绿空红 · 渲染层 palette）
+            if superTrendShowDirectionColor {
+                let st  = row[0]
+                let dir = row[1]
+                if let s = st, let d = dir, d > 0 {
+                    out.append(s); out.append(nil)
+                } else if let s = st, let d = dir, d < 0 {
+                    out.append(nil); out.append(s)
+                } else {
+                    out.append(nil); out.append(nil)
+                }
+            } else {
+                out.append(row[0])
+            }
         }
         if var s = ichimoku {
             let row = Ichimoku.stepIncremental(state: &s, newBar: newBar)

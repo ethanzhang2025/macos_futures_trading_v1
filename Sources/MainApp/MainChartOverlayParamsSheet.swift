@@ -33,9 +33,17 @@ struct MainChartOverlayParamsSheet: View {
 
             ScrollView {
                 Form {
-                    paramSection("SuperTrend（ATR 趋势止损线）", subtitle: "默认 10 / 3 · period=ATR 周期 · mult=带宽倍数（rolling lock · 与麦语言 SUPERTREND 一致）") {
+                    paramSection("Pivot Points（经典支撑阻力）", subtitle: "默认 5 线 P/R1/S1/R2/S2 · v17.162 toggle 开启则 7 线（加 R3/S3 极端阈值 · daily 周期满足）") {
+                        Toggle("显示 R3/S3", isOn: $draft.showPivotR3S3)
+                            .toggleStyle(.checkbox)
+                    }
+
+                    paramSection("SuperTrend（ATR 趋势止损线）", subtitle: "默认 10 / 3 · period=ATR 周期 · mult=带宽倍数 · v17.162 多空分色（开启拆 LONG/SHORT 两段 palette）") {
                         paramField("period", $draft.superTrendPeriod)
                         paramFieldDecimal("mult", $draft.superTrendMultiplier, leadingPad: true)
+                        Toggle("多空分色", isOn: $draft.showSuperTrendDirectionColor)
+                            .toggleStyle(.checkbox)
+                            .padding(.leading, 12)
                     }
 
                     paramSection("Ichimoku（一目均衡表 4-5 线）", subtitle: "默认 9 / 26 / 52 · Tenkan / Kijun / Senkou-B 周期 · v17.161 CHIKOU 可选（close 后移 kijun 根 · 高级用户）") {

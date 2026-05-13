@@ -78,6 +78,10 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
     /// v17.161 · Ichimoku CHIKOU 滞后线开关（默认 false · close 后移 kijun 根 · 高级用户开启）
     /// 实时回放下最新 kijun 根 CHIKOU 显示为空 · ChartIndicatorRunner.step 会用新 K 退避填到 (newLen-1-kijun) 位置
     public var ichimokuShowChikou: Bool
+    /// v17.162 · Pivot R3/S3 极端阈值线开关（默认 false 5 线 · 开启则 7 线 P/R1/S1/R2/S2/R3/S3）
+    public var showPivotR3S3: Bool
+    /// v17.162 · SuperTrend 多空方向分色（默认 false 单色 · 开启则按 DIR 拆 SUPERTREND-LONG/SHORT 两段 · 多绿空红视觉）
+    public var showSuperTrendDirectionColor: Bool
     /// Donchian period（默认 20 · 海龟法标准）
     public var donchianPeriod: Int
     /// Keltner EMA 中轴周期（默认 20）
@@ -122,7 +126,9 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         hmaPeriod: Int = 16,
         demaPeriod: Int = 20,
         temaPeriod: Int = 20,
-        ichimokuShowChikou: Bool = false
+        ichimokuShowChikou: Bool = false,
+        showPivotR3S3: Bool = false,
+        showSuperTrendDirectionColor: Bool = false
     ) {
         self.enabled = enabled
         self.superTrendPeriod = superTrendPeriod
@@ -143,6 +149,8 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.demaPeriod = demaPeriod
         self.temaPeriod = temaPeriod
         self.ichimokuShowChikou = ichimokuShowChikou
+        self.showPivotR3S3 = showPivotR3S3
+        self.showSuperTrendDirectionColor = showSuperTrendDirectionColor
     }
 
     public static let `default` = MainChartOverlayBook()
@@ -167,6 +175,7 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         case sarStep, sarMax, priceChannelPeriod, envelopesPeriod, envelopesPercent  // v17.153
         case hmaPeriod, demaPeriod, temaPeriod  // v17.159
         case ichimokuShowChikou                 // v17.161
+        case showPivotR3S3, showSuperTrendDirectionColor  // v17.162
     }
 
     public init(from decoder: Decoder) throws {
@@ -190,6 +199,8 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.demaPeriod           = try c.decodeIfPresent(Int.self, forKey: .demaPeriod) ?? 20
         self.temaPeriod           = try c.decodeIfPresent(Int.self, forKey: .temaPeriod) ?? 20
         self.ichimokuShowChikou   = try c.decodeIfPresent(Bool.self, forKey: .ichimokuShowChikou) ?? false
+        self.showPivotR3S3        = try c.decodeIfPresent(Bool.self, forKey: .showPivotR3S3) ?? false
+        self.showSuperTrendDirectionColor = try c.decodeIfPresent(Bool.self, forKey: .showSuperTrendDirectionColor) ?? false
     }
 }
 

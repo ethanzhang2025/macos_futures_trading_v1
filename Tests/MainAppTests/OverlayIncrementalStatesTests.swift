@@ -79,6 +79,58 @@ struct OverlayIncrementalStatesTests {
         try assertSingleOverlayParity(.tema, historyCount: 50, stepCount: 30)
     }
 
+    // v17.162 · Pivot 7 / SuperTrend 多空分色 parity
+
+    @Test("Pivot showPivotR3S3 开启 · 7 列 P/R1/S1/R2/S2/R3/S3 · 增量等价")
+    func pivotShowR3S3Equivalence() throws {
+        var book = MainChartOverlayBook(enabled: [.pivot], showPivotR3S3: true)
+        let bars = makeBars(count: 100)
+        let history = Array(bars.prefix(50))
+        let kline = makeSeries(from: history)
+        var states = OverlayIncrementalStates(history: kline, book: book)
+        var historyArr = history
+        for i in 0..<50 {
+            let newBar = bars[50 + i]
+            let stepOut = states.step(newBar: newBar)
+            historyArr.append(newBar)
+            let computeOut = MainChartOverlayCompute.compute(bars: historyArr, book: book)
+            #expect(stepOut.count == 7, "Pivot 7 列 R3/S3 开启")
+            #expect(computeOut.count == 7)
+            for (col, series) in computeOut.enumerated() {
+                #expect(stepOut[col] == series.values.last ?? nil, "Pivot7 col[\(col)] \(series.name)")
+            }
+        }
+        // book unused warning fix
+        _ = book.showPivotR3S3
+    }
+
+    @Test("SuperTrend showSuperTrendDirectionColor 开启 · 2 列 LONG/SHORT 互补 · 增量等价")
+    func superTrendDirectionColorEquivalence() throws {
+        var book = MainChartOverlayBook(enabled: [.superTrend], showSuperTrendDirectionColor: true)
+        let bars = makeBars(count: 100)
+        let history = Array(bars.prefix(50))
+        let kline = makeSeries(from: history)
+        var states = OverlayIncrementalStates(history: kline, book: book)
+        var historyArr = history
+        for _ in 0..<30 {
+            let newBar = bars[historyArr.count]
+            let stepOut = states.step(newBar: newBar)
+            historyArr.append(newBar)
+            let computeOut = MainChartOverlayCompute.compute(bars: historyArr, book: book)
+            #expect(stepOut.count == 2, "SuperTrend 2 列 LONG/SHORT")
+            #expect(computeOut.count == 2)
+            #expect(computeOut[0].name == "SUPERTREND-LONG")
+            #expect(computeOut[1].name == "SUPERTREND-SHORT")
+            for (col, series) in computeOut.enumerated() {
+                #expect(stepOut[col] == series.values.last ?? nil, "STDir col[\(col)] \(series.name)")
+            }
+            // 互斥：同一根不能同时 LONG / SHORT 都非 nil
+            if stepOut[0] != nil { #expect(stepOut[1] == nil) }
+            if stepOut[1] != nil { #expect(stepOut[0] == nil) }
+        }
+        _ = book.showSuperTrendDirectionColor
+    }
+
     // MARK: - 列顺序：多 overlay 启用 · OverlayIncrementalStates.step 输出 == compute(bars).flatMap(\.values.last)
 
     @Test("12 overlay 全开 · step 输出列顺序与 MainChartOverlayCompute 完全一致（26 列）")

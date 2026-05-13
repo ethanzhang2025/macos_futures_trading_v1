@@ -33,6 +33,9 @@ struct MainChartOverlayBookTests {
         #expect(d.temaPeriod == 20)
         // v17.161 · CHIKOU 默认关
         #expect(d.ichimokuShowChikou == false)
+        // v17.162 · Pivot R3/S3 + SuperTrend 多空分色 默认关
+        #expect(d.showPivotR3S3 == false)
+        #expect(d.showSuperTrendDirectionColor == false)
     }
 
     @Test("MainChartOverlayKind allCases 12 类完整 · 顺序 ...envelopes/hma/dema/tema (v17.159)")
@@ -288,6 +291,27 @@ struct MainChartOverlayBookTests {
         #expect(decoded.hmaPeriod == 14)
         #expect(decoded.demaPeriod == 30)
         #expect(decoded.temaPeriod == 35)
+    }
+
+    @Test("v17.162 · Pivot R3/S3 + SuperTrend 多空分色 toggle round-trip + 旧 JSON fallback false")
+    func v17_162Toggles() throws {
+        let on = MainChartOverlayBook(
+            enabled: [.pivot, .superTrend],
+            showPivotR3S3: true,
+            showSuperTrendDirectionColor: true
+        )
+        let data = try JSONEncoder().encode(on)
+        let decoded = try JSONDecoder().decode(MainChartOverlayBook.self, from: data)
+        #expect(decoded.showPivotR3S3 == true)
+        #expect(decoded.showSuperTrendDirectionColor == true)
+
+        // v17.161 旧 JSON 缺 2 字段 · fallback false（trader 默认紧凑配色）
+        let oldJSON = """
+        {"enabled":["pivot"],"ichimokuShowChikou":true}
+        """
+        let decoded2 = try JSONDecoder().decode(MainChartOverlayBook.self, from: oldJSON.data(using: .utf8)!)
+        #expect(decoded2.showPivotR3S3 == false)
+        #expect(decoded2.showSuperTrendDirectionColor == false)
     }
 
     @Test("v17.161 · ichimokuShowChikou toggle round-trip + 旧 JSON 兼容 fallback false")

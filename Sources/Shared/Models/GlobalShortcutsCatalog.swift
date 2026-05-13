@@ -142,6 +142,7 @@ public enum GlobalShortcutsCatalog {
                 ShortcutEntry("⌘⇧L", "形态识别清单 sheet（v17.165 当前 K 线全部检出形态）"),
                 ShortcutEntry("⌘⇧S", "支撑阻力 overlay 显隐（v17.166 ZigZag pivot 聚类水平线）"),
                 ShortcutEntry("⌘⇧Y", "多周期共振 overlay 显隐（v17.170 当前周期 → 高周期 MACD/EMA 金叉死叉）"),
+                ShortcutEntry("⌘⌥⇧Y", "多周期共振历史回测 sheet（v17.184 信号在自家数据上胜率）"),
             ]),
             ShortcutGroup("显隐切换", [
                 ShortcutEntry("⌘.", "副图 显隐"),

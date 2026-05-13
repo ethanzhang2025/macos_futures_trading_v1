@@ -628,6 +628,19 @@ struct ChartScene: View {
             // v15.7 副图独立参数编辑 sheet · book binding 走 effectiveBindingForSlot
             IndicatorParamsSheet(book: bindingForSubSlot(ident.slot))
         }
+        // v17.184 · 多周期共振历史回测 sheet（⌘⌥⇧Y）
+        .sheet(isPresented: $showResonanceStatsSheet) {
+            let basePeriod = bars.first?.period
+            let targets: [KLinePeriod] = basePeriod.map(MultiTimeframeResonance.defaultTargets(for:)) ?? []
+            let signals = (try? MultiTimeframeResonance.detect(baseBars: bars, targetPeriods: targets)) ?? []
+            let stats = MultiTimeframeResonance.performanceStats(signals: signals, baseBars: bars)
+            ResonanceStatsSheet(
+                stats: stats,
+                chartTheme: chartTheme,
+                candleColorMode: candleColorMode
+            )
+        }
+
         // v17.171 · 盘中复盘日期选择 sheet
         .sheet(isPresented: $showIntradayDatePicker) {
             let source = intradayFullBarsBackup ?? replayAllBars
@@ -2606,6 +2619,8 @@ struct ChartContentView: View {
     @AppStorage("viewState.v1.chart.showSupportResistance") private var showSupportResistance: Bool = false
     /// v17.170 · 多周期共振 overlay 开关（⌘⇧Y · 当前周期 → 高周期 MACD/EMA 金叉死叉信号点）
     @AppStorage("viewState.v1.chart.showMultiTimeframeResonance") private var showMultiTimeframeResonance: Bool = false
+    /// v17.184 · 多周期共振历史回测 sheet（⌘⌥⇧Y · trader 看哪种信号准）
+    @State private var showResonanceStatsSheet: Bool = false
 
     /// v15.20 batch84 · 显隐切换瞬态提示（trader 直觉反馈：刚按了 ⌘. ⌘\ 等切换什么）
     @State private var toggleNotice: String?
@@ -2946,6 +2961,11 @@ struct ChartContentView: View {
                 presentToggleNotice("多周期共振：\(showMultiTimeframeResonance ? "显示" : "隐藏")")
             }
                 .keyboardShortcut("y", modifiers: [.command, .shift])
+            // v17.184 · ⌘⌥⇧Y 多周期共振历史回测 sheet
+            Button("") {
+                showResonanceStatsSheet = true
+            }
+                .keyboardShortcut("y", modifiers: [.command, .shift, .option])
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.end, modifiers: [.command])
             Button("", action: jumpToLatestBar)

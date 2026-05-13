@@ -38,10 +38,13 @@ struct MainChartOverlayParamsSheet: View {
                         paramFieldDecimal("mult", $draft.superTrendMultiplier, leadingPad: true)
                     }
 
-                    paramSection("Ichimoku（一目均衡表 4 线）", subtitle: "默认 9 / 26 / 52 · Tenkan 转换线 / Kijun 基准线 / Senkou-B 周期（CHIKOU 暂不画）") {
+                    paramSection("Ichimoku（一目均衡表 4-5 线）", subtitle: "默认 9 / 26 / 52 · Tenkan / Kijun / Senkou-B 周期 · v17.161 CHIKOU 可选（close 后移 kijun 根 · 高级用户）") {
                         paramField("Tenkan", $draft.ichimokuTenkan)
                         paramField("Kijun",  $draft.ichimokuKijun, leadingPad: true)
                         paramField("Senkou", $draft.ichimokuSenkou, leadingPad: true)
+                        Toggle("CHIKOU", isOn: $draft.ichimokuShowChikou)
+                            .toggleStyle(.checkbox)
+                            .padding(.leading, 12)
                     }
 
                     paramSection("Donchian Channel（唐奇安通道）", subtitle: "默认 20 · 海龟交易法核心 · HHV/LLV/MID 3 线") {

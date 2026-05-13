@@ -31,6 +31,8 @@ struct MainChartOverlayBookTests {
         #expect(d.hmaPeriod == 16)
         #expect(d.demaPeriod == 20)
         #expect(d.temaPeriod == 20)
+        // v17.161 · CHIKOU 默认关
+        #expect(d.ichimokuShowChikou == false)
     }
 
     @Test("MainChartOverlayKind allCases 12 类完整 · 顺序 ...envelopes/hma/dema/tema (v17.159)")
@@ -286,5 +288,22 @@ struct MainChartOverlayBookTests {
         #expect(decoded.hmaPeriod == 14)
         #expect(decoded.demaPeriod == 30)
         #expect(decoded.temaPeriod == 35)
+    }
+
+    @Test("v17.161 · ichimokuShowChikou toggle round-trip + 旧 JSON 兼容 fallback false")
+    func ichimokuShowChikouToggle() throws {
+        // round-trip
+        let on = MainChartOverlayBook(enabled: [.ichimoku], ichimokuShowChikou: true)
+        let onData = try JSONEncoder().encode(on)
+        let onDecoded = try JSONDecoder().decode(MainChartOverlayBook.self, from: onData)
+        #expect(onDecoded.ichimokuShowChikou == true)
+
+        // v17.160 旧 JSON 缺字段 · fallback false（trader 默认不画 CHIKOU）
+        let oldJSON = """
+        {"enabled":["ichimoku"],"ichimokuTenkan":9,"ichimokuKijun":26,"ichimokuSenkou":52}
+        """
+        let data = oldJSON.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(MainChartOverlayBook.self, from: data)
+        #expect(decoded.ichimokuShowChikou == false)
     }
 }

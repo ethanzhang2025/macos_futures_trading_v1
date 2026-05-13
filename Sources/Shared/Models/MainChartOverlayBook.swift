@@ -75,6 +75,9 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
     public var ichimokuKijun: Int
     /// Ichimoku 先行 B Senkou-Span-B 周期（默认 52）
     public var ichimokuSenkou: Int
+    /// v17.161 · Ichimoku CHIKOU 滞后线开关（默认 false · close 后移 kijun 根 · 高级用户开启）
+    /// 实时回放下最新 kijun 根 CHIKOU 显示为空 · ChartIndicatorRunner.step 会用新 K 退避填到 (newLen-1-kijun) 位置
+    public var ichimokuShowChikou: Bool
     /// Donchian period（默认 20 · 海龟法标准）
     public var donchianPeriod: Int
     /// Keltner EMA 中轴周期（默认 20）
@@ -118,7 +121,8 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         envelopesPercent: Decimal = Decimal(string: "2.5") ?? Decimal(2.5),
         hmaPeriod: Int = 16,
         demaPeriod: Int = 20,
-        temaPeriod: Int = 20
+        temaPeriod: Int = 20,
+        ichimokuShowChikou: Bool = false
     ) {
         self.enabled = enabled
         self.superTrendPeriod = superTrendPeriod
@@ -138,6 +142,7 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.hmaPeriod = hmaPeriod
         self.demaPeriod = demaPeriod
         self.temaPeriod = temaPeriod
+        self.ichimokuShowChikou = ichimokuShowChikou
     }
 
     public static let `default` = MainChartOverlayBook()
@@ -161,6 +166,7 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         case donchianPeriod, keltnerEMA, keltnerATR, keltnerMultiplier
         case sarStep, sarMax, priceChannelPeriod, envelopesPeriod, envelopesPercent  // v17.153
         case hmaPeriod, demaPeriod, temaPeriod  // v17.159
+        case ichimokuShowChikou                 // v17.161
     }
 
     public init(from decoder: Decoder) throws {
@@ -183,6 +189,7 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.hmaPeriod            = try c.decodeIfPresent(Int.self, forKey: .hmaPeriod) ?? 16
         self.demaPeriod           = try c.decodeIfPresent(Int.self, forKey: .demaPeriod) ?? 20
         self.temaPeriod           = try c.decodeIfPresent(Int.self, forKey: .temaPeriod) ?? 20
+        self.ichimokuShowChikou   = try c.decodeIfPresent(Bool.self, forKey: .ichimokuShowChikou) ?? false
     }
 }
 

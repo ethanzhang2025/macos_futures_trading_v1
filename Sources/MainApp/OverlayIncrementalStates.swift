@@ -67,9 +67,14 @@ enum MainChartOverlayCompute {
                 kline: kline,
                 params: [Decimal(book.ichimokuTenkan), Decimal(book.ichimokuKijun), Decimal(book.ichimokuSenkou)]
             )) ?? []
-            // 输出 4 主线（drop CHIKOU · 用未来 close 后移 · trader 同周期看无意义）
+            // 输出 4 主线 · v17.161 toggle 开时再加 CHIKOU 第 5 列（close 后移 kijun 根 · 滞后线 trader 高级用户）
             for name in ["TENKAN", "KIJUN", "SENKOU-A", "SENKOU-B"] {
                 if let s = result.first(where: { $0.name == name }) {
+                    out.append(s)
+                }
+            }
+            if book.ichimokuShowChikou {
+                if let s = result.first(where: { $0.name == "CHIKOU" }) {
                     out.append(s)
                 }
             }
@@ -131,6 +136,9 @@ struct OverlayIncrementalStates {
     var hma: HMA.IncrementalState?
     var dema: DEMA.IncrementalState?
     var tema: TEMA.IncrementalState?
+    // v17.161 · CHIKOU 滞后渲染需要的状态（用于 ChartIndicatorRunner.step 退避填充）
+    var ichimokuShowChikou: Bool = false
+    var ichimokuKijun: Int = 0
 
     /// 用 history KLine 序列消化每个启用 overlay 的 state · 完成后 step(newBar) 输出当前根
     /// makeIncrementalState 失败（try? = nil · 参数非法等）→ 该 overlay 在 step 时跳过 · 与 MainChartOverlayCompute.compute 同款 `?? []` 行为对齐
@@ -152,6 +160,8 @@ struct OverlayIncrementalStates {
                 kline: history,
                 params: [Decimal(book.ichimokuTenkan), Decimal(book.ichimokuKijun), Decimal(book.ichimokuSenkou)]
             )
+            ichimokuShowChikou = book.ichimokuShowChikou
+            ichimokuKijun = book.ichimokuKijun
         }
         if book.isEnabled(.sar) {
             sar = try? SAR.makeIncrementalState(
@@ -224,11 +234,16 @@ struct OverlayIncrementalStates {
         if var s = ichimoku {
             let row = Ichimoku.stepIncremental(state: &s, newBar: newBar)
             ichimoku = s
-            // Ichimoku stepIncremental 输出 [TENKAN, KIJUN, SENKOU-A, SENKOU-B, CHIKOU(nil)] · 取前 4
+            // Ichimoku stepIncremental 输出 [TENKAN, KIJUN, SENKOU-A, SENKOU-B, CHIKOU(nil)]
+            // v17.161 · showChikou 开时输出 5 列 · 5th = nil（CHIKOU 用未来 close · 增量永远 nil）
+            //          实际渲染：ChartIndicatorRunner.step 用本根 close 退避填到 (newLen-1-kijun) 位置 · 模拟全量 shiftBackward
             out.append(row[0])
             out.append(row[1])
             out.append(row[2])
             out.append(row[3])
+            if ichimokuShowChikou {
+                out.append(row[4])   // 永远 nil（来自 Ichimoku.stepIncremental · 用 shiftForward 后空 CHIKOU 位）
+            }
         }
         if var s = sar {
             let row = SAR.stepIncremental(state: &s, newBar: newBar)

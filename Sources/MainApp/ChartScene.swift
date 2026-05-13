@@ -5414,6 +5414,17 @@ fileprivate struct ChartIndicatorRunner {
             let i = coreCount + j
             series[i] = IndicatorSeries(name: series[i].name, values: series[i].values + [overlayAppended[j]])
         }
+        // 3) v17.161 · Ichimoku CHIKOU 退避填充：本根 close 写入 chikou[newLen-1-kijun] 位置 · 与 calculate shiftBackward 等价
+        if overlayStates.ichimokuShowChikou, overlayStates.ichimokuKijun > 0,
+           let chikouIdx = series.firstIndex(where: { $0.name == "CHIKOU" }) {
+            let chikou = series[chikouIdx]
+            let backfillIdx = chikou.values.count - 1 - overlayStates.ichimokuKijun
+            if backfillIdx >= 0 {
+                var vals = chikou.values
+                vals[backfillIdx] = newBar.close
+                series[chikouIdx] = IndicatorSeries(name: chikou.name, values: vals)
+            }
+        }
         return series
     }
 

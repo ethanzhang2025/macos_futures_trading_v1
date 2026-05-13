@@ -142,7 +142,8 @@ enum ChartMode: String, CaseIterable, Identifiable {
     case live   = "实盘"
     case replay = "回放"
     var id: String { rawValue }
-    var displayName: String { L(rawValue) }
+    /// v17.202 · 中国期货项目固定中文 · 旧版 L(rawValue) 在 en locale 下查表返回 "Live/Replay"
+    var displayName: String { rawValue }
 }
 
 // MARK: - Scene 容器（每窗口独立 state）

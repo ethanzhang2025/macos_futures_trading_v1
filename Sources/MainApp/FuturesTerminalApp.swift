@@ -854,7 +854,7 @@ private struct OpenCSVImportButton: View {
                     Task { @MainActor in
                         var importedCount = 0
                         var saveError: String? = nil
-                        if let store = store, !result.bars.isEmpty {
+                        if let store, !result.bars.isEmpty {
                             do {
                                 // 与 instrumentID/period 重新打标（CSV 可能默认 RB0/.minute1 · trader 选了别的）
                                 let tagged: [KLine] = result.bars.map { bar in
@@ -885,10 +885,10 @@ private struct OpenCSVImportButton: View {
 
                         重新打开主图（合约 \(instrumentID) · \(period.displayName)）即可加载。
                         """
-                        if saveError != nil {
+                        if saveError != nil || !result.errors.isEmpty {
                             alert.alertStyle = .warning
                         } else {
-                            alert.alertStyle = result.errors.isEmpty ? .informational : .warning
+                            alert.alertStyle = .informational
                         }
                         alert.runModal()
                     }

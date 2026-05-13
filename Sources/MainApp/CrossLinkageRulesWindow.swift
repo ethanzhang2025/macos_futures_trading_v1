@@ -362,14 +362,10 @@ struct CrossLinkageRulesWindow: View {
                 // Sina API symbols 大写化 · 匹配回原 case
                 let originalSym = symbols.first { $0.uppercased() == q.symbol.uppercased() } ?? q.symbol
                 let last = NSDecimalNumber(decimal: q.lastPrice).doubleValue
-                let base: Double
-                if q.preSettlement != 0 {
-                    base = NSDecimalNumber(decimal: q.preSettlement).doubleValue
-                } else if q.open != 0 {
-                    base = NSDecimalNumber(decimal: q.open).doubleValue
-                } else {
-                    continue
-                }
+                // base 优先 preSettlement · 缺失再回退 open · 都缺则跳过
+                let baseDecimal = q.preSettlement != 0 ? q.preSettlement : q.open
+                guard baseDecimal != 0 else { continue }
+                let base = NSDecimalNumber(decimal: baseDecimal).doubleValue
                 snaps[originalSym] = CrossLinkageSnapshot(
                     instrument: originalSym, lastPrice: last, basePrice: base
                 )

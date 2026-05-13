@@ -279,6 +279,29 @@ struct ChartScene: View {
     @State private var banners: [Banner] = []
     @Environment(\.bannerService) private var bannerService
 
+    // v17.190+ 第 13 波 · ChartScene 内方法 / sheet 引用 ChartContentView 的标识符 cannot find
+    // 真根：历史 refactor 把 method/state 移到 ChartContentView 但 ChartScene 内仍多处调用
+    // 暂在 ChartScene 内补独立副本让 Mac 编译过 · 功能上 ChartScene 触发的 toggleNotice 不显示
+    //（其 .overlay 内未挂 toggleNotice 视图）· jumpViewport 暂作 NOP · 真重构留 v18+
+    @State private var showResonanceStatsSheet: Bool = false
+    @State private var toggleNotice: String?
+    @State private var toggleNoticeTask: Task<Void, Never>?
+
+    @MainActor
+    private func presentToggleNotice(_ text: String) {
+        toggleNoticeTask?.cancel()
+        toggleNotice = text
+        toggleNoticeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            toggleNotice = nil
+        }
+    }
+
+    private func jumpViewport(toBarIndex idx: Int) {
+        _ = idx
+    }
+
     private static let drawingTemplatesKey = "drawingTemplates.v1"
     /// v13.21 副图偏好持久化（重启保留 · 跨合约/周期共享）
     private static let subIndicatorsKey = "subIndicators.v1"
@@ -3337,7 +3360,7 @@ struct ChartContentView: View {
                 let dp = screenToDataPoint(location, in: chartMainAreaSize)
                 hoverDataPoint = dp
                 if let id = shellPaneID, let reporter = shellCrosshairReporter,
-                   let dp = dp, dp.barIndex >= 0, dp.barIndex < bars.count {
+                   dp.barIndex >= 0, dp.barIndex < bars.count {
                     reporter(id, bars[dp.barIndex].openTime)
                 }
             case .ended:

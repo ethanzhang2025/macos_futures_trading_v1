@@ -415,6 +415,143 @@ public enum SAR: Indicator {
     }
 }
 
+// MARK: - v17.155 · SAR 增量 API（状态机 isLong/ep/af/sar + 前 2 根 high/low 缓冲 · 主图 overlay 增量化）
+//
+// 算法核心（与 calculate 逐根等价）：
+// - 第 1 根：仅缓冲 high/low/close（calculate 用 closes[0..1] 判初始方向 · 单根不够）· 输出 nil
+// - 第 2 根：seed isLong = (close >= prevClose) · ep = isLong ? prevHigh : prevLow · sar = isLong ? prevLow : prevHigh · af = step
+//          然后跑 calculate 内 i=1 的迭代（用 prev high/low 限制 sar · 无 prevPrev）· 输出 round8(sar)
+// - 第 3 根起：跑 calculate 内 i>=2 的迭代（用 prev + prevPrev 双层限制）· 输出 round8(sar)
+//
+// 关键不变量：
+// - state.sar 是流式未 round8（与 calculate 内 `sar` 变量一致 · 每根 sar = sar + af*(ep-sar) 不能用 round 后的值）
+// - 输出 round8(sar)（与 calculate out[i] = round8(sar) 一致）
+// - prevHigh/Low/Close 在每根末尾更新 · prevPrev 在更新前先承接旧 prev
+// - count==0 时 prime() 啥也没消化 · count==1 时表示已缓冲 1 根 · count>=2 时表示已 seeded
+
+extension SAR: IncrementalIndicator {
+
+    public struct IncrementalState: Sendable {
+        public let step: Decimal
+        public let maxAF: Decimal
+
+        public var count: Int
+        public var prevClose: Decimal?
+        public var prevHigh: Decimal?
+        public var prevLow: Decimal?
+        public var prevPrevHigh: Decimal?
+        public var prevPrevLow: Decimal?
+
+        public var isLong: Bool
+        public var ep: Decimal
+        public var af: Decimal
+        public var sar: Decimal
+    }
+
+    public static func makeIncrementalState(kline: KLineSeries, params: [Decimal]) throws -> IncrementalState {
+        guard params.count >= 2 else {
+            throw IndicatorError.invalidParameter("SAR 需要 2 参数（step / max）")
+        }
+        let st = params[0]
+        let mx = params[1]
+        guard st > 0, mx > 0 else {
+            throw IndicatorError.invalidParameter("SAR 参数非法 step=\(st) max=\(mx)")
+        }
+        var state = IncrementalState(
+            step: st, maxAF: mx,
+            count: 0,
+            prevClose: nil, prevHigh: nil, prevLow: nil,
+            prevPrevHigh: nil, prevPrevLow: nil,
+            isLong: true, ep: 0, af: 0, sar: 0
+        )
+        let countH = kline.highs.count
+        for i in 0..<countH {
+            _ = processStep(state: &state, high: kline.highs[i], low: kline.lows[i], close: kline.closes[i])
+        }
+        return state
+    }
+
+    public static func stepIncremental(state: inout IncrementalState, newBar: KLine) -> [Decimal?] {
+        [processStep(state: &state, high: newBar.high, low: newBar.low, close: newBar.close)]
+    }
+
+    /// 单步推进（makeIncrementalState 与 stepIncremental 共享）：
+    /// - count == 1：仅缓冲 first bar · 返回 nil
+    /// - count == 2：seed isLong + 跑 i=1 迭代（仅用 prev · 无 prevPrev）· 返回 round8(sar)
+    /// - count >= 3：跑 i>=2 迭代（用 prev + prevPrev）· 返回 round8(sar)
+    private static func processStep(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal) -> Decimal? {
+        state.count += 1
+
+        if state.count == 1 {
+            state.prevClose = close
+            state.prevHigh = high
+            state.prevLow = low
+            return nil
+        }
+
+        if state.count == 2 {
+            // seed
+            let isLong = close >= (state.prevClose ?? close)
+            state.isLong = isLong
+            state.ep = isLong ? (state.prevHigh ?? high) : (state.prevLow ?? low)
+            state.af = state.step
+            state.sar = isLong ? (state.prevLow ?? low) : (state.prevHigh ?? high)
+            // 跑 i=1 迭代（calculate `for i in 1..<count` 首根）
+            stepIterateLong(state: &state, high: high, low: low, hasPrevPrev: false)
+            let out = Kernels.round8(state.sar)
+            shiftHistory(state: &state, high: high, low: low, close: close)
+            return out
+        }
+
+        // count >= 3
+        stepIterateLong(state: &state, high: high, low: low, hasPrevPrev: true)
+        let out = Kernels.round8(state.sar)
+        shiftHistory(state: &state, high: high, low: low, close: close)
+        return out
+    }
+
+    /// calculate `for i in 1..<count` 单次迭代主体（isLong 分支与 short 分支统一） · 修改 state.sar / ep / af / isLong
+    /// hasPrevPrev：count >= 3 时为 true（calculate `if i >= 2` 分支）· count == 2 时为 false
+    private static func stepIterateLong(state: inout IncrementalState, high: Decimal, low: Decimal, hasPrevPrev: Bool) {
+        state.sar = state.sar + state.af * (state.ep - state.sar)
+        if state.isLong {
+            if let pl = state.prevLow { state.sar = min(state.sar, pl) }
+            if hasPrevPrev, let ppl = state.prevPrevLow { state.sar = min(state.sar, ppl) }
+            if high > state.ep {
+                state.ep = high
+                state.af = min(state.af + state.step, state.maxAF)
+            }
+            if low < state.sar {
+                state.isLong = false
+                state.sar = state.ep
+                state.ep = low
+                state.af = state.step
+            }
+        } else {
+            if let ph = state.prevHigh { state.sar = max(state.sar, ph) }
+            if hasPrevPrev, let pph = state.prevPrevHigh { state.sar = max(state.sar, pph) }
+            if low < state.ep {
+                state.ep = low
+                state.af = min(state.af + state.step, state.maxAF)
+            }
+            if high > state.sar {
+                state.isLong = true
+                state.sar = state.ep
+                state.ep = high
+                state.af = state.step
+            }
+        }
+    }
+
+    private static func shiftHistory(state: inout IncrementalState, high: Decimal, low: Decimal, close: Decimal) {
+        state.prevPrevHigh = state.prevHigh
+        state.prevPrevLow = state.prevLow
+        state.prevHigh = high
+        state.prevLow = low
+        state.prevClose = close
+    }
+}
+
 // MARK: - Supertrend · 基于 ATR 的超级趋势
 // 参数：period（10）/ multiplier（3）
 

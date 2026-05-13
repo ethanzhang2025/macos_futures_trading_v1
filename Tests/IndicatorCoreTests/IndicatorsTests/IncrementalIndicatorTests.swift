@@ -2533,6 +2533,166 @@ struct IchimokuIncrementalTests {
     }
 }
 
+// MARK: - v17.155 · SAR 增量 API（状态机 isLong/ep/af/sar + prev/prevPrev high/low）
+
+@Suite("v17.155 · SAR 增量 API")
+struct SARIncrementalTests {
+
+    @Test("history 满 + 增量推进：每步与全量 calculate 末值精确一致（step=0.02 max=0.2）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let stepP = Decimal(string: "0.02")!
+        let maxP = Decimal(string: "0.2")!
+        let full = try SAR.calculate(kline: series, params: [stepP, maxP])
+        let fullValues = full[0].values
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try SAR.makeIncrementalState(kline: history, params: [stepP, maxP])
+
+        for i in historyCount..<bars.count {
+            let row = SAR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 1)
+            #expect(row[0] == fullValues[i], "SAR[\(i)] = \(String(describing: row[0])) ≠ full[\(i)] = \(String(describing: fullValues[i]))")
+        }
+    }
+
+    @Test("history 空 · 第 1 根返回 nil · 第 2 根起匹配全量")
+    func incrementalWarmupFromEmpty() throws {
+        let bars = makeBars(count: 60)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        let stepP = Decimal(string: "0.02")!
+        let maxP = Decimal(string: "0.2")!
+        var state = try SAR.makeIncrementalState(kline: empty, params: [stepP, maxP])
+
+        let series = makeSeries(from: bars)
+        let full = try SAR.calculate(kline: series, params: [stepP, maxP])
+
+        // 第 1 根（i=0）：calculate 中 out[0] 是种子（依赖 closes[1]）· 增量没有未来 close · 输出 nil
+        let row0 = SAR.stepIncremental(state: &state, newBar: bars[0])
+        #expect(row0[0] == nil)
+        // 第 2 根（i=1）起：种子 + 跑 i=1 迭代 · 必须等于 full[1]
+        for i in 1..<bars.count {
+            let row = SAR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "SAR[\(i)]")
+        }
+    }
+
+    @Test("history 仅 1 根 · 第 1 步即为种子第 2 根 · 匹配 full[1]")
+    func incrementalOneBarHistory() throws {
+        let bars = makeBars(count: 60)
+        let history = makeSeries(from: Array(bars.prefix(1)))
+        let stepP = Decimal(string: "0.02")!
+        let maxP = Decimal(string: "0.2")!
+        var state = try SAR.makeIncrementalState(kline: history, params: [stepP, maxP])
+
+        let series = makeSeries(from: bars)
+        let full = try SAR.calculate(kline: series, params: [stepP, maxP])
+
+        for i in 1..<bars.count {
+            let row = SAR.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "SAR[\(i)]")
+        }
+    }
+
+    @Test("参数错误 / step≤0 / max≤0 / 缺参 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try SAR.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try SAR.makeIncrementalState(kline: empty, params: [Decimal(string: "0.02")!])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try SAR.makeIncrementalState(kline: empty, params: [0, Decimal(string: "0.2")!])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try SAR.makeIncrementalState(kline: empty, params: [Decimal(string: "0.02")!, 0])
+        }
+    }
+}
+
+// MARK: - v17.155 · SuperTrend 增量 API（v17.139 新版 · 2 列输出 SUPERTREND / SUPERTREND-DIR · rolling lock）
+
+@Suite("v17.155 · SuperTrend 增量 API")
+struct SuperTrendIncrementalTests {
+
+    @Test("history 满 + 增量推进：SUPERTREND/DIR 2 列每步与全量精确一致（period=10 mult=3）")
+    func incrementalMatchesFull() throws {
+        let bars = makeBars(count: 100)
+        let series = makeSeries(from: bars)
+        let full = try SuperTrend.calculate(kline: series, params: [10, 3])
+
+        let historyCount = 50
+        let history = makeSeries(from: Array(bars.prefix(historyCount)))
+        var state = try SuperTrend.makeIncrementalState(kline: history, params: [10, 3])
+
+        for i in historyCount..<bars.count {
+            let row = SuperTrend.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row.count == 2)
+            #expect(row[0] == full[0].values[i], "SUPERTREND[\(i)]")
+            #expect(row[1] == full[1].values[i], "SUPERTREND-DIR[\(i)]")
+        }
+    }
+
+    @Test("history 空 · ATR warm-up 期前 period-1 步全 [nil, nil] · 第 period 步起匹配全量")
+    func incrementalWarmupFromEmpty() throws {
+        let bars = makeBars(count: 80)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try SuperTrend.makeIncrementalState(kline: empty, params: [10, 3])
+
+        let series = makeSeries(from: bars)
+        let full = try SuperTrend.calculate(kline: series, params: [10, 3])
+
+        // 前 9 根（i=0..8）ATR warm-up · ATR period=10 · st & dir 全 nil
+        for i in 0..<9 {
+            let row = SuperTrend.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == nil, "SUPERTREND[\(i)] warm-up")
+            #expect(row[1] == nil, "SUPERTREND-DIR[\(i)] warm-up")
+        }
+        // 第 10 步起（i=9）匹配全量
+        for i in 9..<bars.count {
+            let row = SuperTrend.stepIncremental(state: &state, newBar: bars[i])
+            #expect(row[0] == full[0].values[i], "SUPERTREND[\(i)]")
+            #expect(row[1] == full[1].values[i], "SUPERTREND-DIR[\(i)]")
+        }
+    }
+
+    @Test("首个有效 atr 根 trendIsLong = true / ST = round8(dn) / DIR = 1")
+    func firstValidBarSeed() throws {
+        let bars = makeBars(count: 30)
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        var state = try SuperTrend.makeIncrementalState(kline: empty, params: [10, 3])
+
+        // 推进到第 9 根（i=9 · ATR 首个有效根）
+        for i in 0..<9 {
+            _ = SuperTrend.stepIncremental(state: &state, newBar: bars[i])
+        }
+        let row = SuperTrend.stepIncremental(state: &state, newBar: bars[9])
+        #expect(row[0] != nil, "首根有效 atr · ST 非 nil")
+        #expect(row[1] == Decimal(1), "首根 DIR = +1（trendIsLong = true 默认）")
+    }
+
+    @Test("参数错误 / multiplier≤0 / period<1 / 缺参 抛错")
+    func incrementalInvalidParams() throws {
+        let empty = KLineSeries(opens: [], highs: [], lows: [], closes: [], volumes: [], openInterests: [])
+        #expect(throws: IndicatorError.self) {
+            _ = try SuperTrend.makeIncrementalState(kline: empty, params: [])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try SuperTrend.makeIncrementalState(kline: empty, params: [10])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try SuperTrend.makeIncrementalState(kline: empty, params: [10, 0])
+        }
+        #expect(throws: IndicatorError.self) {
+            _ = try SuperTrend.makeIncrementalState(kline: empty, params: [0, 3])
+        }
+    }
+}
+
 // MARK: - 共享 helper（fileprivate · 五个 suite 复用）
 
 fileprivate func makeBars(count: Int) -> [KLine] {

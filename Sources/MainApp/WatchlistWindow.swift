@@ -2842,7 +2842,8 @@ private struct QuickPasteSheet: View {
                 .foregroundColor(.secondary)
 
             TextEditor(text: $text)
-                .font(.system(size: 13 + chartFontSize.sizeDelta, design: .monospaced))
+                // v17.190 · QuickPasteSheet 不持 chartFontSize · 用固定 13pt（与 sheet 简洁定位一致）
+                .font(.system(size: 13, design: .monospaced))
                 .frame(height: 160)
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.gray.opacity(0.4), lineWidth: 1))
 
@@ -2854,7 +2855,8 @@ private struct QuickPasteSheet: View {
                 } else {
                     Text("\(parsedPreview.count) 个 · ").font(.caption)
                     Text(parsedPreview.prefix(8).joined(separator: ", "))
-                        .font(.system(size: 11 + chartFontSize.sizeDelta, design: .monospaced))
+                        // v17.190 · QuickPasteSheet 用固定 11pt
+                        .font(.system(size: 11, design: .monospaced))
                         .lineLimit(1)
                         .truncationMode(.tail)
                     if parsedPreview.count > 8 {

@@ -2991,149 +2991,161 @@ struct ChartContentView: View {
 
     /// 测距 / overlay toggle / 跨窗口快捷键（v15.25 · 从 ChartScene.periodShortcuts 拆出）
     /// ⌘⇧M 测距三态 · ⌘⇧X 复制 · ⌘/ ⌘⇧? 帮助 · ⌘⌥R/J 跨窗口 · ⌘⇧W swing · ⌘./⌘\ 副图/画线 · ⌘End/→ 跳最新
+    /// v17.190 · Mac 6.3 严格 · 18+ Button 超 ViewBuilder buildBlock10 · 拆 3 内 Group 让 swift 推断不超限
     private var chartContentShortcuts: some View {
         Group {
-            Button("") {
-                if measureAnchor == nil {
-                    measureAnchor = hoverDataPoint
-                    measureFinal = nil
-                    presentToggleNotice("测距：起点已设")
-                } else if measureFinal == nil {
-                    measureFinal = hoverDataPoint
-                    presentToggleNotice("测距：终点已锁定 · ⌘⇧X 复制详情")
-                } else {
-                    measureAnchor = nil
-                    measureFinal = nil
-                    presentToggleNotice("测距：已退出")
-                }
-            }
-            .keyboardShortcut("m", modifiers: [.command, .shift])
-            Button("", action: copyMeasurementToPasteboard)
-                .keyboardShortcut("x", modifiers: [.command, .shift])
-            Button("") { showShortcutsHelp.toggle() }
-                .keyboardShortcut("/", modifiers: [.command])
-            Button("") { showShortcutsHelp.toggle() }
-                .keyboardShortcut("?", modifiers: [.command, .shift])
-            Button("") { openWindow(id: "review") }
-                .keyboardShortcut("r", modifiers: [.command, .option])
-            Button("") { openWindow(id: "journal") }
-                .keyboardShortcut("j", modifiers: [.command, .option])
-            Button("") {
-                showSwingPoints.toggle()
-                presentToggleNotice("Swing 标注：\(showSwingPoints ? "显示" : "隐藏")")
-            }
-                .keyboardShortcut("w", modifiers: [.command, .shift])
-            // v17.164 · ⌘⇧P 切换形态识别 overlay（头肩顶/底 + 双顶/底）
-            Button("") {
-                showPatterns.toggle()
-                presentToggleNotice("形态识别：\(showPatterns ? "显示" : "隐藏")")
-            }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
-            // v17.165 · ⌘⇧L 弹形态清单 sheet（当前 K 线全部检出形态 · trader 看完整清单 + 跳转）
-            Button("") {
-                showPatternsListSheet = true
-            }
-                .keyboardShortcut("l", modifiers: [.command, .shift])
-            // v17.166 · ⌘⇧S 切换支撑阻力 overlay
-            Button("") {
-                showSupportResistance.toggle()
-                presentToggleNotice("支撑阻力：\(showSupportResistance ? "显示" : "隐藏")")
-            }
-                .keyboardShortcut("s", modifiers: [.command, .shift])
-            // v17.170 · ⌘⇧Y 切换多周期共振 overlay（当前周期叠加高周期 MACD/EMA 金叉死叉信号点）
-            Button("") {
-                showMultiTimeframeResonance.toggle()
-                presentToggleNotice("多周期共振：\(showMultiTimeframeResonance ? "显示" : "隐藏")")
-            }
-                .keyboardShortcut("y", modifiers: [.command, .shift])
-            // v17.184 · ⌘⌥⇧Y 多周期共振历史回测 sheet
-            Button("") {
-                showResonanceStatsSheet = true
-            }
-                .keyboardShortcut("y", modifiers: [.command, .shift, .option])
-            // v17.189 · ⌘⌥G 多合约 chart overlay 选副合约 sheet（G = graph 同图叠加）
-            Button("") {
-                showSecondaryInstrumentPicker = true
-            }
-                .keyboardShortcut("g", modifiers: [.command, .option])
-            Button("", action: jumpToLatestBar)
-                .keyboardShortcut(.end, modifiers: [.command])
-            Button("", action: jumpToLatestBar)
-                .keyboardShortcut(.rightArrow, modifiers: [.command])
-            Button("") {
-                showSubCharts.toggle()
-                presentToggleNotice("副图：\(showSubCharts ? "显示" : "隐藏")")
-            }
-                .keyboardShortcut(".", modifiers: [.command])
-            Button("") {
-                showDrawings.toggle()
-                presentToggleNotice("画线：\(showDrawings ? "显示" : "隐藏")")
-            }
-                .keyboardShortcut("\\", modifiers: [.command])
+            measurementShortcuts
+            overlayShortcuts
+            navigationShortcuts
         }
         .opacity(0)
         .frame(width: 0, height: 0)
     }
 
+    @ViewBuilder
+    private var measurementShortcuts: some View {
+        Button("") {
+            if measureAnchor == nil {
+                measureAnchor = hoverDataPoint
+                measureFinal = nil
+                presentToggleNotice("测距：起点已设")
+            } else if measureFinal == nil {
+                measureFinal = hoverDataPoint
+                presentToggleNotice("测距：终点已锁定 · ⌘⇧X 复制详情")
+            } else {
+                measureAnchor = nil
+                measureFinal = nil
+                presentToggleNotice("测距：已退出")
+            }
+        }
+        .keyboardShortcut("m", modifiers: [.command, .shift])
+        Button("", action: copyMeasurementToPasteboard)
+            .keyboardShortcut("x", modifiers: [.command, .shift])
+        Button("") { showShortcutsHelp.toggle() }
+            .keyboardShortcut("/", modifiers: [.command])
+        Button("") { showShortcutsHelp.toggle() }
+            .keyboardShortcut("?", modifiers: [.command, .shift])
+        Button("") { openWindow(id: "review") }
+            .keyboardShortcut("r", modifiers: [.command, .option])
+        Button("") { openWindow(id: "journal") }
+            .keyboardShortcut("j", modifiers: [.command, .option])
+    }
+
+    @ViewBuilder
+    private var overlayShortcuts: some View {
+        Button("") {
+            showSwingPoints.toggle()
+            presentToggleNotice("Swing 标注：\(showSwingPoints ? "显示" : "隐藏")")
+        }
+            .keyboardShortcut("w", modifiers: [.command, .shift])
+        Button("") {
+            showPatterns.toggle()
+            presentToggleNotice("形态识别：\(showPatterns ? "显示" : "隐藏")")
+        }
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+        Button("") { showPatternsListSheet = true }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+        Button("") {
+            showSupportResistance.toggle()
+            presentToggleNotice("支撑阻力：\(showSupportResistance ? "显示" : "隐藏")")
+        }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+        Button("") {
+            showMultiTimeframeResonance.toggle()
+            presentToggleNotice("多周期共振：\(showMultiTimeframeResonance ? "显示" : "隐藏")")
+        }
+            .keyboardShortcut("y", modifiers: [.command, .shift])
+        Button("") { showResonanceStatsSheet = true }
+            .keyboardShortcut("y", modifiers: [.command, .shift, .option])
+        Button("") { showSecondaryInstrumentPicker = true }
+            .keyboardShortcut("g", modifiers: [.command, .option])
+    }
+
+    @ViewBuilder
+    private var navigationShortcuts: some View {
+        Button("", action: jumpToLatestBar)
+            .keyboardShortcut(.end, modifiers: [.command])
+        Button("", action: jumpToLatestBar)
+            .keyboardShortcut(.rightArrow, modifiers: [.command])
+        Button("") {
+            showSubCharts.toggle()
+            presentToggleNotice("副图：\(showSubCharts ? "显示" : "隐藏")")
+        }
+            .keyboardShortcut(".", modifiers: [.command])
+        Button("") {
+            showDrawings.toggle()
+            presentToggleNotice("画线：\(showDrawings ? "显示" : "隐藏")")
+        }
+            .keyboardShortcut("\\", modifiers: [.command])
+    }
+
     /// v13.23 viewport 键盘快捷键（仅 keyWindow 响应 · 多窗口隔离）
     /// ⌘= 放大 / ⌘- 缩小 / ⌘0 重置（默认 120 根） / ← 后退 5 / → 前进 5（带 ⇧ 键 25 根加速）
     private var viewportShortcuts: some View {
+        // v17.190 · 12+ children · 拆 2 inner Group 防 ViewBuilder buildBlock10 超限
         Group {
-            Button("") {
-                inertiaTask?.cancel()
-                viewport = clamp(viewport.zoomed(by: 0.7))
-            }
-            .keyboardShortcut("=", modifiers: [.command])
-            Button("") {
-                inertiaTask?.cancel()
-                viewport = clamp(viewport.zoomed(by: 1.4))
-            }
-            .keyboardShortcut("-", modifiers: [.command])
-            Button("") {
-                inertiaTask?.cancel()
-                viewport = RenderViewport(startIndex: max(0, bars.count - 120), visibleCount: 120)
-            }
-            .keyboardShortcut("0", modifiers: [.command])
-            Button("") {
-                inertiaTask?.cancel()
-                viewport = clamp(viewport.pannedSmooth(byBars: -5))
-            }
-            .keyboardShortcut(.leftArrow, modifiers: [])
-            Button("") {
-                inertiaTask?.cancel()
-                viewport = clamp(viewport.pannedSmooth(byBars: 5))
-            }
-            .keyboardShortcut(.rightArrow, modifiers: [])
-            Button("") {
-                inertiaTask?.cancel()
-                viewport = clamp(viewport.pannedSmooth(byBars: -25))
-            }
-            .keyboardShortcut(.leftArrow, modifiers: [.shift])
-            Button("") {
-                inertiaTask?.cancel()
-                viewport = clamp(viewport.pannedSmooth(byBars: 25))
-            }
-            .keyboardShortcut(.rightArrow, modifiers: [.shift])
-            // v13.30 ⌘⇧H 切换 HUD 显隐（截图前可隐藏）· v15.20 batch84 · 加 toast 反馈
-            Button("") {
-                showHUD.toggle()
-                presentToggleNotice("HUD：\(showHUD ? "显示" : "隐藏")")
-            }
-            .keyboardShortcut("h", modifiers: [.command, .shift])
-            // v15.21 batch103 · ⌘P 主图截图保存 PNG / ⌘⇧P 复制截图到剪贴板（trader 截图流畅 · 不进 contextMenu）
-            Button("") { exportChartScreenshot() }
-                .keyboardShortcut("p", modifiers: [.command])
-            Button("") { copyChartScreenshotToClipboard() }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
-            // v17.138 · 时间范围预设 ⌘⌥1-6 = 1D/1W/1M/3M/6M/1Y（trader 复盘 / 回顾常用范围）
-            ForEach(Array(ChartTimeRangePreset.allCases.enumerated()), id: \.element) { idx, preset in
-                Button("") { applyTimeRangePreset(preset) }
-                    .keyboardShortcut(KeyEquivalent(Character("\(idx + 1)")), modifiers: [.command, .option])
-            }
+            zoomPanShortcuts
+            hudExportTimeRangeShortcuts
         }
         .frame(width: 0, height: 0)
         .opacity(0)
         .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var zoomPanShortcuts: some View {
+        Button("") {
+            inertiaTask?.cancel()
+            viewport = clamp(viewport.zoomed(by: 0.7))
+        }
+        .keyboardShortcut("=", modifiers: [.command])
+        Button("") {
+            inertiaTask?.cancel()
+            viewport = clamp(viewport.zoomed(by: 1.4))
+        }
+        .keyboardShortcut("-", modifiers: [.command])
+        Button("") {
+            inertiaTask?.cancel()
+            viewport = RenderViewport(startIndex: max(0, bars.count - 120), visibleCount: 120)
+        }
+        .keyboardShortcut("0", modifiers: [.command])
+        Button("") {
+            inertiaTask?.cancel()
+            viewport = clamp(viewport.pannedSmooth(byBars: -5))
+        }
+        .keyboardShortcut(.leftArrow, modifiers: [])
+        Button("") {
+            inertiaTask?.cancel()
+            viewport = clamp(viewport.pannedSmooth(byBars: 5))
+        }
+        .keyboardShortcut(.rightArrow, modifiers: [])
+        Button("") {
+            inertiaTask?.cancel()
+            viewport = clamp(viewport.pannedSmooth(byBars: -25))
+        }
+        .keyboardShortcut(.leftArrow, modifiers: [.shift])
+        Button("") {
+            inertiaTask?.cancel()
+            viewport = clamp(viewport.pannedSmooth(byBars: 25))
+        }
+        .keyboardShortcut(.rightArrow, modifiers: [.shift])
+    }
+
+    @ViewBuilder
+    private var hudExportTimeRangeShortcuts: some View {
+        Button("") {
+            showHUD.toggle()
+            presentToggleNotice("HUD：\(showHUD ? "显示" : "隐藏")")
+        }
+        .keyboardShortcut("h", modifiers: [.command, .shift])
+        Button("") { exportChartScreenshot() }
+            .keyboardShortcut("p", modifiers: [.command])
+        Button("") { copyChartScreenshotToClipboard() }
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+        ForEach(Array(ChartTimeRangePreset.allCases.enumerated()), id: \.element) { idx, preset in
+            Button("") { applyTimeRangePreset(preset) }
+                .keyboardShortcut(KeyEquivalent(Character("\(idx + 1)")), modifiers: [.command, .option])
+        }
     }
 
     /// v17.138 · 切到指定时间范围 · viewport startIndex = bars.count - barCount · visibleCount = barCount · clamp 防越界

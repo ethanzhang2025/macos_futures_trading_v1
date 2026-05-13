@@ -14,6 +14,8 @@ public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Ident
     case pivot        // Pivot Points 7 线（前一根 H/L/C 推算 · daily 周期最适用）
     case superTrend   // SuperTrend · ATR 趋势止损线（rolling lock · 与麦语言 SUPERTREND 一致）
     case ichimoku     // Ichimoku 一目均衡表 4 线（Tenkan/Kijun/Senkou-A/Senkou-B · CHIKOU 用未来 close 不画）
+    case donchian     // Donchian Channel 唐奇安通道 3 线（HHV/LLV/MID · 海龟交易法核心）
+    case keltner      // Keltner Channel 肯特纳通道 3 线（EMA ± mult*ATR · 趋势/挤压识别）
 
     public var id: String { rawValue }
 
@@ -23,6 +25,8 @@ public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Ident
         case .pivot:      return "Pivot Points（经典支撑阻力 7 线）"
         case .superTrend: return "SuperTrend（ATR 趋势止损线）"
         case .ichimoku:   return "Ichimoku（一目均衡表 4 线）"
+        case .donchian:   return "Donchian Channel（唐奇安通道 3 线）"
+        case .keltner:    return "Keltner Channel（肯特纳通道 3 线）"
         }
     }
 
@@ -33,6 +37,8 @@ public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Ident
         case .pivot:      return "rectangle.split.3x1"
         case .superTrend: return "arrow.triangle.swap"
         case .ichimoku:   return "cloud.fill"
+        case .donchian:   return "rectangle.expand.vertical"
+        case .keltner:    return "rectangle.compress.vertical"
         }
     }
 }
@@ -51,6 +57,14 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
     public var ichimokuKijun: Int
     /// Ichimoku 先行 B Senkou-Span-B 周期（默认 52）
     public var ichimokuSenkou: Int
+    /// Donchian period（默认 20 · 海龟法标准）
+    public var donchianPeriod: Int
+    /// Keltner EMA 中轴周期（默认 20）
+    public var keltnerEMA: Int
+    /// Keltner ATR 周期（默认 10）
+    public var keltnerATR: Int
+    /// Keltner multiplier（默认 2 · 标准）
+    public var keltnerMultiplier: Decimal
 
     public init(
         enabled: Set<MainChartOverlayKind> = [],
@@ -58,7 +72,11 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         superTrendMultiplier: Decimal = 3,
         ichimokuTenkan: Int = 9,
         ichimokuKijun: Int = 26,
-        ichimokuSenkou: Int = 52
+        ichimokuSenkou: Int = 52,
+        donchianPeriod: Int = 20,
+        keltnerEMA: Int = 20,
+        keltnerATR: Int = 10,
+        keltnerMultiplier: Decimal = 2
     ) {
         self.enabled = enabled
         self.superTrendPeriod = superTrendPeriod
@@ -66,6 +84,10 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.ichimokuTenkan = ichimokuTenkan
         self.ichimokuKijun = ichimokuKijun
         self.ichimokuSenkou = ichimokuSenkou
+        self.donchianPeriod = donchianPeriod
+        self.keltnerEMA = keltnerEMA
+        self.keltnerATR = keltnerATR
+        self.keltnerMultiplier = keltnerMultiplier
     }
 
     public static let `default` = MainChartOverlayBook()
@@ -86,6 +108,7 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case enabled, superTrendPeriod, superTrendMultiplier
         case ichimokuTenkan, ichimokuKijun, ichimokuSenkou
+        case donchianPeriod, keltnerEMA, keltnerATR, keltnerMultiplier
     }
 
     public init(from decoder: Decoder) throws {
@@ -96,6 +119,10 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.ichimokuTenkan       = try c.decodeIfPresent(Int.self, forKey: .ichimokuTenkan) ?? 9
         self.ichimokuKijun        = try c.decodeIfPresent(Int.self, forKey: .ichimokuKijun) ?? 26
         self.ichimokuSenkou       = try c.decodeIfPresent(Int.self, forKey: .ichimokuSenkou) ?? 52
+        self.donchianPeriod       = try c.decodeIfPresent(Int.self, forKey: .donchianPeriod) ?? 20
+        self.keltnerEMA           = try c.decodeIfPresent(Int.self, forKey: .keltnerEMA) ?? 20
+        self.keltnerATR           = try c.decodeIfPresent(Int.self, forKey: .keltnerATR) ?? 10
+        self.keltnerMultiplier    = try c.decodeIfPresent(Decimal.self, forKey: .keltnerMultiplier) ?? 2
     }
 }
 

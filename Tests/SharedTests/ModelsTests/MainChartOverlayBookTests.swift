@@ -7,7 +7,7 @@ import Foundation
 @Suite("MainChartOverlayBook · 主图叠加偏好（VWAP / Pivot / SuperTrend）")
 struct MainChartOverlayBookTests {
 
-    @Test("default · 全关 · superTrend 默认 10/3 · ichimoku 默认 9/26/52")
+    @Test("default · 全关 · superTrend 10/3 · ichimoku 9/26/52 · donchian 20 · keltner 20/10/2")
     func defaults() {
         let d = MainChartOverlayBook.default
         #expect(d.enabled.isEmpty)
@@ -17,16 +17,20 @@ struct MainChartOverlayBookTests {
         #expect(d.ichimokuTenkan == 9)
         #expect(d.ichimokuKijun == 26)
         #expect(d.ichimokuSenkou == 52)
+        #expect(d.donchianPeriod == 20)
+        #expect(d.keltnerEMA == 20)
+        #expect(d.keltnerATR == 10)
+        #expect(d.keltnerMultiplier == Decimal(2))
     }
 
-    @Test("MainChartOverlayKind allCases 4 类完整 · 顺序固定 vwap/pivot/superTrend/ichimoku")
+    @Test("MainChartOverlayKind allCases 6 类完整 · 顺序固定 vwap/pivot/superTrend/ichimoku/donchian/keltner")
     func allCases() {
         let cases = MainChartOverlayKind.allCases
-        #expect(cases.count == 4)
-        #expect(cases == [.vwap, .pivot, .superTrend, .ichimoku])
+        #expect(cases.count == 6)
+        #expect(cases == [.vwap, .pivot, .superTrend, .ichimoku, .donchian, .keltner])
     }
 
-    @Test("displayName / icon 四类均非空 · 中文化 trader 友好")
+    @Test("displayName / icon 六类均非空 · 中文化 trader 友好")
     func displayMetadata() {
         for k in MainChartOverlayKind.allCases {
             #expect(!k.displayName.isEmpty)
@@ -36,6 +40,8 @@ struct MainChartOverlayBookTests {
         #expect(MainChartOverlayKind.pivot.displayName.contains("Pivot"))
         #expect(MainChartOverlayKind.superTrend.displayName.contains("SuperTrend"))
         #expect(MainChartOverlayKind.ichimoku.displayName.contains("Ichimoku"))
+        #expect(MainChartOverlayKind.donchian.displayName.contains("Donchian"))
+        #expect(MainChartOverlayKind.keltner.displayName.contains("Keltner"))
     }
 
     @Test("setEnabled 切换 · isEnabled 反映状态 · anyEnabled 反映非空")
@@ -65,29 +71,37 @@ struct MainChartOverlayBookTests {
         #expect(decoded.superTrendMultiplier == Decimal(3))
     }
 
-    @Test("Codable 往返 · 四全开 + 自定义 SuperTrend 14/2.5 + Ichimoku 7/22/44")
+    @Test("Codable 往返 · 六全开 + 自定义 SuperTrend 14/2.5 + Ichimoku 7/22/44 + Donchian 55 + Keltner 14/14/3")
     func codableRoundTripCustom() throws {
         let book = MainChartOverlayBook(
-            enabled: [.vwap, .pivot, .superTrend, .ichimoku],
+            enabled: [.vwap, .pivot, .superTrend, .ichimoku, .donchian, .keltner],
             superTrendPeriod: 14,
             superTrendMultiplier: Decimal(string: "2.5")!,
             ichimokuTenkan: 7,
             ichimokuKijun: 22,
-            ichimokuSenkou: 44
+            ichimokuSenkou: 44,
+            donchianPeriod: 55,
+            keltnerEMA: 14,
+            keltnerATR: 14,
+            keltnerMultiplier: Decimal(3)
         )
         let data = try JSONEncoder().encode(book)
         let decoded = try JSONDecoder().decode(MainChartOverlayBook.self, from: data)
-        #expect(decoded.enabled == [.vwap, .pivot, .superTrend, .ichimoku])
+        #expect(decoded.enabled == [.vwap, .pivot, .superTrend, .ichimoku, .donchian, .keltner])
         #expect(decoded.superTrendPeriod == 14)
         #expect(decoded.superTrendMultiplier == Decimal(string: "2.5"))
         #expect(decoded.ichimokuTenkan == 7)
         #expect(decoded.ichimokuKijun == 22)
         #expect(decoded.ichimokuSenkou == 44)
+        #expect(decoded.donchianPeriod == 55)
+        #expect(decoded.keltnerEMA == 14)
+        #expect(decoded.keltnerATR == 14)
+        #expect(decoded.keltnerMultiplier == Decimal(3))
     }
 
     @Test("旧 JSON 兼容 · 缺字段 fallback 默认（decodeIfPresent 守）")
     func backwardCompatible() throws {
-        // 模拟极简旧 JSON 仅有 enabled · 缺 superTrend / ichimoku 参数 → fallback 默认
+        // 模拟极简旧 JSON 仅有 enabled · 缺 superTrend / ichimoku / donchian / keltner 参数 → fallback 默认
         let json = "{\"enabled\":[]}"
         let data = json.data(using: .utf8)!
         let decoded = try JSONDecoder().decode(MainChartOverlayBook.self, from: data)
@@ -97,6 +111,10 @@ struct MainChartOverlayBookTests {
         #expect(decoded.ichimokuTenkan == 9)
         #expect(decoded.ichimokuKijun == 26)
         #expect(decoded.ichimokuSenkou == 52)
+        #expect(decoded.donchianPeriod == 20)
+        #expect(decoded.keltnerEMA == 20)
+        #expect(decoded.keltnerATR == 10)
+        #expect(decoded.keltnerMultiplier == Decimal(2))
     }
 
     @Test("旧 JSON 完全空 · 全字段 fallback 默认")
@@ -109,6 +127,10 @@ struct MainChartOverlayBookTests {
         #expect(decoded.ichimokuTenkan == 9)
         #expect(decoded.ichimokuKijun == 26)
         #expect(decoded.ichimokuSenkou == 52)
+        #expect(decoded.donchianPeriod == 20)
+        #expect(decoded.keltnerEMA == 20)
+        #expect(decoded.keltnerATR == 10)
+        #expect(decoded.keltnerMultiplier == Decimal(2))
     }
 
     @Test("v17.139 旧 JSON 缺 ichimoku 字段 · ichimoku 默认 9/26/52 + 其余字段保留")
@@ -129,6 +151,27 @@ struct MainChartOverlayBookTests {
         #expect(decoded.ichimokuTenkan == 9)
         #expect(decoded.ichimokuKijun == 26)
         #expect(decoded.ichimokuSenkou == 52)
+    }
+
+    @Test("v17.140 旧 JSON 缺 donchian/keltner 字段 · 全部 fallback 默认 + 其余字段保留")
+    func oldV17_140JSONFallback() throws {
+        // v17.140 时无 donchian/keltner 字段 · 仅 enabled + superTrend + ichimoku
+        let v17_140Book = MainChartOverlayBook(
+            enabled: [.ichimoku],
+            superTrendPeriod: 14,
+            superTrendMultiplier: Decimal(string: "2.5")!,
+            ichimokuTenkan: 7,
+            ichimokuKijun: 22,
+            ichimokuSenkou: 44
+        )
+        let v17_140Encoded = try JSONEncoder().encode(v17_140Book)
+        let decoded = try JSONDecoder().decode(MainChartOverlayBook.self, from: v17_140Encoded)
+        #expect(decoded.enabled == [.ichimoku])
+        #expect(decoded.ichimokuTenkan == 7)
+        #expect(decoded.donchianPeriod == 20)
+        #expect(decoded.keltnerEMA == 20)
+        #expect(decoded.keltnerATR == 10)
+        #expect(decoded.keltnerMultiplier == Decimal(2))
     }
 
     @Test("Store load/save 隔离 UserDefaults")

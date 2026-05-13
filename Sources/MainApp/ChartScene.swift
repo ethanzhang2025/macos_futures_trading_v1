@@ -5377,6 +5377,30 @@ fileprivate enum MainChartOverlayCompute {
                 }
             }
         }
+        if book.isEnabled(.donchian) {
+            let result = (try? Donchian.calculate(
+                kline: kline,
+                params: [Decimal(book.donchianPeriod)]
+            )) ?? []
+            // 输出 3 线：DC-UPPER / DC-MID / DC-LOWER
+            for name in ["DC-UPPER", "DC-MID", "DC-LOWER"] {
+                if let s = result.first(where: { $0.name == name }) {
+                    out.append(s)
+                }
+            }
+        }
+        if book.isEnabled(.keltner) {
+            let result = (try? KC.calculate(
+                kline: kline,
+                params: [Decimal(book.keltnerEMA), Decimal(book.keltnerATR), book.keltnerMultiplier]
+            )) ?? []
+            // 输出 3 线：KC-UPPER / KC-MID / KC-LOWER
+            for name in ["KC-UPPER", "KC-MID", "KC-LOWER"] {
+                if let s = result.first(where: { $0.name == name }) {
+                    out.append(s)
+                }
+            }
+        }
         return out
     }
 }

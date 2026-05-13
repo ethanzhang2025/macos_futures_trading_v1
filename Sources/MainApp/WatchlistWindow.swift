@@ -782,11 +782,12 @@ struct WatchlistWindow: View {
         )
         // v17.132 · 标签筛选（OR 关系 · 空筛选全通过）
         let tagFilteredIDs = filteredIDs.filter(passesTagFilter)
+        // v17.190 · Mac 6.3 严格 · @MainActor method 不能直接传作 (String)->Double? · 包闭包剥离 isolation
         let sortedIDs = WatchlistSorter.sort(
             ids: tagFilteredIDs,
             field: sortField,
             ascending: sortAscending,
-            keyForID: keyForInstrument
+            keyForID: { id in self.keyForInstrument(id) }
         )
         return VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {

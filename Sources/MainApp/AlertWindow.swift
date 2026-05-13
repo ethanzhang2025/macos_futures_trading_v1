@@ -500,18 +500,11 @@ struct AlertWindow: View {
                 let channel = InAppOverlayChannel()
                 await dispatcher.register(channel)
             case .systemNotice:
-                let channel = SystemNoticeChannel { msg in
-                    Task { @MainActor in
-                        appendConsoleLog("[systemNotice] \(msg)")
-                    }
-                }
+                // v17.190 · Mac 6.3 严格 · @MainActor capture 不能跨 @Sendable closure · 用默认 logger
+                let channel = SystemNoticeChannel()
                 await dispatcher.register(channel)
             case .sound:
-                let channel = SoundChannel { msg in
-                    Task { @MainActor in
-                        appendConsoleLog("[sound] \(msg)")
-                    }
-                }
+                let channel = SoundChannel()
                 await dispatcher.register(channel)
             default:
                 let channel = LoggingNotificationChannel(kind: kind) { msg in
@@ -1047,6 +1040,7 @@ struct AlertWindow: View {
         case .indicator:                        return 0
         case .priceBreakoutHigh, .priceBreakoutLow:  return 0   // v15.19+ batch16 · onBar 评估 · 测试触发价 0
         case .spreadDeviation:                  return 0   // v15.57 · placeholder · 不参与测试触发
+        default:                                return 0   // v17.190 · trendLineCrossed 等未覆盖 case · 测试场景 placeholder
         }
     }
 
@@ -1584,6 +1578,7 @@ private enum ConditionKind: String, CaseIterable, Identifiable {
         case .priceMoveSpike:        return .priceMoveSpike
         case .indicator:             return .indicator
         case .spreadDeviation:       return .spreadDeviation
+        default:                     return .priceAbove   // v17.190 · trendLineCrossed 等未覆盖 case · 默认归类
         }
     }
 }
@@ -1676,6 +1671,9 @@ private struct AlertFormDraft {
                 indicatorEventTag = .rsiCrossBelow
                 indicatorRSIThreshold = NSDecimalNumber(decimal: t).doubleValue
             }
+        default:
+            // v17.190 · trendLineCrossed 等未覆盖 case · 跳过加载
+            break
         }
     }
 
@@ -2009,6 +2007,7 @@ extension NotificationChannelKind {
         case .sound:        return L("声")
         case .console:      return L("控")
         case .file:         return L("文")
+        case .webhook:      return L("网")   // v17.190 · webhook 简写
         }
     }
 
@@ -2020,6 +2019,7 @@ extension NotificationChannelKind {
         case .sound:        return L("声音")
         case .console:      return L("控制台日志")
         case .file:         return L("文件日志")
+        case .webhook:      return L("Webhook")   // v17.190 · webhook 通道
         }
     }
 }

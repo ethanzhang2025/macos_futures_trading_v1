@@ -523,17 +523,17 @@ struct TrainingControlBar: View {
     /// 仅昨日有训练时显示 · 与 streak chip 并列
     @ViewBuilder
     private var todayVsYesterdayChip: some View {
+        // v17.190 · @ViewBuilder 禁显式 return · guard 改 if-let
         let cal = Calendar(identifier: .gregorian)
-        let now = Date()
-        let today = cal.startOfDay(for: now)
-        guard let yesterday = cal.date(byAdding: .day, value: -1, to: today) else {
-            EmptyView()
-            return
-        }
+        let today = cal.startOfDay(for: Date())
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)
         let todayCount = viewModel.log.sessions.filter { $0.startedAt >= today }.count
-        let yesterdayCount = viewModel.log.sessions.filter {
-            $0.startedAt >= yesterday && $0.startedAt < today
-        }.count
+        let yesterdayCount: Int = {
+            guard let yd = yesterday else { return 0 }
+            return viewModel.log.sessions.filter {
+                $0.startedAt >= yd && $0.startedAt < today
+            }.count
+        }()
         if yesterdayCount > 0 {
             let delta = todayCount - yesterdayCount
             let (icon, color): (String, Color) = {

@@ -743,16 +743,15 @@ struct TrainingHistoryPanel: View {
     /// 仅当上月有数据时显示 · 月历日历起始（dateInterval of .month）
     @ViewBuilder
     private func monthlyComparisonChip() -> some View {
+        // v17.190 · @ViewBuilder 禁显式 return · guard 改 nested if-let
         let cal = Calendar(identifier: .gregorian)
-        guard let thisMonthStart = cal.dateInterval(of: .month, for: Date())?.start,
-              let lastMonthStart = cal.date(byAdding: .month, value: -1, to: thisMonthStart) else {
-            EmptyView()
-            return
-        }
-        let lastMonthSessions = viewModel.log.sessions.filter {
-            $0.startedAt >= lastMonthStart && $0.startedAt < thisMonthStart
-        }
-        if !lastMonthSessions.isEmpty {
+        let thisMonthStart = cal.dateInterval(of: .month, for: Date())?.start
+        let lastMonthStart: Date? = thisMonthStart.flatMap { cal.date(byAdding: .month, value: -1, to: $0) }
+        let lastMonthSessions: [TrainingSessionLog.Session] = {
+            guard let ts = thisMonthStart, let ls = lastMonthStart else { return [] }
+            return viewModel.log.sessions.filter { $0.startedAt >= ls && $0.startedAt < ts }
+        }()
+        if !lastMonthSessions.isEmpty, let thisMonthStart {
             let thisMonthSessions = viewModel.log.sessions.filter { $0.startedAt >= thisMonthStart }
             let countDelta = thisMonthSessions.count - lastMonthSessions.count
             let lastMonthAvg = lastMonthSessions.compactMap { viewModel.log.score(for: $0.id)?.totalScore }
@@ -846,30 +845,33 @@ struct TrainingHistoryPanel: View {
     /// 数据源：log.scores subScores · 仅含 v2 评分的 session（老 session 缺 subScores 跳过）
     /// 最低维度橙色高亮 · trader 一眼看月度最弱
     private var fiveDimAverageRow: some View {
+        // v17.190 · Mac 6.3 严格 · ViewBuilder Group 内不允许 nested func declaration · 计算逻辑全部移出 ViewBuilder
         struct DimStat { let dim: TrainingSubScores.Dimension; let avg: Int; let min: Int; let max: Int }
         let subs = viewModel.log.sessions.compactMap {
             viewModel.log.score(for: $0.id)?.subScores
         }
+        let n = subs.count
+        let stats: [DimStat] = subs.isEmpty ? [] : {
+            let dimensions: [(TrainingSubScores.Dimension, [Int])] = [
+                (.pnl,        subs.map(\.pnl)),
+                (.discipline, subs.map(\.discipline)),
+                (.winRate,    subs.map(\.winRate)),
+                (.risk,       subs.map(\.risk)),
+                (.efficiency, subs.map(\.efficiency)),
+            ]
+            return dimensions.map { dim, values in
+                DimStat(
+                    dim: dim,
+                    avg: Int(round(Double(values.reduce(0, +)) / Double(max(n, 1)))),
+                    min: values.min() ?? 0,
+                    max: values.max() ?? 0
+                )
+            }
+        }()
         return Group {
             if subs.isEmpty {
                 EmptyView()
             } else {
-                let n = subs.count
-                func stat(_ dim: TrainingSubScores.Dimension, _ values: [Int]) -> DimStat {
-                    DimStat(
-                        dim: dim,
-                        avg: Int(round(Double(values.reduce(0, +)) / Double(n))),
-                        min: values.min() ?? 0,
-                        max: values.max() ?? 0
-                    )
-                }
-                let stats: [DimStat] = [
-                    stat(.pnl,       subs.map(\.pnl)),
-                    stat(.discipline, subs.map(\.discipline)),
-                    stat(.winRate,   subs.map(\.winRate)),
-                    stat(.risk,      subs.map(\.risk)),
-                    stat(.efficiency, subs.map(\.efficiency)),
-                ]
                 let worstAvg = stats.min(by: { $0.avg < $1.avg })?.avg ?? 0
                 // v16.133 · 全部 5 维 ≥ 80 → 完美状态 ✨（trader 全面均衡）
                 // v16.134 · 全 ≥ 90 → 🌟 大师级（更高阶）

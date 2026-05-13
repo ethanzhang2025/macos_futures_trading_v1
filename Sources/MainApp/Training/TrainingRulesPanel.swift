@@ -353,6 +353,7 @@ struct TrainingRulesPanel: View {
     /// v16.212 · tooltip 加 trend 最近 5 session vs 前 5 session 违规次数对比（≥10 session 才显示）
     @ViewBuilder
     private func violationCountBadge(for kind: DisciplineRuleKind) -> some View {
+        // v17.190 · Mac 6.3 严格 · ViewBuilder 内不允许 statement（var/append 等 side-effect）· 计算全部提到 helper
         let count = viewModel.log.sessions
             .flatMap { $0.violations }
             .filter { $0.ruleKind == kind }
@@ -365,27 +366,7 @@ struct TrainingRulesPanel: View {
                 default:    return .secondary
                 }
             }()
-            let recentNames = viewModel.log.sessions
-                .filter { $0.violations.contains { $0.ruleKind == kind } }
-                .sorted { $0.endedAt > $1.endedAt }
-                .prefix(5)
-                .map { $0.scenarioName.isEmpty ? "(未命名)" : $0.scenarioName }
-            var lines: [String] = ["历史违反该规则 \(count) 次"]
-            if !recentNames.isEmpty {
-                lines.append("最近 \(recentNames.count) 次：")
-                lines.append(contentsOf: recentNames.map { "· \($0)" })
-            }
-            // v16.212 · 趋势对比（最近 5 session vs 前 5 session 该 kind 违规计数）
-            let allSorted = viewModel.log.sessions.sorted { $0.endedAt > $1.endedAt }
-            if allSorted.count >= 10 {
-                let recentN = allSorted.prefix(5).flatMap { $0.violations }.filter { $0.ruleKind == kind }.count
-                let prevN = allSorted.dropFirst(5).prefix(5).flatMap { $0.violations }.filter { $0.ruleKind == kind }.count
-                let delta = recentN - prevN
-                let arrow = delta > 0 ? "↑" : (delta < 0 ? "↓" : "−")
-                let sign = delta > 0 ? "+" : ""
-                lines.append("趋势 最近 5 vs 前 5：\(arrow) \(sign)\(delta)（\(recentN) vs \(prevN)）")
-            }
-            let tip = lines.joined(separator: "\n")
+            let tip = buildViolationTooltip(for: kind, count: count)
             Text("⚠️ \(count)")
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(color)
@@ -395,6 +376,30 @@ struct TrainingRulesPanel: View {
                 .cornerRadius(3)
                 .tooltip(tip)
         }
+    }
+
+    /// v17.190 · 从 ViewBuilder 抽出 tip 文本构造（含 side-effect var lines）· Mac 6.3 严格要求
+    private func buildViolationTooltip(for kind: DisciplineRuleKind, count: Int) -> String {
+        let recentNames = viewModel.log.sessions
+            .filter { $0.violations.contains { $0.ruleKind == kind } }
+            .sorted { $0.endedAt > $1.endedAt }
+            .prefix(5)
+            .map { $0.scenarioName.isEmpty ? "(未命名)" : $0.scenarioName }
+        var lines: [String] = ["历史违反该规则 \(count) 次"]
+        if !recentNames.isEmpty {
+            lines.append("最近 \(recentNames.count) 次：")
+            lines.append(contentsOf: recentNames.map { "· \($0)" })
+        }
+        let allSorted = viewModel.log.sessions.sorted { $0.endedAt > $1.endedAt }
+        if allSorted.count >= 10 {
+            let recentN = allSorted.prefix(5).flatMap { $0.violations }.filter { $0.ruleKind == kind }.count
+            let prevN = allSorted.dropFirst(5).prefix(5).flatMap { $0.violations }.filter { $0.ruleKind == kind }.count
+            let delta = recentN - prevN
+            let arrow = delta > 0 ? "↑" : (delta < 0 ? "↓" : "−")
+            let sign = delta > 0 ? "+" : ""
+            lines.append("趋势 最近 5 vs 前 5：\(arrow) \(sign)\(delta)（\(recentN) vs \(prevN)）")
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func formatThreshold(_ value: Decimal) -> String {

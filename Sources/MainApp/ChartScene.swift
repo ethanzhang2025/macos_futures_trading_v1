@@ -394,7 +394,8 @@ struct ChartScene: View {
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
     }
 
-    var body: some View {
+    /// v17.190 · body 第 2 段 split · 让 swift 推断不一次性处理 25+ modifier
+    private var bodyMid: some View {
         bodyPrefix
         .task(id: PipelineKey(mode: chartMode, instrumentID: currentInstrumentID, period: selectedPeriod)) {
             // v15.18 · 持久化最近合约 / 周期（restoreLastSession=true 时下次启动恢复 · 仅 live 模式记录）
@@ -623,6 +624,10 @@ struct ChartScene: View {
             guard isHUDFieldsLoaded else { return }
             HUDFieldsStore.save(newValue)
         }
+    }
+
+    var body: some View {
+        bodyMid
         .sheet(isPresented: $showHUDFieldsSheet) {
             HUDFieldsSheet(book: $hudFields)
         }

@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
-# v17.170-189 增量验收 · swift test + 5 项主图 overlay 自动截图
+# v17.170-189 增量验收 · swift test + 5 项主图 overlay 半自动截图
 #
-# 用法（Mac 端）：
-#   cd /Users/admin/Documents/MAC版本_期货交易终端/macos_futures_trading_v1
-#   git pull
-#   chmod +x mac_acceptance_v17_170_189.sh
-#   ./mac_acceptance_v17_170_189.sh              # 全跑（test + 截图）
+# 半自动模式（v17.192 改版）：
+#   脚本启动 app + 跑 test · 截图阶段每张图都等你回车确认
+#   你自己手动按快捷键 + 看到 overlay/sheet 出来后回车 · 脚本立即 screencapture
+#   完全消除 applescript 焦点丢失 / 快捷键没生效 / 盲截无效问题
+#
+# 用法：
+#   ./mac_acceptance_v17_170_189.sh              # 全跑（test + 半自动截图）
 #   ./mac_acceptance_v17_170_189.sh --skip-test  # 跳过 test 直接截图
 #   ./mac_acceptance_v17_170_189.sh --skip-shots # 仅跑 test
-#
-# 输出：~/Desktop/mac_acceptance_v17_170_189/{shots,swift_test.log,app_stdout.log,summary.txt}
-# 自动 scp 到 beelink@vvsvr:/tmp/mac_acceptance_v17_170_189/
 
 set -uo pipefail
 
@@ -26,17 +25,12 @@ for arg in "$@"; do
     case "${arg}" in
         --skip-test)  SKIP_TEST=1 ;;
         --skip-shots) SKIP_SHOTS=1 ;;
-        -h|--help)
-            sed -n '2,12p' "$0"
-            exit 0
-            ;;
+        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     esac
 done
 
 APP_PID=""
 APP_NAME=""
-MAX_LAUNCH_WAIT=180
-MAX_WINDOW_WAIT=30
 
 detect_app_name() {
     local n
@@ -45,37 +39,6 @@ detect_app_name() {
             echo "${n}"
             return 0
         fi
-    done
-    return 1
-}
-
-wait_for_app_process() {
-    local waited=0
-    while (( waited < MAX_LAUNCH_WAIT )); do
-        if APP_NAME=$(detect_app_name); then
-            echo "  ✓ 进程 ${APP_NAME} 已出现 耗时 ${waited}s"
-            return 0
-        fi
-        sleep 2
-        waited=$((waited + 2))
-        if (( waited % 10 == 0 )); then
-            echo "  ⏳ 等主程序进程... ${waited}/${MAX_LAUNCH_WAIT}s"
-        fi
-    done
-    return 1
-}
-
-wait_for_app_window() {
-    local waited=0
-    local n
-    while (( waited < MAX_WINDOW_WAIT )); do
-        n=$(osascript -e "tell application \"System Events\" to tell (first process whose name is \"${APP_NAME}\") to count of windows" 2>/dev/null || echo 0)
-        if [[ "${n}" =~ ^[0-9]+$ ]] && (( n > 0 )); then
-            echo "  ✓ 主窗口已出现 windows=${n} 耗时 ${waited}s"
-            return 0
-        fi
-        sleep 1
-        waited=$((waited + 1))
     done
     return 1
 }
@@ -111,7 +74,6 @@ cleanup() {
         scp -q "${OUT_DIR}/summary.txt" beelink@vvsvr:"${REMOTE_DIR}/" 2>/dev/null || true
         [[ -f "${OUT_DIR}/app_stdout.log" ]] && scp -q "${OUT_DIR}/app_stdout.log" beelink@vvsvr:"${REMOTE_DIR}/" 2>/dev/null || true
         [[ -f "${OUT_DIR}/swift_test.log" ]] && scp -q "${OUT_DIR}/swift_test.log" beelink@vvsvr:"${REMOTE_DIR}/" 2>/dev/null || true
-        [[ -f "${OUT_DIR}/capture.log" ]]    && scp -q "${OUT_DIR}/capture.log"    beelink@vvsvr:"${REMOTE_DIR}/" 2>/dev/null || true
         [[ -d "${SHOTS_DIR}" ]] && scp -rq "${SHOTS_DIR}" beelink@vvsvr:"${REMOTE_DIR}/" 2>/dev/null || true
         echo "✅ scp 完成 · 告诉 Linux 端: rc=${rc} N=${n}"
     else
@@ -121,10 +83,41 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "${SHOTS_DIR}"
-rm -f "${SHOTS_DIR}"/24_*.png "${SHOTS_DIR}"/25_*.png "${SHOTS_DIR}"/26_*.png "${SHOTS_DIR}"/27_*.png "${SHOTS_DIR}"/28_*.png 2>/dev/null
+rm -f "${SHOTS_DIR}"/*.png 2>/dev/null
+
+# capture_step <name> <prompt>
+# 通过 osascript 把 MainApp 拉到前台后截图 · 不依赖 set frontmost 单调用 · 用 activate
+capture_step() {
+    local name="$1"
+    local prompt="$2"
+    echo ""
+    echo "═══════════════════════════════════════════════"
+    echo "📸 ${name}"
+    echo "  ${prompt}"
+    echo "═══════════════════════════════════════════════"
+    while true; do
+        read -p "  ▸ 看到目标后按 [回车]截图 / s 跳过 / r 重试提示 / q 退出: " ans
+        case "${ans}" in
+            s|S) echo "  ⏭  跳过 ${name}"; return 0 ;;
+            q|Q) echo "  🚪 用户主动退出"; exit 0 ;;
+            r|R) echo "  ${prompt}"; continue ;;
+            *)   break ;;
+        esac
+    done
+
+    # 截图（不切前台 · 用户当前焦点就是 app · screencapture -x 不抢焦点）
+    screencapture -x -o "${SHOTS_DIR}/${name}.png"
+    if [[ -f "${SHOTS_DIR}/${name}.png" ]]; then
+        local size
+        size=$(stat -f '%z' "${SHOTS_DIR}/${name}.png" 2>/dev/null || echo 0)
+        echo "  ✅ 截 ${name}.png（${size} bytes）"
+    else
+        echo "  ❌ 截图失败"
+    fi
+}
 
 echo "════════════════════════════════════════════════════"
-echo " v17.170-189 增量验收 · swift test + 5 截图"
+echo " v17.170-189 增量验收 · 半自动模式（v17.192 改版）"
 echo " 输出 -> ${OUT_DIR}"
 echo " skip_test=${SKIP_TEST} skip_shots=${SKIP_SHOTS}"
 echo "════════════════════════════════════════════════════"
@@ -140,9 +133,7 @@ if (( SKIP_TEST == 0 )); then
         echo "❌ swift test 失败 rc=${TEST_RC} 检查 ${OUT_DIR}/swift_test.log"
         exit 10
     fi
-    PASS_LINE=$(grep -E "Test Suite 'All tests' passed|Executed [0-9]+ tests" "${OUT_DIR}/swift_test.log" | tail -3)
     echo "✅ swift test 全绿"
-    echo "${PASS_LINE}"
 fi
 
 if (( SKIP_SHOTS == 1 )); then
@@ -151,51 +142,43 @@ if (( SKIP_SHOTS == 1 )); then
     exit 0
 fi
 
-# Phase 1: 启动 app + 轮询等就绪
+# Phase 1: 启动 app（不再轮询 · 让用户控制节奏）
 echo ""
 echo "▶ Phase 1: 启动 swift run MainApp"
 nohup swift run MainApp --build-path "${BUILD_PATH}" > "${OUT_DIR}/app_stdout.log" 2>&1 &
 APP_PID=$!
-echo "swift run pid = ${APP_PID} 轮询等主程序进程出现 上限 ${MAX_LAUNCH_WAIT}s"
-
-if ! wait_for_app_process; then
-    echo "❌ 主程序进程在 ${MAX_LAUNCH_WAIT}s 内未出现 检查 ${OUT_DIR}/app_stdout.log"
-    echo "❌ 不进行截图 退出"
-    echo "--- app_stdout.log 末尾 30 行 ---"
-    tail -30 "${OUT_DIR}/app_stdout.log" 2>/dev/null || true
-    exit 2
-fi
-
-echo "  ⏳ 等待主窗口出现 上限 ${MAX_WINDOW_WAIT}s"
-if ! wait_for_app_window; then
-    echo "❌ 主窗口在 ${MAX_WINDOW_WAIT}s 内未出现 不进行截图 退出"
-    echo "--- app_stdout.log 末尾 30 行 ---"
-    tail -30 "${OUT_DIR}/app_stdout.log" 2>/dev/null || true
-    exit 3
-fi
-
-echo "  ⏳ 额外 3s 让首拉数据 / 主图渲染就位"
-sleep 3
-
-if ! pgrep -x "${APP_NAME}" > /dev/null 2>&1; then
-    echo "❌ 主程序在窗口出现后又消失了 可能 crash 不进行截图"
-    echo "--- app_stdout.log 末尾 50 行 ---"
-    tail -50 "${OUT_DIR}/app_stdout.log" 2>/dev/null || true
-    exit 4
-fi
-
-# Phase 2: applescript
+echo "swift run pid = ${APP_PID}"
 echo ""
-echo "▶ Phase 2: 调用 applescript 自动 ~15s 目标进程 ${APP_NAME}"
-if [[ ! -f "${SCRIPT_DIR}/mac_acceptance_v17_170_189.applescript" ]]; then
-    echo "⚠️ 未找到 applescript 退出"
-    exit 1
+echo "⏳ 等 MainApp 启动 +  ⌘N 开主图 + 主图数据加载完毕"
+echo "   （等到 chart 上 K 线 + HUD + 价格 全部正常显示再继续）"
+read -p "▸ 主图准备好后按 [回车] 进入截图流程: " _
+
+if APP_NAME=$(detect_app_name); then
+    echo "✓ 探测到进程 ${APP_NAME}"
+else
+    echo "⚠️ 未探测到 MainApp / FuturesTerminal 进程 · 但继续（也许进程名不同）"
 fi
-osascript "${SCRIPT_DIR}/mac_acceptance_v17_170_189.applescript" "${SHOTS_DIR}" "${APP_NAME}" 2>&1 | tee "${OUT_DIR}/capture.log"
-OSA_RC=${PIPESTATUS[0]}
-if (( OSA_RC != 0 )); then
-    echo "❌ applescript 失败 rc=${OSA_RC} 检查 ${OUT_DIR}/capture.log"
-fi
+
+# Phase 2: 半自动截图 5 张
+echo ""
+echo "═══════════════════════════════════════════════"
+echo " Phase 2: 5 张截图 · 每张前手动操作 + 回车截图"
+echo "═══════════════════════════════════════════════"
+
+capture_step "24_v17188_patterns_overlay" \
+    "操作：在主图按 ⌘⇧P 打开【形态识别 overlay】(13 种形态高亮)"
+
+capture_step "25_v17182_patterns_list_sheet" \
+    "操作：先 ⌘⇧P 关掉 overlay · 再按 ⌘⇧L 打开【形态清单 sheet】(含 stats 区)"
+
+capture_step "26_v17180_resonance_overlay_hud" \
+    "操作：先 ESC 关掉 sheet · 再按 ⌘⇧Y 打开【多周期共振 overlay + 左上 HUD】"
+
+capture_step "27_v17184_resonance_stats_sheet" \
+    "操作：保持共振 overlay 开 · 再按 ⌘⌥⇧Y 打开【共振历史回测 sheet】"
+
+capture_step "28_v17189_secondary_picker_sheet" \
+    "操作：ESC 关 sheet + ⌘⇧Y 关共振 · 再按 ⌘⌥G 打开【多合约 overlay picker sheet】"
 
 # 关 app
 echo ""

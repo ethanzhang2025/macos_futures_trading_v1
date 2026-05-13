@@ -51,12 +51,19 @@ struct ReplayDriverTests {
 
         let driver = ReplayDriver(player: player, baseInterval: 0.02)  // 20ms / 8 = 2.5ms
         await driver.start()
-        try await Task.sleep(nanoseconds: 300_000_000)  // 300ms 足够 5 步 + buffer
+
+        // v17.190+ 第 13 波 · Mac swift 6.3.2 严格 actor 调度慢于 Linux · 固定 300ms sleep 在 Mac flaky
+        // 改 deadline 轮询（最多 2s）· 与本文件 line 35 现存 pattern 一致
+        let deadline = Date().addingTimeInterval(2.0)
+        var cursor = await player.cursor
+        while !cursor.isAtEnd && Date() < deadline {
+            try await Task.sleep(nanoseconds: 30_000_000)  // 30ms 轮询
+            cursor = await player.cursor
+        }
 
         // driveTask 应已退出（advanced == 0 后 break）
         // 注：isRunning 检查 task.isCancelled，自然完成的 task 不算 cancelled
         // 因此这里不直接断言 isRunning == false，而是验证 cursor 到末尾 + 末尾后 player 自动 paused
-        let cursor = await player.cursor
         #expect(cursor.isAtEnd == true)
         let state = await player.currentState
         #expect(state == .paused)  // ReplayPlayer.stepForward 末尾自动 paused（A07 验收）

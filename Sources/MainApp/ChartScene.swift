@@ -2044,7 +2044,17 @@ struct ChartScene: View {
                     instrumentID: currentInstrumentID,
                     period: selectedPeriod,
                     barsCount: bars.count
-                )
+                ),
+                // v17.195 真修 · 9 个 sheet/overlay state 由 ChartScene 单一来源持有 · 第 12 波 假修复 用 @State 致 sheet 永不打开
+                showResonanceStatsSheet: $showResonanceStatsSheet,
+                showPatternsListSheet: $showPatternsListSheet,
+                showSecondaryInstrumentPicker: $showSecondaryInstrumentPicker,
+                showChartTypeOptionsSheet: $showChartTypeOptionsSheet,
+                showSecondaryOverlay: $showSecondaryOverlay,
+                secondaryBars: $secondaryBars,
+                secondaryInstrumentID: $secondaryInstrumentID,
+                secondaryNormalizeMode: $secondaryNormalizeMode,
+                chartTypeOptions: $chartTypeOptions
             )
         } else if let loadError {
             errorView(loadError)
@@ -2721,17 +2731,17 @@ struct ChartContentView: View {
     @AppStorage("viewState.v1.chart.showSupportResistance") private var showSupportResistance: Bool = false
     /// v17.170 · 多周期共振 overlay 开关（⌘⇧Y · 当前周期 → 高周期 MACD/EMA 金叉死叉信号点）
     @AppStorage("viewState.v1.chart.showMultiTimeframeResonance") private var showMultiTimeframeResonance: Bool = false
-    /// v17.184 · 多周期共振历史回测 sheet（⌘⌥⇧Y · trader 看哪种信号准）
-    @State private var showResonanceStatsSheet: Bool = false
-    /// v17.190 · Mac 6.3 严格 · ChartContentView 内 chartContentShortcuts / viewportShortcuts / secondaryInstrumentOverlay 引用的 sheet/state · 之前缺失致 Mac 编译 30+ cannot find · Linux #if os(macOS) 守内代码不编译漏检
-    @State private var showPatternsListSheet: Bool = false
-    @State private var showSecondaryInstrumentPicker: Bool = false
-    @State private var showChartTypeOptionsSheet: Bool = false
-    @State private var showSecondaryOverlay: Bool = false
-    @State private var secondaryBars: [KLine] = []
-    @State private var secondaryInstrumentID: String = ""
-    @State private var secondaryNormalizeMode: MultiInstrumentNormalizer.Mode = .firstBaseline
-    @State private var chartTypeOptions: ChartTypeOptions = ChartTypeOptionsStore.load()
+    /// v17.195 真修 · 第 12 波 v17.190 仅补 @State 让编译过 · ChartScene 同名 state 不连通致 ⌘⇧L 等 sheet 永不打开
+    /// 改 @Binding 由 ChartScene 实例化时传入 → state 单一来源在 ChartScene
+    @Binding var showResonanceStatsSheet: Bool
+    @Binding var showPatternsListSheet: Bool
+    @Binding var showSecondaryInstrumentPicker: Bool
+    @Binding var showChartTypeOptionsSheet: Bool
+    @Binding var showSecondaryOverlay: Bool
+    @Binding var secondaryBars: [KLine]
+    @Binding var secondaryInstrumentID: String
+    @Binding var secondaryNormalizeMode: MultiInstrumentNormalizer.Mode
+    @Binding var chartTypeOptions: ChartTypeOptions
     @Environment(\.shellHostedPaneID) private var shellPaneID
     @Environment(\.shellCrosshairReporter) private var shellCrosshairReporter
 

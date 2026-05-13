@@ -747,7 +747,7 @@ struct TrainingHistoryPanel: View {
         let cal = Calendar(identifier: .gregorian)
         let thisMonthStart = cal.dateInterval(of: .month, for: Date())?.start
         let lastMonthStart: Date? = thisMonthStart.flatMap { cal.date(byAdding: .month, value: -1, to: $0) }
-        let lastMonthSessions: [TrainingSessionLog.Session] = {
+        let lastMonthSessions: [TrainingSession] = {
             guard let ts = thisMonthStart, let ls = lastMonthStart else { return [] }
             return viewModel.log.sessions.filter { $0.startedAt >= ls && $0.startedAt < ts }
         }()

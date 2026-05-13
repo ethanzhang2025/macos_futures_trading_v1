@@ -2044,6 +2044,9 @@ extension AlertCondition {
             let displayName = AlertCondition.spreadDisplayName(id: id, isCalendar: cal)
             let kindLabel = cal ? "跨期" : "跨品种"
             return "[\(kindLabel)] \(displayName) · |z| ≥ \(fmtDecimal(z))"
+        default:
+            // v17.190 · trendLineCrossed 等未覆盖 case · 默认描述
+            return "其他"
         }
     }
 

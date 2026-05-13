@@ -394,6 +394,72 @@ struct ChartScene: View {
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
     }
 
+    /// v17.190 · sheet 复杂 closure 提到 helper · 防 ViewBuilder 多 let 推断 timeout
+    @ViewBuilder
+    private var patternsListSheetContent: some View {
+        let kline = KLineSeries(
+            opens: bars.map(\.open),
+            highs: bars.map(\.high),
+            lows: bars.map(\.low),
+            closes: bars.map(\.close),
+            volumes: bars.map(\.volume),
+            openInterests: bars.map { _ in 0 }
+        )
+        let patterns = (try? PatternDetector.detect(kline: kline)) ?? []
+        let stats = (try? PatternPerformanceAnalyzer.analyze(bars: bars)) ?? []
+        PatternsListSheet(
+            patterns: patterns,
+            stats: stats,
+            chartTheme: chartTheme,
+            candleColorMode: candleColorMode,
+            onJumpTo: { idx in jumpViewport(toBarIndex: idx) }
+        )
+    }
+
+    @ViewBuilder
+    private var resonanceStatsSheetContent: some View {
+        let basePeriod = bars.first?.period
+        let targets: [KLinePeriod] = basePeriod.map(MultiTimeframeResonance.defaultTargets(for:)) ?? []
+        let signals = (try? MultiTimeframeResonance.detect(baseBars: bars, targetPeriods: targets)) ?? []
+        let stats = MultiTimeframeResonance.performanceStats(signals: signals, baseBars: bars)
+        ResonanceStatsSheet(
+            stats: stats,
+            chartTheme: chartTheme,
+            candleColorMode: candleColorMode
+        )
+    }
+
+    @ViewBuilder
+    private var intradayDatePickerSheetContent: some View {
+        let source = intradayFullBarsBackup ?? replayAllBars
+        let dates = IntradayBarsFilter.availableDates(in: source)
+        IntradayDatePickerSheet(
+            availableDates: dates,
+            onConfirm: { date in
+                Task { await enterIntradayReplay(date: date) }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var secondaryInstrumentPickerContent: some View {
+        SecondaryInstrumentPickerSheet(
+            primaryInstrumentID: instrumentLabel,
+            currentSecondaryID: secondaryInstrumentID,
+            currentMode: secondaryNormalizeMode,
+            onConfirm: { id, mode in
+                secondaryNormalizeMode = mode
+                Task { await loadSecondaryBars(id) }
+            },
+            onClear: {
+                secondaryInstrumentID = ""
+                secondaryBars = []
+                showSecondaryOverlay = false
+                presentToggleNotice("副合约 overlay：已清除")
+            }
+        )
+    }
+
     /// v17.190 · body 第 2 段 split · 让 swift 推断不一次性处理 25+ modifier
     private var bodyMid: some View {
         bodyPrefix
@@ -576,25 +642,8 @@ struct ChartScene: View {
         }
         // v17.165 · 形态识别清单 sheet（⌘⇧L · 列当前 K 线全部检出形态 · 点行跳转 viewport）
         // v17.182 · 加历史回测统计区（PatternPerformanceAnalyzer.analyze · bars 直传）
-        .sheet(isPresented: $showPatternsListSheet) {
-            let kline = KLineSeries(
-                opens: bars.map(\.open),
-                highs: bars.map(\.high),
-                lows: bars.map(\.low),
-                closes: bars.map(\.close),
-                volumes: bars.map(\.volume),
-                openInterests: bars.map { _ in 0 }
-            )
-            let patterns = (try? PatternDetector.detect(kline: kline)) ?? []
-            let stats = (try? PatternPerformanceAnalyzer.analyze(bars: bars)) ?? []
-            PatternsListSheet(
-                patterns: patterns,
-                stats: stats,
-                chartTheme: chartTheme,
-                candleColorMode: candleColorMode,
-                onJumpTo: { idx in jumpViewport(toBarIndex: idx) }
-            )
-        }
+        // v17.190 · 内容提到 helper · 防 ViewBuilder closure 多 let 推断 timeout
+        .sheet(isPresented: $showPatternsListSheet) { patternsListSheetContent }
         .onChange(of: overlayBook) { newValue in
             // v17.151 · overlayBook 改（toggle / sheet 保存）→ 持久化 + 重算 indicators · sheet 内"还原默认"也走这里
             MainChartOverlayStore.save(newValue)
@@ -647,47 +696,14 @@ struct ChartScene: View {
             IndicatorParamsSheet(book: bindingForSubSlot(ident.slot))
         }
         // v17.184 · 多周期共振历史回测 sheet（⌘⌥⇧Y）
-        .sheet(isPresented: $showResonanceStatsSheet) {
-            let basePeriod = bars.first?.period
-            let targets: [KLinePeriod] = basePeriod.map(MultiTimeframeResonance.defaultTargets(for:)) ?? []
-            let signals = (try? MultiTimeframeResonance.detect(baseBars: bars, targetPeriods: targets)) ?? []
-            let stats = MultiTimeframeResonance.performanceStats(signals: signals, baseBars: bars)
-            ResonanceStatsSheet(
-                stats: stats,
-                chartTheme: chartTheme,
-                candleColorMode: candleColorMode
-            )
-        }
+        // v17.190 · 内容提到 helper · 防 ViewBuilder closure 多 let 推断 timeout
+        .sheet(isPresented: $showResonanceStatsSheet) { resonanceStatsSheetContent }
 
         // v17.171 · 盘中复盘日期选择 sheet
-        .sheet(isPresented: $showIntradayDatePicker) {
-            let source = intradayFullBarsBackup ?? replayAllBars
-            let dates = IntradayBarsFilter.availableDates(in: source)
-            IntradayDatePickerSheet(
-                availableDates: dates,
-                onConfirm: { date in
-                    Task { await enterIntradayReplay(date: date) }
-                }
-            )
-        }
+        .sheet(isPresented: $showIntradayDatePicker) { intradayDatePickerSheetContent }
         // v17.189 · 多合约 chart overlay 选副合约 sheet（⌘⌥G）
-        .sheet(isPresented: $showSecondaryInstrumentPicker) {
-            SecondaryInstrumentPickerSheet(
-                primaryInstrumentID: instrumentLabel,
-                currentSecondaryID: secondaryInstrumentID,
-                currentMode: secondaryNormalizeMode,
-                onConfirm: { id, mode in
-                    secondaryNormalizeMode = mode
-                    Task { await loadSecondaryBars(id) }
-                },
-                onClear: {
-                    secondaryInstrumentID = ""
-                    secondaryBars = []
-                    showSecondaryOverlay = false
-                    presentToggleNotice("副合约 overlay：已清除")
-                }
-            )
-        }
+        // v17.190 · 内容提到 helper · 防 ViewBuilder closure 多 binding 推断 timeout
+        .sheet(isPresented: $showSecondaryInstrumentPicker) { secondaryInstrumentPickerContent }
         .onChange(of: chartMode) { newValue in
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
             guard newValue == .replay, let service = analytics else { return }

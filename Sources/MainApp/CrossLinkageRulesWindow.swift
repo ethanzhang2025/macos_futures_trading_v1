@@ -11,6 +11,7 @@
 
 import SwiftUI
 import Shared
+import DataCore
 
 struct CrossLinkageRulesWindow: View {
 
@@ -19,6 +20,11 @@ struct CrossLinkageRulesWindow: View {
     @State private var editingRule: CrossInstrumentLinkageRule?
     @State private var manualSnapshots: [String: ManualSnapshotEntry] = [:]
     @State private var observations: [CrossLinkageObservation] = []
+    // v17.178 · Sina 实时 poll · 10s 定时自动拉取 + 评估
+    @State private var autoPollEnabled: Bool = false
+    @State private var pollTask: Task<Void, Never>?
+    @State private var lastPollTime: Date?
+    @State private var pollErrorMessage: String?
 
     private struct ManualSnapshotEntry: Equatable {
         var lastPrice: Double = 0
@@ -39,8 +45,12 @@ struct CrossLinkageRulesWindow: View {
                 .frame(maxHeight: .infinity)
         }
         .padding(16)
-        .frame(minWidth: 760, minHeight: 720)
+        .frame(minWidth: 760, minHeight: 760)
         .onAppear { reload() }
+        .onDisappear {
+            pollTask?.cancel()
+            pollTask = nil
+        }
         .sheet(isPresented: $showEditor) {
             CrossLinkageRuleEditorSheet(
                 rule: editingRule ?? makeDefaultRule(),
@@ -57,23 +67,48 @@ struct CrossLinkageRulesWindow: View {
     // MARK: - sections
 
     private var header: some View {
-        HStack {
-            Text("跨合约联动预警 · v17.172/175")
-                .font(.title2).bold()
-            Spacer()
-            Button {
-                editingRule = nil
-                showEditor = true
-            } label: {
-                Label("新建规则", systemImage: "plus.circle.fill")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("跨合约联动预警 · v17.172/175/178")
+                    .font(.title2).bold()
+                Spacer()
+                Button {
+                    editingRule = nil
+                    showEditor = true
+                } label: {
+                    Label("新建规则", systemImage: "plus.circle.fill")
+                }
+                Button {
+                    evaluate()
+                } label: {
+                    Label("评估当前快照", systemImage: "bolt.circle.fill")
+                }
+                .keyboardShortcut("e", modifiers: [.command])
+                .disabled(rules.rules.isEmpty)
             }
-            Button {
-                evaluate()
-            } label: {
-                Label("评估当前快照", systemImage: "bolt.circle.fill")
+            // v17.178 · Sina 实时 poll toggle + 状态显示
+            HStack(spacing: 8) {
+                Toggle(isOn: $autoPollEnabled) {
+                    Label("Sina 实时（10s 自动评估）", systemImage: "antenna.radiowaves.left.and.right")
+                }
+                .toggleStyle(.switch)
+                .disabled(rules.rules.isEmpty)
+                .onChange(of: autoPollEnabled) { _, newVal in
+                    if newVal { startPolling() } else { stopPolling() }
+                }
+                if let last = lastPollTime {
+                    Text("上次：\(formatTime(last))")
+                        .font(.caption.monospaced())
+                        .foregroundColor(.secondary)
+                }
+                if let err = pollErrorMessage {
+                    Label(err, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .lineLimit(1)
+                }
+                Spacer()
             }
-            .keyboardShortcut("e", modifiers: [.command])
-            .disabled(rules.rules.isEmpty)
         }
     }
 
@@ -285,6 +320,69 @@ struct CrossLinkageRulesWindow: View {
     }
 
     private func formatPct(_ v: Double) -> String { String(format: "%.1f%%", v) }
+
+    private func formatTime(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f.string(from: date)
+    }
+
+    // MARK: - v17.178 · Sina 实时 poll
+
+    private func startPolling() {
+        pollTask?.cancel()
+        pollTask = Task { @MainActor in
+            // 立即拉一次 · 不等 10s
+            await pollSinaAndEvaluate()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                if Task.isCancelled { break }
+                await pollSinaAndEvaluate()
+            }
+        }
+    }
+
+    private func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
+    }
+
+    @MainActor
+    private func pollSinaAndEvaluate() async {
+        let symbols = allInstruments()
+        guard !symbols.isEmpty else {
+            pollErrorMessage = "无规则 · 无合约可拉"
+            return
+        }
+        let sina = SinaMarketData()
+        do {
+            let quotes = try await sina.fetchQuotes(symbols: symbols)
+            var snaps: [String: CrossLinkageSnapshot] = [:]
+            for q in quotes {
+                // Sina API symbols 大写化 · 匹配回原 case
+                let originalSym = symbols.first { $0.uppercased() == q.symbol.uppercased() } ?? q.symbol
+                let last = NSDecimalNumber(decimal: q.lastPrice).doubleValue
+                let base: Double
+                if q.preSettlement != 0 {
+                    base = NSDecimalNumber(decimal: q.preSettlement).doubleValue
+                } else if q.open != 0 {
+                    base = NSDecimalNumber(decimal: q.open).doubleValue
+                } else {
+                    continue
+                }
+                snaps[originalSym] = CrossLinkageSnapshot(
+                    instrument: originalSym, lastPrice: last, basePrice: base
+                )
+                // 同步到 manualSnapshots · trader 在快照面板可见
+                manualSnapshots[originalSym] = ManualSnapshotEntry(lastPrice: last, basePrice: base)
+            }
+            observations = CrossInstrumentLinkage.evaluateAll(rules: rules.rules, snapshots: snaps)
+            lastPollTime = Date()
+            pollErrorMessage = nil
+        } catch {
+            pollErrorMessage = "Sina 拉取失败：\(error)"
+        }
+    }
 
     private func makeDefaultRule() -> CrossInstrumentLinkageRule {
         CrossInstrumentLinkageRule(

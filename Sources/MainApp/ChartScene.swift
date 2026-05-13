@@ -2440,6 +2440,8 @@ struct ChartContentView: View {
     @AppStorage("viewState.v1.chart.showSwingPoints") private var showSwingPoints: Bool = false
     /// v17.164 · 形态识别 overlay 开关（trader 主动开启 · 头肩顶/底 + 双顶/底 自动标注）
     @AppStorage("viewState.v1.chart.showPatterns") private var showPatterns: Bool = false
+    /// v17.166 · 支撑阻力自动识别 overlay 开关（ZigZag pivot 聚类 · 高频价位水平线）
+    @AppStorage("viewState.v1.chart.showSupportResistance") private var showSupportResistance: Bool = false
 
     /// v15.20 batch84 · 显隐切换瞬态提示（trader 直觉反馈：刚按了 ⌘. ⌘\ 等切换什么）
     @State private var toggleNotice: String?
@@ -2768,6 +2770,12 @@ struct ChartContentView: View {
                 showPatternsListSheet = true
             }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
+            // v17.166 · ⌘⇧S 切换支撑阻力 overlay
+            Button("") {
+                showSupportResistance.toggle()
+                presentToggleNotice("支撑阻力：\(showSupportResistance ? "显示" : "隐藏")")
+            }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.end, modifiers: [.command])
             Button("", action: jumpToLatestBar)
@@ -2961,6 +2969,8 @@ struct ChartContentView: View {
             if showSwingPoints { swingPointsOverlay }
             // v17.164 · 形态识别 overlay（头肩顶/底 + 双顶/底 自动标注 · 默认关）
             if showPatterns { patternsOverlay }
+            // v17.166 · 支撑阻力自动识别 overlay（ZigZag pivot 聚类 · 加粗水平线 · 默认关）
+            if showSupportResistance { supportResistanceOverlay }
         }
         .overlay(alignment: .topTrailing) {
             // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
@@ -3526,6 +3536,52 @@ struct ChartContentView: View {
                     .cornerRadius(3)
                     .position(x: x, y: labelY)
                 }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// v17.166 · 支撑阻力 overlay（ZigZag pivot 聚类水平线 · 线宽随 strength · 多绿空红 · 右上 label "支撑/阻力 +touch"）
+    private var supportResistanceOverlay: some View {
+        let kline = KLineSeries(
+            opens: bars.map(\.open),
+            highs: bars.map(\.high),
+            lows: bars.map(\.low),
+            closes: bars.map(\.close),
+            volumes: bars.map(\.volume),
+            openInterests: bars.map { _ in 0 }
+        )
+        let levels = (try? SupportResistanceDetector.detect(kline: kline)) ?? []
+        return GeometryReader { geom in
+            let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+            let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+            let span = max(0.0001, hi - lo)
+            ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
+                let priceD = NSDecimalNumber(decimal: level.price).doubleValue
+                let y = CGFloat((hi - priceD) / span) * geom.size.height
+                let lineColor = level.isResistance
+                    ? chartTheme.candleDown(mode: candleColorMode)
+                    : chartTheme.candleUp(mode: candleColorMode)
+                let lineWidth: CGFloat = 0.8 + CGFloat(level.strength) * 1.5   // 0.8 ~ 2.3
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: geom.size.width, y: y))
+                }
+                .stroke(lineColor.opacity(0.4 + level.strength * 0.4), lineWidth: lineWidth)
+                // 右侧 label "支撑/阻力 ×N"
+                HStack(spacing: 2) {
+                    Text(level.isResistance ? "阻力" : "支撑")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("×\(level.touchCount)")
+                        .font(.system(size: 9, design: .monospaced))
+                        .opacity(0.7)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(lineColor.opacity(0.85))
+                .cornerRadius(2)
+                .position(x: geom.size.width - 32, y: y)
             }
         }
         .allowsHitTesting(false)

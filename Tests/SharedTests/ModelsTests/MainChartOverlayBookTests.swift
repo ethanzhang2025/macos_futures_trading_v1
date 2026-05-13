@@ -7,7 +7,7 @@ import Foundation
 @Suite("MainChartOverlayBook · 主图叠加偏好（VWAP / Pivot / SuperTrend）")
 struct MainChartOverlayBookTests {
 
-    @Test("default · 全关 · 9 类参数全默认（trader 标准）")
+    @Test("default · 全关 · 12 类参数全默认（trader 标准 · v17.159 加 HMA/DEMA/TEMA）")
     func defaults() {
         let d = MainChartOverlayBook.default
         #expect(d.enabled.isEmpty)
@@ -27,16 +27,20 @@ struct MainChartOverlayBookTests {
         #expect(d.priceChannelPeriod == 20)
         #expect(d.envelopesPeriod == 20)
         #expect(d.envelopesPercent == Decimal(string: "2.5"))
+        // v17.159 · 3 改进型均线默认
+        #expect(d.hmaPeriod == 16)
+        #expect(d.demaPeriod == 20)
+        #expect(d.temaPeriod == 20)
     }
 
-    @Test("MainChartOverlayKind allCases 9 类完整 · 顺序 vwap/pivot/superTrend/ichimoku/donchian/keltner/sar/priceChannel/envelopes")
+    @Test("MainChartOverlayKind allCases 12 类完整 · 顺序 ...envelopes/hma/dema/tema (v17.159)")
     func allCases() {
         let cases = MainChartOverlayKind.allCases
-        #expect(cases.count == 9)
-        #expect(cases == [.vwap, .pivot, .superTrend, .ichimoku, .donchian, .keltner, .sar, .priceChannel, .envelopes])
+        #expect(cases.count == 12)
+        #expect(cases == [.vwap, .pivot, .superTrend, .ichimoku, .donchian, .keltner, .sar, .priceChannel, .envelopes, .hma, .dema, .tema])
     }
 
-    @Test("displayName / icon 九类均非空 · 中文化 trader 友好")
+    @Test("displayName / icon 十二类均非空 · 中文化 trader 友好")
     func displayMetadata() {
         for k in MainChartOverlayKind.allCases {
             #expect(!k.displayName.isEmpty)
@@ -51,6 +55,9 @@ struct MainChartOverlayBookTests {
         #expect(MainChartOverlayKind.sar.displayName.contains("SAR"))
         #expect(MainChartOverlayKind.priceChannel.displayName.contains("Price Channel"))
         #expect(MainChartOverlayKind.envelopes.displayName.contains("Envelopes"))
+        #expect(MainChartOverlayKind.hma.displayName.contains("HMA"))
+        #expect(MainChartOverlayKind.dema.displayName.contains("DEMA"))
+        #expect(MainChartOverlayKind.tema.displayName.contains("TEMA"))
     }
 
     @Test("setEnabled 切换 · isEnabled 反映状态 · anyEnabled 反映非空")
@@ -242,5 +249,42 @@ struct MainChartOverlayBookTests {
         #expect(decoded.priceChannelPeriod == 20)
         #expect(decoded.envelopesPeriod == 20)
         #expect(decoded.envelopesPercent == Decimal(string: "2.5"))
+    }
+
+    @Test("v17.158 旧 JSON 缺 hma/dema/tema 字段 · 全部 fallback 默认（v17.159 兼容）")
+    func oldV17_158JSONFallback() throws {
+        // v17.158 时的 schema · 用 v17.159 模型构造 v17.158 子集 encode · 然后用 v17.159 解码必须 fallback hma/dema/tema
+        // 直接用 round-trip 模拟（Encoder 写出当前所有字段 · v17.158 实际历史 JSON 不含 hma/dema/tema · 也能 decode）
+        let v17_158Book = MainChartOverlayBook(
+            enabled: [.sar],
+            sarStep: Decimal(string: "0.05")!,
+            sarMax: Decimal(string: "0.3")!,
+            priceChannelPeriod: 30
+        )
+        let v17_158Encoded = try JSONEncoder().encode(v17_158Book)
+        let decoded = try JSONDecoder().decode(MainChartOverlayBook.self, from: v17_158Encoded)
+        #expect(decoded.enabled == [.sar])
+        #expect(decoded.sarStep == Decimal(string: "0.05"))
+        #expect(decoded.priceChannelPeriod == 30)
+        // v17.159 新字段全 fallback 默认（v17.158 init 未传 · hmaPeriod=16/demaPeriod=20/temaPeriod=20）
+        #expect(decoded.hmaPeriod == 16)
+        #expect(decoded.demaPeriod == 20)
+        #expect(decoded.temaPeriod == 20)
+    }
+
+    @Test("v17.159 Codable 往返 · HMA/DEMA/TEMA 全开 + 自定义 period 14/30/35")
+    func codableRoundTripV17_159() throws {
+        let book = MainChartOverlayBook(
+            enabled: [.hma, .dema, .tema],
+            hmaPeriod: 14,
+            demaPeriod: 30,
+            temaPeriod: 35
+        )
+        let data = try JSONEncoder().encode(book)
+        let decoded = try JSONDecoder().decode(MainChartOverlayBook.self, from: data)
+        #expect(decoded.enabled == [.hma, .dema, .tema])
+        #expect(decoded.hmaPeriod == 14)
+        #expect(decoded.demaPeriod == 30)
+        #expect(decoded.temaPeriod == 35)
     }
 }

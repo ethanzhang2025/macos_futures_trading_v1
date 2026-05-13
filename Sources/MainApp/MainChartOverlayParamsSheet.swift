@@ -26,7 +26,7 @@ struct MainChartOverlayParamsSheet: View {
             Text("主图叠加参数")
                 .font(.title2).bold()
                 .padding(.bottom, 4)
-            Text("trader 调 7 种主图 overlay 参数（VWAP / Pivot 无参）· SuperTrend / Ichimoku / Donchian / Keltner / SAR / PriceChannel / Envelopes")
+            Text("trader 调 10 种主图 overlay 参数（VWAP / Pivot 无参）· SuperTrend / Ichimoku / Donchian / Keltner / SAR / PriceChannel / Envelopes / HMA / DEMA / TEMA")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.bottom, 12)
@@ -67,6 +67,19 @@ struct MainChartOverlayParamsSheet: View {
                     paramSection("Envelopes（包络线）", subtitle: "默认 20 / 2.5% · MA 中轴周期 / 上下偏移百分比 · 经典支撑阻力区") {
                         paramField("period",  $draft.envelopesPeriod)
                         paramFieldDecimal("%", $draft.envelopesPercent, leadingPad: true)
+                    }
+
+                    // v17.159 · 3 改进型均线参数
+                    paramSection("HMA（Hull 移动平均）", subtitle: "默认 16 · WMA 复合算法 · 低延迟跟随 · trader 高级用户") {
+                        paramField("period", $draft.hmaPeriod)
+                    }
+
+                    paramSection("DEMA（双重 EMA）", subtitle: "默认 20 · 2*EMA - EMA(EMA) · 比 EMA 反应更快 · 减少滞后") {
+                        paramField("period", $draft.demaPeriod)
+                    }
+
+                    paramSection("TEMA（三重 EMA）", subtitle: "默认 20 · 3*EMA - 3*EMA(EMA) + EMA(EMA(EMA)) · 极低延迟") {
+                        paramField("period", $draft.temaPeriod)
                     }
                 }
                 .formStyle(.grouped)
@@ -137,6 +150,10 @@ struct MainChartOverlayParamsSheet: View {
         guard b.priceChannelPeriod >= 1 && b.priceChannelPeriod <= 500 else { return false }
         guard b.envelopesPeriod    >= 1 && b.envelopesPeriod    <= 500 else { return false }
         guard b.envelopesPercent   > 0 && b.envelopesPercent   <= 50  else { return false }
+        // v17.159 · 3 改进型均线 period 范围与 IndicatorCore 对齐
+        guard b.hmaPeriod  >= 4 && b.hmaPeriod  <= 500 else { return false }
+        guard b.demaPeriod >= 1 && b.demaPeriod <= 500 else { return false }
+        guard b.temaPeriod >= 1 && b.temaPeriod <= 500 else { return false }
         return true
     }
 }

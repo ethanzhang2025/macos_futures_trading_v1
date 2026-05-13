@@ -1761,7 +1761,7 @@ struct ChartScene: View {
                 }
             }
             Divider()
-            Button("⚙️ 参数...（SuperTrend / Ichimoku / Donchian / Keltner）") {
+            Button("⚙️ 参数...（10 种有参 overlay · VWAP/Pivot 无参）") {
                 showMainChartOverlayParamsSheet = true
             }
         } label: {
@@ -1777,7 +1777,7 @@ struct ChartScene: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .tooltip("主图叠加（VWAP / Pivot / SuperTrend / Ichimoku / Donchian / Keltner · 当前 \(count)/\(total)）")
+        .tooltip("主图叠加（VWAP/Pivot/SuperTrend/Ichimoku/Donchian/Keltner/SAR/PriceChannel/Envelopes/HMA/DEMA/TEMA · 当前 \(count)/\(total)）")
     }
 
     @ViewBuilder

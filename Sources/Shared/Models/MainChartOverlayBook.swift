@@ -19,6 +19,9 @@ public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Ident
     case sar          // SAR · Welles Wilder 抛物线转向（趋势止损 · 反向信号 · v17.153）
     case priceChannel // Price Channel 价格通道 2 线（HHV/LLV close 版 · 趋势突破 · v17.153）
     case envelopes    // Envelopes 包络线 3 线（MA ± k% · 经典支撑阻力区 · v17.153）
+    case hma          // HMA · Hull 移动平均（WMA 复合 · 低延迟 · trader 高级用户 · v17.159）
+    case dema         // DEMA · 双重 EMA（2*EMA - EMA(EMA) · 比 EMA 反应更快 · v17.159）
+    case tema         // TEMA · 三重 EMA（3*EMA - 3*EMA(EMA) + EMA(EMA(EMA)) · 极低延迟 · v17.159）
 
     public var id: String { rawValue }
 
@@ -33,6 +36,9 @@ public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Ident
         case .sar:          return "SAR（抛物线转向止损点）"
         case .priceChannel: return "Price Channel（价格通道 2 线 · close 极值）"
         case .envelopes:    return "Envelopes（包络线 3 线 · MA ± k%）"
+        case .hma:          return "HMA（Hull 移动平均 · 低延迟）"
+        case .dema:         return "DEMA（双重 EMA · 反应快）"
+        case .tema:         return "TEMA（三重 EMA · 极低延迟）"
         }
     }
 
@@ -48,6 +54,9 @@ public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Ident
         case .sar:          return "circle.dotted"
         case .priceChannel: return "rectangle.righthalf.inset.filled"
         case .envelopes:    return "waveform.path.ecg"
+        case .hma:          return "wave.3.forward"
+        case .dema:         return "wave.3.right"
+        case .tema:         return "wave.3.up"
         }
     }
 }
@@ -84,6 +93,12 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
     public var envelopesPeriod: Int
     /// Envelopes 上下偏移百分比（默认 2.5 · v17.153）
     public var envelopesPercent: Decimal
+    /// HMA Hull 移动平均周期（默认 16 · trader 高级用户 · v17.159）
+    public var hmaPeriod: Int
+    /// DEMA 双重 EMA 周期（默认 20 · v17.159）
+    public var demaPeriod: Int
+    /// TEMA 三重 EMA 周期（默认 20 · v17.159）
+    public var temaPeriod: Int
 
     public init(
         enabled: Set<MainChartOverlayKind> = [],
@@ -100,7 +115,10 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         sarMax: Decimal = Decimal(string: "0.2") ?? Decimal(0.2),
         priceChannelPeriod: Int = 20,
         envelopesPeriod: Int = 20,
-        envelopesPercent: Decimal = Decimal(string: "2.5") ?? Decimal(2.5)
+        envelopesPercent: Decimal = Decimal(string: "2.5") ?? Decimal(2.5),
+        hmaPeriod: Int = 16,
+        demaPeriod: Int = 20,
+        temaPeriod: Int = 20
     ) {
         self.enabled = enabled
         self.superTrendPeriod = superTrendPeriod
@@ -117,6 +135,9 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.priceChannelPeriod = priceChannelPeriod
         self.envelopesPeriod = envelopesPeriod
         self.envelopesPercent = envelopesPercent
+        self.hmaPeriod = hmaPeriod
+        self.demaPeriod = demaPeriod
+        self.temaPeriod = temaPeriod
     }
 
     public static let `default` = MainChartOverlayBook()
@@ -139,6 +160,7 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         case ichimokuTenkan, ichimokuKijun, ichimokuSenkou
         case donchianPeriod, keltnerEMA, keltnerATR, keltnerMultiplier
         case sarStep, sarMax, priceChannelPeriod, envelopesPeriod, envelopesPercent  // v17.153
+        case hmaPeriod, demaPeriod, temaPeriod  // v17.159
     }
 
     public init(from decoder: Decoder) throws {
@@ -158,6 +180,9 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.priceChannelPeriod   = try c.decodeIfPresent(Int.self, forKey: .priceChannelPeriod) ?? 20
         self.envelopesPeriod      = try c.decodeIfPresent(Int.self, forKey: .envelopesPeriod) ?? 20
         self.envelopesPercent     = try c.decodeIfPresent(Decimal.self, forKey: .envelopesPercent) ?? Decimal(string: "2.5")!
+        self.hmaPeriod            = try c.decodeIfPresent(Int.self, forKey: .hmaPeriod) ?? 16
+        self.demaPeriod           = try c.decodeIfPresent(Int.self, forKey: .demaPeriod) ?? 20
+        self.temaPeriod           = try c.decodeIfPresent(Int.self, forKey: .temaPeriod) ?? 20
     }
 }
 

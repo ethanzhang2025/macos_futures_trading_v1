@@ -102,6 +102,16 @@ enum MainChartOverlayCompute {
                 }
             }
         }
+        // v17.159 · 3 改进型均线（HMA / DEMA / TEMA · 各 1 列 · 顺序追加末尾）
+        if book.isEnabled(.hma) {
+            out.append(contentsOf: (try? HMA.calculate(kline: kline, params: [Decimal(book.hmaPeriod)])) ?? [])
+        }
+        if book.isEnabled(.dema) {
+            out.append(contentsOf: (try? DEMA.calculate(kline: kline, params: [Decimal(book.demaPeriod)])) ?? [])
+        }
+        if book.isEnabled(.tema) {
+            out.append(contentsOf: (try? TEMA.calculate(kline: kline, params: [Decimal(book.temaPeriod)])) ?? [])
+        }
         return out
     }
 }
@@ -117,6 +127,10 @@ struct OverlayIncrementalStates {
     var envelopes: Envelopes.IncrementalState?
     var donchian: Donchian.IncrementalState?
     var keltner: KC.IncrementalState?
+    // v17.159 · 3 改进型均线
+    var hma: HMA.IncrementalState?
+    var dema: DEMA.IncrementalState?
+    var tema: TEMA.IncrementalState?
 
     /// 用 history KLine 序列消化每个启用 overlay 的 state · 完成后 step(newBar) 输出当前根
     /// makeIncrementalState 失败（try? = nil · 参数非法等）→ 该 overlay 在 step 时跳过 · 与 MainChartOverlayCompute.compute 同款 `?? []` 行为对齐
@@ -168,6 +182,16 @@ struct OverlayIncrementalStates {
                 kline: history,
                 params: [Decimal(book.keltnerEMA), Decimal(book.keltnerATR), book.keltnerMultiplier]
             )
+        }
+        // v17.159 · 3 改进型均线
+        if book.isEnabled(.hma) {
+            hma = try? HMA.makeIncrementalState(kline: history, params: [Decimal(book.hmaPeriod)])
+        }
+        if book.isEnabled(.dema) {
+            dema = try? DEMA.makeIncrementalState(kline: history, params: [Decimal(book.demaPeriod)])
+        }
+        if book.isEnabled(.tema) {
+            tema = try? TEMA.makeIncrementalState(kline: history, params: [Decimal(book.temaPeriod)])
         }
     }
 
@@ -241,6 +265,19 @@ struct OverlayIncrementalStates {
             out.append(row[1])
             out.append(row[0])
             out.append(row[2])
+        }
+        // v17.159 · 3 改进型均线（HMA / DEMA / TEMA 各 1 列）· 顺序与 compute 末尾追加一致
+        if var s = hma {
+            out.append(HMA.stepIncremental(state: &s, newBar: newBar)[0])
+            hma = s
+        }
+        if var s = dema {
+            out.append(DEMA.stepIncremental(state: &s, newBar: newBar)[0])
+            dema = s
+        }
+        if var s = tema {
+            out.append(TEMA.stepIncremental(state: &s, newBar: newBar)[0])
+            tema = s
         }
         return out
     }

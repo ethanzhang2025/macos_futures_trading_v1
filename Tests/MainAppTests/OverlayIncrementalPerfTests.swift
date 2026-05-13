@@ -28,7 +28,7 @@ struct OverlayIncrementalPerfTests {
         return times[times.count / 2]
     }
 
-    @Test("9 overlay 全开 · prime 5000 history + step 500 · 总时间 < 60000ms（Linux Decimal 软算上限）")
+    @Test("12 overlay 全开 · prime 5000 history + step 500 · 总时间 < 60000ms（Linux Decimal 软算上限）")
     func nineOverlaysFullBenchmark() throws {
         let kline = makeSeries(from: Self.history)
         var book = MainChartOverlayBook()
@@ -45,7 +45,7 @@ struct OverlayIncrementalPerfTests {
         #expect(ms < 60_000, "OverlayIncrementalStates 9 全开 prime 5000 + step 500 慢了：\(ms)ms · 阈值 60000ms · 检查是否回归到 v17.139 全量重算路径")
     }
 
-    @Test("step 单根成本 · 9 overlay 全开 · 单 step < 100ms（Linux 上限）")
+    @Test("step 单根成本 · 12 overlay 全开 · 单 step < 100ms（Linux 上限）")
     func singleStepCostBenchmark() throws {
         let kline = makeSeries(from: Self.history)
         var book = MainChartOverlayBook()

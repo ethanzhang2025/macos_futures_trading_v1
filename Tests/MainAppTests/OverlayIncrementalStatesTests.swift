@@ -62,10 +62,27 @@ struct OverlayIncrementalStatesTests {
         try assertSingleOverlayParity(.keltner, historyCount: 80, stepCount: 30)
     }
 
+    // v17.159 · 3 改进型均线 parity
+
+    @Test("HMA 单 overlay · 1 列 · period=16 · 增量等价")
+    func hmaIncrementalEquivalence() throws {
+        try assertSingleOverlayParity(.hma, historyCount: 50, stepCount: 30)
+    }
+
+    @Test("DEMA 单 overlay · 1 列 · period=20 · 增量等价（双 EMA 复合）")
+    func demaIncrementalEquivalence() throws {
+        try assertSingleOverlayParity(.dema, historyCount: 50, stepCount: 30)
+    }
+
+    @Test("TEMA 单 overlay · 1 列 · period=20 · 增量等价（三 EMA 复合）")
+    func temaIncrementalEquivalence() throws {
+        try assertSingleOverlayParity(.tema, historyCount: 50, stepCount: 30)
+    }
+
     // MARK: - 列顺序：多 overlay 启用 · OverlayIncrementalStates.step 输出 == compute(bars).flatMap(\.values.last)
 
-    @Test("9 overlay 全开 · step 输出列顺序与 MainChartOverlayCompute 完全一致（23 列）")
-    func allNineEnabledColumnOrder() throws {
+    @Test("12 overlay 全开 · step 输出列顺序与 MainChartOverlayCompute 完全一致（26 列）")
+    func allEnabledColumnOrder() throws {
         let bars = makeBars(count: 200)
         let history = bars.prefix(150)
         let last50 = Array(bars[150...])

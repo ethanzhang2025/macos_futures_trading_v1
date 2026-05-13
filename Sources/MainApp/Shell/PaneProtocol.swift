@@ -46,7 +46,8 @@ extension EnvironmentValues {
         set { self[ShellHostedPaneIDKey.self] = newValue }
     }
     /// hover 时 publish 给 Shell 的 closure（paneID + Date · Date=nil 表示 hover 离开）
-    public var shellCrosshairReporter: ((UUID, Date?) -> Void)? {
+    /// v17.190 · 类型须与 ShellCrosshairReporterKey.defaultValue 一致 · 加 @Sendable
+    public var shellCrosshairReporter: (@Sendable (UUID, Date?) -> Void)? {
         get { self[ShellCrosshairReporterKey.self] }
         set { self[ShellCrosshairReporterKey.self] = newValue }
     }

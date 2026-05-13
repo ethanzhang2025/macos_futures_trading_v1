@@ -13,19 +13,25 @@ import Foundation
 #if canImport(AppKit) && os(macOS)
 import AppKit
 
+/// v17.190 · Mac swift 6.3 严格 · @AppStorage(macro) 需要 module-level const · actor 内 static let 不被识别为 type member
+/// 外置 enum 持 const · 两 caller (AlertSoundPickerSheet / SoundChannel init) 重命名为 SoundChannelConstants.*
+public enum SoundChannelConstants {
+    /// macOS 内置 14 sound（trader 可在 AlertSoundPickerSheet 选）
+    public static let availableSounds: [String] = [
+        "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero",
+        "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"
+    ]
+    /// UserDefaults 持久化 key（trader 设置后跨 App 重启保留）
+    public static let userDefaultsKey: String = "alertCenter.v1.soundName"
+}
+
 public actor SoundChannel: NotificationChannel {
 
     public nonisolated let kind: NotificationChannelKind = .sound
 
-    /// v17.86 · macOS 内置 14 sound（trader 可在 AlertSoundPickerSheet 选）
-    /// v17.190 · Mac swift 6.3 严格 · actor 内 static 须显式 nonisolated 才能跨 actor scope 访问
-    public nonisolated static let availableSounds: [String] = [
-        "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero",
-        "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"
-    ]
-
-    /// v17.86 · UserDefaults 持久化 key（trader 设置后跨 App 重启保留）
-    public nonisolated static let userDefaultsKey: String = "alertCenter.v1.soundName"
+    /// v17.190 · 兼容别名 · 旧 caller `SoundChannel.availableSounds` 仍 work（actor type member resolution 走 SoundChannel.Type）
+    public static var availableSounds: [String] { SoundChannelConstants.availableSounds }
+    public static var userDefaultsKey: String { SoundChannelConstants.userDefaultsKey }
 
     private let soundName: String
     private let logger: @Sendable (String) -> Void

@@ -13,7 +13,7 @@ struct AlertSoundPickerSheet: View {
 
     @Binding var isPresented: Bool
 
-    @AppStorage(SoundChannel.userDefaultsKey) private var soundName: String = "Funk"
+    @AppStorage(SoundChannelConstants.userDefaultsKey) private var soundName: String = "Funk"
     @State private var pendingName: String = "Funk"
 
     var body: some View {
@@ -43,7 +43,7 @@ struct AlertSoundPickerSheet: View {
     private var soundList: some View {
         ScrollView {
             VStack(spacing: 0) {
-                ForEach(SoundChannel.availableSounds, id: \.self) { name in
+                ForEach(SoundChannelConstants.availableSounds, id: \.self) { name in
                     soundRow(name)
                     Divider().opacity(0.3)
                 }

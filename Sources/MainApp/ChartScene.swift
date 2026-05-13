@@ -350,7 +350,8 @@ struct ChartScene: View {
         let period: KLinePeriod
     }
 
-    var body: some View {
+    /// v17.190 · Mac 6.3 严格 · body 拆 2 段 split type-check chain · 防 ChartScene struct 内表达式 timeout
+    private var bodyPrefix: some View {
         VStack(spacing: 0) {
             // v17.6 · Shell 嵌入模式隐藏顶部 toolbar（由 Shell PrimaryTabBar + Pane Header 统一管理）
             if !isHostedInShell {
@@ -391,6 +392,10 @@ struct ChartScene: View {
         .preferredColorScheme(chartTheme.colorScheme)
         .background(periodShortcuts)
         .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
+    }
+
+    var body: some View {
+        bodyPrefix
         .task(id: PipelineKey(mode: chartMode, instrumentID: currentInstrumentID, period: selectedPeriod)) {
             // v15.18 · 持久化最近合约 / 周期（restoreLastSession=true 时下次启动恢复 · 仅 live 模式记录）
             if chartMode == .live {

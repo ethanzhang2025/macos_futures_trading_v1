@@ -89,19 +89,8 @@ struct ShellKeyboardShortcuts: View {
 
     @ViewBuilder
     private var functionKeyShortcuts: some View {
-        // v17.57 · F 键体系（文华 trader 兼容 · v17.0 P0.4）
-        Button("") { shellVM.focusSidebar() }
-            .keyboardShortcut(.f6, modifiers: [])
-            .opacity(0)
-        Button("") { shellVM.cyclePeriodOnActivePane() }
-            .keyboardShortcut(.f8, modifiers: [])
-            .opacity(0)
-        Button("") { shellVM.openInstrumentInfo() }
-            .keyboardShortcut(.f10, modifiers: [])
-            .opacity(0)
-        Button("") { shellVM.hintDrawingTool() }
-            .keyboardShortcut(.f12, modifiers: [])
-            .opacity(0)
+        // v17.190 · SwiftUI KeyEquivalent 不支持 F6/F8/F10/F12（仅支持 escape/arrows/space/tab/return 等）
+        // v17.57 P0.4 文华 F 键体系待用 NSEvent.addLocalMonitorForEvents 重做 · 此处先保 space
         // 空格唤起下单浮层（v17.57 占位 · Stage A 不接 CTP）
         Button("") { shellVM.openQuickOrder() }
             .keyboardShortcut(.space, modifiers: [])

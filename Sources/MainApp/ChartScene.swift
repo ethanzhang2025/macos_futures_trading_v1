@@ -1626,6 +1626,8 @@ struct ChartScene: View {
 
             // v17.139 · 主图叠加菜单（VWAP / Pivot Points / SuperTrend）· 三选 toggle · 持久化
             mainChartOverlayMenu
+            // v17.154 · 一键指标套装（经典 / 国际派 / 价量派 / 海龟 / 短线 / 裸 K · trader 流派切换）
+            indicatorPresetMenu
 
             // v15.4 · 模拟交易快捷入口（⌘T · 与主菜单 OpenTradingButton 对齐）
             Button {
@@ -1689,6 +1691,46 @@ struct ChartScene: View {
         // v15.8 toolbar 背景跟随主题（深 #15171C / 浅 #ECEEF1 · 替代 .bar 系统默认 · 与主图协调）
         .background(chartTheme.toolbarBackground)
         .overlay(alignment: .bottom) { Divider() }
+    }
+
+    /// v17.154 · 一键指标套装菜单（trader 流派切换 · 6 preset push 副图 + 主图 overlay）
+    /// 副图/overlay 切完后通过 selectedSubIndicators / overlayBook 的 onChange 自动持久化 + 重算
+    @ViewBuilder
+    private var indicatorPresetMenu: some View {
+        Menu {
+            ForEach(IndicatorPreset.allCases) { preset in
+                Button {
+                    applyIndicatorPreset(preset)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(preset.displayName)
+                        Text(preset.subtitle).font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "rectangle.stack.badge.play")
+                .font(.system(size: 13))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .tooltip("一键指标套装（trader 流派切换 · 经典 / 国际派 / 价量派 / 海龟 / 短线 / 裸 K）")
+    }
+
+    /// v17.154 · 应用 preset · push 副图 + 主图 overlay · 不动 ParamsBook 参数（沿用用户偏好）
+    private func applyIndicatorPreset(_ preset: IndicatorPreset) {
+        // 副图集合：raw string → SubIndicatorKind · 至少保留 1（防 UI 空白 · 与 picker toggle 同语义）
+        let subKinds = preset.subIndicatorRaws.compactMap(SubIndicatorKind.init(rawValue:))
+        if !subKinds.isEmpty {
+            selectedSubIndicators = Set(subKinds)
+        } else {
+            // minimal preset · 副图至少 1 个（用 macd 占位 · 不全空保 picker 至少 1）
+            selectedSubIndicators = [.macd]
+        }
+        // 主图 overlay：直接 push enabled · 不动各 overlay 参数（trader 调好的 SuperTrend period 等保留）
+        let overlayKinds = preset.overlayRaws.compactMap(MainChartOverlayKind.init(rawValue:))
+        overlayBook.enabled = Set(overlayKinds)
+        // onChange overlayBook 已绑定 save + 重算 indicators（v17.151）
     }
 
     /// v17.139 · 主图叠加菜单（VWAP / Pivot / SuperTrend / Ichimoku / Donchian / Keltner · 6 选 toggle · 角标 N/6 提示）

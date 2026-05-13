@@ -1666,6 +1666,8 @@ struct ChartScene: View {
 
             // v17.139 · 主图叠加菜单（VWAP / Pivot Points / SuperTrend）· 三选 toggle · 持久化
             mainChartOverlayMenu
+            // v17.167 · 一键模拟下单（限价 @ last / 市价 · 开多/开空 · 1 手 · 调 simulatedTradingEngine.submitOrder）
+            chartQuickOrderMenu
             // v17.154 · 一键指标套装（经典 / 国际派 / 价量派 / 海龟 / 短线 / 裸 K · trader 流派切换）
             indicatorPresetMenu
 
@@ -1795,6 +1797,68 @@ struct ChartScene: View {
             let isFav = indicatorFavorites.contains(k.rawValue)
             Button(isFav ? "移出 ⭐ 收藏" : "加入 ⭐ 收藏") {
                 indicatorFavorites.toggle(k.rawValue)
+            }
+        }
+    }
+
+    /// v17.167 · 主图 toolbar 快速模拟下单 menu（4 选 · 调 simulatedTradingEngine · 1 手 · 限价用 last close · trader 一键开仓不必弹 TradingWindow）
+    private var chartQuickOrderMenu: some View {
+        Menu {
+            Button {
+                placeQuickOrder(direction: .buy, priceType: .limitPrice)
+            } label: {
+                Label("限价开多 1 手 @ last", systemImage: "arrow.up.circle")
+            }
+            Button {
+                placeQuickOrder(direction: .sell, priceType: .limitPrice)
+            } label: {
+                Label("限价开空 1 手 @ last", systemImage: "arrow.down.circle")
+            }
+            Divider()
+            Button {
+                placeQuickOrder(direction: .buy, priceType: .marketPrice)
+            } label: {
+                Label("市价开多 1 手", systemImage: "bolt.circle")
+            }
+            Button {
+                placeQuickOrder(direction: .sell, priceType: .marketPrice)
+            } label: {
+                Label("市价开空 1 手", systemImage: "bolt.circle.fill")
+            }
+        } label: {
+            Image(systemName: "cart.badge.plus")
+                .font(.system(size: 13))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .tooltip("一键模拟下单（开多/开空 · 1 手 · 限价 last 或市价 · 详细委托 → 模拟交易窗口）")
+        .disabled(simulatedTradingEngine == nil || bars.isEmpty)
+    }
+
+    /// v17.167 · 提交 quick order · 不阻塞 UI · 结果用 presentToggleNotice 反馈
+    private func placeQuickOrder(direction: Direction, priceType: OrderPriceType) {
+        guard let engine = simulatedTradingEngine,
+              let last = bars.last else { return }
+        let instrumentID = currentInstrumentID
+        let priceLabel = direction == .buy ? "开多" : "开空"
+        let typeLabel = priceType == .limitPrice ? "限价" : "市价"
+        let limitPrice: Decimal = priceType == .limitPrice ? last.close : last.close
+        let request = OrderRequest(
+            instrumentID: instrumentID,
+            direction: direction,
+            offsetFlag: .open,
+            priceType: priceType,
+            price: limitPrice,
+            volume: 1
+        )
+        Task {
+            let (_, rejection) = await engine.submitOrder(request)
+            await MainActor.run {
+                if let rej = rejection {
+                    presentToggleNotice("⚠️ \(typeLabel)\(priceLabel)被拒：\(rej)")
+                } else {
+                    presentToggleNotice("\(typeLabel)\(priceLabel) 1 手 \(instrumentID) 已提交")
+                }
             }
         }
     }

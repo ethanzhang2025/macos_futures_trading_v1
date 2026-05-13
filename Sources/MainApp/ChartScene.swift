@@ -180,6 +180,10 @@ struct ChartScene: View {
     @State private var replayAllBars: [KLine] = []
     @State private var replay: ReplaySnapshot = ReplaySnapshot()
     @State private var replayObserveTask: Task<Void, Never>?
+    // v17.171 · 盘中复盘 state（选定日期后 · 把 replayAllBars 替换为该日 + warmUp · 退出时还原）
+    @State private var intradayFullBarsBackup: [KLine]? = nil   // nil = 当前未进入盘中复盘
+    @State private var showIntradayDatePicker: Bool = false
+    @State private var intradayActiveDate: Date? = nil           // 当前已激活的复盘日（HUD 显示用）
 
     /// M5 持久化串行写：snapshot save / completedBar append 链式 await · 防多 Task 并发提交导致顺序乱
     /// 风险：高频 completedBar（1 秒级）+ maxBars 截断时 · 无序写入可能丢中间根
@@ -620,6 +624,17 @@ struct ChartScene: View {
         )) { ident in
             // v15.7 副图独立参数编辑 sheet · book binding 走 effectiveBindingForSlot
             IndicatorParamsSheet(book: bindingForSubSlot(ident.slot))
+        }
+        // v17.171 · 盘中复盘日期选择 sheet
+        .sheet(isPresented: $showIntradayDatePicker) {
+            let source = intradayFullBarsBackup ?? replayAllBars
+            let dates = IntradayBarsFilter.availableDates(in: source)
+            IntradayDatePickerSheet(
+                availableDates: dates,
+                onConfirm: { date in
+                    Task { await enterIntradayReplay(date: date) }
+                }
+            )
         }
         .onChange(of: chartMode) { newValue in
             // 埋点：切到回放模式 = replay_start（chart_open 已含 mode 属性 · 这里只在切到 replay 时额外发细粒度）
@@ -2259,6 +2274,29 @@ struct ChartScene: View {
             Text(progressText)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
+
+            // v17.171 · 盘中复盘 entry · 让 trader 选一天回放（每晚必复盘流程）
+            Divider().frame(height: 18)
+            Button {
+                showIntradayDatePicker = true
+            } label: {
+                if let active = intradayActiveDate {
+                    Label(intradayDateLabel(active), systemImage: "calendar.badge.clock")
+                } else {
+                    Image(systemName: "calendar")
+                }
+            }
+            .buttonStyle(ReplayBarButtonStyle(active: intradayActiveDate != nil))
+            .tooltip("盘中复盘：选定日期回放当日 K 线（含前 60 根预热）· v17.171")
+            if intradayActiveDate != nil {
+                Button {
+                    Task { await exitIntradayReplay() }
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .buttonStyle(ReplayBarButtonStyle())
+                .tooltip("退出盘中复盘 · 还原完整历史")
+            }
         }
         .buttonStyle(.borderless)
         .font(.system(size: 14))
@@ -2266,6 +2304,63 @@ struct ChartScene: View {
         .frame(height: 36)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+    }
+
+    /// v17.171 · 盘中复盘日期标签（"12/15 复盘"）
+    private func intradayDateLabel(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "MM/dd"
+        return "\(f.string(from: date)) 复盘"
+    }
+
+    // MARK: - 盘中复盘 actions（v17.171）
+
+    /// 用户选定日期 · 把 replayAllBars 过滤到 [warmUp 60 + 当日全部] · player.load · cursor 回到 0
+    @MainActor
+    private func enterIntradayReplay(date: Date) async {
+        guard let player = replayPlayer else { return }
+        // 第一次进入 · 备份原 replayAllBars 以便退出还原
+        if intradayFullBarsBackup == nil {
+            intradayFullBarsBackup = replayAllBars
+        }
+        let source = intradayFullBarsBackup ?? replayAllBars
+        let filtered = IntradayBarsFilter.filter(bars: source, date: date, precedingWarmUp: 60)
+        guard !filtered.isEmpty else {
+            presentToggleNotice("当日数据不存在 · 已忽略")
+            return
+        }
+        await player.load(bars: filtered)
+        replayAllBars = filtered
+        replay = ReplaySnapshot(
+            cursor: await player.cursor,
+            state: await player.currentState,
+            speed: await player.currentSpeed
+        )
+        bars = Array(filtered.prefix(replay.cursor.currentIndex + 1))
+        await updateIndicatorsFull(bars)
+        intradayActiveDate = date
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        dataSourceLabel = "盘中复盘 \(f.string(from: date)) · \(filtered.count) 根（含 warmUp）"
+        presentToggleNotice("已进入 \(f.string(from: date)) 盘中复盘")
+    }
+
+    /// 退出盘中复盘 · 还原完整历史 · player.load 还原 · cursor 回到 0
+    @MainActor
+    private func exitIntradayReplay() async {
+        guard let player = replayPlayer, let backup = intradayFullBarsBackup else { return }
+        await player.load(bars: backup)
+        replayAllBars = backup
+        replay = ReplaySnapshot(
+            cursor: await player.cursor,
+            state: await player.currentState,
+            speed: await player.currentSpeed
+        )
+        bars = Array(backup.prefix(replay.cursor.currentIndex + 1))
+        await updateIndicatorsFull(bars)
+        intradayFullBarsBackup = nil
+        intradayActiveDate = nil
+        dataSourceLabel = "回放 \(backup.count) 根 · 按 ▶ 启动"
+        presentToggleNotice("已退出盘中复盘")
     }
 
     /// v15.17 · 回放进度条 Slider · 拖拽 seek

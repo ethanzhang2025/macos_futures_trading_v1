@@ -1089,7 +1089,8 @@ struct ChartScene: View {
                 }
             }
             .keyboardShortcut("d", modifiers: [.command])
-            // v13.27 ⌘⇧S 一键保存选中画线为模板（仅 n=1 + 未锁时响应）
+            // v17.197 真修 · 原 ⌘⇧S 与 v17.166 支撑阻力 toggle 冲突 · 后者高频前者低频
+            // v13.27 改 ⌘⌥⇧S 一键保存选中画线为模板（仅 n=1 + 未锁时响应）
             Button("") {
                 if selectedDrawingIDs.count == 1,
                    let id = selectedDrawingIDs.first,
@@ -1098,15 +1099,16 @@ struct ChartScene: View {
                     saveCurrentAsTemplate(drawing)
                 }
             }
-            .keyboardShortcut("s", modifiers: [.command, .shift])
-            // v13.28 ⌘⇧L 一键切换选中画线锁定状态（全锁 → 全解锁 · 否则 → 全锁）
+            .keyboardShortcut("s", modifiers: [.command, .shift, .option])
+            // v17.197 真修 · 原 ⌘⇧L 与 v17.165 patterns list sheet 冲突 · 后者高频前者低频
+            // v13.28 改 ⌘⌥⇧L 一键切换选中画线锁定（全锁 → 全解锁 · 否则 → 全锁）
             Button("") {
                 guard !selectedDrawingIDs.isEmpty else { return }
                 let selected = drawings.filter { selectedDrawingIDs.contains($0.id) }
                 let allLocked = selected.allSatisfy { $0.locked }
                 setLocked(!allLocked, for: selectedDrawingIDs)
             }
-            .keyboardShortcut("l", modifiers: [.command, .shift])
+            .keyboardShortcut("l", modifiers: [.command, .shift, .option])
         }
         .frame(width: 0, height: 0)
         .opacity(0)
@@ -3204,8 +3206,9 @@ struct ChartContentView: View {
         .keyboardShortcut("h", modifiers: [.command, .shift])
         Button("") { exportChartScreenshot() }
             .keyboardShortcut("p", modifiers: [.command])
+        // v17.197 真修 · 原 ⌘⇧P 与 v17.164 形态识别 toggle 冲突 · 后者高频前者低频
         Button("") { copyChartScreenshotToClipboard() }
-            .keyboardShortcut("p", modifiers: [.command, .shift])
+            .keyboardShortcut("p", modifiers: [.command, .shift, .option])
         ForEach(Array(ChartTimeRangePreset.allCases.enumerated()), id: \.element) { idx, preset in
             Button("") { applyTimeRangePreset(preset) }
                 .keyboardShortcut(KeyEquivalent(Character("\(idx + 1)")), modifiers: [.command, .option])

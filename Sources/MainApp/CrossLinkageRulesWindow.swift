@@ -25,6 +25,9 @@ struct CrossLinkageRulesWindow: View {
     @State private var pollTask: Task<Void, Never>?
     @State private var lastPollTime: Date?
     @State private var pollErrorMessage: String?
+    // v17.187 · 评估历史（UserDefaults 持久化 · 跨会话保留）
+    @State private var history: CrossLinkageObservationHistory = .empty
+    @State private var showHistory: Bool = false
 
     private struct ManualSnapshotEntry: Equatable {
         var lastPrice: Double = 0
@@ -41,8 +44,13 @@ struct CrossLinkageRulesWindow: View {
             snapshotSection
                 .frame(maxHeight: 200)
             Divider()
-            observationsSection
-                .frame(maxHeight: .infinity)
+            if showHistory {
+                historySection
+                    .frame(maxHeight: .infinity)
+            } else {
+                observationsSection
+                    .frame(maxHeight: .infinity)
+            }
         }
         .padding(16)
         .frame(minWidth: 760, minHeight: 760)
@@ -197,6 +205,9 @@ struct CrossLinkageRulesWindow: View {
             HStack {
                 Text("评估结果（\(observations.count)）").font(.headline)
                 Spacer()
+                Button("查看历史（\(history.entries.count)）") {
+                    showHistory = true
+                }
                 Button("清除") { observations.removeAll() }
                     .disabled(observations.isEmpty)
             }
@@ -215,6 +226,72 @@ struct CrossLinkageRulesWindow: View {
                 }
             }
         }
+    }
+
+    // v17.187 · 历史 section
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("评估历史（\(history.entries.count) · 跨会话保留）").font(.headline)
+                Spacer()
+                Button("返回当前评估") { showHistory = false }
+                Button("清空历史", role: .destructive) {
+                    history.clear()
+                    CrossLinkageObservationHistoryStore.save(history)
+                }
+                .foregroundColor(.red)
+                .disabled(history.entries.isEmpty)
+            }
+            if history.entries.isEmpty {
+                Text("暂无历史记录 · 评估后自动记录（仅触发的 matched/mismatched）")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 16)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(history.entries.indices, id: \.self) { i in
+                            historyRow(history.entries[i])
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func historyRow(_ entry: CrossLinkageHistoryEntry) -> some View {
+        let color: Color = {
+            switch entry.verdict {
+            case "matched":    return .green
+            case "mismatched": return .red
+            default:           return .secondary
+            }
+        }()
+        let badge: String = {
+            switch entry.verdict {
+            case "matched":    return "✓ 符合"
+            case "mismatched": return "⚠ 套利机会"
+            default:           return "·  未触发"
+            }
+        }()
+        let f = DateFormatter()
+        f.dateFormat = "MM-dd HH:mm:ss"
+        return HStack(spacing: 6) {
+            Text(f.string(from: entry.timestamp))
+                .font(.caption.monospaced())
+                .foregroundColor(.secondary)
+                .frame(width: 110, alignment: .leading)
+            Text(badge)
+                .font(.caption.bold())
+                .foregroundColor(.white)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(color)
+                .cornerRadius(3)
+            Text(entry.ruleID).font(.caption.monospaced()).foregroundColor(.secondary)
+            Text(entry.message).font(.caption).lineLimit(1)
+            Spacer()
+        }
+        .padding(.vertical, 1)
     }
 
     private func observationRow(_ obs: CrossLinkageObservation) -> some View {
@@ -250,6 +327,7 @@ struct CrossLinkageRulesWindow: View {
 
     private func reload() {
         rules = CrossLinkageRulesStore.load() ?? .empty
+        history = CrossLinkageObservationHistoryStore.load() ?? .empty
     }
 
     private func evaluate() {
@@ -260,6 +338,14 @@ struct CrossLinkageRulesWindow: View {
             )
         }
         observations = CrossInstrumentLinkage.evaluateAll(rules: rules.rules, snapshots: snaps)
+        appendToHistory(observations)
+    }
+
+    /// v17.187 · 评估完成自动追加历史（跳过 notTriggered · 仅留触发的 matched/mismatched）
+    private func appendToHistory(_ obs: [CrossLinkageObservation]) {
+        guard !obs.isEmpty else { return }
+        history.appendBatch(observations: obs, rules: rules.rules)
+        CrossLinkageObservationHistoryStore.save(history)
     }
 
     private func autoFillSnapshots() {
@@ -373,6 +459,7 @@ struct CrossLinkageRulesWindow: View {
                 manualSnapshots[originalSym] = ManualSnapshotEntry(lastPrice: last, basePrice: base)
             }
             observations = CrossInstrumentLinkage.evaluateAll(rules: rules.rules, snapshots: snaps)
+            appendToHistory(observations)
             lastPollTime = Date()
             pollErrorMessage = nil
         } catch {

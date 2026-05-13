@@ -106,6 +106,17 @@ public struct MultiTimeframeResonanceParams: Sendable, Equatable {
     public static let `default` = MultiTimeframeResonanceParams()
 }
 
+/// v17.183 · 单一 ResonanceSignalKind 的回测统计（trader 量化哪种信号在自家数据上有效）
+public struct ResonanceSignalPerformanceStats: Sendable, Equatable {
+    public let kind: ResonanceSignalKind
+    public let sourcePeriod: KLinePeriod
+    public let occurrenceCount: Int
+    /// 信号 baseBarIndex 之后 N 根 close 变化% 均值
+    public let averagePriceChangePct: Double
+    /// 与 kind.direction 方向一致的胜率（+1 看多 · -1 看空）
+    public let winRatePct: Double
+}
+
 /// 共振强度汇总（trader 一眼看主基调 · 大多看多 / 看空 / 混合）
 public struct ResonanceSummary: Sendable, Equatable {
     public let bullishCount: Int
@@ -135,6 +146,52 @@ public enum MultiTimeframeResonance {
             else if s.kind.direction < 0 { bear += 1 }
         }
         return ResonanceSummary(bullishCount: bull, bearishCount: bear)
+    }
+
+    /// v17.183 · 按 (kind, sourcePeriod) 对信号做回测统计
+    /// - Parameters:
+    ///   - signals: 已映射回 base bar index 的信号列表（detect 输出）
+    ///   - baseBars: base 周期 bars · 用 close 衡量后市变化
+    ///   - lookForwardBars: 信号 baseBarIndex 后多少根判定（默认 20）
+    /// - Returns: 按 (kind 升序, period 短到长) 排列 · 仅含 occurrenceCount > 0
+    public static func performanceStats(
+        signals: [ResonanceSignal],
+        baseBars: [KLine],
+        lookForwardBars: Int = 20
+    ) -> [ResonanceSignalPerformanceStats] {
+        var bucket: [String: (kind: ResonanceSignalKind, period: KLinePeriod, changes: [Double])] = [:]
+        for s in signals {
+            let futureIdx = s.baseBarIndex + lookForwardBars
+            guard s.baseBarIndex >= 0, s.baseBarIndex < baseBars.count,
+                  futureIdx < baseBars.count else { continue }
+            let baseClose = NSDecimalNumber(decimal: baseBars[s.baseBarIndex].close).doubleValue
+            guard baseClose > 0 else { continue }
+            let futureClose = NSDecimalNumber(decimal: baseBars[futureIdx].close).doubleValue
+            let changePct = (futureClose - baseClose) / baseClose * 100
+            let key = "\(s.kind.rawValue)|\(s.sourcePeriod.rawValue)"
+            if var entry = bucket[key] {
+                entry.changes.append(changePct)
+                bucket[key] = entry
+            } else {
+                bucket[key] = (s.kind, s.sourcePeriod, [changePct])
+            }
+        }
+        return bucket.values.map { entry in
+            let dir = Double(entry.kind.direction)
+            let count = entry.changes.count
+            let avg = entry.changes.reduce(0, +) / Double(count)
+            let wins = entry.changes.filter { $0 * dir > 0 }.count
+            return ResonanceSignalPerformanceStats(
+                kind: entry.kind,
+                sourcePeriod: entry.period,
+                occurrenceCount: count,
+                averagePriceChangePct: avg,
+                winRatePct: Double(wins) / Double(count) * 100
+            )
+        }.sorted {
+            if $0.kind.rawValue != $1.kind.rawValue { return $0.kind.rawValue < $1.kind.rawValue }
+            return $0.sourcePeriod.seconds < $1.sourcePeriod.seconds
+        }
     }
 
     // MARK: - 默认 target 周期映射

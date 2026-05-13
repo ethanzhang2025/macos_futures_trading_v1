@@ -223,6 +223,66 @@ struct MultiTimeframeResonanceTests {
         #expect(s.verdict == "无信号")
         #expect(s.totalCount == 0)
     }
+
+    // MARK: - v17.183 · performanceStats
+
+    @Test("performanceStats · 2 个 golCross 各 baseBar · 后市涨 · 胜率 100%")
+    func performanceStatsBullishWins() {
+        // 构造 base bars · index 5 close = 100 · index 25 close = 110（+10%）· index 10 close = 100 · index 30 close = 105（+5%）
+        var bars: [KLine] = []
+        for i in 0..<40 {
+            let close: Double
+            switch i {
+            case 5:  close = 100
+            case 25: close = 110
+            case 10: close = 100
+            case 30: close = 105
+            default: close = 100 + Double(i) * 0.05
+            }
+            bars.append(KLine(
+                instrumentID: "T", period: .minute1,
+                openTime: Date(timeIntervalSince1970: Double(i * 60)),
+                open: Decimal(close), high: Decimal(close), low: Decimal(close), close: Decimal(close),
+                volume: 0, openInterest: 0, turnover: 0
+            ))
+        }
+        let signals: [ResonanceSignal] = [
+            ResonanceSignal(kind: .macdGoldCross, baseBarIndex: 5, sourcePeriod: .minute5,
+                            sourceOpenTime: Date()),
+            ResonanceSignal(kind: .macdGoldCross, baseBarIndex: 10, sourcePeriod: .minute5,
+                            sourceOpenTime: Date())
+        ]
+        let stats = MultiTimeframeResonance.performanceStats(signals: signals, baseBars: bars, lookForwardBars: 20)
+        let m = stats.first { $0.kind == .macdGoldCross && $0.sourcePeriod == .minute5 }!
+        #expect(m.occurrenceCount == 2)
+        #expect(m.averagePriceChangePct > 0)
+        #expect(m.winRatePct == 100.0)
+    }
+
+    @Test("performanceStats · 后未来 bars 不足 · 跳过")
+    func performanceStatsSkipsInsufficientFuture() {
+        var bars: [KLine] = []
+        for i in 0..<10 {
+            bars.append(KLine(
+                instrumentID: "T", period: .minute1,
+                openTime: Date(timeIntervalSince1970: Double(i * 60)),
+                open: 100, high: 100, low: 100, close: 100, volume: 0,
+                openInterest: 0, turnover: 0
+            ))
+        }
+        let signals = [
+            ResonanceSignal(kind: .emaGoldCross, baseBarIndex: 8, sourcePeriod: .minute5,
+                            sourceOpenTime: Date())
+        ]
+        let stats = MultiTimeframeResonance.performanceStats(signals: signals, baseBars: bars, lookForwardBars: 20)
+        #expect(stats.isEmpty)
+    }
+
+    @Test("performanceStats · 空 signals · 空")
+    func performanceStatsEmpty() {
+        let stats = MultiTimeframeResonance.performanceStats(signals: [], baseBars: [], lookForwardBars: 20)
+        #expect(stats.isEmpty)
+    }
 }
 
 fileprivate func makeSignal(_ kind: ResonanceSignalKind) -> ResonanceSignal {

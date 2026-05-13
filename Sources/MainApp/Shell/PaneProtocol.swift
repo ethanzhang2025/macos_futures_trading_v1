@@ -31,7 +31,8 @@ public struct ShellHostedPaneIDKey: EnvironmentKey {
 }
 
 public struct ShellCrosshairReporterKey: EnvironmentKey {
-    public static let defaultValue: ((UUID, Date?) -> Void)? = nil
+    // v17.190 · Mac 6.3 严格 · closure 须 @Sendable 才能作 module static let
+    public static let defaultValue: (@Sendable (UUID, Date?) -> Void)? = nil
 }
 
 public struct ShellExternalCrosshairKey: EnvironmentKey {

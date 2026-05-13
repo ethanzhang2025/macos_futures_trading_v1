@@ -48,7 +48,8 @@ public enum SidebarSection: String, CaseIterable, Codable, Identifiable, Sendabl
     }
 }
 
-public struct SidebarLayoutSettings: Codable, Equatable {
+// v17.190 · Mac 6.3 严格 · static let `default` 须 Sendable
+public struct SidebarLayoutSettings: Codable, Equatable, Sendable {
     /// 顺序（前 → 后 显示）· 默认 5 section 全可见
     public var order: [SidebarSection]
     /// 隐藏的 section

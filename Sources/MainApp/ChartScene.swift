@@ -443,7 +443,9 @@ struct ChartScene: View {
             // v15.16 hotfix #11：加 isSubPrefsLoaded 守卫 · 防 onAppear 加载偏好误触发埋点（与下方持久化 onChange 守卫保持一致）
             guard isSubPrefsLoaded else { return }
             guard let service = analytics else { return }
-            let kinds = newValue.map(\.rawValue).sorted().joined(separator: ",")
+            // v17.190 · Mac 6.3 严格 · split 表达式避免 type-check timeout
+            let rawValues = newValue.map(\.rawValue)
+            let kinds = rawValues.sorted().joined(separator: ",")
             Task {
                 _ = try? await service.record(
                     .indicatorAdd,
@@ -1916,6 +1918,10 @@ struct ChartScene: View {
         }
     }
 
+    /// v17.139 · 主图叠加菜单（VWAP / Pivot / SuperTrend / Ichimoku / Donchian / Keltner · 6 选 toggle · 角标 N/6 提示）
+    /// v17.151 · 加"参数..."项弹 MainChartOverlayParamsSheet · onChange overlayBook 统一持久化+重算
+    /// v17.190 · @ViewBuilder 允许 let 前缀 + 单 Menu expression · Mac 6.3 严格 single-expression 要求 return
+    @ViewBuilder
     private var mainChartOverlayMenu: some View {
         let count = overlayBook.enabled.count
         let total = MainChartOverlayKind.allCases.count
@@ -2740,6 +2746,9 @@ struct ChartContentView: View {
         chartTheme: ChartTheme,
         candleColorMode: CandleColorMode,
         pricePrecisionMode: PricePrecisionMode,
+        chartFontSize: ChartFontSize,
+        hudOpacityMode: HUDOpacityMode,
+        gridDensity: GridDensity,
         chartType: ChartType,
         hudFields: HUDFieldsBook,
         drawings: Binding<[Drawing]>,
@@ -2769,6 +2778,9 @@ struct ChartContentView: View {
         self.chartTheme = chartTheme
         self.candleColorMode = candleColorMode
         self.pricePrecisionMode = pricePrecisionMode
+        self.chartFontSize = chartFontSize
+        self.hudOpacityMode = hudOpacityMode
+        self.gridDensity = gridDensity
         self.chartType = chartType
         self.hudFields = hudFields
         self._drawings = drawings

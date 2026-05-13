@@ -32,6 +32,11 @@ enum Toast {
         a.runModal()
     }
 
+    /// v17.190 · warn alias = errorBody（WorkspacePresetPickerSheet 6 处 caller 用此名 · 语义警告）
+    static func warn(_ title: String, _ body: String) {
+        errorBody(title, body)
+    }
+
     /// 错误提示（自定义 body · 不来自 Error）
     static func errorBody(_ title: String, _ body: String) {
         let a = NSAlert()

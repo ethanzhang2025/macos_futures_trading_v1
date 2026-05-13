@@ -188,14 +188,16 @@ public struct MaiLangCodeView: NSViewRepresentable {
                     return event
                 }
                 // 本地 key monitor 在主线程触发 · 安全 hop 到 MainActor 调 NSTextView 方法
-                return MainActor.assumeIsolated {
+                // v17.190 · Mac 6.3 严格 NSEvent 不 Sendable · 不跨 closure capture event · 用 Bool 哨兵
+                let consumed: Bool = MainActor.assumeIsolated {
                     guard let tv = weakTV,
                           tv.window?.firstResponder === tv else {
-                        return event
+                        return false
                     }
                     tv.complete(nil)
-                    return nil
+                    return true
                 }
+                return consumed ? nil : event
             }
         }
 

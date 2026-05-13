@@ -253,7 +253,8 @@ struct PaneHeader: View {
     private var paneContextMenu: some View {
         Menu("更换 Pane 类型") {
             // 6 个 popular kinds（与 ⌘K 命令面板对齐）
-            ForEach([PaneKind.chart, .spread, .option, .review, .training, .formulaEditor, .watchlist, .journal, .alert], id: \.self) { kind in
+            // v17.190 · 删 .alert · AlertWindow 不在 PaneKind 框架内
+            ForEach([PaneKind.chart, .spread, .option, .review, .training, .formulaEditor, .watchlist, .journal], id: \.self) { kind in
                 Button {
                     shellVM.changePaneKind(paneID: config.id, to: kind)
                 } label: {

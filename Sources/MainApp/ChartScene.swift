@@ -2418,6 +2418,8 @@ struct ChartContentView: View {
 
     /// v15.20 batch82 · swing high/low 标注显隐（⌘⇧W 切换 · 默认关 · @AppStorage 持久化）
     @AppStorage("viewState.v1.chart.showSwingPoints") private var showSwingPoints: Bool = false
+    /// v17.164 · 形态识别 overlay 开关（trader 主动开启 · 头肩顶/底 + 双顶/底 自动标注）
+    @AppStorage("viewState.v1.chart.showPatterns") private var showPatterns: Bool = false
 
     /// v15.20 batch84 · 显隐切换瞬态提示（trader 直觉反馈：刚按了 ⌘. ⌘\ 等切换什么）
     @State private var toggleNotice: String?
@@ -2735,6 +2737,12 @@ struct ChartContentView: View {
                 presentToggleNotice("Swing 标注：\(showSwingPoints ? "显示" : "隐藏")")
             }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
+            // v17.164 · ⌘⇧P 切换形态识别 overlay（头肩顶/底 + 双顶/底）
+            Button("") {
+                showPatterns.toggle()
+                presentToggleNotice("形态识别：\(showPatterns ? "显示" : "隐藏")")
+            }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.end, modifiers: [.command])
             Button("", action: jumpToLatestBar)
@@ -2926,6 +2934,8 @@ struct ChartContentView: View {
             measurementMarkers
             // v15.20 batch82 · swing high/low 标注（⌘⇧W 切换 · 默认关）
             if showSwingPoints { swingPointsOverlay }
+            // v17.164 · 形态识别 overlay（头肩顶/底 + 双顶/底 自动标注 · 默认关）
+            if showPatterns { patternsOverlay }
         }
         .overlay(alignment: .topTrailing) {
             // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
@@ -3414,6 +3424,74 @@ struct ChartContentView: View {
                         .background(chartTheme.hudBackground(mode: hudOpacityMode))
                         .cornerRadius(2)
                         .position(x: x, y: isHigh ? markerY - 24 : markerY + 24)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// v17.164 · 形态识别 overlay（头肩顶/底 + 双顶/底 自动标注 · pivot 连线 + 中文 label）
+    private var patternsOverlay: some View {
+        let kline = KLineSeries(
+            opens: bars.map(\.open),
+            highs: bars.map(\.high),
+            lows: bars.map(\.low),
+            closes: bars.map(\.close),
+            volumes: bars.map(\.volume),
+            openInterests: bars.map { _ in 0 }
+        )
+        let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
+        let allPatterns = (try? PatternDetector.detect(kline: kline)) ?? []
+        // 只渲染至少 1 个 pivot 落在 visible 区间内的形态（避免遥远历史污染视图）
+        let visiblePatterns = allPatterns.filter { p in
+            p.pivotIndices.contains { $0 >= viewport.startIndex && $0 < visibleEnd }
+        }
+        return GeometryReader { geom in
+            let visibleCount = max(1, viewport.visibleCount)
+            let barWidth = geom.size.width / CGFloat(visibleCount)
+            let xOffset = CGFloat(viewport.startOffset)
+            let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+            let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+            let span = max(0.0001, hi - lo)
+            ForEach(Array(visiblePatterns.enumerated()), id: \.offset) { _, pattern in
+                let isBull = pattern.kind.direction > 0
+                let patternColor = isBull
+                    ? chartTheme.candleUp(mode: candleColorMode)
+                    : chartTheme.candleDown(mode: candleColorMode)
+                // 1. 连接 pivots 的折线（指示形态形状）
+                Path { path in
+                    var started = false
+                    for (i, idx) in pattern.pivotIndices.enumerated() {
+                        let priceD = NSDecimalNumber(decimal: pattern.pivotPrices[i]).doubleValue
+                        let x = (CGFloat(idx - viewport.startIndex) + 0.5 - xOffset) * barWidth
+                        let y = CGFloat((hi - priceD) / span) * geom.size.height
+                        if started { path.addLine(to: CGPoint(x: x, y: y)) }
+                        else { path.move(to: CGPoint(x: x, y: y)); started = true }
+                    }
+                }
+                .stroke(patternColor.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [4, 2]))
+                // 2. label · 显示在最末 pivot 旁
+                if let lastIdx = pattern.pivotIndices.last,
+                   let lastPrice = pattern.pivotPrices.last {
+                    let priceD = NSDecimalNumber(decimal: lastPrice).doubleValue
+                    let x = (CGFloat(lastIdx - viewport.startIndex) + 0.5 - xOffset) * barWidth
+                    let y = CGFloat((hi - priceD) / span) * geom.size.height
+                    let labelY = isBull ? y + 18 : y - 18
+                    HStack(spacing: 2) {
+                        Image(systemName: pattern.kind.icon)
+                            .font(.system(size: 8))
+                        Text(pattern.kind.displayName)
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(String(format: "%.0f%%", pattern.confidence * 100))
+                            .font(.system(size: 8, design: .monospaced))
+                            .opacity(0.7)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(patternColor.opacity(0.85))
+                    .cornerRadius(3)
+                    .position(x: x, y: labelY)
                 }
             }
         }

@@ -137,6 +137,7 @@ public enum GlobalShortcutsCatalog {
                 ShortcutEntry("⌘⇧M", "测距三态 起 → 终 → 退出"),
                 ShortcutEntry("⌘⇧X", "复制测距详情到剪贴板"),
                 ShortcutEntry("⌘⇧W", "Swing High/Low 显隐"),
+                ShortcutEntry("⌘⇧P", "形态识别 overlay 显隐（v17.164 头肩顶/底 + 双顶/底）"),
             ]),
             ShortcutGroup("显隐切换", [
                 ShortcutEntry("⌘.", "副图 显隐"),

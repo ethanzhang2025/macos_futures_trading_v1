@@ -219,6 +219,8 @@ struct ChartScene: View {
     @State private var isIndicatorParamsLoaded: Bool = false
     /// v15.2 指标参数编辑 Sheet 显隐
     @State private var showIndicatorParamsSheet: Bool = false
+    /// v17.151 · 主图叠加参数 sheet 显隐（SuperTrend/Ichimoku/Donchian/Keltner 4 种 overlay 参数）
+    @State private var showMainChartOverlayParamsSheet: Bool = false
     /// v17.139 · 主图叠加偏好（VWAP / Pivot / SuperTrend）· UserDefaults 全局共享 · 默认全关
     @State private var overlayBook: MainChartOverlayBook = MainChartOverlayStore.load() ?? .default
     /// v15.7 副图独立参数 overrides · key = 副图槽位 0~3 · 缺失 = 用全局 indicatorParams
@@ -545,6 +547,15 @@ struct ChartScene: View {
         }
         .sheet(isPresented: $showIndicatorParamsSheet) {
             IndicatorParamsSheet(book: $indicatorParams)
+        }
+        // v17.151 · 主图叠加参数 sheet（SuperTrend/Ichimoku/Donchian/Keltner 4 种 · trader 弹此调参）
+        .sheet(isPresented: $showMainChartOverlayParamsSheet) {
+            MainChartOverlayParamsSheet(book: $overlayBook)
+        }
+        .onChange(of: overlayBook) { newValue in
+            // v17.151 · overlayBook 改（toggle / sheet 保存）→ 持久化 + 重算 indicators · sheet 内"还原默认"也走这里
+            MainChartOverlayStore.save(newValue)
+            Task { await updateIndicatorsFull(bars) }
         }
         .onChange(of: subParamsOverrides) { newValue in
             // v15.7 副图独立参数 overrides 持久化（仅副图重算 · 主图不受影响）
@@ -1680,22 +1691,24 @@ struct ChartScene: View {
         .overlay(alignment: .bottom) { Divider() }
     }
 
-    /// v17.139 · 主图叠加菜单（VWAP / Pivot / SuperTrend）· 三选 toggle · 角标 N/3 提示当前几个开
+    /// v17.139 · 主图叠加菜单（VWAP / Pivot / SuperTrend / Ichimoku / Donchian / Keltner · 6 选 toggle · 角标 N/6 提示）
+    /// v17.151 · 加"参数..."项弹 MainChartOverlayParamsSheet · onChange overlayBook 统一持久化+重算
     @ViewBuilder
     private var mainChartOverlayMenu: some View {
         let count = overlayBook.enabled.count
+        let total = MainChartOverlayKind.allCases.count
         Menu {
             ForEach(MainChartOverlayKind.allCases) { kind in
                 Toggle(isOn: Binding(
                     get: { overlayBook.isEnabled(kind) },
-                    set: { newVal in
-                        overlayBook.setEnabled(kind, newVal)
-                        MainChartOverlayStore.save(overlayBook)
-                        Task { await updateIndicatorsFull(bars) }
-                    }
+                    set: { newVal in overlayBook.setEnabled(kind, newVal) }   // onChange 统一处理 save + 重算
                 )) {
                     Label(kind.displayName, systemImage: kind.icon)
                 }
+            }
+            Divider()
+            Button("⚙️ 参数...（SuperTrend / Ichimoku / Donchian / Keltner）") {
+                showMainChartOverlayParamsSheet = true
             }
         } label: {
             HStack(spacing: 2) {
@@ -1710,7 +1723,7 @@ struct ChartScene: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .tooltip("主图叠加（VWAP / Pivot Points / SuperTrend · 当前 \(count)/3）")
+        .tooltip("主图叠加（VWAP / Pivot / SuperTrend / Ichimoku / Donchian / Keltner · 当前 \(count)/\(total)）")
     }
 
     @ViewBuilder

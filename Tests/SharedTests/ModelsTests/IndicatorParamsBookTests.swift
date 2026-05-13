@@ -298,4 +298,73 @@ struct SubChartParamsOverridesStoreTests {
         let defaults = makeDefaults()
         #expect(SubChartParamsOverridesStore.load(defaults: defaults) == nil)
     }
+
+    // MARK: - v17.148 · 副图 6 个新指标 period（trix/cmf/vr/adx/mfi/cmo · trader 可调）
+
+    @Test("v17.148 · default 含 6 副图指标默认 period 12/20/26/14/14/14")
+    func v17148SubIndicatorDefaults() {
+        let d = IndicatorParamsBook.default
+        #expect(d.trixPeriod == 12)
+        #expect(d.cmfPeriod == 20)
+        #expect(d.vrPeriod == 26)
+        #expect(d.adxPeriod == 14)
+        #expect(d.mfiPeriod == 14)
+        #expect(d.cmoPeriod == 14)
+    }
+
+    @Test("v17.148 · 6 副图 Decimal helper 正确转换")
+    func v17148DecimalHelpers() {
+        let d = IndicatorParamsBook.default
+        #expect(d.trixParamsDecimal == [Decimal(12)])
+        #expect(d.cmfParamsDecimal  == [Decimal(20)])
+        #expect(d.vrParamsDecimal   == [Decimal(26)])
+        #expect(d.adxParamsDecimal  == [Decimal(14)])
+        #expect(d.mfiParamsDecimal  == [Decimal(14)])
+        #expect(d.cmoParamsDecimal  == [Decimal(14)])
+    }
+
+    @Test("v17.148 · 6 字段 round-trip 自定义值持久化")
+    func v17148RoundTrip() throws {
+        var book = IndicatorParamsBook.default
+        book.trixPeriod = 18
+        book.cmfPeriod  = 14
+        book.vrPeriod   = 50
+        book.adxPeriod  = 21
+        book.mfiPeriod  = 7
+        book.cmoPeriod  = 9
+        let encoded = try JSONEncoder().encode(book)
+        let decoded = try JSONDecoder().decode(IndicatorParamsBook.self, from: encoded)
+        #expect(decoded.trixPeriod == 18)
+        #expect(decoded.cmfPeriod == 14)
+        #expect(decoded.vrPeriod == 50)
+        #expect(decoded.adxPeriod == 21)
+        #expect(decoded.mfiPeriod == 7)
+        #expect(decoded.cmoPeriod == 9)
+    }
+
+    @Test("v17.148 · v17.147 之前旧 JSON 缺 6 副图字段 · 全部 fallback 默认 12/20/26/14/14/14")
+    func v17148LegacyJSONFallback() throws {
+        // v17.147 之前 JSON 不含 trix/cmf/vr/adx/mfi/cmo 字段
+        let legacyJSON = """
+        {
+          "mainMAPeriods": [5, 20, 60],
+          "mainBOLLParams": [20, 2],
+          "macdParams": [12, 26, 9],
+          "kdjParams": [9, 3, 3],
+          "rsiPeriod": 14,
+          "swingLookback": 8
+        }
+        """
+        let data = legacyJSON.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(IndicatorParamsBook.self, from: data)
+        #expect(decoded.trixPeriod == 12)
+        #expect(decoded.cmfPeriod == 20)
+        #expect(decoded.vrPeriod == 26)
+        #expect(decoded.adxPeriod == 14)
+        #expect(decoded.mfiPeriod == 14)
+        #expect(decoded.cmoPeriod == 14)
+        // 旧字段保留
+        #expect(decoded.swingLookback == 8)
+        #expect(decoded.rsiPeriod == 14)
+    }
 }

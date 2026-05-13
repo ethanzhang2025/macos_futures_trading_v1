@@ -51,6 +51,18 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
     public var swingLookback: Int
     /// Swing 同向最小 bar 间距（默认 0 · v15.21 batch106 · >0 时密集合并保留更极值 · 减少视觉噪声）
     public var swingMinSpacing: Int
+    /// TRIX 周期（默认 12 · v17.148 · 三重 EMA 趋势）
+    public var trixPeriod: Int
+    /// CMF 周期（默认 20 · v17.148 · 蔡金资金流）
+    public var cmfPeriod: Int
+    /// VR 周期（默认 26 · v17.148 · 成交量比）
+    public var vrPeriod: Int
+    /// ADX 周期（默认 14 · v17.148 · 平均趋向指数）
+    public var adxPeriod: Int
+    /// MFI 周期（默认 14 · v17.148 · 资金流量指数）
+    public var mfiPeriod: Int
+    /// CMO 周期（默认 14 · v17.148 · 钱德动量振荡器）
+    public var cmoPeriod: Int
 
     public init(
         mainMAPeriods: [Int],
@@ -72,7 +84,13 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         bbwParams: [Int] = [20, 2],
         atrpPeriod: Int = 14,
         swingLookback: Int = 5,
-        swingMinSpacing: Int = 0
+        swingMinSpacing: Int = 0,
+        trixPeriod: Int = 12,
+        cmfPeriod: Int = 20,
+        vrPeriod: Int = 26,
+        adxPeriod: Int = 14,
+        mfiPeriod: Int = 14,
+        cmoPeriod: Int = 14
     ) {
         self.mainMAPeriods = mainMAPeriods
         self.mainBOLLParams = mainBOLLParams
@@ -94,6 +112,12 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.atrpPeriod = atrpPeriod
         self.swingLookback = swingLookback
         self.swingMinSpacing = swingMinSpacing
+        self.trixPeriod = trixPeriod
+        self.cmfPeriod = cmfPeriod
+        self.vrPeriod = vrPeriod
+        self.adxPeriod = adxPeriod
+        self.mfiPeriod = mfiPeriod
+        self.cmoPeriod = cmoPeriod
     }
 
     public static let `default` = IndicatorParamsBook(
@@ -116,7 +140,14 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         bbwParams: [20, 2],
         atrpPeriod: 14,
         swingLookback: 5,
-        swingMinSpacing: 0
+        swingMinSpacing: 0,
+        // v17.148 · 副图 6 个新指标 trader 标准默认
+        trixPeriod: 12,
+        cmfPeriod: 20,
+        vrPeriod: 26,
+        adxPeriod: 14,
+        mfiPeriod: 14,
+        cmoPeriod: 14
     )
 
     // MARK: - Codable · v15.11 加 cciPeriod/wrPeriod · v15.13 加 dmi/stoch/roc/bias 字段
@@ -129,6 +160,7 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         case aroonPeriod, stcParams, elderRayPeriod, choppinessPeriod, forceIndexPeriod
         case bbwParams, atrpPeriod
         case swingLookback, swingMinSpacing
+        case trixPeriod, cmfPeriod, vrPeriod, adxPeriod, mfiPeriod, cmoPeriod   // v17.148
     }
 
     public init(from decoder: Decoder) throws {
@@ -157,6 +189,13 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
         self.swingLookback    = try c.decodeIfPresent(Int.self, forKey: .swingLookback) ?? 5
         // v15.21 batch106 · Swing 同向最小间距（旧用户启动 fallback 0 不过滤）
         self.swingMinSpacing  = try c.decodeIfPresent(Int.self, forKey: .swingMinSpacing) ?? 0
+        // v17.148 · 副图 6 个新指标 period（旧用户启动 fallback trader 标准默认）
+        self.trixPeriod       = try c.decodeIfPresent(Int.self, forKey: .trixPeriod) ?? 12
+        self.cmfPeriod        = try c.decodeIfPresent(Int.self, forKey: .cmfPeriod) ?? 20
+        self.vrPeriod         = try c.decodeIfPresent(Int.self, forKey: .vrPeriod) ?? 26
+        self.adxPeriod        = try c.decodeIfPresent(Int.self, forKey: .adxPeriod) ?? 14
+        self.mfiPeriod        = try c.decodeIfPresent(Int.self, forKey: .mfiPeriod) ?? 14
+        self.cmoPeriod        = try c.decodeIfPresent(Int.self, forKey: .cmoPeriod) ?? 14
     }
 
     // MARK: - Decimal 转换 helper（IndicatorCore.calculate 接受 [Decimal]）
@@ -236,6 +275,15 @@ public struct IndicatorParamsBook: Sendable, Codable, Equatable {
     public var atrpParamsDecimal: [Decimal] {
         [Decimal(atrpPeriod)]
     }
+
+    // v17.148 · 副图 6 个新指标 Decimal helper
+
+    public var trixParamsDecimal: [Decimal] { [Decimal(trixPeriod)] }
+    public var cmfParamsDecimal: [Decimal]  { [Decimal(cmfPeriod)] }
+    public var vrParamsDecimal: [Decimal]   { [Decimal(vrPeriod)] }
+    public var adxParamsDecimal: [Decimal]  { [Decimal(adxPeriod)] }
+    public var mfiParamsDecimal: [Decimal]  { [Decimal(mfiPeriod)] }
+    public var cmoParamsDecimal: [Decimal]  { [Decimal(cmoPeriod)] }
 }
 
 // MARK: - UserDefaults 加载/保存

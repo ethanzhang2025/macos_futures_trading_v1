@@ -76,16 +76,16 @@ enum SubIndicatorKind: String, CaseIterable, Identifiable, Sendable {
         case .bbw:         return "BBW \(params.bbwParams[0])/\(params.bbwParams[1])"
         case .atrp:        return "ATRP \(params.atrpPeriod)"
         case .volumeProfile: return "成交量分布"
-        // v17.143 · hardcoded 默认参数 · 不读 ParamsBook
-        case .trix:   return "TRIX 12"
-        case .cmf:    return "CMF 20"
+        // v17.143 · v17.148 接 ParamsBook 可调 period
+        case .trix:   return "TRIX \(params.trixPeriod)"
+        case .cmf:    return "CMF \(params.cmfPeriod)"
         case .pvt:    return "PVT"
-        case .vr:     return "VR 26"
-        // v17.144 · hardcoded 默认参数
-        case .adx:    return "ADX 14"
+        case .vr:     return "VR \(params.vrPeriod)"
+        // v17.144 · v17.148 接 ParamsBook 可调 period
+        case .adx:    return "ADX \(params.adxPeriod)"
         case .adl:    return "ADL"
-        case .mfi:    return "MFI 14"
-        case .cmo:    return "CMO 14"
+        case .mfi:    return "MFI \(params.mfiPeriod)"
+        case .cmo:    return "CMO \(params.cmoPeriod)"
         }
     }
 
@@ -367,25 +367,25 @@ struct SubChartView: View {
                 return (try? BollingerBandwidth.calculate(kline: series, params: paramsCopy.bbwParamsDecimal)) ?? []
             case .atrp:
                 return (try? ATRPercent.calculate(kline: series, params: paramsCopy.atrpParamsDecimal)) ?? []
-            // v17.143 · 4 个国际派常用副图 · v1 hardcoded 默认参数（trader 标准 · v2 接 ParamsBook 加可调）
+            // v17.143 · 4 个国际派常用副图 · v17.148 · 接 IndicatorParamsBook（trader 可调 period · UI 弹 IndicatorParamsSheet）
             case .trix:
-                return (try? TRIX.calculate(kline: series, params: [Decimal(12)])) ?? []
+                return (try? TRIX.calculate(kline: series, params: paramsCopy.trixParamsDecimal)) ?? []
             case .cmf:
-                return (try? CMF.calculate(kline: series, params: [Decimal(20)])) ?? []
+                return (try? CMF.calculate(kline: series, params: paramsCopy.cmfParamsDecimal)) ?? []
             case .pvt:
-                return (try? PVT.calculate(kline: series, params: [])) ?? []
+                return (try? PVT.calculate(kline: series, params: [])) ?? []   // PVT 无参
             case .vr:
-                return (try? VR.calculate(kline: series, params: [Decimal(26)])) ?? []
-            // v17.144 · 4 个补全副图（趋势强度 / 累积分配 / 资金流量 / 钱德动量）
+                return (try? VR.calculate(kline: series, params: paramsCopy.vrParamsDecimal)) ?? []
+            // v17.144 · 4 个补全副图（趋势强度 / 累积分配 / 资金流量 / 钱德动量）· v17.148 接 ParamsBook
             case .adx:
                 // ADX 输出 [+DI, -DI, ADX] 3 列 · 仅取末列 ADX 单线（DMI 已有 +DI/-DI 副图）
-                return (try? ADX.calculate(kline: series, params: [Decimal(14)])) ?? []
+                return (try? ADX.calculate(kline: series, params: paramsCopy.adxParamsDecimal)) ?? []
             case .adl:
-                return (try? ADL.calculate(kline: series, params: [])) ?? []
+                return (try? ADL.calculate(kline: series, params: [])) ?? []   // ADL 无参
             case .mfi:
-                return (try? MFI.calculate(kline: series, params: [Decimal(14)])) ?? []
+                return (try? MFI.calculate(kline: series, params: paramsCopy.mfiParamsDecimal)) ?? []
             case .cmo:
-                return (try? CMO.calculate(kline: series, params: [Decimal(14)])) ?? []
+                return (try? CMO.calculate(kline: series, params: paramsCopy.cmoParamsDecimal)) ?? []
             case .volume, .oi, .volumeProfile:
                 return []  // 直读 bars · 不走 Indicator 计算
             }

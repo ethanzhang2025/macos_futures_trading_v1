@@ -35,6 +35,11 @@ public enum PatternKind: String, Sendable, Codable, CaseIterable {
     // v17.177 · 楔形（双线同向但斜率不同 · 收敛形态 · 经典反转）
     case risingWedge              // 上升楔形（高低都升但底升更快 · 看空反转）
     case fallingWedge             // 下降楔形（高低都降但顶降更快 · 看多反转）
+    // v17.188 · 旗形 / 三角旗 / 杯柄（pole + body 延续形态 + U 形反转）
+    case bullishFlag              // 看多旗形（pole 涨 + 略下倾平行回调 · 看多延续）
+    case bearishFlag              // 看空旗形（pole 跌 + 略上倾平行反弹 · 看空延续）
+    case pennant                  // 三角旗（pole + 短小收敛三角 body · 跟随 pole 方向 · 此处取中性等突破）
+    case cupAndHandle             // 杯柄（U 形大杯 + 小回调柄 · 看多突破）
 
     public var displayName: String {
         switch self {
@@ -47,15 +52,24 @@ public enum PatternKind: String, Sendable, Codable, CaseIterable {
         case .rectangle:              return "矩形整理"
         case .risingWedge:            return "上升楔形"
         case .fallingWedge:           return "下降楔形"
+        case .bullishFlag:            return "看多旗形"
+        case .bearishFlag:            return "看空旗形"
+        case .pennant:                return "三角旗"
+        case .cupAndHandle:           return "杯柄"
         }
     }
 
     /// 信号方向 · +1 = 看多反转/突破 · -1 = 看空反转/击穿 · 0 = 中性等突破方向
     public var direction: Int {
         switch self {
-        case .headAndShouldersBottom, .doubleBottom, .ascendingTriangle, .fallingWedge: return 1
-        case .headAndShouldersTop, .doubleTop, .descendingTriangle, .risingWedge:       return -1
-        case .rectangle:                                                                 return 0
+        case .headAndShouldersBottom, .doubleBottom, .ascendingTriangle, .fallingWedge,
+             .bullishFlag, .cupAndHandle:
+            return 1
+        case .headAndShouldersTop, .doubleTop, .descendingTriangle, .risingWedge,
+             .bearishFlag:
+            return -1
+        case .rectangle, .pennant:
+            return 0
         }
     }
 
@@ -71,6 +85,10 @@ public enum PatternKind: String, Sendable, Codable, CaseIterable {
         case .rectangle:              return "rectangle"
         case .risingWedge:            return "chevron.up.chevron.down"
         case .fallingWedge:           return "chevron.down.chevron.up"
+        case .bullishFlag:            return "flag.fill"
+        case .bearishFlag:            return "flag.slash.fill"
+        case .pennant:                return "triangle"
+        case .cupAndHandle:           return "cup.and.saucer"
         }
     }
 }
@@ -118,6 +136,18 @@ public struct PatternDetectorParams: Sendable, Equatable {
     public var rectangleRangeMin: Double
     /// v17.177 · 楔形 · 两线斜率差最少占慢侧斜率比例（默认 1.5）· 收敛判定 · 越大要求收敛越显著
     public var wedgeConvergenceRatioMin: Double
+    /// v17.188 · 旗形 / 三角旗 · pole 最小幅度（默认 0.05 = 5%）· 区分"延续 pole"与"普通摆动"
+    public var flagPoleMin: Double
+    /// v17.188 · 旗形 · body 顶底斜率比容忍（默认 1.5）· 越大越容忍非平行 · 与 wedge 反向语义
+    public var flagParallelismRatio: Double
+    /// v17.188 · 旗形 · body 顶降/底降最大幅度（默认 0.03 = 3%）· 防"body 退化成新趋势"
+    public var flagBodyMaxSlope: Double
+    /// v17.188 · 杯柄 · 两口对称容忍（默认 0.05 = 5%）· 两口差太大不算杯
+    public var cupRimTolerance: Double
+    /// v17.188 · 杯柄 · 杯深最小占口部比例（默认 0.10 = 10%）· 杯太浅 = 双顶而非杯
+    public var cupDepthMin: Double
+    /// v17.188 · 杯柄 · 柄回撤最大占杯深比例（默认 0.5）· 柄太深 = 真双底而非杯柄
+    public var cupHandleMaxRetrace: Double
 
     public init(
         zigzagPercent: Decimal = 3,
@@ -129,7 +159,13 @@ public struct PatternDetectorParams: Sendable, Equatable {
         triangleHorizontalTolerance: Double = 0.02,
         triangleSlopingMin: Double = 0.015,
         rectangleRangeMin: Double = 0.02,
-        wedgeConvergenceRatioMin: Double = 1.5
+        wedgeConvergenceRatioMin: Double = 1.5,
+        flagPoleMin: Double = 0.05,
+        flagParallelismRatio: Double = 1.5,
+        flagBodyMaxSlope: Double = 0.03,
+        cupRimTolerance: Double = 0.05,
+        cupDepthMin: Double = 0.10,
+        cupHandleMaxRetrace: Double = 0.5
     ) {
         self.zigzagPercent = zigzagPercent
         self.shoulderSymmetryTolerance = shoulderSymmetryTolerance
@@ -141,6 +177,12 @@ public struct PatternDetectorParams: Sendable, Equatable {
         self.triangleSlopingMin = triangleSlopingMin
         self.rectangleRangeMin = rectangleRangeMin
         self.wedgeConvergenceRatioMin = wedgeConvergenceRatioMin
+        self.flagPoleMin = flagPoleMin
+        self.flagParallelismRatio = flagParallelismRatio
+        self.flagBodyMaxSlope = flagBodyMaxSlope
+        self.cupRimTolerance = cupRimTolerance
+        self.cupDepthMin = cupDepthMin
+        self.cupHandleMaxRetrace = cupHandleMaxRetrace
     }
 
     public static let `default` = PatternDetectorParams()
@@ -159,60 +201,202 @@ public enum PatternDetector {
 
         var detected: [DetectedPattern] = []
 
-        // 滑动 5 pivot 窗口 · 检 HS 顶/底
+        // 滑动 5 pivot 窗口 · HS 顶/底 + 楔形 + v17.188 旗形/三角旗/杯柄
         if pivots.count >= 5 {
             for i in 0...(pivots.count - 5) {
                 let window = Array(pivots[i..<(i + 5)])
-                if let p = checkHeadAndShouldersTop(window, params: params) {
-                    detected.append(p)
-                }
-                if let p = checkHeadAndShouldersBottom(window, params: params) {
-                    detected.append(p)
-                }
+                if let p = checkHeadAndShouldersTop(window, params: params) { detected.append(p) }
+                if let p = checkHeadAndShouldersBottom(window, params: params) { detected.append(p) }
+                if let p = checkRisingWedge(window, params: params) { detected.append(p) }
+                if let p = checkFallingWedge(window, params: params) { detected.append(p) }
+                if let p = checkBullishFlag(window, params: params) { detected.append(p) }
+                if let p = checkBearishFlag(window, params: params) { detected.append(p) }
+                if let p = checkPennant(window, params: params) { detected.append(p) }
+                if let p = checkCupAndHandle(window, params: params) { detected.append(p) }
             }
         }
 
         // 滑动 3 pivot 窗口 · 检 双顶/底
         for i in 0...(pivots.count - 3) {
             let window = Array(pivots[i..<(i + 3)])
-            if let p = checkDoubleTop(window, params: params) {
-                detected.append(p)
-            }
-            if let p = checkDoubleBottom(window, params: params) {
-                detected.append(p)
-            }
+            if let p = checkDoubleTop(window, params: params) { detected.append(p) }
+            if let p = checkDoubleBottom(window, params: params) { detected.append(p) }
         }
 
         // v17.173 · 滑动 4 pivot 窗口 · 检 三角形 + 矩形
         if pivots.count >= 4 {
             for i in 0...(pivots.count - 4) {
                 let window = Array(pivots[i..<(i + 4)])
-                if let p = checkAscendingTriangle(window, params: params) {
-                    detected.append(p)
-                }
-                if let p = checkDescendingTriangle(window, params: params) {
-                    detected.append(p)
-                }
-                if let p = checkRectangle(window, params: params) {
-                    detected.append(p)
-                }
-            }
-        }
-
-        // v17.177 · 滑动 5 pivot 窗口 · 检 楔形（HS 同窗口 · 但已在前面检过 · 不冲突）
-        if pivots.count >= 5 {
-            for i in 0...(pivots.count - 5) {
-                let window = Array(pivots[i..<(i + 5)])
-                if let p = checkRisingWedge(window, params: params) {
-                    detected.append(p)
-                }
-                if let p = checkFallingWedge(window, params: params) {
-                    detected.append(p)
-                }
+                if let p = checkAscendingTriangle(window, params: params) { detected.append(p) }
+                if let p = checkDescendingTriangle(window, params: params) { detected.append(p) }
+                if let p = checkRectangle(window, params: params) { detected.append(p) }
             }
         }
 
         return dedupByEndIndex(detected)
+    }
+
+    // MARK: - v17.188 · 旗形 / 三角旗 / 杯柄（5 pivot 窗口）
+
+    /// 看多旗形 · 5 pivot trough-peak-trough-peak-trough · pole p[0]→p[1] 大涨 · body p[1..4] 略下倾平行
+    private static func checkBullishFlag(
+        _ p: [(idx: Int, price: Decimal)],
+        params: PatternDetectorParams
+    ) -> DetectedPattern? {
+        guard p.count == 5,
+              p[0].price < p[1].price,
+              p[1].price > p[2].price,
+              p[2].price < p[3].price,
+              p[3].price > p[4].price else { return nil }
+        let poleStart = doubleValue(p[0].price)
+        let poleEnd   = doubleValue(p[1].price)
+        let polePct = (poleEnd - poleStart) / poleStart
+        guard polePct >= params.flagPoleMin else { return nil }
+        let topHi1 = poleEnd
+        let topHi2 = doubleValue(p[3].price)
+        let botLo1 = doubleValue(p[2].price)
+        let botLo2 = doubleValue(p[4].price)
+        // body 顶降 + 底降 = 略下倾平行通道
+        guard topHi2 < topHi1, botLo2 < botLo1 else { return nil }
+        let topSlope = (topHi1 - topHi2) / topHi1
+        let botSlope = (botLo1 - botLo2) / botLo1
+        guard topSlope <= params.flagBodyMaxSlope, botSlope <= params.flagBodyMaxSlope else { return nil }
+        let ratio = max(topSlope, botSlope) / max(min(topSlope, botSlope), 1e-6)
+        guard ratio <= params.flagParallelismRatio else { return nil }
+        let poleScore = min(1, polePct / (params.flagPoleMin * 4))
+        let parallelScore = 1 - (ratio - 1) / max(params.flagParallelismRatio - 1, 1e-6)
+        return DetectedPattern(
+            kind: .bullishFlag,
+            pivotIndices: p.map(\.idx),
+            pivotPrices: p.map(\.price),
+            confidence: clamp01(poleScore * 0.5 + parallelScore * 0.5)
+        )
+    }
+
+    /// 看空旗形 · 5 pivot peak-trough-peak-trough-peak · pole p[0]→p[1] 大跌 · body p[1..4] 略上倾平行
+    private static func checkBearishFlag(
+        _ p: [(idx: Int, price: Decimal)],
+        params: PatternDetectorParams
+    ) -> DetectedPattern? {
+        guard p.count == 5,
+              p[0].price > p[1].price,
+              p[1].price < p[2].price,
+              p[2].price > p[3].price,
+              p[3].price < p[4].price else { return nil }
+        let poleStart = doubleValue(p[0].price)
+        let poleEnd   = doubleValue(p[1].price)
+        let polePct = (poleStart - poleEnd) / poleStart
+        guard polePct >= params.flagPoleMin else { return nil }
+        let botLo1 = poleEnd
+        let botLo2 = doubleValue(p[3].price)
+        let topHi1 = doubleValue(p[2].price)
+        let topHi2 = doubleValue(p[4].price)
+        // body 底升 + 顶升 = 略上倾平行通道
+        guard botLo2 > botLo1, topHi2 > topHi1 else { return nil }
+        let botSlope = (botLo2 - botLo1) / botLo1
+        let topSlope = (topHi2 - topHi1) / topHi1
+        guard botSlope <= params.flagBodyMaxSlope, topSlope <= params.flagBodyMaxSlope else { return nil }
+        let ratio = max(botSlope, topSlope) / max(min(botSlope, topSlope), 1e-6)
+        guard ratio <= params.flagParallelismRatio else { return nil }
+        let poleScore = min(1, polePct / (params.flagPoleMin * 4))
+        let parallelScore = 1 - (ratio - 1) / max(params.flagParallelismRatio - 1, 1e-6)
+        return DetectedPattern(
+            kind: .bearishFlag,
+            pivotIndices: p.map(\.idx),
+            pivotPrices: p.map(\.price),
+            confidence: clamp01(poleScore * 0.5 + parallelScore * 0.5)
+        )
+    }
+
+    /// 三角旗 · 5 pivot · pole + body 收敛三角（顶降+底升 或 底升+顶降）· 直接套用两种 pivot 模式
+    /// 中性方向（pennant direction=0）· trader 按 pole 方向自行判断突破
+    private static func checkPennant(
+        _ p: [(idx: Int, price: Decimal)],
+        params: PatternDetectorParams
+    ) -> DetectedPattern? {
+        guard p.count == 5 else { return nil }
+        let poleStart: Double
+        let poleEnd: Double
+        let bodyTopHi1, bodyTopHi2, bodyBotLo1, bodyBotLo2: Double
+        if p[0].price < p[1].price, p[1].price > p[2].price, p[2].price < p[3].price, p[3].price > p[4].price {
+            // bull pole（trough-peak）+ body peak-trough-peak-trough：顶 p[1],p[3] 降 · 底 p[2],p[4] 升
+            poleStart = doubleValue(p[0].price)
+            poleEnd   = doubleValue(p[1].price)
+            bodyTopHi1 = poleEnd
+            bodyTopHi2 = doubleValue(p[3].price)
+            bodyBotLo1 = doubleValue(p[2].price)
+            bodyBotLo2 = doubleValue(p[4].price)
+            guard (poleEnd - poleStart) / poleStart >= params.flagPoleMin else { return nil }
+            guard bodyTopHi2 < bodyTopHi1, bodyBotLo2 > bodyBotLo1 else { return nil }
+        } else if p[0].price > p[1].price, p[1].price < p[2].price, p[2].price > p[3].price, p[3].price < p[4].price {
+            // bear pole（peak-trough）+ body trough-peak-trough-peak：底 p[1],p[3] 升 · 顶 p[2],p[4] 降
+            poleStart = doubleValue(p[0].price)
+            poleEnd   = doubleValue(p[1].price)
+            bodyTopHi1 = doubleValue(p[2].price)
+            bodyTopHi2 = doubleValue(p[4].price)
+            bodyBotLo1 = poleEnd
+            bodyBotLo2 = doubleValue(p[3].price)
+            guard (poleStart - poleEnd) / poleStart >= params.flagPoleMin else { return nil }
+            guard bodyTopHi2 < bodyTopHi1, bodyBotLo2 > bodyBotLo1 else { return nil }
+        } else {
+            return nil
+        }
+        let topSlope = (bodyTopHi1 - bodyTopHi2) / bodyTopHi1
+        let botSlope = (bodyBotLo2 - bodyBotLo1) / bodyBotLo1
+        guard topSlope > 0, botSlope > 0 else { return nil }
+        // 收敛判定：两线斜率都不可忽略 · 且最大斜率 ≤ wedgeConvergenceRatioMin × 最小斜率
+        let convergence = min(topSlope, botSlope) > 0 ? max(topSlope, botSlope) / min(topSlope, botSlope) : .infinity
+        guard convergence <= params.wedgeConvergenceRatioMin * 2 else { return nil }
+        let polePct = abs(poleEnd - poleStart) / poleStart
+        let poleScore = min(1, polePct / (params.flagPoleMin * 4))
+        let convergeScore = 1 - (convergence - 1) / max(params.wedgeConvergenceRatioMin * 2 - 1, 1e-6)
+        return DetectedPattern(
+            kind: .pennant,
+            pivotIndices: p.map(\.idx),
+            pivotPrices: p.map(\.price),
+            confidence: clamp01(poleScore * 0.5 + convergeScore * 0.5)
+        )
+    }
+
+    /// 杯柄 · 5 pivot peak-trough-peak-trough-peak · 两口 p[0]≈p[2]≈p[4] · 杯 p[1] 显著深 · 柄 p[3] 浅
+    /// 与 HS-top 同 pivot 模式 · 但特征互斥（HS-top 要求 head>shoulders · 杯柄要求两口对称）
+    private static func checkCupAndHandle(
+        _ p: [(idx: Int, price: Decimal)],
+        params: PatternDetectorParams
+    ) -> DetectedPattern? {
+        guard p.count == 5,
+              p[0].price > p[1].price,
+              p[1].price < p[2].price,
+              p[2].price > p[3].price,
+              p[3].price < p[4].price else { return nil }
+        let leftRim  = doubleValue(p[0].price)
+        let cupBot   = doubleValue(p[1].price)
+        let rightRim = doubleValue(p[2].price)
+        let handleBot = doubleValue(p[3].price)
+        let breakout  = doubleValue(p[4].price)
+        // 两口对称
+        let rimDiff = abs(leftRim - rightRim) / max(leftRim, rightRim)
+        guard rimDiff <= params.cupRimTolerance else { return nil }
+        // 杯深（占口部比例）
+        let cupRim = (leftRim + rightRim) / 2
+        let cupDepth = (cupRim - cupBot) / cupRim
+        guard cupDepth >= params.cupDepthMin else { return nil }
+        // 柄：浅回撤 · 占杯深比例不超过 cupHandleMaxRetrace
+        let handleDepth = (rightRim - handleBot) / rightRim
+        guard handleDepth > 0,
+              handleDepth <= cupDepth * params.cupHandleMaxRetrace else { return nil }
+        // 突破点接近或高于右口（cup-handle 经典是再次回到口部并准备突破）
+        guard breakout >= handleBot else { return nil }
+        // confidence：两口越对称 + 杯越深 + 柄越浅
+        let rimScore = 1 - rimDiff / params.cupRimTolerance
+        let depthScore = min(1, cupDepth / (params.cupDepthMin * 3))
+        let handleScore = 1 - (handleDepth / max(cupDepth * params.cupHandleMaxRetrace, 1e-6))
+        return DetectedPattern(
+            kind: .cupAndHandle,
+            pivotIndices: p.map(\.idx),
+            pivotPrices: p.map(\.price),
+            confidence: clamp01(rimScore * 0.35 + depthScore * 0.4 + handleScore * 0.25)
+        )
     }
 
     // MARK: - v17.177 · 楔形匹配模板（5 pivot 窗口）

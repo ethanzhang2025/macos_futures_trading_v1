@@ -214,15 +214,112 @@ struct PatternDetectorTests {
         #expect(detected.filter { $0.kind == .descendingTriangle }.isEmpty)
     }
 
-    @Test("PatternKind allCases · v17.177 后扩到 9 case（v17.173 7 + 楔形 2）")
+    @Test("PatternKind allCases · v17.188 后扩到 13 case（v17.177 9 + 旗形/三角旗/杯柄 4）")
     func patternKindAllCasesCount() {
-        #expect(PatternKind.allCases.count == 9)
+        #expect(PatternKind.allCases.count == 13)
         let kinds = Set(PatternKind.allCases)
         #expect(kinds.contains(.ascendingTriangle))
         #expect(kinds.contains(.descendingTriangle))
         #expect(kinds.contains(.rectangle))
         #expect(kinds.contains(.risingWedge))
         #expect(kinds.contains(.fallingWedge))
+        #expect(kinds.contains(.bullishFlag))
+        #expect(kinds.contains(.bearishFlag))
+        #expect(kinds.contains(.pennant))
+        #expect(kinds.contains(.cupAndHandle))
+    }
+
+    // MARK: - v17.188 · 旗形 / 三角旗 / 杯柄
+
+    @Test("看多旗形 · pole 100→120 + body 顶/底略下倾平行 · 检出 direction +1")
+    func detectBullishFlag() throws {
+        // 5 pivot 100/120/114/118/112 · pole +20% ≥ 5% · 顶降 1.67% · 底降 1.75% · ratio 1.05 ≤ 1.5
+        let prices: [Double] = [100, 100, 120, 120, 114, 114, 118, 118, 112, 112, 115]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        let flag = detected.filter { $0.kind == .bullishFlag }
+        #expect(flag.count >= 1, "应至少检出 1 个看多旗形 · detected=\(detected.map { ($0.kind, $0.confidence) })")
+        if let p = flag.first {
+            #expect(p.kind.direction == 1)
+            #expect(p.pivotPrices.count == 5)
+        }
+    }
+
+    @Test("看空旗形 · pole 120→100 + body 顶/底略上倾平行 · 检出 direction -1")
+    func detectBearishFlag() throws {
+        // 5 pivot 120/100/106/102/108 · pole -16.67% ≥ 5% · 底升 2% · 顶升 1.89% · ratio 1.06 ≤ 1.5
+        let prices: [Double] = [120, 120, 100, 100, 106, 106, 102, 102, 108, 108, 105]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        let flag = detected.filter { $0.kind == .bearishFlag }
+        #expect(flag.count >= 1, "应至少检出 1 个看空旗形 · detected=\(detected.map { ($0.kind, $0.confidence) })")
+        if let p = flag.first {
+            #expect(p.kind.direction == -1)
+        }
+    }
+
+    @Test("三角旗 · bull pole 100→120 + body 顶降 + 底升 收敛 · 检出 direction 0（跟随 pole）")
+    func detectPennant() throws {
+        // 5 pivot 100/120/110/116/112 · pole +20% · 顶降 3.33% · 底升 1.82% · convergence 1.83 ≤ 3
+        let prices: [Double] = [100, 100, 120, 120, 110, 110, 116, 116, 112, 112, 114]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        let pen = detected.filter { $0.kind == .pennant }
+        #expect(pen.count >= 1, "应至少检出 1 个三角旗 · detected=\(detected.map { ($0.kind, $0.confidence) })")
+        if let p = pen.first {
+            #expect(p.kind.direction == 0)
+            #expect(p.pivotPrices.count == 5)
+        }
+    }
+
+    @Test("杯柄 · 两口 120/119 对称 + 杯底 100 深 16% + 柄 114 浅 · 检出 direction +1")
+    func detectCupAndHandle() throws {
+        // 5 pivot 120/100/119/114/120 · rimDiff 0.83% ≤ 5% · cupDepth 16.32% ≥ 10% · handle 4.2% ≤ cupDepth*0.5
+        let prices: [Double] = [120, 120, 100, 100, 119, 119, 114, 114, 120, 120, 118]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        let cup = detected.filter { $0.kind == .cupAndHandle }
+        #expect(cup.count >= 1, "应至少检出 1 个杯柄 · detected=\(detected.map { ($0.kind, $0.confidence) })")
+        if let p = cup.first {
+            #expect(p.kind.direction == 1)
+            #expect(p.pivotPrices.count == 5)
+        }
+    }
+
+    @Test("看多旗形 · body 顶降过陡（5%）> flagBodyMaxSlope 3% · 不应识别")
+    func bullishFlagRejectsSteepBody() throws {
+        // pivots 100/120/110/114/108 · topSlope (120-114)/120 = 5% > 3% 阈值
+        let prices: [Double] = [100, 100, 120, 120, 110, 110, 114, 114, 108, 108, 110]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        #expect(detected.filter { $0.kind == .bullishFlag }.isEmpty)
+    }
+
+    @Test("看空旗形 · body 顶升过陡（8.5%）> flagBodyMaxSlope 3% · 不应识别")
+    func bearishFlagRejectsSteepBody() throws {
+        // pivots 120/100/106/102/115 · topSlope (115-106)/106 = 8.49% > 3%
+        let prices: [Double] = [120, 120, 100, 100, 106, 106, 102, 102, 115, 115, 110]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        #expect(detected.filter { $0.kind == .bearishFlag }.isEmpty)
+    }
+
+    @Test("三角旗 · body 顶降+底降（同向不收敛）· 不应识别")
+    func pennantRejectsParallelBody() throws {
+        // pivots 100/120/110/116/106 · 顶降 3.33% ✓ · 底降 3.64% ✗（pennant 要求底升）
+        let prices: [Double] = [100, 100, 120, 120, 110, 110, 116, 116, 106, 106, 108]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        #expect(detected.filter { $0.kind == .pennant }.isEmpty)
+    }
+
+    @Test("杯柄 · 两口 120/130 不对称（diff 7.7%）> cupRimTolerance 5% · 不应识别")
+    func cupAndHandleRejectsAsymmetricRims() throws {
+        // pivots 120/100/130/124/128 · rimDiff (130-120)/130 ≈ 7.69% > 5% 阈值
+        let prices: [Double] = [120, 120, 100, 100, 130, 130, 124, 124, 128, 128, 126]
+        let bars = makeBarsFromCloses(prices)
+        let detected = try PatternDetector.detect(kline: makeSeries(bars: bars), params: .default)
+        #expect(detected.filter { $0.kind == .cupAndHandle }.isEmpty)
     }
 
     // MARK: - v17.177 · 楔形

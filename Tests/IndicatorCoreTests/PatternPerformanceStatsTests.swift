@@ -11,8 +11,8 @@ struct PatternPerformanceStatsTests {
     @Test("analyze · 空 bars · 所有 kind 占位 count=0")
     func emptyBars() throws {
         let stats = try PatternPerformanceAnalyzer.analyze(bars: [])
-        // 9 PatternKind allCases · 全部 count=0
-        #expect(stats.count == 9)
+        // v17.188 后 PatternKind allCases 共 13 · 全部 count=0
+        #expect(stats.count == PatternKind.allCases.count)
         #expect(stats.allSatisfy { $0.occurrenceCount == 0 })
         #expect(stats.allSatisfy { $0.individualChangesPct.isEmpty })
     }

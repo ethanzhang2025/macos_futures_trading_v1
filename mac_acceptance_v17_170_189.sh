@@ -114,8 +114,34 @@ trap cleanup EXIT
 mkdir -p "${SHOTS_DIR}"
 rm -f "${SHOTS_DIR}"/*.png 2>/dev/null
 
+# capture_step_timed <name> <prompt> <seconds>
+# 倒计时截全屏 · 用于右键 menu / 临时 hover 等截图按 ⌘⇧4 会让 menu 消失的场景
+# screencapture -T N -x = N 秒后自动截全屏 · 不交互 · 用户期间完成操作
+capture_step_timed() {
+    local name="$1"
+    local prompt="$2"
+    local seconds="$3"
+    local target="${SHOTS_DIR}/${name}.png"
+
+    echo ""
+    echo "📸 ${name} · ${prompt}"
+    echo "  ⏰ 倒计时模式：回车后 ${seconds}s 自动截全屏 · 期间完成操作（不要切焦点到终端）"
+    read -p "▸ 准备好后回车启动倒计时 / s 跳过 / q 退出: " ans
+    case "${ans}" in
+        s|S) echo "  ⏭  跳过"; return 0 ;;
+        q|Q) exit 0 ;;
+    esac
+    rm -f "${target}" 2>/dev/null
+    screencapture -T "${seconds}" -x "${target}"
+    if [[ -f "${target}" ]]; then
+        echo "  ✅ ${name}.png ($(stat -f '%z' "${target}") bytes)"
+    else
+        echo "  ⚠️ 截图失败"
+    fi
+}
+
 # capture_step <name> <prompt>
-# 极简：回车 → screencapture -i → 用户鼠标点窗口/拖框 → 完成
+# 极简：回车 → screencapture -iW → 用户鼠标点窗口/拖框 → 完成
 capture_step() {
     local name="$1"
     local prompt="$2"
@@ -210,13 +236,18 @@ want_shot 29 && capture_step "29_⌘⌥L_crosslinkage_window" \
     "按 ⌘⌥L 弹【跨合约联动预警规则管理窗口】· 截整个新弹窗口（不是 chart 主图）"
 
 want_shot 30 && capture_step "30_盘中复盘_calendar_sheet" \
-    "① toolbar 顶部 picker 切到【回放】· ② 底部弹出 replayControlBar · ③ 点 📅 calendar 图标 · ④ 弹出日期选择 sheet 后截图"
+    "① chart toolbar 顶部最左有 segmented picker【实盘 | 回放】· 点【回放】 · ② 底部弹出 replayControlBar · ③ 点 📅 calendar 图标 · ④ 弹出日期选择 sheet 后截图"
 
-want_shot 31 && capture_step "31_右键_OHLC_形态_Markdown_menu" \
-    "在主图 K 线某根 bar 上【右键】· 弹出 context menu 含「复制 OHLC」「复制形态」等 · 截 menu 展开状态"
+# step 31 用 timed mode · 右键 menu 按 ⌘⇧4 截图时 menu 会自动关
+want_shot 31 && capture_step_timed "31_右键_OHLC_形态_Markdown_menu" \
+    "在主图 K 线某根 bar 上【右键】· 让 menu 保持打开 · 倒计时结束自动截屏" 5
 
 want_shot 32 && capture_step "32_CSV导入_⌘⇧⌥I_filepicker" \
     "按 ⌘⇧⌥I · 弹出 macOS 文件选择 sheet 让选 CSV · 截弹出后的文件选择窗口"
+
+# v17.200 · 诊断 step · 截整个 chart window 让 Claude 看 toolbar 布局
+want_shot 33 && capture_step "33_chart_整窗诊断_toolbar位置" \
+    "什么都不做 · 直接截【chart 完整 window 含顶部 toolbar】让 Claude 看 实盘/回放 picker 在哪 · 截图时点击 chart 窗口即可"
 
 # 关 app
 echo ""

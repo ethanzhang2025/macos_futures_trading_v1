@@ -4235,6 +4235,10 @@ struct ChartContentView: View {
             Button("复制可见区 OHLC（Markdown 表格）") {
                 copyVisibleBarsAsMarkdown()
             }
+            // v17.186 · Markdown + 形态识别标注（同伴/AI 沟通时一键带形态）
+            Button("复制可见区 OHLC + 形态（Markdown）") {
+                copyVisibleBarsAsMarkdownWithPatterns()
+            }
             // v15.21 batch119 · 复制可见区时间范围（标关注区间 · 写笔记/IM 群讨论用）
             Button("复制可见区时间范围") {
                 copyVisibleTimeRange()
@@ -4368,6 +4372,38 @@ struct ChartContentView: View {
         let markdown = OHLCMarkdownExporter.render(slice)
         guard !markdown.isEmpty else { return }
         Pasteboard.copy(markdown)
+    }
+
+    /// v17.186 · 复制 viewport 可见区 K 线为 Markdown · 带形态标注列（trader 跟同伴/AI 沟通时连形态都发）
+    /// pivotIndex 由 PatternDetector.detect 给出（全图坐标）· 转换为 slice 内的相对索引 [0, slice.count)
+    private func copyVisibleBarsAsMarkdownWithPatterns() {
+        let endIdx = min(bars.count, viewport.startIndex + viewport.visibleCount)
+        let startIdx = max(0, viewport.startIndex)
+        guard startIdx < endIdx else { return }
+        let slice = Array(bars[startIdx..<endIdx])
+        let kline = KLineSeries(
+            opens: bars.map(\.open), highs: bars.map(\.high), lows: bars.map(\.low),
+            closes: bars.map(\.close), volumes: bars.map(\.volume),
+            openInterests: bars.map { _ in 0 }
+        )
+        let patterns = (try? PatternDetector.detect(kline: kline)) ?? []
+        // 把 endIndex 落在 [startIdx, endIdx) 内的形态汇总到对应相对索引
+        var annotations: [Int: String] = [:]
+        for p in patterns {
+            let endAbs = p.endIndex
+            guard endAbs >= startIdx, endAbs < endIdx else { continue }
+            let rel = endAbs - startIdx
+            let label = "\(p.kind.displayName)(\(Int(p.confidence * 100))%)"
+            if let existing = annotations[rel] {
+                annotations[rel] = existing + ";" + label
+            } else {
+                annotations[rel] = label
+            }
+        }
+        let markdown = OHLCMarkdownExporter.renderWithAnnotations(slice, annotations: annotations)
+        guard !markdown.isEmpty else { return }
+        Pasteboard.copy(markdown)
+        presentToggleNotice("已复制 Markdown（含 \(annotations.count) 形态标注）")
     }
 
     /// v13.24 复制 viewport 可见区 K 线为 CSV 到 NSPasteboard

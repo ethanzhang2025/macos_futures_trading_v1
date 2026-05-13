@@ -19,6 +19,8 @@ public struct ShellWindow: View {
     /// v17.84 · 当前显示的预警 banner（5s 自动消失 · 点击 → 打开预警窗口）
     @State private var alertBanner: NotificationEvent?
     @State private var alertBannerDismissTask: Task<Void, Never>?
+    /// v17.141 · 全工程快捷键速查 sheet 显隐（⌘⇧/ 触发 · 主菜单帮助项也调）
+    @State private var showShortcutsSheet: Bool = false
 
     public init() {}
 
@@ -67,6 +69,13 @@ public struct ShellWindow: View {
         .sheet(isPresented: $shellVM.showPresetPickerSheet) {
             WorkspacePresetPickerSheet(isPresented: $shellVM.showPresetPickerSheet)
                 .environmentObject(shellVM)
+        }
+        // v17.141 · 全工程快捷键速查 sheet · ⌘⇧/ 触发 + 主菜单"帮助" → "全局快捷键速查"
+        .sheet(isPresented: $showShortcutsSheet) {
+            GlobalShortcutsHelpSheet()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openGlobalShortcutsSheet)) { _ in
+            showShortcutsSheet = true
         }
         // v17.57 · F 键 toast overlay（瞬态 1.5s）
         .overlay(alignment: .top) {

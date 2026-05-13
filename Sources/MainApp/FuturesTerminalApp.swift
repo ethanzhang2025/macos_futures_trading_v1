@@ -376,6 +376,10 @@ struct FuturesTerminalApp: App {
                 Divider()
                 OpenFormulaEditorButton()  // v15.22 batch4 · WP-65 公式编辑器（⌘⌥F）
             }
+            // v17.141 · 帮助菜单加全局快捷键速查（⌘⇧/ · 任何窗口前台都能触发）
+            CommandGroup(replacing: .help) {
+                OpenGlobalShortcutsButton()
+            }
         }
 
         // 自选合约窗口（菜单触发打开 · 单实例 · WP-43 UI · M5 接 SQLiteWatchlistBookStore）
@@ -797,6 +801,20 @@ private struct OpenBacktestButton: View {
     var body: some View {
         Button("公式回测（⌘⌥K）") { openWindow(id: "backtest") }
             .keyboardShortcut("k", modifiers: [.command, .option])
+    }
+}
+
+/// v17.141 · 全工程快捷键速查菜单项（⌘⇧/ · 任何窗口前台触发 · post Notification 让 ShellWindow 弹 sheet）
+/// macOS 系统 .help category 默认含 ⌘? · ⌘⇧/ 是它的常见替代键位（与 ChartScene 内 ⌘/ 互补）
+private struct OpenGlobalShortcutsButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("全局快捷键速查（⌘⇧/）") {
+            // 先确保 Shell 在前台（用户可能从子窗口触发） · 再 post 通知让 sheet 弹出
+            openWindow(id: "shell")
+            NotificationCenter.default.post(name: .openGlobalShortcutsSheet, object: nil)
+        }
+        .keyboardShortcut("/", modifiers: [.command, .shift])
     }
 }
 

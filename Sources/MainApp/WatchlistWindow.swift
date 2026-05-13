@@ -1358,6 +1358,8 @@ struct WatchlistWindow: View {
         let pinCount = book.group(id: groupID)?.pinnedInstrumentIDs?.count ?? 0
         // v17.134 · 当前合约别名（持久化 InstrumentAliasStore · trader 自定义可读名）
         let alias = aliasStore.alias(for: id)
+        // v17.146 · 当前合约存档状态（per-group · 已平仓/历史合约 · 灰色降级显示）
+        let isArchived = book.isArchived(id, in: groupID)
         return HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.5))
@@ -1371,15 +1373,24 @@ struct WatchlistWindow: View {
                         .rotationEffect(.degrees(45))
                         .tooltip("已置顶 · 永远在组内顶部")
                 }
+                // v17.146 · 已存档 📦 标识（灰色降级 · trader 一眼区分活跃 vs 历史合约）
+                if isArchived {
+                    Image(systemName: "archivebox.fill")
+                        .font(.system(size: 9 + chartFontSize.sizeDelta))
+                        .foregroundColor(.secondary.opacity(0.7))
+                        .tooltip("已存档 · 已平仓/历史合约 · 右键取消存档恢复")
+                }
                 if flag != .none {
                     Text(flag.emoji)
                         .font(.system(size: 11 + chartFontSize.sizeDelta))
                         .tooltip(flag.displayName)
                 }
                 // v17.134 · 别名替代 ID 显示（trader 自定义中文名优先 · tooltip 给原 ID）
+                // v17.146 · archived 灰色降级（trader 视觉区分活跃合约 vs 历史归档）
                 Text(alias ?? id)
                     .font(.system(.body, design: alias == nil ? .monospaced : .default))
                     .fontWeight(.medium)
+                    .foregroundColor(isArchived ? .secondary.opacity(0.65) : .primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .tooltip(alias.map { "\($0)（\(id)）" } ?? id)
@@ -1509,6 +1520,10 @@ struct WatchlistWindow: View {
                 Button("📌 取消置顶") {
                     _ = book.unpinInstrument(id, in: groupID)
                 }
+            } else if isArchived {
+                // v17.146 · 已存档不可置顶（互斥 · 模型层 pinInstrument 已 guard · UI 显示禁用提示）
+                Button("📌 置顶（已存档 · 先取消存档）") {}
+                    .disabled(true)
             } else if pinCount < Watchlist.maxPinnedPerGroup {
                 Button("📌 置顶到组顶部") {
                     _ = book.pinInstrument(id, in: groupID)
@@ -1516,6 +1531,16 @@ struct WatchlistWindow: View {
             } else {
                 Button("📌 置顶（已满 \(Watchlist.maxPinnedPerGroup)/\(Watchlist.maxPinnedPerGroup) · 先取消其他）") {}
                     .disabled(true)
+            }
+            // v17.146 · 存档 📦（已平仓 / 历史合约 · 灰色降级显示 · 互斥 pin）
+            if isArchived {
+                Button("📦 取消存档") {
+                    _ = book.unarchiveInstrument(id, in: groupID)
+                }
+            } else {
+                Button("📦 存档（已平仓 / 历史合约）") {
+                    _ = book.archiveInstrument(id, in: groupID)
+                }
             }
             // v17.134 · 别名（trader 自定义可读名 · "豆粕 0509" 替代 m2509）
             Button(alias == nil ? "✏️ 设别名" : "✏️ 编辑别名") {

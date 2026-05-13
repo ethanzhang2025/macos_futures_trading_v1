@@ -561,6 +561,7 @@ struct ChartScene: View {
             MainChartOverlayParamsSheet(book: $overlayBook)
         }
         // v17.165 · 形态识别清单 sheet（⌘⇧L · 列当前 K 线全部检出形态 · 点行跳转 viewport）
+        // v17.182 · 加历史回测统计区（PatternPerformanceAnalyzer.analyze · bars 直传）
         .sheet(isPresented: $showPatternsListSheet) {
             let kline = KLineSeries(
                 opens: bars.map(\.open),
@@ -571,8 +572,10 @@ struct ChartScene: View {
                 openInterests: bars.map { _ in 0 }
             )
             let patterns = (try? PatternDetector.detect(kline: kline)) ?? []
+            let stats = (try? PatternPerformanceAnalyzer.analyze(bars: bars)) ?? []
             PatternsListSheet(
                 patterns: patterns,
+                stats: stats,
                 chartTheme: chartTheme,
                 candleColorMode: candleColorMode,
                 onJumpTo: { idx in jumpViewport(toBarIndex: idx) }

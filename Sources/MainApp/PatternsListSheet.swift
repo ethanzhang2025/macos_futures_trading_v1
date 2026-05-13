@@ -18,10 +18,27 @@ import Shared
 struct PatternsListSheet: View {
 
     let patterns: [DetectedPattern]
+    /// v17.182 · 历史回测统计（caller 跑 PatternPerformanceAnalyzer.analyze 传入 · 不传 = 不显示）
+    let stats: [PatternPerformanceStats]
     let chartTheme: ChartTheme
     let candleColorMode: CandleColorMode
     let onJumpTo: (Int) -> Void
     @Environment(\.dismiss) private var dismiss
+
+    /// v17.182 兼容旧 caller（无 stats 参数）
+    init(
+        patterns: [DetectedPattern],
+        stats: [PatternPerformanceStats] = [],
+        chartTheme: ChartTheme,
+        candleColorMode: CandleColorMode,
+        onJumpTo: @escaping (Int) -> Void
+    ) {
+        self.patterns = patterns
+        self.stats = stats
+        self.chartTheme = chartTheme
+        self.candleColorMode = candleColorMode
+        self.onJumpTo = onJumpTo
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -34,6 +51,12 @@ struct PatternsListSheet: View {
                     .foregroundColor(.secondary)
             }
             .padding(.bottom, 8)
+
+            // v17.182 · 历史回测统计区（仅有命中的 kind 显示 · 占位 0 命中的 kind 不显示避免噪声）
+            if !stats.isEmpty {
+                statsSection
+                Divider().padding(.bottom, 6)
+            }
 
             if patterns.isEmpty {
                 VStack(spacing: 8) {
@@ -100,6 +123,62 @@ struct PatternsListSheet: View {
 
     private var sortedPatterns: [DetectedPattern] {
         patterns.sorted { $0.confidence > $1.confidence }
+    }
+
+    // MARK: - v17.182 · 历史回测统计区
+
+    private var statsSection: some View {
+        let nonZero = stats.filter { $0.occurrenceCount > 0 }
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: "chart.bar.fill").font(.caption)
+                Text("历史回测（后 20 根 close 变化均值 + 与方向一致胜率）")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            if nonZero.isEmpty {
+                Text("当前 K 线无足够后续数据计算回测（≥ 20 根 lookForward）")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(nonZero, id: \.kind) { s in
+                    statsRow(s)
+                }
+            }
+        }
+        .padding(.bottom, 6)
+    }
+
+    private func statsRow(_ s: PatternPerformanceStats) -> some View {
+        let kindColor: Color = {
+            if s.kind.direction == 0 { return .gray }
+            return s.kind.direction > 0
+                ? chartTheme.candleUp(mode: candleColorMode)
+                : chartTheme.candleDown(mode: candleColorMode)
+        }()
+        return HStack(spacing: 6) {
+            Image(systemName: s.kind.icon)
+                .foregroundColor(kindColor)
+                .font(.system(size: 10))
+                .frame(width: 14)
+            Text(s.kind.displayName)
+                .font(.system(size: 11))
+                .frame(width: 70, alignment: .leading)
+            Text("\(s.occurrenceCount)")
+                .font(.system(size: 11, design: .monospaced))
+                .frame(width: 30, alignment: .trailing)
+                .foregroundColor(.secondary)
+            Text(String(format: "%+.2f%%", s.averagePriceChangePct))
+                .font(.system(size: 11, design: .monospaced))
+                .frame(width: 70, alignment: .trailing)
+                .foregroundColor(s.averagePriceChangePct >= 0
+                    ? chartTheme.candleUp(mode: candleColorMode)
+                    : chartTheme.candleDown(mode: candleColorMode))
+            Text(String(format: "%.0f%%", s.winRatePct))
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .frame(width: 50, alignment: .trailing)
+                .foregroundColor(s.winRatePct >= 60 ? .green : (s.winRatePct >= 40 ? .orange : .red))
+        }
     }
 
     private func colorFor(_ p: DetectedPattern) -> Color {

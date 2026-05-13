@@ -11,23 +11,32 @@
 
 on run argv
     if (count of argv) < 1 then
-        log "用法：osascript mac_acceptance_v17_170_189.applescript <shots_dir>"
-        return
+        log "用法：osascript mac_acceptance_v17_170_189.applescript <shots_dir> [app_name]"
+        error "missing shots_dir" number 64
     end if
     set shotsDir to item 1 of argv
+    set appName to "MainApp"
+    if (count of argv) ≥ 2 then set appName to item 2 of argv
 
-    -- app 前置
+    -- 强制把目标 app 前置 · 找不到 = hard error 让 sh 端 exit
     try
-        tell application "System Events" to set frontmost of (first process whose name is "MainApp") to true
-    on error
-        try
-            tell application "System Events" to set frontmost of (first process whose name is "FuturesTerminal") to true
-        on error
-            log "⚠️ MainApp / FuturesTerminal 进程未找到 · 退出"
-            return
-        end try
+        tell application "System Events" to set frontmost of (first process whose name is appName) to true
+    on error errMsg
+        log "❌ 目标进程 " & appName & " 未找到 · " & errMsg
+        error "app process not found: " & appName number 70
     end try
     delay 1.0
+
+    -- 二次确认窗口存在
+    try
+        tell application "System Events"
+            set winCount to count of windows of (first process whose name is appName)
+        end tell
+        if winCount < 1 then
+            log "❌ " & appName & " 窗口数 = 0 · 主窗口未渲染"
+            error "no window for " & appName number 71
+        end if
+    end try
 
     -- 打开主图（⌘N · 数据加载 ~5s）
     tell application "System Events" to keystroke "n" using {command down}

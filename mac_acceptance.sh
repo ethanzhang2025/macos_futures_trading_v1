@@ -223,14 +223,13 @@ else
     BUILD_RC=${PIPESTATUS[0]}
 
     if [[ "$BUILD_RC" -ne 0 ]]; then
-        echo "❌ Build 失败 · 中止后续 · trap 会自动上传 01_build.log + exit_summary.txt"
+        echo "❌ Build 失败 · 中止后续 · trap 上传精简 extract（不传 01_build.log）"
+        # v17.190 · 极简精炼 · 只留 "X.swift:line:col: error: msg" 行 · 去重 · token 极小
         {
-            echo "# BUILD 失败摘要"
-            echo "## 错误行（grep error/warning · tail 50）"
-            grep -nE "error:|warning:" "$OUT_DIR/01_build.log" 2>/dev/null | tail -50 || echo "未匹配到 error/warning 行"
-            echo ""
-            echo "## 末 80 行"
-            tail -80 "$OUT_DIR/01_build.log"
+            echo "# BUILD 失败 · 仅 error 行（去重）"
+            grep -E "\.swift:[0-9]+:[0-9]+: error:" "$OUT_DIR/01_build.log" 2>/dev/null \
+                | sed 's|.*/Sources/|Sources/|' \
+                | sort -u
         } > "$OUT_DIR/01_build_error_extract.txt"
         COMPLETED_PHASES="P1 build 失败"
         exit 1

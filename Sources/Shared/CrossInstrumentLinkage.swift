@@ -59,7 +59,9 @@ public enum CrossLinkageExpectation: String, Sendable, Codable, CaseIterable {
 }
 
 /// 一条联动规则（trader 配置 · v1 内存 · v2 持久化 + UI 编辑）
-public struct CrossInstrumentLinkageRule: Sendable, Codable, Equatable {
+/// v17.190 · Identifiable 让 SwiftUI Table 可直接用 · id 复用 ruleID
+public struct CrossInstrumentLinkageRule: Sendable, Codable, Equatable, Identifiable {
+    public var id: String { ruleID }
     public var ruleID: String
     public var triggerInstrument: String
     public var triggerKind: CrossLinkageTriggerKind

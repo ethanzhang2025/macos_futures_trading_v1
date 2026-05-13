@@ -5323,6 +5323,11 @@ struct ChartContentView: View {
             minD = min(minD, Self.pointToSegmentDistance(p, CGPoint(x: xMin, y: yMin), CGPoint(x: xMax, y: yMax)))
             minD = min(minD, Self.pointToSegmentDistance(p, CGPoint(x: xMin, y: yMax), CGPoint(x: xMax, y: yMin)))
             return minD
+
+        case .fibonacciSpiral:
+            // v17.190 · fibonacciSpiral hit-test 兜底 · 用 start→end 直线段距离（足够 trader 选中 · 精确弧度计算非必需）
+            guard let end = drawing.endPoint else { return .infinity }
+            return Self.pointToSegmentDistance(p, screenPoint(drawing.startPoint), screenPoint(end))
         }
     }
 
@@ -5882,7 +5887,7 @@ struct ChartContentView: View {
             formatter.dateFormat = "yy-MM-dd HH:mm"
         case .daily, .weekly:
             formatter.dateFormat = "yyyy-MM-dd"
-        case .monthly:
+        case .monthly, .quarterly, .semiAnnual, .annual:
             formatter.dateFormat = "yyyy-MM"
         }
         return formatter.string(from: bar.openTime)

@@ -101,7 +101,8 @@ struct CrossLinkageRulesWindow: View {
                 }
                 .toggleStyle(.switch)
                 .disabled(rules.rules.isEmpty)
-                .onChange(of: autoPollEnabled) { _, newVal in
+                .onChange(of: autoPollEnabled) { newVal in
+                    // v17.190 · macOS 13 target · 单参数版本（双参数 onChange(of:initial:_:) 仅 macOS 14+）
                     if newVal { startPolling() } else { stopPolling() }
                 }
                 if let last = lastPollTime {

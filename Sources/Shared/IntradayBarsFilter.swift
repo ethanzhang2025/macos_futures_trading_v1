@@ -28,15 +28,9 @@ public enum IntradayBarsFilter {
         precedingWarmUp: Int = 60,
         calendar: Calendar = .current
     ) -> [KLine] {
-        guard !bars.isEmpty else { return [] }
-        guard let firstInDay = bars.firstIndex(where: { calendar.isDate($0.openTime, inSameDayAs: date) }) else {
-            return []
-        }
-        guard let lastInDay = bars.lastIndex(where: { calendar.isDate($0.openTime, inSameDayAs: date) }) else {
-            return []
-        }
-        let warmUpStart = max(0, firstInDay - max(0, precedingWarmUp))
-        return Array(bars[warmUpStart...lastInDay])
+        guard let range = dayRange(in: bars, date: date, calendar: calendar) else { return [] }
+        let warmUpStart = max(0, range.firstIndex - max(0, precedingWarmUp))
+        return Array(bars[warmUpStart...range.lastIndex])
     }
 
     /// 返回 bars 内出现过的所有交易日（startOfDay 去重 · 按时间升序）

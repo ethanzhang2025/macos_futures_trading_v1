@@ -3140,6 +3140,8 @@ struct ChartContentView: View {
             if showSupportResistance { supportResistanceOverlay }
             // v17.170 · 多周期共振 overlay（当前周期叠加高周期 MACD/EMA 金叉死叉 · 默认关）
             if showMultiTimeframeResonance { multiTimeframeResonanceOverlay }
+            // v17.180 · 多周期共振汇总 HUD（左上角 · 偏多/偏空/中性 · 一眼看主基调）
+            if showMultiTimeframeResonance { multiTimeframeResonanceHUD }
         }
         .overlay(alignment: .topTrailing) {
             // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
@@ -3813,6 +3815,45 @@ struct ChartContentView: View {
                 }
             }
         }
+        .allowsHitTesting(false)
+    }
+
+    /// v17.180 · 多周期共振汇总 HUD（左上 · 偏多/偏空/中性 + 多空 count · trader 一眼判主基调）
+    private var multiTimeframeResonanceHUD: some View {
+        let basePeriod = bars.first?.period
+        let targets: [KLinePeriod] = basePeriod.map(MultiTimeframeResonance.defaultTargets(for:)) ?? []
+        let allSignals: [ResonanceSignal] = (try? MultiTimeframeResonance.detect(
+            baseBars: bars, targetPeriods: targets
+        )) ?? []
+        // 仅看 visible 区间内的信号（与 overlay 一致）
+        let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
+        let visible = allSignals.filter { $0.baseBarIndex >= viewport.startIndex && $0.baseBarIndex < visibleEnd }
+        let summary = MultiTimeframeResonance.summary(signals: visible)
+        let verdictColor: Color = {
+            if summary.netStrength > 0 { return chartTheme.candleUp(mode: candleColorMode) }
+            if summary.netStrength < 0 { return chartTheme.candleDown(mode: candleColorMode) }
+            return .gray
+        }()
+        return HStack(spacing: 6) {
+            Image(systemName: "waveform.path.ecg")
+                .font(.system(size: 10))
+            Text("多周期共振").font(.system(size: 10, weight: .semibold))
+            Text(summary.verdict)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+            if summary.totalCount > 0 {
+                Text("⬆\(summary.bullishCount) ⬇\(summary.bearishCount)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .opacity(0.85)
+            }
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(verdictColor.opacity(0.85))
+        .cornerRadius(3)
+        .padding(.leading, 8)
+        .padding(.top, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
     }
 

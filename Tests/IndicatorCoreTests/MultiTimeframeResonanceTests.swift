@@ -174,6 +174,60 @@ struct MultiTimeframeResonanceTests {
         #expect(ResonanceSignalKind.emaDeathCross.shortCode == "E↓")
         #expect(ResonanceSignalKind.allCases.count == 4)
     }
+
+    // MARK: - v17.180 · ResonanceSummary
+
+    @Test("summary · 3 bull + 1 bear · netStrength +2 verdict 偏多")
+    func summaryBullish() {
+        let signals = [
+            makeSignal(.macdGoldCross),
+            makeSignal(.emaGoldCross),
+            makeSignal(.macdGoldCross),
+            makeSignal(.macdDeathCross)
+        ]
+        let s = MultiTimeframeResonance.summary(signals: signals)
+        #expect(s.bullishCount == 3)
+        #expect(s.bearishCount == 1)
+        #expect(s.netStrength == 2)
+        #expect(s.totalCount == 4)
+        #expect(s.verdict == "偏多")
+    }
+
+    @Test("summary · 1 bull + 3 bear · 偏空")
+    func summaryBearish() {
+        let signals = [
+            makeSignal(.macdGoldCross),
+            makeSignal(.macdDeathCross),
+            makeSignal(.emaDeathCross),
+            makeSignal(.macdDeathCross)
+        ]
+        let s = MultiTimeframeResonance.summary(signals: signals)
+        #expect(s.verdict == "偏空")
+        #expect(s.netStrength == -2)
+    }
+
+    @Test("summary · bull == bear · 中性")
+    func summaryNeutral() {
+        let signals = [
+            makeSignal(.macdGoldCross),
+            makeSignal(.macdDeathCross)
+        ]
+        let s = MultiTimeframeResonance.summary(signals: signals)
+        #expect(s.verdict == "中性")
+        #expect(s.netStrength == 0)
+    }
+
+    @Test("summary · 空列表 · 无信号")
+    func summaryEmpty() {
+        let s = MultiTimeframeResonance.summary(signals: [])
+        #expect(s.verdict == "无信号")
+        #expect(s.totalCount == 0)
+    }
+}
+
+fileprivate func makeSignal(_ kind: ResonanceSignalKind) -> ResonanceSignal {
+    ResonanceSignal(kind: kind, baseBarIndex: 0, sourcePeriod: .minute5,
+                    sourceOpenTime: Date(timeIntervalSince1970: 0))
 }
 
 // MARK: - test helpers

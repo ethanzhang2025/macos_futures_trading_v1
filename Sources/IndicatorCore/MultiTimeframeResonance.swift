@@ -106,7 +106,36 @@ public struct MultiTimeframeResonanceParams: Sendable, Equatable {
     public static let `default` = MultiTimeframeResonanceParams()
 }
 
+/// 共振强度汇总（trader 一眼看主基调 · 大多看多 / 看空 / 混合）
+public struct ResonanceSummary: Sendable, Equatable {
+    public let bullishCount: Int
+    public let bearishCount: Int
+    /// 净强度 = bullish - bearish · 正数偏多 · 负数偏空
+    public var netStrength: Int { bullishCount - bearishCount }
+    /// 总信号数（含中性 · 当前 v1 信号类型都有方向 · neutral 不出现）
+    public var totalCount: Int { bullishCount + bearishCount }
+    /// 主基调："偏多" / "偏空" / "中性" / "无信号"
+    public var verdict: String {
+        if totalCount == 0 { return "无信号" }
+        if netStrength > 0 { return "偏多" }
+        if netStrength < 0 { return "偏空" }
+        return "中性"
+    }
+}
+
 public enum MultiTimeframeResonance {
+
+    // MARK: - v17.180 · 汇总
+
+    /// 汇总信号方向（用于 trader HUD · 一眼看主基调）
+    public static func summary(signals: [ResonanceSignal]) -> ResonanceSummary {
+        var bull = 0, bear = 0
+        for s in signals {
+            if s.kind.direction > 0 { bull += 1 }
+            else if s.kind.direction < 0 { bear += 1 }
+        }
+        return ResonanceSummary(bullishCount: bull, bearishCount: bear)
+    }
 
     // MARK: - 默认 target 周期映射
 

@@ -380,8 +380,11 @@ struct ChartScene: View {
     private var bodyPrefix: some View {
         VStack(spacing: 0) {
             // v17.6 · Shell 嵌入模式隐藏顶部 toolbar（由 Shell PrimaryTabBar + Pane Header 统一管理）
+            // v17.201 · Shell 模式补回 chartMode 入口（实盘/回放）· Pane Header 管不了
             if !isHostedInShell {
                 toolbar
+            } else {
+                shellModeBar
             }
             mainContent
             if chartMode == .replay {
@@ -1682,6 +1685,27 @@ struct ChartScene: View {
     }
 
     // MARK: - 工具条
+
+    /// v17.201 · Shell 嵌入模式精简栏 · 仅 chartMode picker（实盘/回放）
+    /// Shell 模式下 toolbar 整体被隐藏 · Pane Header 不管 chartMode · 用户无入口切回放
+    /// 此栏只补 chartMode 一个 picker · 高 26pt · 不抢主图空间
+    private var shellModeBar: some View {
+        HStack(spacing: 8) {
+            Picker("", selection: $chartMode) {
+                ForEach(ChartMode.allCases) { m in
+                    Text(m.displayName).tag(m)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 120)
+            Spacer()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 3)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+    }
 
     private var toolbar: some View {
         HStack(spacing: 14) {

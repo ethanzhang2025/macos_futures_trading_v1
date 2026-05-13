@@ -18,13 +18,14 @@ public actor SoundChannel: NotificationChannel {
     public nonisolated let kind: NotificationChannelKind = .sound
 
     /// v17.86 · macOS 内置 14 sound（trader 可在 AlertSoundPickerSheet 选）
-    public static let availableSounds: [String] = [
+    /// v17.190 · Mac swift 6.3 严格 · actor 内 static 须显式 nonisolated 才能跨 actor scope 访问
+    public nonisolated static let availableSounds: [String] = [
         "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero",
         "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"
     ]
 
     /// v17.86 · UserDefaults 持久化 key（trader 设置后跨 App 重启保留）
-    public static let userDefaultsKey: String = "alertCenter.v1.soundName"
+    public nonisolated static let userDefaultsKey: String = "alertCenter.v1.soundName"
 
     private let soundName: String
     private let logger: @Sendable (String) -> Void

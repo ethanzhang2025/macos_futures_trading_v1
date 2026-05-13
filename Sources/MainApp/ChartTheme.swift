@@ -342,4 +342,14 @@ enum ChartThemeStore {
     }
 }
 
+// MARK: - v17.190 · 全局 free function delegate（14 caller 无前缀直接用 · Mac swift 6.3 严格 scope lookup 兼容）
+// 历史：v17.105 加 ChartTheme.chartProfitColor / chartLossColor / *EmphasizedColor 静态方法 · 14 文件 caller 写法混乱（部分加 ChartTheme. 前缀部分没加）
+// Linux swift 5.x 容忍无前缀调用 · Mac swift 6.3.2 严格 scope lookup 报"cannot find in scope"
+// 修法：保留 ChartTheme.* 同时加 module 内 internal free function · 两种写法都 work · 0 调用点改动
+
+func chartProfitColor(mode: CandleColorMode) -> Color { ChartTheme.chartProfitColor(mode: mode) }
+func chartLossColor(mode: CandleColorMode) -> Color { ChartTheme.chartLossColor(mode: mode) }
+func chartProfitEmphasizedColor(mode: CandleColorMode) -> Color { ChartTheme.chartProfitEmphasizedColor(mode: mode) }
+func chartLossEmphasizedColor(mode: CandleColorMode) -> Color { ChartTheme.chartLossEmphasizedColor(mode: mode) }
+
 #endif

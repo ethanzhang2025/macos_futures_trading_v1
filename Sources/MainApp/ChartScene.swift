@@ -1830,10 +1830,8 @@ struct ChartScene: View {
         // onChange overlayBook 已绑定 save + 重算 indicators（v17.151）
     }
 
-    /// v17.139 · 主图叠加菜单（VWAP / Pivot / SuperTrend / Ichimoku / Donchian / Keltner · 6 选 toggle · 角标 N/6 提示）
-    /// v17.151 · 加"参数..."项弹 MainChartOverlayParamsSheet · onChange overlayBook 统一持久化+重算
-    @ViewBuilder
     /// v17.160 · 副图 picker 单行（toggle + 右键收藏菜单 · 收藏 section / 分类 section 共用）
+    /// v17.190 · 清理：原 v17.139/151 的 mainChartOverlayMenu 函数早在某次 simplifier 被切 · 留孤儿 @ViewBuilder
     @ViewBuilder
     private func subIndicatorPickerRow(_ k: SubIndicatorKind, isPinned: Bool) -> some View {
         Toggle(k.shortName, isOn: Binding(

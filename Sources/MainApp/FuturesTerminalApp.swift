@@ -377,6 +377,8 @@ struct FuturesTerminalApp: App {
                 OpenFormulaEditorButton()  // v15.22 batch4 · WP-65 公式编辑器（⌘⌥F）
                 Divider()
                 OpenCSVImportButton()      // v17.169 · CSV 行情导入器
+                Divider()
+                OpenCrossLinkageButton()   // v17.175 · 跨合约联动预警规则管理
             }
             // v17.141 · 帮助菜单加全局快捷键速查（⌘⇧/ · 任何窗口前台都能触发）
             CommandGroup(replacing: .help) {
@@ -514,6 +516,13 @@ struct FuturesTerminalApp: App {
                 .followingChartTheme()
         }
         .defaultSize(width: 1100, height: 720)
+
+        // v17.175 · 跨合约联动预警（v17.172 闭环 UI · 规则管理 + 手动评估）
+        WindowGroup("跨合约联动", id: "crossLinkage") {
+            CrossLinkageRulesWindow()
+                .followingChartTheme()
+        }
+        .defaultSize(width: 820, height: 760)
 
         // v15.50 · WP-套利 跨期（⌘⌥X · 同品种近-远月价差 + contango/backwardation 判定）
         WindowGroup("跨期套利", id: "calendarSpread") {
@@ -677,6 +686,15 @@ private struct OpenTrainingButton: View {
     var body: some View {
         Button("模拟训练（⌘⇧T）") { openWindow(id: "training") }
             .keyboardShortcut("t", modifiers: [.command, .shift])
+    }
+}
+
+/// v17.175 · 跨合约联动预警入口（规则管理 + 手动评估 · ⌘⌥L）
+private struct OpenCrossLinkageButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("跨合约联动预警（⌘⌥L）") { openWindow(id: "crossLinkage") }
+            .keyboardShortcut("l", modifiers: [.command, .option])
     }
 }
 

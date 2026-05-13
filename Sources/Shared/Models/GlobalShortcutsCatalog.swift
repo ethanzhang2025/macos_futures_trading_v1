@@ -112,6 +112,7 @@ public enum GlobalShortcutsCatalog {
                 ShortcutEntry("⌘⌥W", "价差套利 alert"),
                 ShortcutEntry("⌘⌥K", "公式回测"),
                 ShortcutEntry("⌘⌥F", "公式编辑器"),
+                ShortcutEntry("⌘⌥L", "跨合约联动预警（v17.175 规则管理）"),
             ]),
             ShortcutGroup("主题与导入", [
                 ShortcutEntry("⌘⇧D", "切换主题（深色 / 浅色 · 全局生效）"),

@@ -13,6 +13,7 @@ public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Ident
     case vwap         // VWAP · 累积成交量加权均价（trader 日内基准）
     case pivot        // Pivot Points 7 线（前一根 H/L/C 推算 · daily 周期最适用）
     case superTrend   // SuperTrend · ATR 趋势止损线（rolling lock · 与麦语言 SUPERTREND 一致）
+    case ichimoku     // Ichimoku 一目均衡表 4 线（Tenkan/Kijun/Senkou-A/Senkou-B · CHIKOU 用未来 close 不画）
 
     public var id: String { rawValue }
 
@@ -21,6 +22,7 @@ public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Ident
         case .vwap:       return "VWAP（成交量加权均价）"
         case .pivot:      return "Pivot Points（经典支撑阻力 7 线）"
         case .superTrend: return "SuperTrend（ATR 趋势止损线）"
+        case .ichimoku:   return "Ichimoku（一目均衡表 4 线）"
         }
     }
 
@@ -30,6 +32,7 @@ public enum MainChartOverlayKind: String, CaseIterable, Sendable, Codable, Ident
         case .vwap:       return "chart.line.uptrend.xyaxis"
         case .pivot:      return "rectangle.split.3x1"
         case .superTrend: return "arrow.triangle.swap"
+        case .ichimoku:   return "cloud.fill"
         }
     }
 }
@@ -42,15 +45,27 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
     public var superTrendPeriod: Int
     /// SuperTrend multiplier（默认 3 · 标准参数）
     public var superTrendMultiplier: Decimal
+    /// Ichimoku 转换线 Tenkan-sen 周期（默认 9）
+    public var ichimokuTenkan: Int
+    /// Ichimoku 基准线 Kijun-sen 周期（默认 26）
+    public var ichimokuKijun: Int
+    /// Ichimoku 先行 B Senkou-Span-B 周期（默认 52）
+    public var ichimokuSenkou: Int
 
     public init(
         enabled: Set<MainChartOverlayKind> = [],
         superTrendPeriod: Int = 10,
-        superTrendMultiplier: Decimal = 3
+        superTrendMultiplier: Decimal = 3,
+        ichimokuTenkan: Int = 9,
+        ichimokuKijun: Int = 26,
+        ichimokuSenkou: Int = 52
     ) {
         self.enabled = enabled
         self.superTrendPeriod = superTrendPeriod
         self.superTrendMultiplier = superTrendMultiplier
+        self.ichimokuTenkan = ichimokuTenkan
+        self.ichimokuKijun = ichimokuKijun
+        self.ichimokuSenkou = ichimokuSenkou
     }
 
     public static let `default` = MainChartOverlayBook()
@@ -70,6 +85,7 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case enabled, superTrendPeriod, superTrendMultiplier
+        case ichimokuTenkan, ichimokuKijun, ichimokuSenkou
     }
 
     public init(from decoder: Decoder) throws {
@@ -77,6 +93,9 @@ public struct MainChartOverlayBook: Sendable, Codable, Equatable {
         self.enabled              = try c.decodeIfPresent(Set<MainChartOverlayKind>.self, forKey: .enabled) ?? []
         self.superTrendPeriod     = try c.decodeIfPresent(Int.self, forKey: .superTrendPeriod) ?? 10
         self.superTrendMultiplier = try c.decodeIfPresent(Decimal.self, forKey: .superTrendMultiplier) ?? 3
+        self.ichimokuTenkan       = try c.decodeIfPresent(Int.self, forKey: .ichimokuTenkan) ?? 9
+        self.ichimokuKijun        = try c.decodeIfPresent(Int.self, forKey: .ichimokuKijun) ?? 26
+        self.ichimokuSenkou       = try c.decodeIfPresent(Int.self, forKey: .ichimokuSenkou) ?? 52
     }
 }
 

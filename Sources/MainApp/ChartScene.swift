@@ -5364,6 +5364,19 @@ fileprivate enum MainChartOverlayCompute {
                 out.append(st)
             }
         }
+        if book.isEnabled(.ichimoku) {
+            let result = (try? Ichimoku.calculate(
+                kline: kline,
+                params: [Decimal(book.ichimokuTenkan), Decimal(book.ichimokuKijun), Decimal(book.ichimokuSenkou)]
+            )) ?? []
+            // 输出 4 条主线：TENKAN / KIJUN / SENKOU-A / SENKOU-B
+            // 不输出 CHIKOU（用未来 close 后移 · trader 看主图同周期没意义 · 等 v2 加支持滞后绘制再开）
+            for name in ["TENKAN", "KIJUN", "SENKOU-A", "SENKOU-B"] {
+                if let s = result.first(where: { $0.name == name }) {
+                    out.append(s)
+                }
+            }
+        }
         return out
     }
 }

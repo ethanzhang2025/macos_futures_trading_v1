@@ -147,6 +147,9 @@ enum ChartMode: String, CaseIterable, Identifiable {
 
 // MARK: - Scene 容器（每窗口独立 state）
 
+// v17.190 · Mac 6.3 严格 strict concurrency · @MainActor 让所有 method/closure 同 isolation
+// 否则各处 closure (Task / MainActor.run / sheet builder) 内 cross-isolation 触发 "cannot find in scope"
+@MainActor
 struct ChartScene: View {
 
     // 共享 state
@@ -3831,7 +3834,8 @@ struct ChartContentView: View {
 
     /// v17.189 · 副合约 normalized close 叠加层（橙色虚线 · 右下 label · 与主图同价格刻度）
     /// 数据流：secondaryBars (cached) → alignByOpenTime(primary=bars, secondary) → primary visible 区 closes 取 baseline → normalize → 渲染 Path
-    private var secondaryInstrumentOverlay: some View {
+    /// v17.190 · 计算 normalizedCloses 提到 helper · 防 Mac 6.3 推断复杂 expression timeout
+    private func secondaryNormalizedCloses() -> [Decimal] {
         let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
         let visiblePrimary = Array(bars[viewport.startIndex..<visibleEnd])
         let (_, alignedSecondary) = MultiInstrumentNormalizer.alignByOpenTime(
@@ -3840,11 +3844,16 @@ struct ChartContentView: View {
         )
         let primaryCloses = visiblePrimary.map(\.close)
         let secondaryCloses = alignedSecondary.map(\.close)
-        let normalizedCloses = MultiInstrumentNormalizer.normalizeToPrimaryScale(
+        return MultiInstrumentNormalizer.normalizeToPrimaryScale(
             primary: primaryCloses,
             secondary: secondaryCloses,
             mode: secondaryNormalizeMode
         )
+    }
+
+    private var secondaryInstrumentOverlay: some View {
+        let normalizedCloses = secondaryNormalizedCloses()
+        let label = "\(secondaryInstrumentID) · \(secondaryNormalizeMode.displayName)"
         return GeometryReader { geom in
             let visibleCount = max(1, viewport.visibleCount)
             let barWidth = geom.size.width / CGFloat(visibleCount)
@@ -3863,12 +3872,9 @@ struct ChartContentView: View {
                 }
             }
             .stroke(Color.orange.opacity(0.85), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-            // 右下 label 标识副合约 + 模式
             HStack(spacing: 4) {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 9))
-                Text("\(secondaryInstrumentID) · \(secondaryNormalizeMode.displayName)")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 9))
+                Text(label).font(.system(size: 10, weight: .semibold, design: .monospaced))
             }
             .foregroundColor(.white)
             .padding(.horizontal, 6)

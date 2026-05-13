@@ -2506,6 +2506,8 @@ struct ChartContentView: View {
     @AppStorage("viewState.v1.chart.showPatterns") private var showPatterns: Bool = false
     /// v17.166 · 支撑阻力自动识别 overlay 开关（ZigZag pivot 聚类 · 高频价位水平线）
     @AppStorage("viewState.v1.chart.showSupportResistance") private var showSupportResistance: Bool = false
+    /// v17.170 · 多周期共振 overlay 开关（⌘⇧Y · 当前周期 → 高周期 MACD/EMA 金叉死叉信号点）
+    @AppStorage("viewState.v1.chart.showMultiTimeframeResonance") private var showMultiTimeframeResonance: Bool = false
 
     /// v15.20 batch84 · 显隐切换瞬态提示（trader 直觉反馈：刚按了 ⌘. ⌘\ 等切换什么）
     @State private var toggleNotice: String?
@@ -2840,6 +2842,12 @@ struct ChartContentView: View {
                 presentToggleNotice("支撑阻力：\(showSupportResistance ? "显示" : "隐藏")")
             }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
+            // v17.170 · ⌘⇧Y 切换多周期共振 overlay（当前周期叠加高周期 MACD/EMA 金叉死叉信号点）
+            Button("") {
+                showMultiTimeframeResonance.toggle()
+                presentToggleNotice("多周期共振：\(showMultiTimeframeResonance ? "显示" : "隐藏")")
+            }
+                .keyboardShortcut("y", modifiers: [.command, .shift])
             Button("", action: jumpToLatestBar)
                 .keyboardShortcut(.end, modifiers: [.command])
             Button("", action: jumpToLatestBar)
@@ -3035,6 +3043,8 @@ struct ChartContentView: View {
             if showPatterns { patternsOverlay }
             // v17.166 · 支撑阻力自动识别 overlay（ZigZag pivot 聚类 · 加粗水平线 · 默认关）
             if showSupportResistance { supportResistanceOverlay }
+            // v17.170 · 多周期共振 overlay（当前周期叠加高周期 MACD/EMA 金叉死叉 · 默认关）
+            if showMultiTimeframeResonance { multiTimeframeResonanceOverlay }
         }
         .overlay(alignment: .topTrailing) {
             // 视觉迭代第 6 项：顶部当前价大字号 + 涨跌（vs Sina 实时昨结算 preSettle · fallback visible 周期首根）
@@ -3296,6 +3306,7 @@ struct ChartContentView: View {
                 ("⌘\\", "画线 overlay 显隐"),
                 ("⌘⇧H", "HUD 显隐"),
                 ("⌘⇧W", "Swing High/Low 标注显隐"),
+                ("⌘⇧Y", "多周期共振 overlay 显隐（v17.170）"),
             ]),
             ("主题 / 截图", [
                 ("⌘⇧D", "切换深色 / 浅色主题"),
@@ -3646,6 +3657,61 @@ struct ChartContentView: View {
                 .background(lineColor.opacity(0.85))
                 .cornerRadius(2)
                 .position(x: geom.size.width - 32, y: y)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// v17.170 · 多周期共振 overlay（当前周期 bars 聚合到 2 个高周期 · MACD/EMA 金叉死叉 · 看多绿三角朝上 / 看空红三角朝下 · 标签源周期）
+    private var multiTimeframeResonanceOverlay: some View {
+        let basePeriod = bars.first?.period
+        let targets: [KLinePeriod] = basePeriod.map(MultiTimeframeResonance.defaultTargets(for:)) ?? []
+        let allSignals: [ResonanceSignal] = (try? MultiTimeframeResonance.detect(
+            baseBars: bars, targetPeriods: targets
+        )) ?? []
+        let visibleEnd = min(viewport.startIndex + viewport.visibleCount, bars.count)
+        let visibleSignals = allSignals.filter { $0.baseBarIndex >= viewport.startIndex && $0.baseBarIndex < visibleEnd }
+        return GeometryReader { geom in
+            let visibleCount = max(1, viewport.visibleCount)
+            let barWidth = geom.size.width / CGFloat(visibleCount)
+            let xOffset = CGFloat(viewport.startOffset)
+            let hi = NSDecimalNumber(decimal: currentPriceRange.upperBound).doubleValue
+            let lo = NSDecimalNumber(decimal: currentPriceRange.lowerBound).doubleValue
+            let span = max(0.0001, hi - lo)
+            // 同 base bar 多信号沿 y 方向堆叠（每加 1 高 14pt）· 顺序按 sourcePeriod.seconds（更高周期更靠外）
+            let grouped = Dictionary(grouping: visibleSignals, by: \.baseBarIndex)
+            ForEach(Array(grouped.keys.sorted()), id: \.self) { barIdx in
+                let signalsAtBar = grouped[barIdx] ?? []
+                let bar = bars[barIdx]
+                let highPx = NSDecimalNumber(decimal: bar.high).doubleValue
+                let lowPx  = NSDecimalNumber(decimal: bar.low).doubleValue
+                let x = (CGFloat(barIdx - viewport.startIndex) + 0.5 - xOffset) * barWidth
+                ForEach(Array(signalsAtBar.enumerated()), id: \.offset) { stack, signal in
+                    let isBull = signal.kind.direction > 0
+                    let markerColor = isBull
+                        ? chartTheme.candleUp(mode: candleColorMode)
+                        : chartTheme.candleDown(mode: candleColorMode)
+                    let anchorY = isBull
+                        ? CGFloat((hi - lowPx)  / span) * geom.size.height + 8
+                        : CGFloat((hi - highPx) / span) * geom.size.height - 8
+                    let y = anchorY + CGFloat(stack) * (isBull ? 14 : -14)
+                    HStack(spacing: 2) {
+                        Image(systemName: isBull ? "triangle.fill" : "triangle.fill")
+                            .rotationEffect(isBull ? .zero : .degrees(180))
+                            .font(.system(size: 7))
+                        Text(signal.sourcePeriod.displayName)
+                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        Text(signal.kind.shortCode)
+                            .font(.system(size: 8, design: .monospaced))
+                            .opacity(0.85)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(markerColor.opacity(0.85))
+                    .cornerRadius(2)
+                    .position(x: x, y: y)
+                }
             }
         }
         .allowsHitTesting(false)

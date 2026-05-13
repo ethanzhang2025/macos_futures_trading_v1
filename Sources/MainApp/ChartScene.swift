@@ -254,6 +254,8 @@ struct ChartScene: View {
     @State private var showHUDFieldsSheet: Bool = false
     /// v15.17 · 副图多选 popover 显示状态（替代之前 Menu+Button · 修复"点一次只能选一个"便利问题）
     @State private var showSubIndicatorPicker: Bool = false
+    /// v17.160 · 副图指标收藏夹（高频指标置顶 ⭐ section · 右键 picker 行加入/移出）
+    @State private var indicatorFavorites: IndicatorFavorites = IndicatorFavoritesStore.load() ?? .default
     /// v15.17 InAppOverlayChannel 接收的预警 toast（3 秒自动消失 · 多个仅显示最新）
     @State private var alertToast: AlertToastInfo?
     @State private var alertToastDismissTask: Task<Void, Never>?
@@ -556,6 +558,10 @@ struct ChartScene: View {
             // v17.151 · overlayBook 改（toggle / sheet 保存）→ 持久化 + 重算 indicators · sheet 内"还原默认"也走这里
             MainChartOverlayStore.save(newValue)
             Task { await updateIndicatorsFull(bars) }
+        }
+        .onChange(of: indicatorFavorites) { newValue in
+            // v17.160 · 收藏夹改 → 持久化 · 不重算 indicators（picker UI only）
+            IndicatorFavoritesStore.save(newValue)
         }
         .onChange(of: subParamsOverrides) { newValue in
             // v15.7 副图独立参数 overrides 持久化（仅副图重算 · 主图不受影响）
@@ -1586,13 +1592,26 @@ struct ChartScene: View {
             .frame(width: 90)
             .tooltip("副图指标多选（至少 1 · 最多 4 · 点空白关闭弹窗）")
             .popover(isPresented: $showSubIndicatorPicker, arrowEdge: .bottom) {
-                // v17.158 · 按 IndicatorCategory 分组（30 项平铺 → 6 大类紧凑分段 · trader 浏览效率提升）
+                // v17.158 · 按 IndicatorCategory 分组（28 项平铺 → 6 大类紧凑分段）
+                // v17.160 · 顶部 ⭐ 收藏 section（右键各 toggle 加入/移出 · UserDefaults 持久化）
                 ScrollView {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("副图（多选 · 点空白关闭）")
+                        Text("副图（多选 · 右键加入 ⭐ 收藏）")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Divider()
+                        // v17.160 · 收藏 section（仅非空时显示）
+                        let favKinds = indicatorFavorites.rawValues.compactMap(SubIndicatorKind.init(rawValue:))
+                        if !favKinds.isEmpty {
+                            Text("⭐ 收藏")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.accentColor)
+                                .padding(.top, 4)
+                            ForEach(favKinds) { k in
+                                subIndicatorPickerRow(k, isPinned: true)
+                            }
+                            Divider().padding(.vertical, 2)
+                        }
                         ForEach(IndicatorCategory.allCases, id: \.self) { cat in
                             let items = SubIndicatorKind.allCases.filter { $0.category == cat }
                             if !items.isEmpty {
@@ -1601,25 +1620,14 @@ struct ChartScene: View {
                                     .foregroundColor(.secondary)
                                     .padding(.top, 4)
                                 ForEach(items) { k in
-                                    Toggle(k.shortName, isOn: Binding(
-                                        get: { selectedSubIndicators.contains(k) },
-                                        set: { isOn in
-                                            if isOn {
-                                                selectedSubIndicators.insert(k)
-                                            } else if selectedSubIndicators.count > 1 {
-                                                selectedSubIndicators.remove(k)
-                                            }
-                                        }
-                                    ))
-                                    .toggleStyle(.checkbox)
-                                    .padding(.leading, 8)
+                                    subIndicatorPickerRow(k, isPinned: false)
                                 }
                             }
                         }
                     }
                     .padding(12)
                 }
-                .frame(width: 200, height: 460)
+                .frame(width: 220, height: 480)
             }
 
             Divider().frame(height: 16)
@@ -1748,6 +1756,29 @@ struct ChartScene: View {
     /// v17.139 · 主图叠加菜单（VWAP / Pivot / SuperTrend / Ichimoku / Donchian / Keltner · 6 选 toggle · 角标 N/6 提示）
     /// v17.151 · 加"参数..."项弹 MainChartOverlayParamsSheet · onChange overlayBook 统一持久化+重算
     @ViewBuilder
+    /// v17.160 · 副图 picker 单行（toggle + 右键收藏菜单 · 收藏 section / 分类 section 共用）
+    @ViewBuilder
+    private func subIndicatorPickerRow(_ k: SubIndicatorKind, isPinned: Bool) -> some View {
+        Toggle(k.shortName, isOn: Binding(
+            get: { selectedSubIndicators.contains(k) },
+            set: { isOn in
+                if isOn {
+                    selectedSubIndicators.insert(k)
+                } else if selectedSubIndicators.count > 1 {
+                    selectedSubIndicators.remove(k)
+                }
+            }
+        ))
+        .toggleStyle(.checkbox)
+        .padding(.leading, 8)
+        .contextMenu {
+            let isFav = indicatorFavorites.contains(k.rawValue)
+            Button(isFav ? "移出 ⭐ 收藏" : "加入 ⭐ 收藏") {
+                indicatorFavorites.toggle(k.rawValue)
+            }
+        }
+    }
+
     private var mainChartOverlayMenu: some View {
         let count = overlayBook.enabled.count
         let total = MainChartOverlayKind.allCases.count

@@ -128,6 +128,26 @@ struct IndicatorParamsSheet: View {
                     paramField("lookback", $draft.swingLookback)
                     paramField("minSpacing", $draft.swingMinSpacing, leadingPad: true)
                 }
+
+                // v17.148 · 副图 6 个国际派常用指标 period（v17.143/144 收口 · trader 可调）
+                paramSection("副图 TRIX（三重 EMA 趋势 %）", subtitle: "默认 12（单线 · 上下对称视野 · 0 参考 · 趋势加速度）") {
+                    paramField("周期", $draft.trixPeriod)
+                }
+                paramSection("副图 CMF（蔡金资金流 Chaikin Money Flow）", subtitle: "默认 20（单线 · 上下对称视野 · ±0.05 阈值 · 资金流核心）") {
+                    paramField("周期", $draft.cmfPeriod)
+                }
+                paramSection("副图 VR（成交量比 Volume Ratio）", subtitle: "默认 26（单线 · 100 中性参考 · >150 强多 / <70 强空）") {
+                    paramField("周期", $draft.vrPeriod)
+                }
+                paramSection("副图 ADX（平均趋向指数 · DMI 配套）", subtitle: "默认 14（单线 0~100 · >25 趋势 / >40 极强）") {
+                    paramField("周期", $draft.adxPeriod)
+                }
+                paramSection("副图 MFI（资金流量指数 · 含 volume 的 RSI）", subtitle: "默认 14（单线 0~100 · 80/50/20 阈值 · 比 RSI 早识别背离）") {
+                    paramField("周期", $draft.mfiPeriod)
+                }
+                paramSection("副图 CMO（钱德动量 Chande Momentum）", subtitle: "默认 14（单线 -100~+100 · ±50/0 强动量阈值 · RSI 升级版）") {
+                    paramField("周期", $draft.cmoPeriod)
+                }
             }
             .formStyle(.grouped)
             } // ScrollView 结束
@@ -228,6 +248,13 @@ struct IndicatorParamsSheet: View {
         guard b.swingLookback >= 1 && b.swingLookback <= 100 else { return false }
         // v15.21 batch106 · Swing minSpacing 范围（0~100 · 0=不过滤 · 默认 0）
         guard b.swingMinSpacing >= 0 && b.swingMinSpacing <= 100 else { return false }
+        // v17.148 · 副图 6 个新指标 period 范围（与各自 IndicatorCore parameters 对齐 · 1~200）
+        guard b.trixPeriod >= 1 && b.trixPeriod <= 200 else { return false }
+        guard b.cmfPeriod  >= 1 && b.cmfPeriod  <= 200 else { return false }
+        guard b.vrPeriod   >= 1 && b.vrPeriod   <= 200 else { return false }
+        guard b.adxPeriod  >= 2 && b.adxPeriod  <= 200 else { return false }
+        guard b.mfiPeriod  >= 1 && b.mfiPeriod  <= 200 else { return false }
+        guard b.cmoPeriod  >= 1 && b.cmoPeriod  <= 200 else { return false }
         return true
     }
 }

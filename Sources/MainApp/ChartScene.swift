@@ -5756,7 +5756,7 @@ struct ChartContentView: View {
     /// 顶部当前价大字号 + 涨跌幅 · 红涨绿跌 · baseline 用 Sina 实时昨结算 preSettle · fallback visible 周期首根
     /// v15.16 hotfix #10：用户开 HUD .change 时隐藏右侧涨跌副栏（避免与 HUD 视觉重复）· 大字号保留 + 染色保留
     private var priceTopBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: DesignTokens.Spacing.md) {
             if let last = bars.last, let first = bars.first {
                 let close = NSDecimalNumber(decimal: last.close).doubleValue
                 let baselineDecimal = preSettle ?? first.close
@@ -5771,7 +5771,7 @@ struct ChartContentView: View {
                     .font(.system(size: 22 + chartFontSize.sizeDelta, weight: .bold, design: .monospaced))
                     .foregroundColor(color)
                 if !hudFields.fields.contains(.change) {
-                    VStack(alignment: .trailing, spacing: 1) {
+                    VStack(alignment: .trailing, spacing: DesignTokens.Spacing.xxs) {
                         Text("\(isUp ? "▲" : "▼") \(String(format: "%+.\(digits)f", diff))")
                             .font(ChartTheme.fontValue(size: chartFontSize))
                             .foregroundColor(color)
@@ -5782,11 +5782,23 @@ struct ChartContentView: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(chartTheme.hudBackground(mode: hudOpacityMode))
-        .cornerRadius(6)
-        .padding(12)
+        .padding(.horizontal, DesignTokens.Spacing.lg)
+        .padding(.vertical, DesignTokens.Spacing.md)
+        // v17.206 · 视觉升级 · macOS 原生模糊背景 + 主题 tint 叠加 + 1pt 描边 · 替代纯色 hudBackground
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
+                        .fill(chartTheme.hudBackground(mode: hudOpacityMode))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
+                        .stroke(Color.white.opacity(0.08), lineWidth: DesignTokens.Border.hairline)
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+        .padding(DesignTokens.Spacing.lg)
     }
 
     /// 拖拽平移 + 松手惯性滑行
@@ -5858,10 +5870,11 @@ struct ChartContentView: View {
     }
 
     var hud: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
             // 主标识行：合约 + 周期 + 数据源（核心信息 · 醒目 · 始终显示不可关）
+            // v17.206 · 视觉升级 · 字号 13 → 14 加粗 · 大众审美 title 档
             Text("\(instrumentLabel) · \(periodLabel) · \(dataSourceLabel)")
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundColor(chartTheme.textPrimary)
             // 视觉迭代第 3 项：MA / BOLL 数值彩色圆点 + 染色（与 Metal 折线 5 色调色板对齐 · 黄/紫/蓝/橙/粉）
             ForEach(Array(indicators.enumerated()), id: \.offset) { idx, series in
@@ -5935,10 +5948,22 @@ struct ChartContentView: View {
         }
         .font(.system(size: 12, design: .monospaced))
         .foregroundColor(chartTheme.textPrimary)
-        .padding(8)
-        .background(chartTheme.hudBackground(mode: hudOpacityMode))
-        .cornerRadius(6)
-        .padding(12)
+        .padding(DesignTokens.Spacing.md)
+        // v17.206 · 视觉升级 · macOS 原生模糊背景 + 主题 tint + 1pt 描边 · 替代纯色 hudBackground
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
+                        .fill(chartTheme.hudBackground(mode: hudOpacityMode))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
+                        .stroke(Color.white.opacity(0.08), lineWidth: DesignTokens.Border.hairline)
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+        .padding(DesignTokens.Spacing.lg)
     }
 
     /// v15.14 visible window 末位 K 线（HUD 自定义字段所有"最新"语义都基于此 · 与画面对齐）

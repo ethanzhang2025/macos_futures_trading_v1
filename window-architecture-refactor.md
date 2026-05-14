@@ -180,6 +180,55 @@ MainWindow: NSWindow
 
 ---
 
+## PrimaryTabBar 处理规则
+
+PrimaryTabBar 是主窗口顶部的 5 个一级模块入口：看盘 / 套利 / 期权 / 复盘 / 训练。
+
+V1 改造前（Shell 模式 · 已淘汰）：
+
+```text
+点击 PrimaryTab → shellVM.primaryTab = tab → activateFirstWorkspaceOfPrimaryTab
+                → PaneContainer 内嵌切换 → PaneBody case .option/.spread/.review/.training
+                → 撑大父容器 → PrimaryTabBar/WorkspaceTabBar 消失（v17.207 bug 根源）
+```
+
+V1 改造后（混合架构）：
+
+```text
+PrimaryTabBar 物理位置 → 保留在 MainWindow 顶部 · NSHostingController 包装
+PrimaryTabBar 点击行为 → 5 个 tab 变 5 个入口按钮
+
+  - 看盘  → 主窗 default 状态 · 不开新窗 · ChartScene 已在主窗内
+  - 套利  → WindowManager.open(.spread)
+  - 期权  → WindowManager.open(.option)
+  - 复盘  → WindowManager.open(.review)
+  - 训练  → WindowManager.open(.training)
+```
+
+要求：
+
+- PrimaryTabBar 仍保留在主窗 · 不删除
+- 5 tab 不再切 PaneBody · 改为调用 WindowManager
+- 看盘 tab 仅做"激活主窗"动作（确保主窗在前台）· 不开新窗口
+- 其他 4 tab 通过 WindowManager.open 弹出对应重型独立 NSWindow
+- WindowManager 内部判定：该重型窗口已开则激活前台 · 未开则创建
+- WorkspaceTabBar 同步处理：仅看盘 tab 显示 workspace tab 列表 · 其他 4 tab 隐藏 WorkspaceTabBar（因为它们走独立窗）
+
+视觉位置：
+
+```text
+MainWindow
+├── [顶] PrimaryTabBar       看盘 ▌ 套利 ▌ 期权 ▌ 复盘 ▌ 训练
+├── [次顶] WorkspaceTabBar    仅看盘 tab 下显示
+├── NSSplitViewController
+│   ├── Sidebar
+│   ├── ChartScene
+│   └── MonitorSplitItems (Watchlist / Sector / Position)
+└── [底] BottomBar + StatusBar
+```
+
+---
+
 ## 重型独立窗口
 
 以下模块保留或迁移为独立 `NSWindow`：

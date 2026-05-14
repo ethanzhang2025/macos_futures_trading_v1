@@ -327,6 +327,19 @@ struct FuturesTerminalApp: App {
         }
         .defaultSize(width: 1600, height: 1000)
 
+        // v17.208 · 方案 3 spike · AppKit NSSplitViewController + NSHostingController 桥接验证
+        // 不动现有 Shell · 独立窗口 · 工具菜单「🧪 AppKit Spike（⌘⌥⇧K）」打开
+        WindowGroup("AppKit Spike", id: "appkitSpike") {
+            AppKitShellSpikeWindow()
+                .environmentObject(shellVM)
+                .environment(\.storeManager, storeManager)
+                .environment(\.analytics, analytics)
+                .environment(\.alertEvaluator, alertEvaluator)
+                .environment(\.simulatedTradingEngine, simulatedTradingEngine)
+                .environment(\.bannerService, bannerService)
+        }
+        .defaultSize(width: 1600, height: 900)
+
         // 主图表窗口（保留 · 用户主动"分离"才打开 · Cmd+N 新建多个）
         // v15.17 · 移除全局 .preferredColorScheme(.dark) · ChartScene 内动态 chartTheme.colorScheme · sheet/popup 跟主题
         WindowGroup("K 线图表", id: "chart") {
@@ -379,6 +392,8 @@ struct FuturesTerminalApp: App {
                 OpenCSVImportButton()      // v17.169 · CSV 行情导入器
                 Divider()
                 OpenCrossLinkageButton()   // v17.175 · 跨合约联动预警规则管理
+                Divider()
+                OpenAppKitSpikeButton()    // v17.208 · 方案 3 spike · AppKit 桥接可行性验证
             }
             // v17.141 · 帮助菜单加全局快捷键速查（⌘⇧/ · 任何窗口前台都能触发）
             CommandGroup(replacing: .help) {
@@ -676,6 +691,15 @@ private struct OpenFormulaEditorButton: View {
     var body: some View {
         Button("公式编辑器（⌘⌥F）") { openWindow(id: "formulaEditor") }
             .keyboardShortcut("f", modifiers: [.command, .option])
+    }
+}
+
+/// v17.208 · 方案 3 spike · AppKit NSSplitViewController + NSHostingController 桥接验证
+private struct OpenAppKitSpikeButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("🧪 AppKit Spike（⌘⌥⇧K）") { openWindow(id: "appkitSpike") }
+            .keyboardShortcut("k", modifiers: [.command, .option, .shift])
     }
 }
 

@@ -32,35 +32,45 @@ struct ShellStatusBar: View {
     }()
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: DesignTokens.Spacing.lg) {
             // CTP 连接状态
             statusChip(
-                icon: Circle().fill(Color.orange).frame(width: 6, height: 6),
+                icon: Circle().fill(DesignTokens.StatusColor.warning).frame(width: 6, height: 6),
                 text: "CTP 未连接 (Stage A 模拟)",
-                color: .orange
+                color: DesignTokens.StatusColor.warning
             )
             statusDivider
             // 行情状态 + v17.96 心跳（上次更新时间 · 1s tick · trader 一眼确认数据流活着）
-            HStack(spacing: 4) {
+            HStack(spacing: DesignTokens.Spacing.xs) {
                 Circle()
-                    .fill(Color.green)
+                    .fill(DesignTokens.StatusColor.success)
                     .frame(width: 6, height: 6)
                     .opacity(heartbeatOpacity)
                 Text("行情正常")
-                    .font(.system(size: 10))
-                    .foregroundColor(.green)
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(DesignTokens.StatusColor.success)
                 Text("· 上次更新 \(dateFmt.string(from: now))")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .font(DesignTokens.Typography.hint)
+                    .foregroundColor(DesignTokens.StatusColor.dimmed)
             }
             .help("数据流心跳 · 每秒刷新本机时间作为 mock tick（Stage A · 接 CTP 后改读真行情 lastTickAt）")
             statusDivider
-            // 资金风险度
-            statusChip(
-                icon: Text("💰").font(.system(size: 10)),
-                text: "权益 ¥100,000 · 风险 0.0%",
-                color: .secondary
-            )
+            // 资金风险度（重要数据 · 强调字号）
+            HStack(spacing: DesignTokens.Spacing.xs) {
+                Text("💰").font(DesignTokens.Typography.label)
+                Text("权益")
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
+                Text("¥100,000")
+                    .font(DesignTokens.Typography.monoBold)
+                    .foregroundColor(.primary)
+                Text("· 风险")
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
+                Text("0.0%")
+                    .font(DesignTokens.Typography.mono)
+                    .foregroundColor(DesignTokens.StatusColor.success)
+            }
             statusDivider
             // 训练 streak
             trainingChip
@@ -74,8 +84,8 @@ struct ShellStatusBar: View {
             // 实时时间
             timeChip
         }
-        .padding(.horizontal, 12)
-        .frame(height: 22)
+        .padding(.horizontal, DesignTokens.Spacing.lg)
+        .frame(height: 26)
         .background(.bar)
         .onReceive(clockTimer) { now = $0 }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
@@ -90,13 +100,13 @@ struct ShellStatusBar: View {
             ChartThemeStore.save(next)
             currentTheme = next
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: DesignTokens.Spacing.xs) {
                 Image(systemName: currentTheme.icon)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
                 Text(currentTheme.displayName)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
             }
         }
         .buttonStyle(.plain)
@@ -105,43 +115,43 @@ struct ShellStatusBar: View {
 
     @ViewBuilder
     private func statusChip<I: View>(icon: I, text: String, color: Color) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DesignTokens.Spacing.xs) {
             icon
             Text(text)
-                .font(.system(size: 10))
+                .font(DesignTokens.Typography.label)
                 .foregroundColor(color)
         }
     }
 
     private var statusDivider: some View {
         Rectangle()
-            .fill(Color.secondary.opacity(0.3))
-            .frame(width: 1, height: 12)
+            .fill(DesignTokens.StatusColor.muted.opacity(0.3))
+            .frame(width: DesignTokens.Border.hairline, height: 12)
     }
 
     @ViewBuilder
     private var trainingChip: some View {
         let streak = trainingLog.currentStreak
         if streak.count >= 2 {
-            HStack(spacing: 4) {
-                Text(streak.isWinning ? "🔥" : "💧").font(.system(size: 10))
+            HStack(spacing: DesignTokens.Spacing.xs) {
+                Text(streak.isWinning ? "🔥" : "💧").font(DesignTokens.Typography.label)
                 Text("\(streak.isWinning ? "连胜" : "连败") \(streak.count)")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(streak.isWinning ? .red : .blue)
+                    .font(DesignTokens.Typography.mono)
+                    .foregroundColor(streak.isWinning ? .red : DesignTokens.StatusColor.accent)
             }
         } else if trainingLog.sessions.isEmpty {
-            HStack(spacing: 4) {
-                Text("🎯").font(.system(size: 10))
+            HStack(spacing: DesignTokens.Spacing.xs) {
+                Text("🎯").font(DesignTokens.Typography.label)
                 Text("尚未训练")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
             }
         } else {
-            HStack(spacing: 4) {
-                Text("🎯").font(.system(size: 10))
+            HStack(spacing: DesignTokens.Spacing.xs) {
+                Text("🎯").font(DesignTokens.Typography.label)
                 Text("累计 \(trainingLog.sessions.count) 次")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.mono)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
             }
         }
     }
@@ -149,26 +159,28 @@ struct ShellStatusBar: View {
     @ViewBuilder
     private var workspaceChip: some View {
         if let ws = shellVM.activeWorkspace {
-            HStack(spacing: 4) {
-                Text(ws.primaryTab.emoji).font(.system(size: 10))
+            HStack(spacing: DesignTokens.Spacing.xs) {
+                Text(ws.primaryTab.emoji).font(DesignTokens.Typography.label)
                 Text(ws.name)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                Text("·").foregroundColor(.secondary.opacity(0.4)).font(.system(size: 10))
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(.primary)
+                Text("·")
+                    .foregroundColor(DesignTokens.StatusColor.dimmed)
+                    .font(DesignTokens.Typography.label)
                 Text(ws.paneLayout.displayName)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
             }
         }
     }
 
     private var timeChip: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DesignTokens.Spacing.xs) {
             Image(systemName: "clock")
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
+                .font(DesignTokens.Typography.label)
+                .foregroundColor(DesignTokens.StatusColor.muted)
             Text(dateFmt.string(from: now))
-                .font(.system(size: 10, design: .monospaced))
+                .font(DesignTokens.Typography.monoBold)
                 .foregroundColor(.primary)
         }
         .help(fullDateFmt.string(from: now))

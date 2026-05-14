@@ -68,11 +68,11 @@ struct PaneContainer: View {
         if idx < workspace.panes.count {
             PaneHost(config: workspace.panes[idx])
         } else {
-            // 配置中缺少该 Pane · 显示占位
-            VStack {
+            // 配置中缺少该 Pane · 显示占位（大众审美：留白多 + 字号舒适）
+            VStack(spacing: DesignTokens.Spacing.sm) {
                 Text("空 Pane #\(idx + 1)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.body)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.secondary.opacity(0.04))
@@ -124,21 +124,21 @@ struct PaneHeader: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(config.kind.emoji).font(.system(size: 12))
+        HStack(spacing: DesignTokens.Spacing.sm) {
+            Text(config.kind.emoji).font(.system(size: 13))
             Text(config.kind.displayName)
-                .font(.system(size: 11, weight: .medium))
+                .font(DesignTokens.Typography.body.weight(.medium))
             if editingSymbol {
                 TextField("合约", text: $symbolText, onCommit: commitSymbol)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(DesignTokens.Typography.mono)
                     .frame(width: 80)
                     .onExitCommand { editingSymbol = false }
             } else if let sym = effectiveSymbol {
-                Text("·").foregroundColor(.secondary).font(.system(size: 11))
+                separatorDot
                 Text(sym)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.accentColor)
+                    .font(DesignTokens.Typography.monoBold)
+                    .foregroundColor(DesignTokens.StatusColor.accent)
                     .onTapGesture(count: 2) {
                         symbolText = sym
                         editingSymbol = true
@@ -147,24 +147,19 @@ struct PaneHeader: View {
             }
             // v17.71 · PaneHeader 周期 inline 切换（仅 chart Pane · 点击展开分段 Menu · 同 group 广播）
             if config.kind == .chart {
-                Text("·").foregroundColor(.secondary).font(.system(size: 11))
+                separatorDot
                 periodMenu
             } else if let period = config.periodRaw {
-                Text("·").foregroundColor(.secondary).font(.system(size: 11))
+                separatorDot
                 Text(period)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.mono)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
             }
             // v17.58 · 同 group 兄弟广播的 crosshair badge（"🎯 14:35:22"）
             if let groupCrosshair = shellVM.effectiveCrosshair(for: config),
                config.groupColor != nil {
                 Text("🎯 \(Self.crosshairTimeFormatter.string(from: groupCrosshair))")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color.accentColor.opacity(0.7))
-                    .cornerRadius(3)
+                    .chipStyle(background: DesignTokens.StatusColor.accent.opacity(0.7))
                     .help("同 \(config.groupColor!.displayName) 联动光标 · Alt+V 跨周期同步")
             }
             Spacer()
@@ -176,8 +171,8 @@ struct PaneHeader: View {
                 Image(systemName: shellVM.maximizedPaneID == config.id
                       ? "arrow.down.right.and.arrow.up.left"
                       : "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
             }
             .buttonStyle(.plain)
             .help(shellVM.maximizedPaneID == config.id
@@ -190,8 +185,8 @@ struct PaneHeader: View {
                 openWindow(id: "detachedPane", value: config.id.uuidString)
             } label: {
                 Image(systemName: "arrow.up.right.square")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.label)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
             }
             .buttonStyle(.plain)
             .help("分离为独立窗口（多屏支持 · 仍受 group 联动 · 重启自动恢复）")
@@ -201,10 +196,23 @@ struct PaneHeader: View {
             shellVM.toggleMaximize(config.id)
         }
         .contextMenu { paneContextMenu }   // v17.20 · Pane 右键操作菜单
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .frame(height: 24)
-        .background(Color.secondary.opacity(0.08))
+        .padding(.horizontal, DesignTokens.Spacing.md)
+        .padding(.vertical, DesignTokens.Spacing.xs)
+        .frame(height: 28)
+        .background(Color.secondary.opacity(0.06))
+        .overlay(alignment: .bottom) {
+            // 底部分隔线：让 header 与 body 视觉分离（v17.204 大众审美：1pt divider）
+            Rectangle()
+                .fill(Color.secondary.opacity(0.15))
+                .frame(height: DesignTokens.Border.hairline)
+        }
+    }
+
+    /// 分隔点（取代散落的 Text("·") · 大众审美：muted 色 + body 字号）
+    private var separatorDot: some View {
+        Text("·")
+            .foregroundColor(DesignTokens.StatusColor.muted)
+            .font(DesignTokens.Typography.body)
     }
 
     /// v17.71 · 周期 inline 切换 Menu（分钟/小时/日及以上 3 段 · 同 group 广播）
@@ -239,8 +247,8 @@ struct PaneHeader: View {
             }
         } label: {
             Text(config.periodRaw ?? "周期")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(DesignTokens.Typography.mono)
+                .foregroundColor(DesignTokens.StatusColor.muted)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -303,11 +311,12 @@ struct PaneHeader: View {
             }
         } label: {
             if let color = config.groupColor {
-                Circle().fill(color.color).frame(width: 10, height: 10)
+                Circle().fill(color.color).frame(width: 12, height: 12)
             } else {
                 Circle()
-                    .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 1)
-                    .frame(width: 10, height: 10)
+                    .strokeBorder(DesignTokens.StatusColor.muted.opacity(0.4),
+                                  lineWidth: DesignTokens.Border.thin)
+                    .frame(width: 12, height: 12)
             }
         }
         .menuStyle(.borderlessButton)
@@ -370,12 +379,13 @@ struct PaneBody: View {
 
     @ViewBuilder
     private func placeholderFor(_ kind: PaneKind) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: DesignTokens.Spacing.md) {
             Text(kind.emoji).font(.system(size: 40))
             Text(kind.displayName)
                 .font(.title3.bold())
             Text("Step 5+ 适配（需特殊 init / host 参数）")
-                .font(.caption).foregroundColor(.secondary)
+                .font(DesignTokens.Typography.body)
+                .foregroundColor(DesignTokens.StatusColor.muted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.secondary.opacity(0.04))

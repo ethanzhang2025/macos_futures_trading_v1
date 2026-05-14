@@ -9,7 +9,7 @@ struct PrimaryTabBar: View {
     @EnvironmentObject var shellVM: ShellViewModel
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DesignTokens.Spacing.xs) {
             ForEach(PrimaryTab.allCases) { tab in
                 primaryTabButton(tab)
             }
@@ -17,7 +17,7 @@ struct PrimaryTabBar: View {
             globalSearchButton
             connectionStatus
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, DesignTokens.Spacing.lg)
         .frame(height: ShellMetrics.topBarHeight)
         .background(.regularMaterial)
     }
@@ -31,19 +31,18 @@ struct PrimaryTabBar: View {
                 shellVM.activateFirstWorkspaceOfPrimaryTab()
             }
         } label: {
-            HStack(spacing: 4) {
-                Text(tab.emoji).font(.system(size: 14))
+            HStack(spacing: DesignTokens.Spacing.xs) {
+                Text(tab.emoji).font(.system(size: 15))
                 Text(tab.displayName)
-                    .font(.system(size: 13,
-                                  weight: isActive ? .semibold : .regular))
+                    .font(.system(size: 13, weight: isActive ? .semibold : .regular))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .padding(.horizontal, DesignTokens.Spacing.md)
+            .padding(.vertical, DesignTokens.Spacing.xs)
             .background(isActive
-                        ? Color.accentColor.opacity(0.18)
+                        ? DesignTokens.StatusColor.accent.opacity(0.16)
                         : Color.clear)
-            .foregroundColor(isActive ? .accentColor : .primary)
-            .cornerRadius(5)
+            .foregroundColor(isActive ? DesignTokens.StatusColor.accent : .primary)
+            .cornerRadius(DesignTokens.Radius.sm)
         }
         .buttonStyle(.plain)
         .help("\(tab.displayName)（⌘\(tab.shortcutNumber)）")
@@ -53,31 +52,35 @@ struct PrimaryTabBar: View {
         Button {
             shellVM.showCommandPalette = true
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: DesignTokens.Spacing.xs) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
+                    .font(DesignTokens.Typography.label)
                 Text("⌘K")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(DesignTokens.Typography.hint)
             }
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 1))
+            .foregroundColor(DesignTokens.StatusColor.muted)
+            .padding(.horizontal, DesignTokens.Spacing.sm)
+            .padding(.vertical, DesignTokens.Spacing.xxs)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.sm)
+                    .strokeBorder(DesignTokens.StatusColor.muted.opacity(0.4),
+                                  lineWidth: DesignTokens.Border.hairline)
+            )
         }
         .buttonStyle(.plain)
         .help("全局命令面板（合约 / 模块 / Workspace · ⌘K）")
     }
 
     private var connectionStatus: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: DesignTokens.Spacing.xs) {
             Circle()
-                .fill(Color.orange)
+                .fill(DesignTokens.StatusColor.warning)
                 .frame(width: 6, height: 6)
             Text("CTP 未连接 · 行情正常")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(DesignTokens.Typography.hint)
+                .foregroundColor(DesignTokens.StatusColor.muted)
         }
+        .padding(.leading, DesignTokens.Spacing.sm)
     }
 }
 

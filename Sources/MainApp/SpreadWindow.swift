@@ -49,6 +49,9 @@ struct SpreadWindow: View {
     /// v17.95 · 单击两腿 label → openWindow("chart") + post 切主图
     @Environment(\.openWindow) private var openWindow
 
+    /// v17.207 · Shell 嵌入模式（撑大 frame minHeight 720 会把 Shell PrimaryTabBar/StatusBar 挤出可见区）
+    @Environment(\.isHostedInShell) private var isHostedInShell
+
     private var selectedPair: SpreadPair {
         SpreadPresets.byID[selectedPairID] ?? SpreadPresets.all.first!
     }
@@ -87,7 +90,10 @@ struct SpreadWindow: View {
                 }
             }
         }
-        .frame(minWidth: 920, minHeight: 600)
+        .frame(
+            minWidth: isHostedInShell ? 0 : 920,
+            minHeight: isHostedInShell ? 0 : 600
+        )
         .task(id: selectedPairID) { reload() }
         .onChange(of: rollingWindow) { _ in recomputeV2() }
         // v17.95 · 接 watchlistInstrumentSelected · 主图切到某合约时 · 自动找含该腿的套利对（保持当前对若已含）

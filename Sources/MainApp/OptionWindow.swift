@@ -47,6 +47,9 @@ struct OptionWindow: View {
     /// v17.117 · 用户字号偏好（跟 ChartScene/Settings 同步 · HUD/Tooltip 字号 swap 用）
     @State private var chartFontSize: ChartFontSize = ChartSettingsStore.loadChartFontSize()
 
+    /// v17.207 · Shell 嵌入模式（撑大 frame minHeight 720 会把 Shell PrimaryTabBar/StatusBar 挤出可见区）
+    @Environment(\.isHostedInShell) private var isHostedInShell
+
     // v17.107 · PnL 盈亏色（跟 candleColorMode swap · 与 K 线涨跌色一致）
     private var chartProfit: Color { chartProfitColor(mode: candleColorMode) }
     private var chartLoss: Color { chartLossColor(mode: candleColorMode) }
@@ -136,7 +139,10 @@ struct OptionWindow: View {
                     .frame(width: 360)
             }
         }
-        .frame(minWidth: 1100, minHeight: 720)
+        .frame(
+            minWidth: isHostedInShell ? 0 : 1100,
+            minHeight: isHostedInShell ? 0 : 720
+        )
         .onChange(of: selectedUnderlyingID) { _ in resetForNewUnderlying() }
         .onChange(of: selectedStrategyType) { newType in remapStrikesForStrategy(newType) }
         // v17.95 · 接 watchlistInstrumentSelected · 当主图切到 IO / m / SR 等期权标的时同步

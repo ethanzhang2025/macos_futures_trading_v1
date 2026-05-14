@@ -81,7 +81,13 @@ struct ReviewWindow: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(minWidth: 1024, idealWidth: 1280, minHeight: 720, idealHeight: 900)
+        // v17.207 · Shell 嵌入时移除 minWidth/minHeight 硬约束（避免撑大 Pane 挤出 PrimaryTabBar）
+        .frame(
+            minWidth: isHostedInShell ? 0 : 1024,
+            idealWidth: 1280,
+            minHeight: isHostedInShell ? 0 : 720,
+            idealHeight: 900
+        )
         .task { await loadMockReview() }
         .onChange(of: dateFilterRawTag) { _ in
             recomputeSummary()

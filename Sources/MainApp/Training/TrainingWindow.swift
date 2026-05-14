@@ -51,7 +51,13 @@ struct TrainingWindow: View {
             Divider()
             tabContent
         }
-        .frame(minWidth: 720, idealWidth: 880, minHeight: 540, idealHeight: 680)
+        // v17.207 · Shell 嵌入时移除 min 约束（避免撑大 Pane 挤出 PrimaryTabBar）
+        .frame(
+            minWidth: isHostedInShell ? 0 : 720,
+            idealWidth: 880,
+            minHeight: isHostedInShell ? 0 : 540,
+            idealHeight: 680
+        )
         .task {
             startObserving()
         }

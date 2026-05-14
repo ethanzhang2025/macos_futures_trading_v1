@@ -24,6 +24,7 @@ import SwiftUI
 import AppKit
 import Foundation
 import Shared
+import StoreCore
 import TradingCore
 import AlertCore
 
@@ -50,7 +51,7 @@ struct AppKitShellSpikeWindow: View {
                 simulatedTradingEngine: simulatedTradingEngine,
                 bannerService: bannerService
             )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: CGFloat.infinity, maxHeight: CGFloat.infinity)
             Divider()
             spikeFooter
         }

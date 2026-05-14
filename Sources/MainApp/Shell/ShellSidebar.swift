@@ -131,41 +131,33 @@ struct ShellSidebar: View {
                     openWindow(id: "chart")
                     NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: item.symbol)
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: DesignTokens.Spacing.sm) {
                         Text(item.symbol)
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text(item.price)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(DesignTokens.Typography.mono)
                         Text(item.change)
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(DesignTokens.Typography.monoSm)
                             .foregroundColor(item.change.hasPrefix("+") ? .red : .green)
                     }
-                    .padding(.vertical, 1)
+                    .padding(.vertical, DesignTokens.Spacing.xs)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("\(item.symbol) · 点击切主图")
             }
         } header: {
-            HStack {
+            HStack(spacing: DesignTokens.Spacing.sm) {
                 Label("自选 (\(effectiveWatchlist.count))", systemImage: "star.fill")
-                    .foregroundColor(.orange)
-                if !sidebarWatchSymbols.isEmpty {
-                    Text("真")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 3).padding(.vertical, 1)
-                        .background(Color.green.opacity(0.18))
-                        .foregroundColor(.green)
-                        .cornerRadius(2)
-                }
+                    .sidebarSectionHeader()
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(.primary, DesignTokens.StatusColor.warning)
+                Spacer()
+                // F6 跳焦反馈 chip · 临时高亮 1.5s · 仅此场景保留 chip（"真"chip 已去除冗余）
                 if watchlistHighlight {
                     Text("F6")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 4).padding(.vertical, 1)
-                        .background(Color.orange.opacity(0.85))
-                        .foregroundColor(.white)
-                        .cornerRadius(3)
+                        .chipStyle(background: DesignTokens.StatusColor.warning.opacity(0.85))
                         .transition(.opacity)
                 }
             }
@@ -208,33 +200,28 @@ struct ShellSidebar: View {
                 Button {
                     openWindow(id: "sector")
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: DesignTokens.Spacing.sm) {
                         Image(systemName: row.sector.icon)
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                        Text(row.sector.displayName).font(.system(size: 12))
+                            .font(DesignTokens.Typography.label)
+                            .foregroundColor(DesignTokens.StatusColor.muted)
+                        Text(row.sector.displayName)
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text(Self.formatSectorChange(row.avgChangePct))
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(DesignTokens.Typography.monoSm)
                             .foregroundColor(row.avgChangePct >= 0 ? .red : .green)
                     }
-                    .padding(.vertical, 1)
+                    .padding(.vertical, DesignTokens.Spacing.xs)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("\(row.sector.displayName) 板块均涨幅 \(Self.formatSectorChange(row.avgChangePct)) · 点击打开板块联动窗口")
             }
         } header: {
-            HStack(spacing: 4) {
-                Label("板块 (\(topSectorRows.count))", systemImage: "square.grid.2x2.fill")
-                    .foregroundColor(.blue)
-                Text("真")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 3).padding(.vertical, 1)
-                    .background(Color.green.opacity(0.18))
-                    .foregroundColor(.green)
-                    .cornerRadius(2)
-            }
+            Label("板块 (\(topSectorRows.count))", systemImage: "square.grid.2x2.fill")
+                .sidebarSectionHeader()
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(.primary, DesignTokens.StatusColor.info)
         }
     }
 
@@ -270,25 +257,25 @@ struct ShellSidebar: View {
                     openWindow(id: "chart")
                     NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: pos.instrumentID)
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: DesignTokens.Spacing.sm) {
                         Text(pos.instrumentID)
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(DesignTokens.Typography.mono)
                         Text(pos.direction.displayName)
-                            .font(.system(size: 10))
-                            .padding(.horizontal, 3)
-                            .background((pos.direction == .long ? Color.red : Color.green).opacity(0.2))
-                            .cornerRadius(2)
+                            .chipStyle(
+                                foreground: pos.direction == .long ? .red : .green,
+                                background: (pos.direction == .long ? Color.red : Color.green).opacity(0.18)
+                            )
                         Text("\(pos.volume)")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .font(DesignTokens.Typography.monoSm)
+                            .foregroundColor(DesignTokens.StatusColor.muted)
                         Spacer()
                         let pnl = positionPnL(pos)
                         let pnlVal = NSDecimalNumber(decimal: pnl).doubleValue
                         Text(String(format: "%@¥%.0f", pnlVal >= 0 ? "+" : "", pnlVal))
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(DesignTokens.Typography.mono)
                             .foregroundColor(pnlVal >= 0 ? .red : .green)
                     }
-                    .padding(.vertical, 1)
+                    .padding(.vertical, DesignTokens.Spacing.xs)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -299,22 +286,25 @@ struct ShellSidebar: View {
                     openWindow(id: "trading")
                 } label: {
                     Text("无持仓 · 打开模拟交易→")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.StatusColor.muted)
+                        .padding(.vertical, DesignTokens.Spacing.xs)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("打开模拟交易窗口")
             }
         } header: {
-            HStack(spacing: 4) {
+            HStack(spacing: DesignTokens.Spacing.sm) {
                 Label("持仓 (\(realPositions.count))", systemImage: "briefcase.fill")
-                    .foregroundColor(.purple)
+                    .sidebarSectionHeader()
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(.primary, DesignTokens.StatusColor.purple)
                 Spacer()
                 if !realPositions.isEmpty {
                     // v17.23 · 总浮盈 chip（涨红跌绿）
                     Text(String(format: "%@¥%.0f", totalFloatingPnL >= 0 ? "+" : "", totalFloatingPnL))
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(DesignTokens.Typography.monoBold)
                         .foregroundColor(totalFloatingPnL >= 0 ? .red : .green)
                 }
             }
@@ -326,34 +316,39 @@ struct ShellSidebar: View {
     private var alertHistorySection: some View {
         Section {
             if recentAlerts.isEmpty {
-                Text("尚无触发记录").font(.caption).foregroundColor(.secondary)
+                Text("尚无触发记录")
+                    .font(DesignTokens.Typography.body)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
+                    .padding(.vertical, DesignTokens.Spacing.xs)
             } else {
                 ForEach(recentAlerts) { entry in
                     Button {
                         openWindow(id: "chart")
                         NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: entry.instrumentID)
                     } label: {
-                        HStack(spacing: 6) {
-                            Text("🔔").font(.system(size: 10))
-                            VStack(alignment: .leading, spacing: 1) {
-                                HStack(spacing: 4) {
+                        HStack(spacing: DesignTokens.Spacing.sm) {
+                            Image(systemName: "bell.fill")
+                                .font(DesignTokens.Typography.label)
+                                .foregroundColor(DesignTokens.StatusColor.danger)
+                            VStack(alignment: .leading, spacing: DesignTokens.Spacing.xxs) {
+                                HStack(spacing: DesignTokens.Spacing.xs) {
                                     Text(entry.instrumentID)
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .foregroundColor(.accentColor)
+                                        .font(DesignTokens.Typography.mono)
+                                        .foregroundColor(DesignTokens.StatusColor.accent)
                                     Text(entry.alertName)
-                                        .font(.system(size: 11))
+                                        .font(DesignTokens.Typography.body)
                                         .lineLimit(1)
                                 }
                                 Text(Self.alertTimeFormatter.string(from: entry.triggeredAt))
-                                    .font(.system(size: 9, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .font(DesignTokens.Typography.hint)
+                                    .foregroundColor(DesignTokens.StatusColor.muted)
                             }
                             Spacer()
                             Text(NSDecimalNumber(decimal: entry.triggerPrice).stringValue)
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .font(DesignTokens.Typography.monoSm)
+                                .foregroundColor(DesignTokens.StatusColor.muted)
                         }
-                        .padding(.vertical, 1)
+                        .padding(.vertical, DesignTokens.Spacing.xs)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -362,7 +357,9 @@ struct ShellSidebar: View {
             }
         } header: {
             Label("预警 (\(recentAlerts.count))", systemImage: "bell.fill")
-                .foregroundColor(.red)
+                .sidebarSectionHeader()
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(.primary, DesignTokens.StatusColor.danger)
         }
     }
 
@@ -386,37 +383,40 @@ struct ShellSidebar: View {
         Section {
             let evts = topAnomaliesCache
             if evts.isEmpty {
-                Text("无异常 · 全市场平稳").font(.caption).foregroundColor(.secondary)
+                Text("无异常 · 全市场平稳")
+                    .font(DesignTokens.Typography.body)
+                    .foregroundColor(DesignTokens.StatusColor.muted)
+                    .padding(.vertical, DesignTokens.Spacing.xs)
             } else {
                 ForEach(evts) { evt in
                     Button {
                         openWindow(id: "chart")
                         NotificationCenter.default.post(name: .watchlistInstrumentSelected, object: evt.instrumentID)
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: DesignTokens.Spacing.sm) {
                             Image(systemName: evt.kind.icon)
-                                .font(.system(size: 10))
+                                .font(DesignTokens.Typography.label)
                                 .foregroundColor(Self.anomalyKindColor(evt.kind))
-                            VStack(alignment: .leading, spacing: 1) {
-                                HStack(spacing: 4) {
+                            VStack(alignment: .leading, spacing: DesignTokens.Spacing.xxs) {
+                                HStack(spacing: DesignTokens.Spacing.xs) {
                                     Text(evt.instrumentID)
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .foregroundColor(.accentColor)
+                                        .font(DesignTokens.Typography.mono)
+                                        .foregroundColor(DesignTokens.StatusColor.accent)
                                     Text(evt.instrumentName)
-                                        .font(.system(size: 11))
+                                        .font(DesignTokens.Typography.body)
                                         .foregroundColor(.primary)
                                         .lineLimit(1)
                                 }
                                 Text(evt.kind.displayName)
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.secondary)
+                                    .font(DesignTokens.Typography.hint)
+                                    .foregroundColor(DesignTokens.StatusColor.muted)
                             }
                             Spacer()
                             Text(String(format: "%.0f", evt.severity))
-                                .font(.system(size: 10, design: .monospaced).bold())
+                                .font(DesignTokens.Typography.monoBold)
                                 .foregroundColor(Self.anomalyKindColor(evt.kind))
                         }
-                        .padding(.vertical, 1)
+                        .padding(.vertical, DesignTokens.Spacing.xs)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -424,14 +424,16 @@ struct ShellSidebar: View {
                 }
             }
         } header: {
-            HStack(spacing: 4) {
+            HStack(spacing: DesignTokens.Spacing.sm) {
                 Label("异动 (\(topAnomaliesCache.count))", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
+                    .sidebarSectionHeader()
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(.primary, DesignTokens.StatusColor.warning)
                 Spacer()
                 // v17.88 · 显示距离上次扫描的时间（trader 看"系统活着"）
                 Text(Self.anomalyTimeAgo(from: lastAnomalyScanAt))
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .font(DesignTokens.Typography.hint)
+                    .foregroundColor(DesignTokens.StatusColor.dimmed)
             }
         }
     }
@@ -467,51 +469,55 @@ struct ShellSidebar: View {
                 shellVM.primaryTab = .training
                 shellVM.activateFirstWorkspaceOfPrimaryTab()
             } label: {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
                     let streak = trainingLog.currentStreak
                     if streak.count >= 2 {
-                        HStack {
+                        HStack(spacing: DesignTokens.Spacing.sm) {
                             Text(streak.isWinning ? "🔥" : "💧")
                             Text("\(streak.isWinning ? "连胜" : "连败") \(streak.count) 次")
-                                .font(.system(size: 12))
+                                .font(DesignTokens.Typography.body)
                             Spacer()
                         }
                     }
                     if let avg = thisMonthAvg {
-                        HStack {
+                        HStack(spacing: DesignTokens.Spacing.sm) {
                             Text("📊")
                             Text("本月均分 \(avg)")
-                                .font(.system(size: 12))
+                                .font(DesignTokens.Typography.body)
                             Spacer()
                         }
                     }
-                    HStack {
+                    HStack(spacing: DesignTokens.Spacing.sm) {
                         Text("🎯")
                         Text("累计 \(trainingLog.sessions.count) 次训练")
-                            .font(.system(size: 12))
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                     }
                     if let dim = focusDimension {
-                        HStack {
+                        HStack(spacing: DesignTokens.Spacing.sm) {
                             Text("🎯")
                             Text("下次专项: \(dim)")
-                                .font(.system(size: 12))
-                                .foregroundColor(.purple)
+                                .font(DesignTokens.Typography.body)
+                                .foregroundColor(DesignTokens.StatusColor.purple)
                             Spacer()
                         }
                     }
                     if trainingLog.sessions.isEmpty {
                         Text("尚未开始训练 · 点击进入训练模块 →")
-                            .font(.caption).foregroundColor(.secondary)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.StatusColor.muted)
                     }
                 }
+                .padding(.vertical, DesignTokens.Spacing.xs)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("点击切到训练模块（⌘5）")
         } header: {
             Label("训练", systemImage: "target")
-                .foregroundColor(.green)
+                .sidebarSectionHeader()
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(.primary, DesignTokens.StatusColor.success)
         }
     }
 

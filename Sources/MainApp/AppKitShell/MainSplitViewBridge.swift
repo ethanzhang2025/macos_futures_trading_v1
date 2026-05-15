@@ -13,6 +13,7 @@ import AppKit
 /// Step 2b · VStack 包顶 PrimaryTabBar / 中 MainSplitViewBridge / 底 BottomTradingBar + ShellStatusBar
 struct MainWindowView: View {
     let env: AppKitShellEnvironment
+    @EnvironmentObject var shellVM: ShellViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +38,25 @@ struct MainWindowView: View {
             ShellStatusBar()
         }
         .injectAppKitShellEnv(env)
+        // v17.232 · ⌘K 命令面板弹层（与旧版 Shell 同入口 · 共享 shellVM.showCommandPalette）
+        .sheet(isPresented: $shellVM.showCommandPalette) {
+            ShellCommandPalette(isPresented: $shellVM.showCommandPalette)
+                .environmentObject(shellVM)
+        }
+        // v17.232 · ⌘K 局部快捷键覆盖全局「工作区模板」窗口的 ⌘K
+        .background(V1MainWindowKeyboardShortcuts(shellVM: shellVM))
+    }
+}
+
+/// v17.232 · V1 主窗内置局部快捷键 · 当前仅 ⌘K → 命令面板
+/// SwiftUI 优先级：视图层级 keyboardShortcut > CommandGroup 全局快捷键
+private struct V1MainWindowKeyboardShortcuts: View {
+    let shellVM: ShellViewModel
+    var body: some View {
+        Button("") { shellVM.showCommandPalette = true }
+            .keyboardShortcut("k", modifiers: [.command])
+            .opacity(0)
+            .frame(width: 0, height: 0)
     }
 }
 

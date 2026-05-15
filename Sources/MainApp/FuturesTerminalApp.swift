@@ -372,6 +372,7 @@ struct FuturesTerminalApp: App {
         // Step 2 · 3 split item 真组件（ShellSidebar / ChartScene / WatchlistWindow）+ 顶/底 PrimaryTabBar/BottomTradingBar/ShellStatusBar
         WindowGroup("主工作台 V1", id: "mainV1") {
             MainWindowView(env: makeEnv())
+                .environmentObject(shellVM)
         }
         // v17.212 · default 1800x1100 · 留给 ChartScene toolbar 完整空间（sidebar 240 + watchlist 240 → chart 1320pt 够）
         .defaultSize(width: 1800, height: 1100)

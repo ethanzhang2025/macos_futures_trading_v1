@@ -19,14 +19,16 @@ final class MainSplitViewController: NSSplitViewController {
         splitView.isVertical = true
         splitView.dividerStyle = .thin
 
-        // 左 · Sidebar（C3 · min 200 / max 360 / pref 240 / canCollapse）
+        // 左 · Sidebar（C3 · min 200 / max 360 / pref 240）
+        // Step 1 canCollapse=false · 拖到底是 200pt 不会折叠消失
+        // Step 2 同步加 NSToolbar trackingSeparator + 菜单 View → Show Sidebar + ⌘⌃[ 后再 enable canCollapse
         let sidebarItem = NSSplitViewItem(
             viewController: Self.placeholderHC(label: "Sidebar", color: .systemBlue)
         )
         sidebarItem.minimumThickness = 200
         sidebarItem.maximumThickness = 360
         sidebarItem.preferredThicknessFraction = 240.0 / 1600.0
-        sidebarItem.canCollapse = true
+        sidebarItem.canCollapse = false
         addSplitViewItem(sidebarItem)
 
         // 中 · PaneContainer（A3=C · 看盘 tab 下 chart Pane 1-N 切分 · PaneKind 限定 .chart）
@@ -41,6 +43,7 @@ final class MainSplitViewController: NSSplitViewController {
         addSplitViewItem(centerItem)
 
         // 右 · Monitor 区（A2=C · Watchlist / Sector / Position · 可 detach 为 NSPanel）
+        // Step 1 canCollapse=false · Step 4 monitor detach 接入时再 enable + 加 toolbar/菜单恢复入口
         let monitorItem = NSSplitViewItem(
             viewController: Self.placeholderHC(
                 label: "Monitor\n（Watchlist / Sector / Position）",
@@ -49,7 +52,7 @@ final class MainSplitViewController: NSSplitViewController {
         )
         monitorItem.minimumThickness = 240
         monitorItem.maximumThickness = 480
-        monitorItem.canCollapse = true
+        monitorItem.canCollapse = false
         addSplitViewItem(monitorItem)
     }
 

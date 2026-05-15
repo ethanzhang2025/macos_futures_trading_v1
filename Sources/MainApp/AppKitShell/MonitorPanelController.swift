@@ -89,10 +89,13 @@ final class MonitorPanelController: NSObject, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     nonisolated func windowWillClose(_ notification: Notification) {
+        // Swift 6 严格模式：notification 不 Sendable · 不能跨 actor 捕获
+        // 修法：nonisolated 内先提取 ObjectIdentifier（Sendable struct）· 跨 actor 传 ID
+        guard let panel = notification.object as? NSPanel else { return }
+        let panelID = ObjectIdentifier(panel)
         Task { @MainActor [weak self] in
-            guard let self,
-                  let panel = notification.object as? NSPanel else { return }
-            for (kind, p) in self.panels where p === panel {
+            guard let self else { return }
+            for (kind, p) in self.panels where ObjectIdentifier(p) == panelID {
                 self.panels[kind] = nil
                 break
             }

@@ -443,6 +443,16 @@ struct FuturesTerminalApp: App {
                     envProvider: makeEnv,
                     windowManager: coordinator.windowManager
                 )
+                Divider()
+                // v17.231 · V1 主窗面板布局切换 · 直接验「A3=C 1/2/4/6/9 网格」
+                Menu("V1 主窗面板布局") {
+                    PaneLayoutMenuButton(layout: .single, label: "▢ 单图", shellVM: shellVM)
+                    PaneLayoutMenuButton(layout: .twoHorizontal, label: "◫ 左右双图", shellVM: shellVM)
+                    PaneLayoutMenuButton(layout: .twoVertical, label: "⬓ 上下双图", shellVM: shellVM)
+                    PaneLayoutMenuButton(layout: .four, label: "⊞ 四宫格", shellVM: shellVM)
+                    PaneLayoutMenuButton(layout: .sixGrid, label: "▦ 六宫格", shellVM: shellVM)
+                    PaneLayoutMenuButton(layout: .nineGrid, label: "▩ 九宫格", shellVM: shellVM)
+                }
             }
             CommandMenu("工具") {
                 ImportFormulaButton()
@@ -817,6 +827,19 @@ private struct DetachMonitorPanelButton: View {
     var body: some View {
         Button(label) {
             windowManager.openMonitorPanel(kind, env: envProvider())
+        }
+    }
+}
+
+/// v17.231 · V1 主窗面板布局切换入口（视图菜单 · 直接测 1/2/4/6/9 网格）
+/// CommandMenu 内不接 environmentObject · init 直接传 shellVM
+private struct PaneLayoutMenuButton: View {
+    let layout: PaneLayout
+    let label: String
+    let shellVM: ShellViewModel
+    var body: some View {
+        Button(label) {
+            shellVM.setPaneLayout(layout)
         }
     }
 }

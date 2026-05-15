@@ -77,7 +77,9 @@ final class MonitorPanelController: NSObject, NSWindowDelegate {
             defer: false
         )
         panel.title = kind.displayName
-        panel.isFloatingPanel = true
+        // v17.231 修 · 去掉 isFloatingPanel · 之前用浮动窗口层级导致切到别的程序也盖不住面板
+        // 现在用普通窗口层级 · 切其他程序时面板会被正常覆盖
+        panel.isFloatingPanel = false
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.setFrameAutosaveName("monitorPanel.v1.\(kind.rawValue)")

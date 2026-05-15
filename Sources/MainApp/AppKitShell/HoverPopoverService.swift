@@ -1,29 +1,32 @@
-// MainApp · AppKitShell · v17.226 · V1 重构 Step 5
+// MainApp · AppKitShell · v17.234 · 改 shared 单例 + 独立 chartTooltip 入口
 //
-// NSPopover 0 延迟 hover tooltip · 替代 macOS 系统 .help() 1.5s 延迟
-// doc 章节 314-332（NSPopover 规则）+ Step 5（替代 .help() 不稳定）
+// v17.226 原版 → 让全局 .tooltip 走 HoverPopoverModifier · 322 处替换性能崩盘
+// v17.233 紧急回退 · InstantTooltip.tooltip() 恢复 .help()
+// v17.234 重定位 · 仅 K 线图工具条用 NSPopover 0 延迟提示 · 通过独立 .chartTooltip 调用
 //
 // 设计要点：
-// - 单例 NSPopover · 重用避免频繁创建（show 时只换 contentViewController）
-// - behavior=.transient · 鼠标移出 anchor / 点击外部自动关
-// - animates=false · 0 延迟 + 0 淡入动画
-// - SwiftUI 入口在 InstantTooltip.tooltip() · 全 app 调用点零修改
-// - 失败 fallback 走系统 .help()（无 popoverService environment 时）
+// - shared 单例 NSPopover 复用 · behavior=.transient + animates=false
+// - 不依赖 SwiftUI environment 注入 · 进程级共享（与 InstantTooltip 风格一致）
+// - HoverPopoverAnchor NSViewRepresentable 单次 makeNSView · 不重建（防 SwiftUI 重渲染累积开销）
 
 #if canImport(SwiftUI) && os(macOS)
 
 import SwiftUI
 import AppKit
 
-/// V1 主窗 hover popover 服务 · 单例 NSPopover · 0 延迟自定义 tooltip
+/// NSPopover 0 延迟悬停提示气泡服务 · shared 单例
 @MainActor
 final class HoverPopoverService {
+    static let shared = HoverPopoverService()
+
     private let popover: NSPopover = {
         let p = NSPopover()
         p.behavior = .transient
         p.animates = false
         return p
     }()
+
+    private init() {}
 
     func show(anchor: NSView, text: String) {
         guard !text.isEmpty, anchor.window != nil else { return }
@@ -36,18 +39,6 @@ final class HoverPopoverService {
         if popover.isShown {
             popover.performClose(nil)
         }
-    }
-}
-
-/// EnvironmentKey · HoverPopoverService 注入（V1 主窗内嵌组件用）
-private struct HoverPopoverServiceKey: EnvironmentKey {
-    static let defaultValue: HoverPopoverService? = nil
-}
-
-extension EnvironmentValues {
-    var hoverPopoverService: HoverPopoverService? {
-        get { self[HoverPopoverServiceKey.self] }
-        set { self[HoverPopoverServiceKey.self] = newValue }
     }
 }
 
@@ -86,29 +77,32 @@ struct HoverPopoverAnchor: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
-/// SwiftUI hover popover modifier · 内部走 HoverPopoverService（不可用则降级 .help()）
-struct HoverPopoverModifier: ViewModifier {
+/// SwiftUI chart 工具条专用 hover popover modifier · 走 shared service
+struct ChartTooltipModifier: ViewModifier {
     let text: String
-    @Environment(\.hoverPopoverService) private var service
     @State private var anchor: NSView?
 
     func body(content: Content) -> some View {
-        if let service {
-            content
-                .background(
-                    HoverPopoverAnchor { v in anchor = v }
-                        .allowsHitTesting(false)
-                )
-                .onHover { hovering in
-                    if hovering, let a = anchor {
-                        service.show(anchor: a, text: text)
-                    } else {
-                        service.hide()
-                    }
+        content
+            .background(
+                HoverPopoverAnchor { v in anchor = v }
+                    .allowsHitTesting(false)
+            )
+            .onHover { hovering in
+                if hovering, let a = anchor {
+                    HoverPopoverService.shared.show(anchor: a, text: text)
+                } else {
+                    HoverPopoverService.shared.hide()
                 }
-        } else {
-            content.help(text)
-        }
+            }
+    }
+}
+
+extension View {
+    /// K 线图工具条专用 0 延迟提示气泡 · 仅 ChartScene 工具条调用 · 全 app 其他地方仍用 .tooltip / .help
+    /// v17.234 · 替代 v17.226 全局替换（322 处性能崩盘）· 仅 31 处局部应用
+    func chartTooltip(_ text: String) -> some View {
+        modifier(ChartTooltipModifier(text: text))
     }
 }
 

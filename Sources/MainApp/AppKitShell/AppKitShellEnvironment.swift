@@ -47,6 +47,7 @@ extension View {
             .environment(\.simulatedTradingEngine, env.simulatedTradingEngine)
             .environment(\.bannerService, env.bannerService)
             .environment(\.windowManager, env.windowManager)
+            .environment(\.hoverPopoverService, env.windowManager.popoverService)
             .environment(\.isInV1MainWindow, true)
     }
 }

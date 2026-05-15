@@ -40,7 +40,7 @@ final class MainSplitViewController: NSSplitViewController {
         let sidebarVC = AppKitShellHC.wrap(ShellSidebar(), env: env)
         sidebarVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
         let sidebarItem = NSSplitViewItem(viewController: sidebarVC)
-        sidebarItem.canCollapse = false
+        sidebarItem.canCollapse = true   // v17.221 真修 · canCollapse=false 在 SwiftUI 嵌入下锁死整个 NSSplitView 拖动 · 改回 true 恢复拖动
         addSplitViewItem(sidebarItem)
 
         // 中 · PaneContainer（A3=C · 看盘 tab 下 chart Pane 1-N 切分）
@@ -48,7 +48,7 @@ final class MainSplitViewController: NSSplitViewController {
         let centerVC = AppKitShellHC.wrap(ChartScene(), env: env)
         centerVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 400).isActive = true
         let centerItem = NSSplitViewItem(viewController: centerVC)
-        centerItem.canCollapse = false
+        centerItem.canCollapse = true
         addSplitViewItem(centerItem)
 
         // 右 · Monitor 区（A2=C · Watchlist / Sector / Position · 可 detach 为 NSPanel）
@@ -56,7 +56,7 @@ final class MainSplitViewController: NSSplitViewController {
         let monitorVC = AppKitShellHC.wrapAsMonitor(WatchlistWindow(), env: env)
         monitorVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
         let monitorItem = NSSplitViewItem(viewController: monitorVC)
-        monitorItem.canCollapse = false
+        monitorItem.canCollapse = true
         addSplitViewItem(monitorItem)
     }
 }

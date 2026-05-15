@@ -344,13 +344,20 @@ struct FuturesTerminalApp: App {
         }
         .defaultSize(width: 1600, height: 900)
 
-        // v17.209 · V1 重构 Step 1 · AppKit 主工作台（新 Shell）· D3 双窗口入口 ⌘⌃1
+        // v17.209 · V1 重构 Step 2 · AppKit 主工作台（新 Shell）· D3 双窗口入口 ⌘⌃1
         // A5=B 决策 · SwiftUI WindowGroup + NSViewControllerRepresentable + NSSplitViewController 三层桥接
-        // Step 1 · 3 split item 占位 · Step 2 替换为真 Sidebar / PaneContainer / Monitor
+        // Step 2 · 3 split item 真组件（ShellSidebar / ChartScene / WatchlistWindow）+ 顶/底 PrimaryTabBar/BottomTradingBar/ShellStatusBar
         WindowGroup("主工作台 V1", id: "mainV1") {
-            MainWindowView(windowManager: coordinator.windowManager)
-                .environmentObject(coordinator.appState)
-                .environment(\.windowManager, coordinator.windowManager)
+            MainWindowView(env: AppKitShellEnvironment(
+                shellVM: shellVM,
+                storeManager: storeManager,
+                analytics: analytics,
+                alertEvaluator: alertEvaluator,
+                simulatedTradingEngine: simulatedTradingEngine,
+                bannerService: bannerService,
+                appState: coordinator.appState,
+                windowManager: coordinator.windowManager
+            ))
         }
         .defaultSize(width: 1600, height: 1000)
 

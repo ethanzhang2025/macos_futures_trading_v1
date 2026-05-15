@@ -1,10 +1,12 @@
-// MainApp · AppKitShell · v17.209 · V1 重构 Step 1
+// MainApp · AppKitShell · v17.209 · V1 重构 Step 2a
 //
 // 主窗 NSSplitViewController · 3 列横向 split（Sidebar / PaneContainer / Monitor）
-// doc 章节 153-163 + C3 数值约束（Sidebar min 200/max 360/pref 240/canCollapse）
+// doc 章节 153-163 + C3 数值约束（Sidebar min 200/max 360/pref 240）
 //
-// Step 1 · 3 个 split item 全部用 placeholder NSHostingController 验证桥接稳定
-// Step 2 · 替换为真 SwiftUI 子树（ShellSidebar / PaneContainer / Watchlist+Sector+Position）
+// Step 1 · 3 个 split item placeholder NSHostingController（已通过桥接验证）
+// Step 2a · 替换为真 SwiftUI 子树（ShellSidebar / ChartScene / WatchlistWindow）
+//   - 中央 PaneContainer 暂用单 ChartScene 起步 · Step 3+ 接入真 PaneContainer 1-N 切分
+//   - 右 Monitor 暂用 WatchlistWindow · Step 4 Monitor detach NSPanel 时再接 Sector/Position 切换
 
 #if canImport(SwiftUI) && os(macOS)
 
@@ -13,6 +15,17 @@ import AppKit
 
 /// V1 主窗 NSSplitViewController · 3 列布局
 final class MainSplitViewController: NSSplitViewController {
+    private let env: AppKitShellEnvironment
+
+    init(env: AppKitShellEnvironment) {
+        self.env = env
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) not supported · V1 NSSplitViewController 仅程序化构造")
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -20,10 +33,9 @@ final class MainSplitViewController: NSSplitViewController {
         splitView.dividerStyle = .thin
 
         // 左 · Sidebar（C3 · min 200 / max 360 / pref 240）
-        // Step 1 canCollapse=false · 拖到底是 200pt 不会折叠消失
-        // Step 2 同步加 NSToolbar trackingSeparator + 菜单 View → Show Sidebar + ⌘⌃[ 后再 enable canCollapse
+        // Step 1 canCollapse=false · Step 2 toolbar/菜单/⌘⌃[ 完整方案后再 enable
         let sidebarItem = NSSplitViewItem(
-            viewController: Self.placeholderHC(label: "Sidebar", color: .systemBlue)
+            viewController: AppKitShellHC.wrap(ShellSidebar(), env: env)
         )
         sidebarItem.minimumThickness = 200
         sidebarItem.maximumThickness = 360
@@ -31,57 +43,25 @@ final class MainSplitViewController: NSSplitViewController {
         sidebarItem.canCollapse = false
         addSplitViewItem(sidebarItem)
 
-        // 中 · PaneContainer（A3=C · 看盘 tab 下 chart Pane 1-N 切分 · PaneKind 限定 .chart）
+        // 中 · PaneContainer（A3=C · 看盘 tab 下 chart Pane 1-N 切分）
+        // Step 2 暂用单 ChartScene · Step 3+ 接入真 PaneContainer（嵌套 NSSplitView 1/2/4/6/9 grid）
         let centerItem = NSSplitViewItem(
-            viewController: Self.placeholderHC(
-                label: "PaneContainer\n（中央 · 看盘 tab chart Pane 1-N 切分）",
-                color: .systemGray
-            )
+            viewController: AppKitShellHC.wrap(ChartScene(), env: env)
         )
         centerItem.minimumThickness = 400
         centerItem.canCollapse = false
         addSplitViewItem(centerItem)
 
         // 右 · Monitor 区（A2=C · Watchlist / Sector / Position · 可 detach 为 NSPanel）
-        // Step 1 canCollapse=false · Step 4 monitor detach 接入时再 enable + 加 toolbar/菜单恢复入口
+        // Step 2 暂用 WatchlistWindow · Step 4 Monitor detach 接入时加 Sector/Position 切换
+        // Step 1 canCollapse=false · Step 4 toolbar/菜单完整方案后再 enable
         let monitorItem = NSSplitViewItem(
-            viewController: Self.placeholderHC(
-                label: "Monitor\n（Watchlist / Sector / Position）",
-                color: .systemGreen
-            )
+            viewController: AppKitShellHC.wrap(WatchlistWindow(), env: env)
         )
         monitorItem.minimumThickness = 240
         monitorItem.maximumThickness = 480
         monitorItem.canCollapse = false
         addSplitViewItem(monitorItem)
-    }
-
-    /// Step 1 占位 NSHostingController · Step 2 替换为真 SwiftUI 视图
-    private static func placeholderHC(label: String, color: NSColor) -> NSViewController {
-        NSHostingController(rootView: PlaceholderPaneView(label: label, color: Color(nsColor: color)))
-    }
-}
-
-/// Step 1 占位视图 · 让 3 个 split item 可视化 · Step 2 移除
-private struct PlaceholderPaneView: View {
-    let label: String
-    let color: Color
-
-    var body: some View {
-        ZStack {
-            color.opacity(0.15)
-            VStack(spacing: 8) {
-                Text("🚧 V1 · Step 1 占位")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-                Text(label)
-                    .font(.system(size: 13, weight: .medium))
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(color)
-            }
-            .padding(16)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

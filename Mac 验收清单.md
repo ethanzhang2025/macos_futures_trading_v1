@@ -1435,3 +1435,70 @@ Linux 端编译能过 · 视觉/手感/系统集成需 Mac 切机一次性集中
 ### 测试基线
 - [ ] Linux: swift test 2526/390 全绿（基线 2516/388 + 10 new tests · 3 new suites: HeikinAshi/Channel/Fibonacci）
 - [ ] Mac: ./mac_acceptance.sh --skip-shots 通过
+
+---
+
+## V1 重构 v17.225-229（2026-05-15 · appkit-shell-rewrite 分支 · 本会话 5 commit）
+
+### v17.225 · Step 3a · AppState facade 化 9 字段
+
+facade 模式 · AppState 包同一个 ShellViewModel ref · 通过 Combine 转发 objectWillChange · 行为零变化。
+
+- [ ] ⌘⌃1 V1 主窗 → 中央 ChartScene + Sidebar + Watchlist 正常显示（与 v17.224 一致）
+- [ ] ⌘⌃0 旧 Shell → 完整功能正常（双窗口入口）
+- [ ] 关闭并重开 App · primaryTab / workspaces / 自选合约 等 ShellViewModel 持久化字段照常 load
+- [ ] 多 chart 窗（⌘N）打开后 · group binding 联动跨窗口工作（shellVM 唯一 instance）
+
+### v17.226 · Step 5 · NSPopover HoverPopoverService 替代 .help()
+
+V1 主窗内 .tooltip("xxx") 走 NSPopover · 0 延迟 + 自定义视觉。旧 Shell / detached / chart 独立窗 environment 缺失 → 自动降级 .help()。
+
+- [ ] V1 主窗 · hover ChartScene toolbar 任意按钮 → 立即（无延迟）弹小 NSPopover · 显示 tooltip 文本
+- [ ] 鼠标移出按钮 → NSPopover 立即关闭
+- [ ] 旧 Shell ⌘⌃0 内 hover toolbar 按钮 → 1.5s 后系统 .help() 显示（降级路径正常）
+- [ ] hover 多个按钮快速切换 → NSPopover 跟随移到新 anchor · 不堆积
+- [ ] hover 时点击按钮 → 按钮正常响应 · NSPopover 自动关
+
+### v17.227 · A3=C Mini v1 · PaneContainer 嵌套 chart 切分
+
+V1 主窗中央 PaneContainerController · 根据 activeWorkspace.paneLayout 动态 1/2/4/6/9 grid · NSStackView fillEqually 均分。
+
+- [ ] V1 主窗 default · 看盘 tab · 中央显示 1 个 ChartScene（single layout）
+- [ ] 切 workspace 到 paneLayout=twoHorizontal → 中央自动变左右 2 个 ChartScene（均分）
+- [ ] 切 paneLayout=four → 2x2 grid 4 个 ChartScene
+- [ ] 切 paneLayout=sixGrid → 2x3 grid 6 个 ChartScene
+- [ ] 切 paneLayout=nineGrid → 3x3 grid 9 个 ChartScene
+- [ ] 切回 single → 自动 collapse 回 1 个
+- [ ] 每个 ChartScene 独立 toolbar / 合约切换 / 周期切换（@State 独立）
+- [ ] 多 chart grid 下外层 NSSplitView divider 仍可拖（Sidebar / Monitor）
+
+### v17.228 · A2=C Mini v1 · Monitor 面板 NSPanel detach
+
+视图菜单 3 项 detach 按钮 · NSPanel 浮顶不抢主窗焦点 · 可拖副屏。
+
+- [ ] 视图菜单 → 看到 3 项 "📤 拖出自选合约 / 板块联动 / 多空持仓"（v17.224 toggle 项之后 · Divider 隔开）
+- [ ] 点 "📤 拖出自选合约" → 弹 NSPanel "自选合约" 标题 · 内嵌 WatchlistWindow · 浮在主窗之上
+- [ ] NSPanel 内 Watchlist 行为正常（点合约切到主图等）
+- [ ] 主窗仍在前台 · 主窗内输入框 / 按钮 / chart 操作不被 NSPanel 抢焦点
+- [ ] 拖 NSPanel 到副屏 → 主窗内 Watchlist 仍显示（A2 C Mini v1 主窗 monitor 区不变）
+- [ ] 关闭 NSPanel → 再开同 monitor 立即出现（registry 重建）
+- [ ] 同时打开 3 个 NSPanel（自选 + 板块 + 持仓）→ 3 个浮顶面板各自独立
+- [ ] App 重启 → NSPanel 位置由 setFrameAutosaveName 恢复
+
+### v17.229 · Step 6 · 重型窗口路由集中 WindowManager.openHeavyWindow
+
+V1PrimaryTabBar 4 个 tab（套利/期权/复盘/训练）改走 WindowManager.openHeavyWindow · windowID 收 enum。
+
+- [ ] V1 主窗 PrimaryTabBar 点"套利" → 弹 SpreadWindow（与 v17.224 行为一致）
+- [ ] 点"期权" → 弹 OptionWindow
+- [ ] 点"复盘" → 弹 ReviewWindow
+- [ ] 点"训练" → 弹 TrainingWindow
+- [ ] 各窗口已开时再点 tab → 激活前台（不创建第 2 个实例）
+- [ ] 主窗"看盘" tab 始终 active 高亮 · 点击 no-op
+
+### 累积验证（前面 commit + 本批次共同）
+
+- [ ] 3 列分栏拖动正常（v17.223 isInV1MainWindow + ChartScene minWidth=0 · 不被新 PaneContainerController 破坏）
+- [ ] ⌘⌃[ / ⌘⌃] toggle Sidebar/Watchlist 正常（v17.224）
+- [ ] D1 sheet 弹出 ⌘⇧L / ⌘⇧⌥Y / toolbar 🟦 / Renko ⚙️ 全部正常（v17.224 验过 · 不被新 facade 破坏）
+- [ ] 测试基线：Linux swift build 全绿（已 Linux 验证）

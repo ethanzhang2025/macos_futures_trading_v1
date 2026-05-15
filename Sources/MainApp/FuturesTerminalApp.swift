@@ -138,13 +138,21 @@ struct FuturesTerminalApp: App {
 
     /// v17.59 · ShellViewModel 提到 App 级（@StateObject）· 让 detached Pane 多屏共享同一 instance
     /// 跨窗口 group 联动 / Workspace 列表 / 持仓 / 等 state 全部共享
-    @StateObject private var shellVM = ShellViewModel()
+    /// v17.225 · Step 3a · 改为 init 内创建 · 同 ref 传给 AppCoordinator(shellVM:) 让 AppState facade 包它
+    @StateObject private var shellVM: ShellViewModel
 
     /// v17.209 · V1 重构 Step 1 · AppKitShell 顶层协调器（持 AppState + WindowManager）
     /// D3 双窗口入口阶段两套并存 · 旧 Shell ⌘⌃0 · V1 主窗 ⌘⌃1 · 1 周稳定后删旧 Shell
-    @StateObject private var coordinator = AppCoordinator()
+    /// v17.225 · Step 3a · AppState facade 包同一个 shellVM · 新 V1 组件读 AppState · 老调用继续 shellVM
+    @StateObject private var coordinator: AppCoordinator
 
     init() {
+        // v17.225 · Step 3a · ShellViewModel 与 AppCoordinator 共享同一 ref
+        // AppState facade 9 字段全部转发到此 shellVM · 二者读写同一数据源
+        let shell = ShellViewModel()
+        _shellVM = StateObject(wrappedValue: shell)
+        _coordinator = StateObject(wrappedValue: AppCoordinator(shellVM: shell))
+
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
         // 菜单栏不切换 · ⌘N / ⌘L / ⌘, 全部落到 Terminal 上。
         // 显式声明 .regular 让主菜单栏 + 全局快捷键 + Dock 图标正常工作。

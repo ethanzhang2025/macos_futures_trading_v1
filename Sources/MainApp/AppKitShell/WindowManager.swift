@@ -28,10 +28,6 @@ final class WindowManager: ObservableObject {
     /// Step 4 接入 · Step 1 占位
     var detachedMonitorPanelIDs: [String] = []
 
-    /// v17.226 · Step 5 · NSPopover hover tooltip service
-    /// 替代系统 .help() 1.5s 延迟 · 0 延迟自定义视觉 · 全 app 通过 .tooltip("xxx") 调用
-    let popoverService: HoverPopoverService
-
     /// v17.228 · A2=C Mini v1 · Monitor 面板 NSPanel detach controller（lazy · 首次 open 才创建）
     /// env 跨循环依赖 callsite 传入 · doc 章节 293-309
     private var monitorPanelController: MonitorPanelController?
@@ -39,7 +35,6 @@ final class WindowManager: ObservableObject {
     init(appState: AppState) {
         self.appState = appState
         self.mainWindowController = MainWindowController()
-        self.popoverService = HoverPopoverService()
     }
 
     /// 激活主窗口到前台（菜单 ⌘⌃1 触发 · D3 双窗口入口）

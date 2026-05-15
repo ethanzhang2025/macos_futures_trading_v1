@@ -140,6 +140,10 @@ struct FuturesTerminalApp: App {
     /// 跨窗口 group 联动 / Workspace 列表 / 持仓 / 等 state 全部共享
     @StateObject private var shellVM = ShellViewModel()
 
+    /// v17.209 · V1 重构 Step 1 · AppKitShell 顶层协调器（持 AppState + WindowManager）
+    /// D3 双窗口入口阶段两套并存 · 旧 Shell ⌘⌃0 · V1 主窗 ⌘⌃1 · 1 周稳定后删旧 Shell
+    @StateObject private var coordinator = AppCoordinator()
+
     init() {
         // swift run 是 non-bundle 可执行 · macOS 默认不把它当前台 App ·
         // 菜单栏不切换 · ⌘N / ⌘L / ⌘, 全部落到 Terminal 上。
@@ -340,6 +344,16 @@ struct FuturesTerminalApp: App {
         }
         .defaultSize(width: 1600, height: 900)
 
+        // v17.209 · V1 重构 Step 1 · AppKit 主工作台（新 Shell）· D3 双窗口入口 ⌘⌃1
+        // A5=B 决策 · SwiftUI WindowGroup + NSViewControllerRepresentable + NSSplitViewController 三层桥接
+        // Step 1 · 3 split item 占位 · Step 2 替换为真 Sidebar / PaneContainer / Monitor
+        WindowGroup("主工作台 V1", id: "mainV1") {
+            MainWindowView(windowManager: coordinator.windowManager)
+                .environmentObject(coordinator.appState)
+                .environment(\.windowManager, coordinator.windowManager)
+        }
+        .defaultSize(width: 1600, height: 1000)
+
         // 主图表窗口（保留 · 用户主动"分离"才打开 · Cmd+N 新建多个）
         // v15.17 · 移除全局 .preferredColorScheme(.dark) · ChartScene 内动态 chartTheme.colorScheme · sheet/popup 跟主题
         WindowGroup("K 线图表", id: "chart") {
@@ -394,6 +408,9 @@ struct FuturesTerminalApp: App {
                 OpenCrossLinkageButton()   // v17.175 · 跨合约联动预警规则管理
                 Divider()
                 OpenAppKitSpikeButton()    // v17.208 · 方案 3 spike · AppKit 桥接可行性验证
+                Divider()
+                OpenMainWindowV1Button()   // v17.209 · V1 重构 Step 1 · ⌘⌃1 新 AppKit 主工作台
+                OpenLegacyShellButton()    // v17.209 · D3 双窗口回退 · ⌘⌃0 旧 Shell（1 周稳定后删）
             }
             // v17.141 · 帮助菜单加全局快捷键速查（⌘⇧/ · 任何窗口前台都能触发）
             CommandGroup(replacing: .help) {
@@ -700,6 +717,25 @@ private struct OpenAppKitSpikeButton: View {
     var body: some View {
         Button("🧪 AppKit Spike（⌘⌥⇧K）") { openWindow(id: "appkitSpike") }
             .keyboardShortcut("k", modifiers: [.command, .option, .shift])
+    }
+}
+
+/// v17.209 · V1 重构 Step 1 · 新 AppKit 主工作台入口（⌘⌃1 · D3 双窗口入口）
+/// A5=B 决策 · WindowGroup id "mainV1" · 内嵌 NSSplitViewController 3 列布局
+private struct OpenMainWindowV1Button: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("🆕 主工作台 V1 · AppKit（⌘⌃1）") { openWindow(id: "mainV1") }
+            .keyboardShortcut("1", modifiers: [.command, .control])
+    }
+}
+
+/// v17.209 · D3 双窗口回退 · 旧 Shell 入口（⌘⌃0 · Mac 验证 1 周稳定后删）
+private struct OpenLegacyShellButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("🧪 旧 Shell · 回退（⌘⌃0）") { openWindow(id: "shell") }
+            .keyboardShortcut("0", modifiers: [.command, .control])
     }
 }
 

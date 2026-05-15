@@ -17,6 +17,8 @@ struct ShellCommandPalette: View {
     @FocusState private var queryFocused: Bool
     /// v17.77 · 从 SQLiteWatchlistBookStore 加载的 trader 自选 symbols（去重并集）
     @State private var loadedSymbols: [String] = []
+    /// v17.236 · 展示结果缓存 · body re-eval 时不触发 allCommands + filteredCommands 重算
+    @State private var displayCommands: [(cmd: PaletteCommand, range: Range<String.Index>?)] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +26,7 @@ struct ShellCommandPalette: View {
             Divider()
             ScrollView {
                 VStack(spacing: 0) {
-                    filteredCommands.isEmpty
+                    displayCommands.isEmpty
                         ? AnyView(emptyState)
                         : AnyView(commandList)
                 }
@@ -32,11 +34,22 @@ struct ShellCommandPalette: View {
         }
         .frame(width: 640, height: 480)
         .background(.regularMaterial)
-        .onAppear { queryFocused = true }
+        .onAppear {
+            queryFocused = true
+            refreshDisplay()
+        }
+        .onChange(of: query) { _, _ in refreshDisplay() }
+        .onChange(of: loadedSymbols) { _, _ in refreshDisplay() }
         // v17.77 · 启动时 / 每次打开 ⌘K 时刷新 watchlistBook · 让 trader 自选实时可搜
         .task {
             await loadWatchlistSymbolsAsync()
         }
+    }
+
+    /// v17.236 · 用户事件触发的单次计算 · 写入 displayCommands @State
+    /// body re-eval 不再触发 allCommands / filteredCommands 重新构造
+    private func refreshDisplay() {
+        displayCommands = filteredCommands
     }
 
     /// v17.77 · 从 SQLiteWatchlistBookStore 加载所有 group 的 instrumentIDs 并去重排序
@@ -66,7 +79,7 @@ struct ShellCommandPalette: View {
 
     private var commandList: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(filteredCommands.enumerated()), id: \.element.cmd.id) { _, item in
+            ForEach(Array(displayCommands.enumerated()), id: \.element.cmd.id) { _, item in
                 commandRow(item.cmd, highlightRange: item.range)
             }
         }
@@ -131,7 +144,7 @@ struct ShellCommandPalette: View {
     }
 
     private func executeFirst() {
-        if let first = filteredCommands.first {
+        if let first = displayCommands.first {
             shellVM.recordPaletteCommandUsage(first.cmd.title)  // v17.29 · LRU 记录
             first.cmd.action()
             isPresented = false
@@ -421,19 +434,21 @@ struct ShellCommandPalette: View {
     }
 
     /// v17.69 · 模糊匹配 + 排名 + 高亮 range
-    /// 排序：score desc / title.count asc tiebreaker
-    /// score: 100 exact / 90 prefix / 70 substring / 50 subsequence / 30 subtitle substring
+    /// v17.236 性能修 · 用户报「⌘K 鼠标转轮卡死多秒」· 根因：filteredCommands 内访问 allCommands 6 次
+    ///   · 每次重新构造 80+ PaletteCommand 含 UUID() syscall · O(N²) recents lookup
+    /// 修法：allCommands 在 func 入口算一次 · recents 用 Dictionary O(1) lookup 代替 first 扫描
     private var filteredCommands: [(cmd: PaletteCommand, range: Range<String.Index>?)] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let all = allCommands   // ★ 一次访问 · 避免 6 次重新构造
         if q.isEmpty {
-            let recents = shellVM.recentPaletteCommands.compactMap { title in
-                allCommands.first { $0.title == title }
-            }
+            // ★ Dictionary O(1) lookup 代替 O(N) first 扫描
+            let byTitle = Dictionary(all.map { ($0.title, $0) }, uniquingKeysWith: { first, _ in first })
+            let recents = shellVM.recentPaletteCommands.compactMap { byTitle[$0] }
             let recentTitles = Set(recents.map(\.title))
-            let others = allCommands.filter { !recentTitles.contains($0.title) }
+            let others = all.filter { !recentTitles.contains($0.title) }
             return Array((recents + others).prefix(20)).map { ($0, nil) }
         }
-        let matched: [(cmd: PaletteCommand, score: Int, range: Range<String.Index>?)] = allCommands.compactMap { cmd in
+        let matched: [(cmd: PaletteCommand, score: Int, range: Range<String.Index>?)] = all.compactMap { cmd in
             guard let m = Self.matchScore(for: cmd, query: q) else { return nil }
             return (cmd, m.score, m.range)
         }

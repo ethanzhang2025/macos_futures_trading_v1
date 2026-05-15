@@ -1709,6 +1709,10 @@ struct ChartScene: View {
     }
 
     private var toolbar: some View {
+        // v17.218 · ScrollView(.horizontal) 包 HStack · toolbar 实测宽 ~1450pt
+        // 独立 chart 窗 1280pt+ 通常足够 · V1 主窗嵌入时 chart 区 1140-1320pt 不够 · ScrollView 横滑兜底
+        // showsIndicators: false 隐藏 scroll bar · 视觉与原 toolbar 一致 · 用户横滑能看到末端按钮
+        ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 14) {
             // 视觉迭代第 8 项：模式 / 副图 2 项 segmented 直接可见 · 合约 / 周期保留 menu（项多 segmented 挤）
             Picker("", selection: $chartMode) {
@@ -1859,15 +1863,15 @@ struct ChartScene: View {
             .buttonStyle(.borderless)
             .tooltip("HUD 显示字段（OHLC / 成交量 / 持仓量 / 时间 等可选）")
 
-            Spacer()
-            // v17.216 · 删 chart toolbar 末端 "⌘N 新窗口 · ⌘L 自选 · ⌘T 模拟交易" hint
-            // 释放 ~180pt · 让 V1 主窗 chart 区 (default 1320pt) 能完整显示 toolbar 所有按钮
-            // 快捷键提示用户从主菜单可见 · trader 用熟后不依赖 chart 内 hint
+            // v17.216 · 删 chart toolbar 末端 "⌘N 新窗口 · ⌘L 自选 · ⌘T 模拟交易" hint · 释放 ~180pt
+            // v17.218 · 删 Spacer · ScrollView 内 Spacer 无 trailing 内容时表现异常（高度优先级低）
         }
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 12)
         .frame(height: 32)
+        }
         // v15.8 toolbar 背景跟随主题（深 #15171C / 浅 #ECEEF1 · 替代 .bar 系统默认 · 与主图协调）
+        .frame(height: 32)
         .background(chartTheme.toolbarBackground)
         .overlay(alignment: .bottom) { Divider() }
     }

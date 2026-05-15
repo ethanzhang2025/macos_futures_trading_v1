@@ -30,7 +30,8 @@ final class MainSplitViewController: NSSplitViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         splitView.isVertical = true
-        splitView.dividerStyle = .thin
+        // v17.218 · 用默认 paneSplitter（3pt 宽 · 用户拖动 affordance 更好）· .thin 1pt 用户找不准 hover target
+        // splitView.dividerStyle = .thin  // 删除 · 用 NSSplitView 默认 .paneSplitter
 
         // 左 · Sidebar（C3 · min 200 / max 360 / pref 240）
         // Step 1 canCollapse=false · Step 2 toolbar/菜单/⌘⌃[ 完整方案后再 enable

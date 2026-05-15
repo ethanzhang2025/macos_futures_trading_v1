@@ -32,9 +32,11 @@ struct AppKitShellEnvironment {
 }
 
 extension View {
-    /// 一行注入 8 个标准 environment（V1 主窗子组件 NSHostingController 跨边界用）
+    /// 一行注入 9 个 environment（V1 主窗子组件 NSHostingController 跨边界用）
     /// 不注入 isHostedInShell · ChartScene line 385 看 isHostedInShell 决定是否隐藏 toolbar
     /// 仅 monitor split item 内的子组件需要 isHostedInShell=true · 用 AppKitShellHC.wrapAsMonitor
+    /// v17.223 · 注入 isInV1MainWindow=true · 让子组件知道在 V1 主窗内
+    /// ChartScene 据此把 minWidth/minHeight 缩到 0 · 不撑大 NSHostingController.view 覆盖 NSSplitView divider
     func injectAppKitShellEnv(_ env: AppKitShellEnvironment) -> some View {
         self
             .environmentObject(env.shellVM)
@@ -45,6 +47,21 @@ extension View {
             .environment(\.simulatedTradingEngine, env.simulatedTradingEngine)
             .environment(\.bannerService, env.bannerService)
             .environment(\.windowManager, env.windowManager)
+            .environment(\.isInV1MainWindow, true)
+    }
+}
+
+/// EnvironmentKey · V1 主窗内嵌标识（区别于 isHostedInShell · 仅监盘面板用）
+/// 让 ChartScene / 其它子组件知道在 V1 NSSplitView 内 · 缩 minWidth/minHeight=0
+/// 防止 SwiftUI rootView ideal size 撑大 NSHostingController.view 覆盖 divider hit test
+private struct IsInV1MainWindowKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var isInV1MainWindow: Bool {
+        get { self[IsInV1MainWindowKey.self] }
+        set { self[IsInV1MainWindowKey.self] = newValue }
     }
 }
 

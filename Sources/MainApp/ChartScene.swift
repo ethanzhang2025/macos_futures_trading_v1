@@ -358,6 +358,9 @@ struct ChartScene: View {
     @Environment(\.openWindow) private var openWindow
     /// v17.6 · Shell 嵌入模式（隐藏顶部 toolbar · 由 Shell 顶部统一管理）
     @Environment(\.isHostedInShell) private var isHostedInShell
+    /// v17.223 · V1 主窗嵌入标识 · 区别于 isHostedInShell（仅监盘面板用）
+    /// V1 主窗内 ChartScene 缩 minWidth/minHeight=0 · 防止撑大 NSHostingController.view 覆盖 NSSplitView divider
+    @Environment(\.isInV1MainWindow) private var isInV1MainWindow
     /// v17.58 · 跨周期十字光标同步 · Shell 注入的 Pane 身份 + reporter
     @Environment(\.shellHostedPaneID) private var shellPaneID
     @Environment(\.shellCrosshairReporter) private var shellCrosshairReporter
@@ -421,7 +424,12 @@ struct ChartScene: View {
         // v15.17 · 主题动态 colorScheme · sheet/popup/系统色组件跟主图主题切换
         .preferredColorScheme(chartTheme.colorScheme)
         .background(periodShortcuts)
-        .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
+        .frame(
+            minWidth: isInV1MainWindow ? 0 : 800,
+            idealWidth: 1280,
+            minHeight: isInV1MainWindow ? 0 : 480,
+            idealHeight: 720
+        )
     }
 
     /// v17.190 · sheet 复杂 closure 提到 helper · 防 ViewBuilder 多 let 推断 timeout
@@ -2692,6 +2700,8 @@ struct ChartContentView: View {
     @Environment(\.analytics) private var analytics
     /// v17.71 · 跨周期共振外部光标（ChartScene 透传 · 副图 SubChartView 渲染浅蓝竖线）
     @Environment(\.shellExternalCrosshair) private var shellExternalCrosshair
+    /// v17.223 · V1 主窗嵌入标识 · 缩 minWidth/minHeight=0 防撑大 NSHostingController.view 覆盖 NSSplitView divider
+    @Environment(\.isInV1MainWindow) private var isInV1MainWindow
 
     let renderer: MetalKLineRenderer
     let bars: [KLine]
@@ -3030,7 +3040,12 @@ struct ChartContentView: View {
             )
             .frame(height: 28)
         }
-        .frame(minWidth: 800, idealWidth: 1280, minHeight: 480, idealHeight: 720)
+        .frame(
+            minWidth: isInV1MainWindow ? 0 : 800,
+            idealWidth: 1280,
+            minHeight: isInV1MainWindow ? 0 : 480,
+            idealHeight: 720
+        )
         .background(viewportShortcuts)
         .background(chartContentShortcuts)
         .onChange(of: viewport) { newValue in

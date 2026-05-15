@@ -42,8 +42,9 @@ final class MainSplitViewController: NSSplitViewController {
         sidebarItem.canCollapse = true
         addSplitViewItem(sidebarItem)
 
-        // 中 · PaneContainer（A3=C · 看盘 tab 下 chart Pane 1-N 切分 · Step 2 暂用单 ChartScene）
-        let centerVC = AppKitShellHC.wrap(ChartScene(), env: env)
+        // 中 · PaneContainer（A3=C · v17.227 · 嵌套 NSStackView 支持 1/2/4/6/9 grid）
+        // PaneContainerController 监听 activeWorkspace.paneLayout 变化自动 rebuild
+        let centerVC = PaneContainerController(env: env)
         centerVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 400).isActive = true
         let centerItem = NSSplitViewItem(viewController: centerVC)
         centerItem.canCollapse = false

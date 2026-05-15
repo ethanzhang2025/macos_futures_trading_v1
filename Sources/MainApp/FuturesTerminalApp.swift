@@ -359,7 +359,8 @@ struct FuturesTerminalApp: App {
                 windowManager: coordinator.windowManager
             ))
         }
-        .defaultSize(width: 1600, height: 1000)
+        // v17.212 · default 1800x1100 · 留给 ChartScene toolbar 完整空间（sidebar 240 + watchlist 240 → chart 1320pt 够）
+        .defaultSize(width: 1800, height: 1100)
 
         // 主图表窗口（保留 · 用户主动"分离"才打开 · Cmd+N 新建多个）
         // v15.17 · 移除全局 .preferredColorScheme(.dark) · ChartScene 内动态 chartTheme.colorScheme · sheet/popup 跟主题

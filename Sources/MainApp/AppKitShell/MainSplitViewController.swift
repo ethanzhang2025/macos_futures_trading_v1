@@ -36,19 +36,19 @@ final class MainSplitViewController: NSSplitViewController {
         // 通过 = 真子组件干扰 hit test · 继续定位
         // 不通过 = 与子组件无关 · 排查 V1 主窗其他结构
 
-        let sidebarVC = NSHostingController(rootView: DiagPlaceholderView(label: "Sidebar 占位", color: .systemBlue))
+        let sidebarVC = NSHostingController(rootView: DiagPlaceholderView(label: "Sidebar 占位", color: .blue))
         sidebarVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
         let sidebarItem = NSSplitViewItem(viewController: sidebarVC)
         sidebarItem.canCollapse = true
         addSplitViewItem(sidebarItem)
 
-        let centerVC = NSHostingController(rootView: DiagPlaceholderView(label: "Center 占位", color: .systemGray))
+        let centerVC = NSHostingController(rootView: DiagPlaceholderView(label: "Center 占位", color: .gray))
         centerVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 400).isActive = true
         let centerItem = NSSplitViewItem(viewController: centerVC)
         centerItem.canCollapse = false
         addSplitViewItem(centerItem)
 
-        let monitorVC = NSHostingController(rootView: DiagPlaceholderView(label: "Monitor 占位", color: .systemGreen))
+        let monitorVC = NSHostingController(rootView: DiagPlaceholderView(label: "Monitor 占位", color: .green))
         monitorVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
         let monitorItem = NSSplitViewItem(viewController: monitorVC)
         monitorItem.canCollapse = true

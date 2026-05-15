@@ -21,6 +21,7 @@ import SwiftUI
 struct V1PrimaryTabBar: View {
     @EnvironmentObject var shellVM: ShellViewModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.windowManager) private var windowManager
 
     var body: some View {
         HStack(spacing: DesignTokens.Spacing.xs) {
@@ -61,18 +62,19 @@ struct V1PrimaryTabBar: View {
     }
 
     private func handleTabTap(_ tab: PrimaryTab) {
+        // v17.229 · Step 6 · 重型窗口路由统一走 WindowManager.openHeavyWindow
         switch tab {
         case .watching:
             // V1 主窗 default 状态 · 看盘永远 active · 点击 no-op
             break
         case .arbitrage:
-            openWindow(id: "spread")
+            windowManager?.openHeavyWindow(.spread, using: openWindow)
         case .option:
-            openWindow(id: "option")
+            windowManager?.openHeavyWindow(.option, using: openWindow)
         case .review:
-            openWindow(id: "review")
+            windowManager?.openHeavyWindow(.review, using: openWindow)
         case .training:
-            openWindow(id: "training")
+            windowManager?.openHeavyWindow(.training, using: openWindow)
         }
     }
 

@@ -59,6 +59,31 @@ final class WindowManager: ObservableObject {
     func closeMonitorPanel(_ kind: MonitorPanelKind) {
         monitorPanelController?.close(kind)
     }
+
+    /// v17.229 · Step 6 · 重型独立窗口统一路由 · doc 章节 237-254（13 类重型窗口）
+    /// 当前实现走 SwiftUI openWindow · 后续可平滑切到 WindowManager 直接管 NSWindow 创建
+    func openHeavyWindow(_ kind: HeavyWindowKind, using openWindow: OpenWindowAction) {
+        openWindow(id: kind.windowID)
+    }
+}
+
+/// v17.229 · Step 6 · 13 类重型独立窗口集中标识 · doc 章节 237-254
+enum HeavyWindowKind: String, CaseIterable {
+    case option
+    case spread
+    case calendarSpread
+    case spreadAlert
+    case review
+    case journal
+    case training
+    case formulaEditor
+    case anomalyMonitor
+    case instrumentDashboard
+    case sessionCompare
+    case correlation
+    case moneyflow
+
+    var windowID: String { rawValue }
 }
 
 /// EnvironmentKey · WindowManager 注入到 SwiftUI tree（@Environment(\.windowManager)）

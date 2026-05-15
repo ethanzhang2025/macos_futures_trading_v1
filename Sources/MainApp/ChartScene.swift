@@ -1860,8 +1860,9 @@ struct ChartScene: View {
             .tooltip("HUD 显示字段（OHLC / 成交量 / 持仓量 / 时间 等可选）")
 
             Spacer()
-            Text("⌘N 新窗口 · ⌘L 自选 · ⌘T 模拟交易")
-                .foregroundColor(.secondary)
+            // v17.216 · 删 chart toolbar 末端 "⌘N 新窗口 · ⌘L 自选 · ⌘T 模拟交易" hint
+            // 释放 ~180pt · 让 V1 主窗 chart 区 (default 1320pt) 能完整显示 toolbar 所有按钮
+            // 快捷键提示用户从主菜单可见 · trader 用熟后不依赖 chart 内 hint
         }
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 12)

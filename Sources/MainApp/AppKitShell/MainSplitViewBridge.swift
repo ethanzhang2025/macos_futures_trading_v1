@@ -55,6 +55,10 @@ struct MainSplitViewBridge: NSViewControllerRepresentable {
            window !== env.windowManager.mainWindowController.window {
             env.windowManager.mainWindowController.attach(window)
         }
+        // v17.224 · 注入 split controller ref 给 MainWindowController · 用于 toggleSidebar / toggleMonitor 菜单
+        if env.windowManager.mainWindowController.splitViewController !== nsViewController {
+            env.windowManager.mainWindowController.splitViewController = nsViewController
+        }
     }
 }
 

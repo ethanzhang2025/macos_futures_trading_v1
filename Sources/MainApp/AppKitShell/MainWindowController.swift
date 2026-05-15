@@ -15,6 +15,10 @@ final class MainWindowController {
     /// SwiftUI WindowGroup 创建的 NSWindow · MainSplitViewBridge.updateNSViewController 内首次拿到时 attach
     weak var window: NSWindow?
 
+    /// v17.224 · MainSplitViewController 引用 · MainSplitViewBridge.updateNSViewController 时设置
+    /// 用于 toggleSidebar / toggleMonitor 菜单 + 快捷键调用（防 collapse 死胡同）
+    weak var splitViewController: MainSplitViewController?
+
     /// 绑定 NSWindow 并注入 V1 标准配置（C2 数值约束）
     func attach(_ window: NSWindow) {
         self.window = window
@@ -28,6 +32,20 @@ final class MainWindowController {
         guard let window else { return }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// v17.224 · 切 Sidebar 显隐（菜单「视图 → 显示/隐藏 Sidebar」+ ⌘⌃[）
+    func toggleSidebar() {
+        guard let split = splitViewController,
+              split.splitViewItems.indices.contains(0) else { return }
+        split.splitViewItems[0].animator().isCollapsed.toggle()
+    }
+
+    /// v17.224 · 切 Monitor 显隐（菜单「视图 → 显示/隐藏 Watchlist」+ ⌘⌃]）
+    func toggleMonitor() {
+        guard let split = splitViewController,
+              split.splitViewItems.indices.contains(2) else { return }
+        split.splitViewItems[2].animator().isCollapsed.toggle()
     }
 }
 

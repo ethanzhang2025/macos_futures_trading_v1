@@ -405,6 +405,10 @@ struct FuturesTerminalApp: App {
                     .foregroundColor(.secondary)
                 Divider()
                 ToggleThemeButton()  // v15.17 · ⌘⇧D 全局切主题（任何窗口前台都能切）
+                Divider()
+                // v17.224 · V1 主窗 NSSplitView toggle 入口 · 防 collapse 死胡同
+                ToggleSidebarButton(windowManager: coordinator.windowManager)
+                ToggleMonitorButton(windowManager: coordinator.windowManager)
             }
             CommandMenu("工具") {
                 ImportFormulaButton()
@@ -744,6 +748,28 @@ private struct OpenLegacyShellButton: View {
     var body: some View {
         Button("🧪 旧 Shell · 回退（⌘⌃0）") { openWindow(id: "shell") }
             .keyboardShortcut("0", modifiers: [.command, .control])
+    }
+}
+
+/// v17.224 · V1 主窗 Sidebar toggle（⌘⌃[ · 防 NSSplitView collapse 死胡同）
+private struct ToggleSidebarButton: View {
+    let windowManager: WindowManager
+    var body: some View {
+        Button("显示/隐藏 Sidebar（⌘⌃[）") {
+            windowManager.mainWindowController.toggleSidebar()
+        }
+        .keyboardShortcut("[", modifiers: [.command, .control])
+    }
+}
+
+/// v17.224 · V1 主窗 Monitor (Watchlist) toggle（⌘⌃] · 防 NSSplitView collapse 死胡同）
+private struct ToggleMonitorButton: View {
+    let windowManager: WindowManager
+    var body: some View {
+        Button("显示/隐藏 自选合约（⌘⌃]）") {
+            windowManager.mainWindowController.toggleMonitor()
+        }
+        .keyboardShortcut("]", modifiers: [.command, .control])
     }
 }
 

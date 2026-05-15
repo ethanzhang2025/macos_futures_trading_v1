@@ -228,13 +228,27 @@ struct WatchlistWindow: View {
     @State private var comboMap: [String: ComboAnomaly] = [:]
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
-        } detail: {
-            detail
+        Group {
+            if isHostedInShell {
+                // v17.214 · V1 主窗嵌入模式 · 单栏（顶部 compact group picker + detail）
+                // 避开 NavigationSplitView 双栏（V1 主窗本身就是 NSSplitView · 嵌套会显示 2 个 sidebar
+                // 并让 macOS 自动在 host window titlebar 加 sidebar toggle 按钮 · 视觉混乱）
+                VStack(spacing: 0) {
+                    embeddedGroupPicker
+                    Divider()
+                    detail
+                }
+            } else {
+                // 独立窗口模式 · NavigationSplitView 双栏（自选分组列表 + 合约表）
+                NavigationSplitView {
+                    sidebar
+                        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
+                } detail: {
+                    detail
+                }
+                .frame(minWidth: 720, idealWidth: 880, minHeight: 480, idealHeight: 600)
+            }
         }
-        .frame(minWidth: 720, idealWidth: 880, minHeight: 480, idealHeight: 600)
         .animation(.easeInOut(duration: 0.22), value: book)
         .background(groupShortcuts)
         .task {
@@ -497,6 +511,37 @@ struct WatchlistWindow: View {
         guard index >= 0, index < book.groups.count else { return }
         selectedGroupID = book.groups[index].id
         showAllAggregated = false   // 切到具体分组自动退出聚合视图
+    }
+
+    /// v17.214 · V1 嵌入模式顶部 compact group picker
+    /// 不显示完整 sidebar 分组列表 · 用紧凑 Menu Picker 切 group · 节省横向空间
+    @ViewBuilder
+    private var embeddedGroupPicker: some View {
+        HStack(spacing: DesignTokens.Spacing.sm) {
+            Picker("", selection: $selectedGroupID) {
+                ForEach(book.groups) { group in
+                    Text(group.name).tag(Optional(group.id))
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 140)
+            .labelsHidden()
+            .help("切换自选分组")
+
+            Spacer()
+
+            Button {
+                refreshQuotesNow()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.borderless)
+            .help("强制刷新报价（与 5s 周期 task 并行）")
+        }
+        .padding(.horizontal, DesignTokens.Spacing.md)
+        .padding(.vertical, DesignTokens.Spacing.xs)
+        .background(.regularMaterial)
     }
 
     private var sidebar: some View {

@@ -32,7 +32,9 @@ struct AppKitShellEnvironment {
 }
 
 extension View {
-    /// 一行注入 8 个 environment（V1 主窗子组件 NSHostingController 跨边界用）
+    /// 一行注入 9 个 environment（V1 主窗子组件 NSHostingController 跨边界用）
+    /// v17.214 · isHostedInShell=true 让 WatchlistWindow / OptionWindow / SpreadWindow 等
+    /// 切到嵌入模式（缩 minWidth/minHeight 到 0 · 单栏布局 · 不抢父容器空间）· doc D2 章节
     func injectAppKitShellEnv(_ env: AppKitShellEnvironment) -> some View {
         self
             .environmentObject(env.shellVM)
@@ -43,6 +45,7 @@ extension View {
             .environment(\.simulatedTradingEngine, env.simulatedTradingEngine)
             .environment(\.bannerService, env.bannerService)
             .environment(\.windowManager, env.windowManager)
+            .environment(\.isHostedInShell, true)
     }
 }
 

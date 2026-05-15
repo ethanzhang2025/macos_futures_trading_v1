@@ -54,15 +54,16 @@ final class MainSplitViewController: NSSplitViewController {
 
         // 右 · Monitor 区（A2=C · Watchlist / Sector / Position · 可 detach 为 NSPanel）
         // Step 2 暂用 WatchlistWindow · Step 4 Monitor detach 接入时加 Sector/Position 切换
-        // Step 1 canCollapse=false · Step 4 toolbar/菜单完整方案后再 enable
-        // v17.215 · 用 wrapAsMonitor 注入 isHostedInShell=true · WatchlistWindow 走单栏嵌入模式
-        // 拖动范围 min 160 / max 480 · preferred 240/1800 ≈ 13.3% · default chart 区 = 1320pt ✅
+        // v17.217 · min 60 让 trader 能拖窄到几乎只剩窄列（不进 collapse 死胡同 · 仍可拖回）
+        // ChartScene toolbar 需要 ~1240pt · 主窗 1440 - 240 sidebar - 60 watchlist = 1140pt（13" 边界够）
+        // 主窗 1600 - 240 - 60 = 1300pt · 主窗 1800 - 240 - 60 = 1500pt
+        // preferred 220/1800 ≈ 12.2% · default chart 区 = 1340pt 完整 toolbar ✅
         let monitorItem = NSSplitViewItem(
             viewController: AppKitShellHC.wrapAsMonitor(WatchlistWindow(), env: env)
         )
-        monitorItem.minimumThickness = 160
+        monitorItem.minimumThickness = 60
         monitorItem.maximumThickness = 480
-        monitorItem.preferredThicknessFraction = 240.0 / 1800.0
+        monitorItem.preferredThicknessFraction = 220.0 / 1800.0
         monitorItem.canCollapse = false
         addSplitViewItem(monitorItem)
     }

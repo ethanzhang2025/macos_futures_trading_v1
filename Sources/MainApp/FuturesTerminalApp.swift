@@ -319,6 +319,21 @@ struct FuturesTerminalApp: App {
         return newID
     }
 
+    /// v17.228 · 构造 AppKitShellEnvironment helper · 给 V1 主窗 WindowGroup + 视图菜单 detach 按钮复用
+    /// 多处需要 env 时不重复 8 字段构造代码
+    private func makeEnv() -> AppKitShellEnvironment {
+        AppKitShellEnvironment(
+            shellVM: shellVM,
+            storeManager: storeManager,
+            analytics: analytics,
+            alertEvaluator: alertEvaluator,
+            simulatedTradingEngine: simulatedTradingEngine,
+            bannerService: bannerService,
+            appState: coordinator.appState,
+            windowManager: coordinator.windowManager
+        )
+    }
+
     /// v1 占位 · 无登录态 · 接 Apple ID / 用户系统后替换
     static let anonymousUserID = "anonymous"
 
@@ -356,16 +371,7 @@ struct FuturesTerminalApp: App {
         // A5=B 决策 · SwiftUI WindowGroup + NSViewControllerRepresentable + NSSplitViewController 三层桥接
         // Step 2 · 3 split item 真组件（ShellSidebar / ChartScene / WatchlistWindow）+ 顶/底 PrimaryTabBar/BottomTradingBar/ShellStatusBar
         WindowGroup("主工作台 V1", id: "mainV1") {
-            MainWindowView(env: AppKitShellEnvironment(
-                shellVM: shellVM,
-                storeManager: storeManager,
-                analytics: analytics,
-                alertEvaluator: alertEvaluator,
-                simulatedTradingEngine: simulatedTradingEngine,
-                bannerService: bannerService,
-                appState: coordinator.appState,
-                windowManager: coordinator.windowManager
-            ))
+            MainWindowView(env: makeEnv())
         }
         // v17.212 · default 1800x1100 · 留给 ChartScene toolbar 完整空间（sidebar 240 + watchlist 240 → chart 1320pt 够）
         .defaultSize(width: 1800, height: 1100)
@@ -417,6 +423,26 @@ struct FuturesTerminalApp: App {
                 // v17.224 · V1 主窗 NSSplitView toggle 入口 · 防 collapse 死胡同
                 ToggleSidebarButton(windowManager: coordinator.windowManager)
                 ToggleMonitorButton(windowManager: coordinator.windowManager)
+                Divider()
+                // v17.228 · A2=C Mini v1 · Monitor 面板 NSPanel detach 入口
+                DetachMonitorPanelButton(
+                    kind: .watchlist,
+                    label: "📤 拖出自选合约（NSPanel 浮顶副屏）",
+                    envProvider: makeEnv,
+                    windowManager: coordinator.windowManager
+                )
+                DetachMonitorPanelButton(
+                    kind: .sector,
+                    label: "📤 拖出板块联动（NSPanel 浮顶副屏）",
+                    envProvider: makeEnv,
+                    windowManager: coordinator.windowManager
+                )
+                DetachMonitorPanelButton(
+                    kind: .position,
+                    label: "📤 拖出多空持仓（NSPanel 浮顶副屏）",
+                    envProvider: makeEnv,
+                    windowManager: coordinator.windowManager
+                )
             }
             CommandMenu("工具") {
                 ImportFormulaButton()
@@ -778,6 +804,20 @@ private struct ToggleMonitorButton: View {
             windowManager.mainWindowController.toggleMonitor()
         }
         .keyboardShortcut("]", modifiers: [.command, .control])
+    }
+}
+
+/// v17.228 · A2=C Mini v1 · Monitor 面板 NSPanel detach 入口（视图菜单）
+/// trader 把 Watchlist / Sector / Position 拖副屏 · NSPanel 浮顶不抢主窗焦点
+private struct DetachMonitorPanelButton: View {
+    let kind: MonitorPanelKind
+    let label: String
+    let envProvider: () -> AppKitShellEnvironment
+    let windowManager: WindowManager
+    var body: some View {
+        Button(label) {
+            windowManager.openMonitorPanel(kind, env: envProvider())
+        }
     }
 }
 

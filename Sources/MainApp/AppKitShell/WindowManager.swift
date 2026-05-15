@@ -32,6 +32,10 @@ final class WindowManager: ObservableObject {
     /// 替代系统 .help() 1.5s 延迟 · 0 延迟自定义视觉 · 全 app 通过 .tooltip("xxx") 调用
     let popoverService: HoverPopoverService
 
+    /// v17.228 · A2=C Mini v1 · Monitor 面板 NSPanel detach controller（lazy · 首次 open 才创建）
+    /// env 跨循环依赖 callsite 传入 · doc 章节 293-309
+    private var monitorPanelController: MonitorPanelController?
+
     init(appState: AppState) {
         self.appState = appState
         self.mainWindowController = MainWindowController()
@@ -41,6 +45,19 @@ final class WindowManager: ObservableObject {
     /// 激活主窗口到前台（菜单 ⌘⌃1 触发 · D3 双窗口入口）
     func activateMainWindow() {
         mainWindowController.activate()
+    }
+
+    /// v17.228 · 打开 Monitor 面板 NSPanel · 已开则激活前台
+    func openMonitorPanel(_ kind: MonitorPanelKind, env: AppKitShellEnvironment) {
+        if monitorPanelController == nil {
+            monitorPanelController = MonitorPanelController(env: env)
+        }
+        monitorPanelController?.open(kind)
+    }
+
+    /// v17.228 · 关闭 Monitor 面板 NSPanel
+    func closeMonitorPanel(_ kind: MonitorPanelKind) {
+        monitorPanelController?.close(kind)
     }
 }
 

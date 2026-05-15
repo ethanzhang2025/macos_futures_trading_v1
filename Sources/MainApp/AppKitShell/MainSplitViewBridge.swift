@@ -16,9 +16,9 @@ struct MainWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部 · PrimaryTabBar（doc 章节 184-231）
-            // Step 2b 直接 SwiftUI 渲染 · 不需要 NSHostingController 包（A5=B WindowGroup 内 SwiftUI 已是 native）
-            PrimaryTabBar()
+            // 顶部 · V1PrimaryTabBar（A1 决策 · 看盘=主窗 default 永远 active / 其他 4=openWindow 独立窗）
+            // 旧 PrimaryTabBar 仍在旧 Shell 用 · Step 6 删旧 Shell 时一起删
+            V1PrimaryTabBar()
 
             Divider()
 

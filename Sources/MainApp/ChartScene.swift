@@ -1179,7 +1179,7 @@ struct ChartScene: View {
                         .font(.system(size: 10, design: .monospaced))
                         .frame(width: 32)
                 }
-                .tooltip("文字字号 8~32 pt（新建文字应用 · 老文字右键修改字号）")
+                .chartTooltip("文字字号 8~32 pt（新建文字应用 · 老文字右键修改字号）")
             }
             // v13.31 多边形完成按钮 · 仅 polygon 工具激活 + 已点 ≥ 2 点（含起点 ≥ 3 点）时显示
             if activeDrawingTool == .polygon, pendingDrawingPoint != nil {
@@ -1191,7 +1191,7 @@ struct ChartScene: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(totalPoints < 3)
-                .tooltip("闭合多边形（至少 3 点）")
+                .chartTooltip("闭合多边形（至少 3 点）")
             }
             // v15.93 · Esc 取消画线工具 · 隐藏按钮挂 .escape · 仅画线工具激活时启用（避免吞默认 Esc 行为）
             Button("") {
@@ -1210,13 +1210,13 @@ struct ChartScene: View {
                 .labelsHidden()
                 .frame(width: 18, height: 18)
                 .clipShape(Circle())
-                .tooltip("画线颜色 + 透明度（v13.15 alpha 通道 · 新建生效 · 老画线右键应用）")
+                .chartTooltip("画线颜色 + 透明度（v13.15 alpha 通道 · 新建生效 · 老画线右键应用）")
             Stepper(value: $currentStrokeWidth, in: 0.5...5.0, step: 0.5) {
                 Text(String(format: "%.1f", currentStrokeWidth))
                     .font(.system(size: 10, design: .monospaced))
                     .frame(width: 24)
             }
-            .tooltip("画线线宽 0.5~5.0 pt（新建生效 · 老画线右键应用）")
+            .chartTooltip("画线线宽 0.5~5.0 pt（新建生效 · 老画线右键应用）")
             Divider().frame(height: 16)
             // v13.16 画线模板 Menu（保存常用 · 跨合约复用）
             templatesMenu
@@ -1225,12 +1225,12 @@ struct ChartScene: View {
                 Image(systemName: "square.and.arrow.up")
             }
             .buttonStyle(.borderless)
-            .tooltip("导出当前合约+周期画线为 JSON")
+            .chartTooltip("导出当前合约+周期画线为 JSON")
             Button { importDrawings() } label: {
                 Image(systemName: "square.and.arrow.down")
             }
             .buttonStyle(.borderless)
-            .tooltip("从 JSON 导入画线")
+            .chartTooltip("从 JSON 导入画线")
             Button {
                 drawings.removeAll()
                 pendingDrawingPoint = nil
@@ -1240,7 +1240,7 @@ struct ChartScene: View {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
-            .tooltip("清空所有画线")
+            .chartTooltip("清空所有画线")
         }
     }
 
@@ -1371,7 +1371,7 @@ struct ChartScene: View {
         }
         .menuStyle(.borderlessButton)
         .frame(width: 28)
-        .tooltip("画线模板（保存常用 / 一键插入 · 跨合约复用）")
+        .chartTooltip("画线模板（保存常用 / 一键插入 · 跨合约复用）")
     }
 
     /// v13.16 从模板实例化新画线 · 锚点重定位到最新 30 根 bar 区间（可见区附近）· 价格保留模板原值
@@ -1648,7 +1648,7 @@ struct ChartScene: View {
                 .strokeBorder(Color.accentColor.opacity(isActive ? 0.7 : 0), lineWidth: 1)  // v17.28 · 选中加 border
         )
         .cornerRadius(4)
-        .tooltip(help)
+        .chartTooltip(help)
     }
 
     /// v15.85 · 文字标注工具按钮 · 用 "Aa" 字符替代 textformat SF Symbol（更直观）
@@ -1672,7 +1672,7 @@ struct ChartScene: View {
                 .strokeBorder(Color.accentColor.opacity(isActive ? 0.7 : 0), lineWidth: 1)
         )
         .cornerRadius(4)
-        .tooltip(help)
+        .chartTooltip(help)
     }
 
     /// v13.31 工具栏"完成（n 点）"按钮 · 闭合多边形 · 至少 3 点（startPoint + ≥2 extra）
@@ -1758,7 +1758,7 @@ struct ChartScene: View {
             }
             .buttonStyle(.borderless)
             .frame(width: 90)
-            .tooltip("副图指标多选（至少 1 · 最多 4 · 点空白关闭弹窗）")
+            .chartTooltip("副图指标多选（至少 1 · 最多 4 · 点空白关闭弹窗）")
             .popover(isPresented: $showSubIndicatorPicker, arrowEdge: .bottom) {
                 // v17.158 · 按 IndicatorCategory 分组（28 项平铺 → 6 大类紧凑分段）
                 // v17.160 · 顶部 ⭐ 收藏 section（右键各 toggle 加入/移出 · UserDefaults 持久化）
@@ -1810,7 +1810,7 @@ struct ChartScene: View {
                     .font(.system(size: 13))
             }
             .buttonStyle(.borderless)
-            .tooltip("指标参数（MA / BOLL / MACD / KDJ / RSI 周期可调）")
+            .chartTooltip("指标参数（MA / BOLL / MACD / KDJ / RSI 周期可调）")
 
             // v17.139 · 主图叠加菜单（VWAP / Pivot Points / SuperTrend）· 三选 toggle · 持久化
             mainChartOverlayMenu
@@ -1827,7 +1827,7 @@ struct ChartScene: View {
                     .font(.system(size: 13))
             }
             .buttonStyle(.borderless)
-            .tooltip("模拟交易（⌘T · SimNow 模拟训练）")
+            .chartTooltip("模拟交易（⌘T · SimNow 模拟训练）")
 
             // v15.8 · 主题切换（深色 ↔ 浅色 · UserDefaults 持久化）
             Button {
@@ -1837,7 +1837,7 @@ struct ChartScene: View {
                     .font(.system(size: 13))
             }
             .buttonStyle(.borderless)
-            .tooltip("切换 \(chartTheme == .dark ? "浅色" : "深色") 主题")
+            .chartTooltip("切换 \(chartTheme == .dark ? "浅色" : "深色") 主题")
 
             // v17.13 A1.1 / v17.52-55 A1.2-5 · 图表类型切换（11 种 · TradingView 对齐 A1）
             Picker("", selection: $chartType) {
@@ -1847,7 +1847,7 @@ struct ChartScene: View {
             }
             .pickerStyle(.menu)
             .frame(width: 130)
-            .tooltip("图表类型（K 线 / Heikin Ashi / Renko / 折线 / 面积 / Baseline / Hollow / Bars OHLC / P&F / Kagi）")
+            .chartTooltip("图表类型（K 线 / Heikin Ashi / Renko / 折线 / 面积 / Baseline / Hollow / Bars OHLC / P&F / Kagi）")
 
             // v17.60 · 算法参数 ⚙️ 按钮（仅 renko / pnf / kagi 显示）
             if chartType == .renko || chartType == .pointFigure || chartType == .kagi {
@@ -1858,7 +1858,7 @@ struct ChartScene: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.borderless)
-                .tooltip("\(chartType.displayName) 算法参数（brickSize / boxSize / reversal）")
+                .chartTooltip("\(chartType.displayName) 算法参数（brickSize / boxSize / reversal）")
             }
 
             // v15.14 · HUD 字段自定义按钮（OHLC / 涨跌 / 成交量 / 持仓量 / 时间 / 调试 全可选）
@@ -1869,7 +1869,7 @@ struct ChartScene: View {
                     .font(.system(size: 13))
             }
             .buttonStyle(.borderless)
-            .tooltip("HUD 显示字段（OHLC / 成交量 / 持仓量 / 时间 等可选）")
+            .chartTooltip("HUD 显示字段（OHLC / 成交量 / 持仓量 / 时间 等可选）")
 
             // v17.216 · 删 chart toolbar 末端 "⌘N 新窗口 · ⌘L 自选 · ⌘T 模拟交易" hint · 释放 ~180pt
             // v17.218 · 删 Spacer · ScrollView 内 Spacer 无 trailing 内容时表现异常（高度优先级低）
@@ -1905,7 +1905,7 @@ struct ChartScene: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .tooltip("一键指标套装（trader 流派切换 · 经典 / 国际派 / 价量派 / 海龟 / 短线 / 裸 K）")
+        .chartTooltip("一键指标套装（trader 流派切换 · 经典 / 国际派 / 价量派 / 海龟 / 短线 / 裸 K）")
     }
 
     /// v17.154 · 应用 preset · push 副图 + 主图 overlay · 不动 ParamsBook 参数（沿用用户偏好）
@@ -1978,7 +1978,7 @@ struct ChartScene: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .tooltip("一键模拟下单（开多/开空 · 1 手 · 限价 last 或市价 · 详细委托 → 模拟交易窗口）")
+        .chartTooltip("一键模拟下单（开多/开空 · 1 手 · 限价 last 或市价 · 详细委托 → 模拟交易窗口）")
         .disabled(simulatedTradingEngine == nil || bars.isEmpty)
     }
 
@@ -2043,7 +2043,7 @@ struct ChartScene: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .tooltip("主图叠加（VWAP/Pivot/SuperTrend/Ichimoku/Donchian/Keltner/SAR/PriceChannel/Envelopes/HMA/DEMA/TEMA · 当前 \(count)/\(total)）")
+        .chartTooltip("主图叠加（VWAP/Pivot/SuperTrend/Ichimoku/Donchian/Keltner/SAR/PriceChannel/Envelopes/HMA/DEMA/TEMA · 当前 \(count)/\(total)）")
     }
 
     @ViewBuilder
@@ -2371,33 +2371,33 @@ struct ChartScene: View {
                 Image(systemName: "stop.fill")
             }
             .buttonStyle(ReplayBarButtonStyle())
-            .tooltip("停止 · 重置到第 1 根")
+            .chartTooltip("停止 · 重置到第 1 根")
 
             Button { Task { await onTapStepBackward() } } label: {
                 Image(systemName: "backward.frame.fill")
             }
             .buttonStyle(ReplayBarButtonStyle())
-            .tooltip("单步后退 1 根")
+            .chartTooltip("单步后退 1 根")
 
             Button { Task { await onTapPlayPause() } } label: {
                 Image(systemName: replay.state == .playing ? "pause.fill" : "play.fill")
             }
             .buttonStyle(ReplayBarButtonStyle(active: replay.state == .playing))
             .keyboardShortcut(.space, modifiers: [])
-            .tooltip(replay.state == .playing ? "暂停（空格）" : "播放（空格）")
+            .chartTooltip(replay.state == .playing ? "暂停（空格）" : "播放（空格）")
 
             Button { Task { await onTapStepForward() } } label: {
                 Image(systemName: "forward.frame.fill")
             }
             .buttonStyle(ReplayBarButtonStyle())
-            .tooltip("单步前进 1 根")
+            .chartTooltip("单步前进 1 根")
 
             // v15.17 · 跳到末根（替代连续点 stepForward 上千次）
             Button { Task { await onTapJumpToEnd() } } label: {
                 Image(systemName: "forward.end.fill")
             }
             .buttonStyle(ReplayBarButtonStyle())
-            .tooltip("跳到末根 K 线")
+            .chartTooltip("跳到末根 K 线")
 
             Divider().frame(height: 18)
 
@@ -2433,7 +2433,7 @@ struct ChartScene: View {
                 }
             }
             .buttonStyle(ReplayBarButtonStyle(active: intradayActiveDate != nil))
-            .tooltip("盘中复盘：选定日期回放当日 K 线（含前 60 根预热）· v17.171")
+            .chartTooltip("盘中复盘：选定日期回放当日 K 线（含前 60 根预热）· v17.171")
             if intradayActiveDate != nil {
                 Button {
                     Task { await exitIntradayReplay() }
@@ -2441,7 +2441,7 @@ struct ChartScene: View {
                     Image(systemName: "arrow.uturn.backward")
                 }
                 .buttonStyle(ReplayBarButtonStyle())
-                .tooltip("退出盘中复盘 · 还原完整历史")
+                .chartTooltip("退出盘中复盘 · 还原完整历史")
             }
         }
         .buttonStyle(.borderless)
@@ -2548,7 +2548,7 @@ struct ChartScene: View {
             in: 0...Double(max(0, total - 1))
         )
         .frame(minWidth: 200, maxWidth: .infinity)
-        .tooltip("拖拽跳到任意 K 线（也可单步按钮走）")
+        .chartTooltip("拖拽跳到任意 K 线（也可单步按钮走）")
     }
 
     private var progressText: String {
@@ -3700,21 +3700,21 @@ struct ChartContentView: View {
             } label: {
                 Image(systemName: "plus.magnifyingglass").frame(width: 24, height: 24)
             }
-            .tooltip("放大（⌘=）")
+            .chartTooltip("放大（⌘=）")
             Button {
                 inertiaTask?.cancel()
                 viewport = clamp(viewport.zoomed(by: 1.4))
             } label: {
                 Image(systemName: "minus.magnifyingglass").frame(width: 24, height: 24)
             }
-            .tooltip("缩小（⌘-）")
+            .chartTooltip("缩小（⌘-）")
             Button {
                 inertiaTask?.cancel()
                 viewport = RenderViewport(startIndex: max(0, bars.count - 120), visibleCount: 120)
             } label: {
                 Image(systemName: "arrow.counterclockwise").frame(width: 24, height: 24)
             }
-            .tooltip("重置缩放（⌘0）")
+            .chartTooltip("重置缩放（⌘0）")
         }
         .buttonStyle(.borderless)
         .padding(6)

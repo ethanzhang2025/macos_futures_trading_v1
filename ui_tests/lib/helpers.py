@@ -128,6 +128,8 @@ def click_menu_item(driver, *menu_path: str, settle: float = 0.4) -> None:
         第 1 级 = XCUIElementTypeMenuBarItem (顶级 menu)
         第 2+ 级 = XCUIElementTypeMenuItem (子项)
         按 @title 属性匹配（ui_tree dump 看到的 title 字段）
+
+    v17.259 · 完成后发 ESC 关菜单 · 防 menu 残留 expand 干扰下一步截图
     """
     for i, item_title in enumerate(menu_path):
         quoted = _xpath_quote(item_title)
@@ -145,6 +147,14 @@ def click_menu_item(driver, *menu_path: str, settle: float = 0.4) -> None:
             )
         el.click()
         time.sleep(settle)
+
+    # 防 menu 残留 expand · 发 ESC 关闭任何残留 popup
+    try:
+        # XCUIKeyboardKeyEscape = "\x1b"
+        driver.execute_script("macos: keys", {"keys": [{"key": "\x1b"}]})
+        time.sleep(0.2)
+    except Exception:
+        pass
 
 
 # ─── 鼠标 ────────────────────────────────────────────────

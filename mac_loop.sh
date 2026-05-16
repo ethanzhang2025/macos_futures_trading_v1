@@ -54,16 +54,20 @@ VVSVR_PATH="/home/beelink/debug_img/appium_loop_latest"
 APPIUM_PID=""
 
 cleanup() {
-    # v17.258 · 顺序: 先停自动化测试 (appium) · 再退主程序 (MainApp) · 中间留 graceful 窗口
+    # v17.259 · 顺序: 先停自动化测试 (appium + child procs) · 再退主程序 (MainApp)
+    # 解决: appium fork 多个 node child + WebDriverAgent · 只 kill 父 PID 残留挂住 shell
 
-    # 1. 停 appium server (pytest 已退 · driver session 已 quit · server 可以走)
+    # 1. 停 appium server + 所有相关 child 进程
     if [[ -n "${APPIUM_PID:-}" ]] && kill -0 "$APPIUM_PID" 2>/dev/null; then
         echo "   ↓ 停 appium server (PID=$APPIUM_PID)"
         kill -TERM "$APPIUM_PID" 2>/dev/null || true
         sleep 1
-        # 兜底
         kill -9 "$APPIUM_PID" 2>/dev/null || true
     fi
+    # 兜底 · pkill 残留 appium / WebDriverAgent / mac2-driver 进程
+    pkill -f "appium --base-path" 2>/dev/null || true
+    pkill -f "WebDriverAgent" 2>/dev/null || true
+    pkill -f "appium-mac2-driver" 2>/dev/null || true
 
     # 2. 关 MainApp · SIGTERM 让它走完正常退出流程 (清 ChartScene Metal / 释放窗口)
     if pgrep -f "MainApp.app/Contents/MacOS/MainApp" >/dev/null 2>&1; then

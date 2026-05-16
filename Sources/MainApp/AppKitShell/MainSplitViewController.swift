@@ -50,10 +50,14 @@ final class MainSplitViewController: NSSplitViewController {
         sidebarItem.holdingPriority = NSLayoutConstraint.Priority(252)
         addSplitViewItem(sidebarItem)
 
-        // 中 · PaneContainer · 最小 400pt · 不可折叠 · 低 priority (拖时优先变)
+        // 中 · PaneContainer · 最小 200pt · 不可折叠 · 低 priority (拖时优先变)
+        // v17.266 · ui_tree 验证 center 当前 = 400pt (= 旧 minThickness · 卡 min 不能 shrink)
+        //   → NSSplitView 把 delta 推给 monitor · center 不变
+        // 改 400 → 200 · 让 center 真正能 shrink/grow 接收 delta
+        // inner 4 chart pane 各自 minWidth=0 (isInV1MainWindow · v17.223) · 不阻止 center 压缩
         let centerVC = PaneContainerController(env: env)
         let centerItem = NSSplitViewItem(viewController: centerVC)
-        centerItem.minimumThickness = 400
+        centerItem.minimumThickness = 200
         centerItem.canCollapse = false
         centerItem.holdingPriority = NSLayoutConstraint.Priority(248)
         addSplitViewItem(centerItem)

@@ -19,6 +19,8 @@ struct ShellCommandPalette: View {
     @State private var loadedSymbols: [String] = []
     /// v17.236 · 展示结果缓存 · body re-eval 时不触发 allCommands + filteredCommands 重算
     @State private var displayCommands: [(cmd: PaletteCommand, range: Range<String.Index>?)] = []
+    /// v17.239 · 所有候选缓存 · onAppear 构造一次 / loadedSymbols 变化时刷新 · 避免 query 变化触发 80+ PaletteCommand 重建
+    @State private var cachedAllCommands: [PaletteCommand] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,11 +38,15 @@ struct ShellCommandPalette: View {
         .background(.regularMaterial)
         .onAppear {
             queryFocused = true
+            cachedAllCommands = allCommands   // v17.239 · 一次构造 80+ PaletteCommand · 后续 query 变化不重建
             refreshDisplay()
         }
         // macOS 13 兼容 · 单参数版本（双参数 onChange 是 macOS 14+ API · memory: feedback_macOS版本API兼容）
         .onChange(of: query) { _ in refreshDisplay() }
-        .onChange(of: loadedSymbols) { _ in refreshDisplay() }
+        .onChange(of: loadedSymbols) { _ in
+            cachedAllCommands = allCommands   // 自选合约异步加载完 · 重建 cache
+            refreshDisplay()
+        }
         // v17.77 · 启动时 / 每次打开 ⌘K 时刷新 watchlistBook · 让 trader 自选实时可搜
         .task {
             await loadWatchlistSymbolsAsync()
@@ -440,7 +446,7 @@ struct ShellCommandPalette: View {
     /// 修法：allCommands 在 func 入口算一次 · recents 用 Dictionary O(1) lookup 代替 first 扫描
     private var filteredCommands: [(cmd: PaletteCommand, range: Range<String.Index>?)] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let all = allCommands   // ★ 一次访问 · 避免 6 次重新构造
+        let all = cachedAllCommands   // v17.239 · 走 @State cache · 0 次重建 PaletteCommand
         if q.isEmpty {
             // ★ Dictionary O(1) lookup 代替 O(N) first 扫描
             let byTitle = Dictionary(all.map { ($0.title, $0) }, uniquingKeysWith: { first, _ in first })
@@ -494,7 +500,8 @@ struct ShellCommandPalette: View {
 // MARK: - Palette command model
 
 struct PaletteCommand: Identifiable {
-    let id = UUID()
+    // v17.239 性能修 · 用 stable computed id 替代 UUID() · 消除 80+ 次 syscall × 每次构造 allCommands
+    var id: String { "\(category.label):\(title)" }
     let title: String
     let subtitle: String?
     let emoji: String

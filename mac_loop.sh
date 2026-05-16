@@ -53,33 +53,38 @@ VVSVR_PATH="/home/beelink/debug_img/appium_loop_latest"
 
 APPIUM_PID=""
 
-cleanup() {
-    # v17.259 · 顺序: 先停自动化测试 (appium + child procs) · 再退主程序 (MainApp)
-    # 解决: appium fork 多个 node child + WebDriverAgent · 只 kill 父 PID 残留挂住 shell
-
-    # 1. 停 appium server + 所有相关 child 进程
+stop_appium() {
+    # 停 appium server + 所有 child 进程 (node fork / WebDriverAgent / mac2-driver)
     if [[ -n "${APPIUM_PID:-}" ]] && kill -0 "$APPIUM_PID" 2>/dev/null; then
         echo "   ↓ 停 appium server (PID=$APPIUM_PID)"
         kill -TERM "$APPIUM_PID" 2>/dev/null || true
         sleep 1
         kill -9 "$APPIUM_PID" 2>/dev/null || true
+        APPIUM_PID=""
     fi
-    # 兜底 · pkill 残留 appium / WebDriverAgent / mac2-driver 进程
     pkill -f "appium --base-path" 2>/dev/null || true
     pkill -f "WebDriverAgent" 2>/dev/null || true
     pkill -f "appium-mac2-driver" 2>/dev/null || true
+}
 
-    # 2. 关 MainApp · SIGTERM 让它走完正常退出流程 (清 ChartScene Metal / 释放窗口)
+quit_main_app() {
+    # 关 MainApp · SIGTERM 让它走完正常退出流程 (清 Metal / 释放窗口)
     if pgrep -f "MainApp.app/Contents/MacOS/MainApp" >/dev/null 2>&1; then
         echo "   ↓ 关 MainApp (graceful SIGTERM)"
         pkill -TERM -f "MainApp.app/Contents/MacOS/MainApp" 2>/dev/null || true
         sleep 2
-        # 兜底 force kill (如果 graceful 卡住)
         if pgrep -f "MainApp.app/Contents/MacOS/MainApp" >/dev/null 2>&1; then
             echo "   ↓ MainApp 未响应 · force kill (SIGKILL)"
             pkill -9 -f "MainApp.app/Contents/MacOS/MainApp" 2>/dev/null || true
         fi
     fi
+}
+
+# v17.263 · 拆分 cleanup · pytest 完后立即停 appium · scp 期间 appium 已停
+# 用户反馈: 收集结果后就该停 appium · scp 不需要 appium 还活着浪费资源
+cleanup() {
+    stop_appium
+    quit_main_app
 }
 trap cleanup EXIT INT TERM
 
@@ -233,6 +238,11 @@ EOF
 
 echo ""
 
+# v17.263 · 收集完结果 · 立即停 appium (scp 不需要 appium 还活着浪费资源)
+echo "🛑 停 appium (收集完成 · 释放 driver 资源)"
+stop_appium
+echo ""
+
 # ─── [7/8] scp → vvsvr ──────────────────────────────────
 echo "📤 [7/8] scp → $VVSVR_REMOTE:$VVSVR_PATH"
 if ssh -o ConnectTimeout=5 "$VVSVR_REMOTE" \
@@ -246,8 +256,9 @@ fi
 echo ""
 
 # ─── [8/8] cleanup ──────────────────────────────────────
-echo "🧹 [8/8] cleanup..."
-cleanup
+# v17.263 · appium 已在 [6/8] 后停 · 此处只关 MainApp
+echo "🧹 [8/8] cleanup · 关 MainApp..."
+quit_main_app
 deactivate 2>/dev/null || true
 
 # 解析 pytest 结果 · 打个简短 summary

@@ -1742,6 +1742,7 @@ struct ChartScene: View {
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundColor(.primary)
                 .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)  // v17.262 · 防 Spacer 把 Text 压成 width=1
 
             Spacer(minLength: 4)
 

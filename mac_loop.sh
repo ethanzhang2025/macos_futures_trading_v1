@@ -10,7 +10,7 @@
 #   2. (用户已 git pull · 脚本不重复)
 #   3. ./run-mac.sh debug build → MainApp.app
 #   4. 启 appium server (background · trap 自动 kill)
-#   5. pytest tests/generated/ --json-report
+#   5. pytest ui_tests/generated/ --json-report
 #   6. 收集 result.json / shots / logs
 #   7. scp → vvsvr:/home/beelink/debug_img/appium_loop_latest/
 #   8. cleanup
@@ -19,7 +19,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 REPO_DIR="$(pwd)"
-TESTS_DIR="$REPO_DIR/tests"
+TESTS_DIR="$REPO_DIR/ui_tests"
 VENV_DIR="$TESTS_DIR/.venv"
 SHOTS_DIR="$TESTS_DIR/shots"
 

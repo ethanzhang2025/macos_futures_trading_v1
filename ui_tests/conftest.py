@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
-# 确保 lib/ 在 sys.path · generated/*.py 可 import helpers
-_LIB_DIR = Path(__file__).resolve().parent
+# conftest.py 在 ui_tests/ 根 · helpers.py 在 ui_tests/lib/
+# 把 lib/ 加进 sys.path · generated/*.py 可 from helpers import ...
+_LIB_DIR = Path(__file__).resolve().parent / "lib"
 if str(_LIB_DIR) not in sys.path:
     sys.path.insert(0, str(_LIB_DIR))
 
@@ -23,8 +24,8 @@ def _resolve_app_path() -> str:
     p = os.environ.get("APP_PATH")
     if p and Path(p).exists():
         return p
-    # 兜底: 从仓库根推算
-    repo_root = Path(__file__).resolve().parents[2]
+    # 兜底: 从仓库根推算（conftest 在 ui_tests/ 根 · 仓库根 = parents[1]）
+    repo_root = Path(__file__).resolve().parents[1]
     candidate = repo_root / ".build" / "debug" / "MainApp.app"
     if candidate.exists():
         return str(candidate)
@@ -44,7 +45,7 @@ def app_path() -> str:
 
 @pytest.fixture(scope="session")
 def shots_dir() -> str:
-    p = Path(__file__).resolve().parents[1] / "shots"
+    p = Path(__file__).resolve().parent / "shots"
     p.mkdir(parents=True, exist_ok=True)
     return str(p)
 

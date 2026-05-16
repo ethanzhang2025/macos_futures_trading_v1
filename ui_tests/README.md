@@ -18,7 +18,7 @@ Linux 端 Claude 改代码 → Mac 端 1 行命令 → 结果自动回传 Linux 
           2. (用户已 pull · 不重复)
           3. ./run-mac.sh debug build → MainApp.app
           4. 后台启 appium server (port 4723)
-          5. pytest tests/generated/ --json-report
+          5. pytest ui_tests/generated/ --json-report
           6. 收集 result.json / shots/ / logs
           7. scp → vvsvr:/home/beelink/debug_img/appium_loop_latest/
           8. cleanup
@@ -53,7 +53,7 @@ node -v && python3 -V && appium driver list --installed | grep mac2
 ```
 看到三个版本号 + `✓ mac2@x.x.x` 即 OK。
 
-> Python venv / pip 依赖 · npm 全局 driver · 都不需要手动管。首次 `./mac_loop.sh` 会自动建 `tests/.venv/` + `pip install -r requirements.txt`。
+> Python venv / pip 依赖 · npm 全局 driver · 都不需要手动管。首次 `./mac_loop.sh` 会自动建 `ui_tests/.venv/` + `pip install -r requirements.txt`。
 
 ---
 
@@ -71,13 +71,13 @@ git pull --ff-only && ./mac_loop.sh
 ## 目录结构
 
 ```
-tests/
+ui_tests/
 ├── specs/                  ← 用户写 Markdown 测试说明（人 + AI 共读）
 │   └── 5.1_四宫格divider拖动.md
 ├── generated/              ← Claude 从 specs/ 翻译的 pytest .py（autogen · 改 specs 后重生成）
 │   └── test_5_1_four_grid_divider.py
-├── lib/                    ← 通用基础设施
-│   ├── conftest.py         ← pytest fixture · appium driver 启停
+├── conftest.py             ← pytest fixture · appium driver 启停（必须在 ui_tests/ 根 · pytest 自动加载）
+├── lib/
 │   └── helpers.py          ← clickAndDrag / pressKeys / find_by_label / dump_ui_tree
 ├── shots/                  ← runtime 截图（gitignore）
 ├── result.json             ← pytest --json-report 输出
@@ -92,9 +92,9 @@ tests/
 
 ## 加新测试场景的工作流
 
-1. **你**：在 `tests/specs/` 写新 .md（按 `5.1_四宫格divider拖动.md` 的结构）
+1. **你**：在 `ui_tests/specs/` 写新 .md（按 `5.1_四宫格divider拖动.md` 的结构）
 2. **你**：告 Claude「生成 specs/xxx.md 对应的测试」
-3. **Claude**：在 `tests/generated/` 写对应 .py + commit + push
+3. **Claude**：在 `ui_tests/generated/` 写对应 .py + commit + push
 4. **你**：`git pull && ./mac_loop.sh`
 5. **Claude**：拉 result.json 看 pass/fail · 改主工程 → 循环
 
@@ -105,8 +105,8 @@ tests/
 主工程 SwiftUI view 多数没设 `.accessibilityIdentifier("xxx")` · appium 找不到元素时 pytest 会 `skip` 而不是 `fail`。
 
 第一轮的关键产出：
-- `tests/ui_tree_v1.xml`（appium dump 整个窗口 UI tree）
-- `tests/shots/00_v1_main.png`（V1 主窗截图）
+- `ui_tests/ui_tree_v1.xml`（appium dump 整个窗口 UI tree）
+- `ui_tests/shots/00_v1_main.png`（V1 主窗截图）
 
 Claude 据此：
 1. 看 ui_tree_v1.xml · 找到 sidebar / center / monitor 等元素在 tree 里的位置 + 当前 label

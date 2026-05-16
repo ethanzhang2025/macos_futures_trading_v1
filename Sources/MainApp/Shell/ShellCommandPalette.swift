@@ -38,8 +38,9 @@ struct ShellCommandPalette: View {
             queryFocused = true
             refreshDisplay()
         }
-        .onChange(of: query) { _, _ in refreshDisplay() }
-        .onChange(of: loadedSymbols) { _, _ in refreshDisplay() }
+        // macOS 13 兼容 · 单参数版本（双参数 onChange 是 macOS 14+ API · memory: feedback_macOS版本API兼容）
+        .onChange(of: query) { _ in refreshDisplay() }
+        .onChange(of: loadedSymbols) { _ in refreshDisplay() }
         // v17.77 · 启动时 / 每次打开 ⌘K 时刷新 watchlistBook · 让 trader 自选实时可搜
         .task {
             await loadWatchlistSymbolsAsync()

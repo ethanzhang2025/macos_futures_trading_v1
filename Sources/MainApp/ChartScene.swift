@@ -246,7 +246,9 @@ struct ChartScene: View {
     /// v15.2 参数变更触发 updateIndicatorsFull 的链式串行 task · 防快速连续变更产生重叠重算
     @State private var indicatorParamsRecomputeTask: Task<Void, Never>?
     /// v15.8 主图主题（深色 / 浅色）· UserDefaults 全局共享
-    @State private var chartTheme: ChartTheme = .dark
+    /// v17.244 · @State → @AppStorage · SwiftUI 内置 UserDefaults 桥接 · 跨 chart 实例 + 独立窗自动同步
+    /// 0 改其他 60+ chartTheme.xxx 调用点 · doc Step 3a chartTheme 字段事实实现
+    @AppStorage(ChartThemeStore.key) private var chartTheme: ChartTheme = .dark
     @State private var isChartThemeLoaded: Bool = false
     /// v17.94 · K 线涨跌配色（中国 红涨 / 国际 绿涨）· Settings 图表 tab 持久化 · UserDefaults 全局共享
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()

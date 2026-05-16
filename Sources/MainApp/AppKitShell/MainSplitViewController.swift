@@ -35,26 +35,27 @@ final class MainSplitViewController: NSSplitViewController {
         super.viewDidLoad()
         splitView.isVertical = true
 
-        // 左 · Sidebar · widthAnchor ≥ 200
+        // v17.248 修 · widthAnchor.required 与 NSSplitView 自身 layout 系统冲突 · 导致 divider 拖不动
+        // 改用 NSSplitViewItem.minimumThickness（NSSplitView 标准 API · 不走 Auto Layout）
+
+        // 左 · Sidebar · 最小 200pt · 可折叠
         let sidebarVC = AppKitShellHC.wrap(ShellSidebar(), env: env)
-        sidebarVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
         let sidebarItem = NSSplitViewItem(viewController: sidebarVC)
+        sidebarItem.minimumThickness = 200
         sidebarItem.canCollapse = true
         addSplitViewItem(sidebarItem)
 
-        // 中 · PaneContainer（A3=C · v17.227 · 嵌套 NSStackView 支持 1/2/4/6/9 grid）
-        // PaneContainerController 监听 activeWorkspace.paneLayout 变化自动 rebuild
+        // 中 · PaneContainer · 最小 400pt · 不可折叠（PaneContainerController 监听 paneLayout 变化）
         let centerVC = PaneContainerController(env: env)
-        centerVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 400).isActive = true
         let centerItem = NSSplitViewItem(viewController: centerVC)
+        centerItem.minimumThickness = 400
         centerItem.canCollapse = false
         addSplitViewItem(centerItem)
 
-        // 右 · Monitor 区（A2=C Full v2 · v17.241 · 嵌套 NSSplitViewController 垂直堆叠 3 段）
-        // 上：自选合约 / 中：板块联动 / 下：多空持仓 · 各自可折叠
+        // 右 · Monitor · 最小 200pt · 可折叠（内嵌 MonitorStackController 3 段堆叠）
         let monitorStackVC = MonitorStackController(env: env)
-        monitorStackVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
         let monitorItem = NSSplitViewItem(viewController: monitorStackVC)
+        monitorItem.minimumThickness = 200
         monitorItem.canCollapse = true
         addSplitViewItem(monitorItem)
     }

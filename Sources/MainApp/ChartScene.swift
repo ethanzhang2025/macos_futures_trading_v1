@@ -387,10 +387,15 @@ struct ChartScene: View {
         VStack(spacing: 0) {
             // v17.6 · Shell 嵌入模式隐藏顶部 toolbar（由 Shell PrimaryTabBar + Pane Header 统一管理）
             // v17.201 · Shell 模式补回 chartMode 入口（实盘/回放）· Pane Header 管不了
-            if !isHostedInShell {
-                toolbar
-            } else {
+            // v17.261 · V1 主窗模式（PaneContainer 多 chart）pane 宽 ~200pt · 完整 toolbar 装不下
+            //          走精简 v1MainModeBar (chartMode + symbol + period 3 核心)
+            //          ui_tree 直接定位: toolbar ScrollView width=200 但内容 1450pt · 用户截图看到挤一堆
+            if isInV1MainWindow {
+                v1MainModeBar
+            } else if isHostedInShell {
                 shellModeBar
+            } else {
+                toolbar
             }
             mainContent
             if chartMode == .replay {
@@ -1714,6 +1719,44 @@ struct ChartScene: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 3)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    /// v17.261 · V1 主窗 chart pane 精简栏 · pane 宽 ~200pt · 完整 toolbar 装不下
+    /// 保留 3 核心: chartMode (实盘/回放) · symbol 显示 · period 切换
+    private var v1MainModeBar: some View {
+        HStack(spacing: 6) {
+            Picker("", selection: $chartMode) {
+                ForEach(ChartMode.allCases) { m in
+                    Text(m.displayName).tag(m)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 100)
+
+            Spacer(minLength: 4)
+
+            Text(currentInstrumentID.isEmpty ? "—" : currentInstrumentID)
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            Picker("", selection: $selectedPeriod) {
+                ForEach(MarketDataPipeline.supportedPeriods, id: \.self) { p in
+                    Text(p.displayName).tag(p)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(width: 70)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .frame(height: 30)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
     }

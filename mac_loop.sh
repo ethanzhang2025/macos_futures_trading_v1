@@ -17,6 +17,27 @@
 
 set -euo pipefail
 
+# ─── 参数解析 ──────────────────────────────────────
+# --until N  : 只跑 test_step_00 ~ test_step_NN (例: --until 02)
+# --step N   : 只跑 test_step_NN (单步)
+# (无参)     : 跑 generated/ 内全部测试
+UNTIL=""
+SINGLE_STEP=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --until) UNTIL="$2"; shift 2 ;;
+        --step)  SINGLE_STEP="$2"; shift 2 ;;
+        -h|--help)
+            echo "用法: $0 [--until NN] [--step NN]"
+            echo "  --until 02   只跑 step_00 + step_01 + step_02"
+            echo "  --step 01    只跑 step_01 单步"
+            echo "  (无参)        跑全部 generated/"
+            exit 0
+            ;;
+        *) shift ;;
+    esac
+done
+
 cd "$(dirname "$0")"
 REPO_DIR="$(pwd)"
 TESTS_DIR="$REPO_DIR/ui_tests"
@@ -137,9 +158,31 @@ export APP_PATH
 export APPIUM_URL="http://127.0.0.1:4723/wd/hub"
 
 cd "$TESTS_DIR"
+
+# 计算要跑的测试文件列表
+if [[ -n "$SINGLE_STEP" ]]; then
+    TEST_FILES=$(ls generated/test_step_${SINGLE_STEP}_*.py 2>/dev/null || true)
+    echo "   → 单步模式 · 跑 step_$SINGLE_STEP"
+elif [[ -n "$UNTIL" ]]; then
+    # 取所有 step_*.py · 按数字排序 · 取前 (UNTIL+1) 个
+    LIMIT=$((10#$UNTIL + 1))
+    TEST_FILES=$(ls generated/test_step_*.py 2>/dev/null | sort | head -n "$LIMIT" | tr '\n' ' ')
+    echo "   → 渐进模式 · 跑 step_00 ~ step_$UNTIL ($LIMIT 个文件)"
+else
+    TEST_FILES="generated/"
+    echo "   → 全量模式 · 跑 generated/ 内全部"
+fi
+
+if [[ -z "$TEST_FILES" ]]; then
+    echo "❌ 未找到匹配的测试文件 · 检查 --step / --until 参数"
+    exit 1
+fi
+
 # pytest 即使失败也继续后续步骤 · 用 || true
-"$VENV_DIR/bin/python3" -m pytest generated/ \
+# --maxfail=1 让第一个 fail 立即停 · 不浪费时间
+"$VENV_DIR/bin/python3" -m pytest $TEST_FILES \
     --json-report --json-report-file=result.json \
+    --maxfail=1 \
     -v --tb=short 2>&1 | tee pytest.log || true
 cd "$REPO_DIR"
 

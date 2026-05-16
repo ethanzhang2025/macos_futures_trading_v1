@@ -12,34 +12,46 @@ import pytest
 
 # 通过 conftest 把 lib/ 加进 sys.path · 直接 import helpers
 from helpers import (
-    screenshot, press_keys, click_and_drag,
-    find_by_label, find_all_by_type, find_static_texts,
+    screenshot, press_keys, click_and_drag, click_menu_item,
+    find_by_label, find_all_by_type, find_static_texts, find_window_by_id,
     get_frame, assert_in_range, dump_ui_tree, wait_seconds,
+    MOD_CMD_CTRL,
 )
 
 
 # ─── 模块级 setup · 启 V1 主窗 + 切四宫格 ───────────────────────
+#
+# v17.255 教训:
+#   - 之前 press_keys 用 modifiers="ctrl|cmd" 字符串 · mac2 driver 忽略 · 快捷键无效
+#   - 「⊞ 四宫格」菜单项没快捷键 · 必须 click menu
+#   修法: 全走 click_menu_item（menu xpath by title）· 不依赖快捷键
 
 @pytest.fixture(scope="module", autouse=True)
 def setup_v1_four_grid(driver, shots_dir):
-    """打开 .app → 切 V1 主窗 → 切四宫格 layout"""
+    """cold start (shell) → 菜单切 V1 → 菜单切四宫格"""
     tests_root = Path(shots_dir).resolve().parent
 
-    # 1. 初始 UI tree dump（看到的是默认 launch 状态）
+    # 1. 初始 UI tree dump（cold start 默认 shell）
     dump_ui_tree(driver, str(tests_root / "ui_tree_initial.xml"))
     screenshot(driver, shots_dir, "00_initial")
 
-    # 2. ⌘⌃1 切 V1 主工作台
-    press_keys(driver, "1", "ctrl|cmd")
-    wait_seconds(2)
+    # 2. 工具菜单 → 🆕 主工作台 V1 · AppKit（⌘⌃1） · 打开 V1 主窗
+    try:
+        click_menu_item(driver, "工具", "🆕 主工作台 V1 · AppKit（⌘⌃1）")
+    except AssertionError:
+        # fallback · 试 ⌘⌃1 快捷键（用整数 modifier · 不是字符串）
+        press_keys(driver, "1", MOD_CMD_CTRL)
+    wait_seconds(3)  # V1 主窗 cold init 略慢
     screenshot(driver, shots_dir, "01_v1_main")
     dump_ui_tree(driver, str(tests_root / "ui_tree_v1.xml"))
 
-    # 3. 切四宫格 layout
-    #    候选: ⌘⌃4 / 视图菜单 / ⌘K 命令面板搜 "四宫格"
-    #    第一轮先试 ⌘⌃4 · 如未绑定 · 跑完看 ui_tree 调整
-    press_keys(driver, "4", "ctrl|cmd")
-    wait_seconds(2)
+    # 3. 视图菜单 → V1 主窗面板布局 → ⊞ 四宫格 · 切 layout
+    try:
+        click_menu_item(driver, "视图", "V1 主窗面板布局", "⊞ 四宫格")
+    except AssertionError as e:
+        # 留 trace · 但继续后续测试 · 让 TC3/TC4 自己 skip/fail
+        print(f"[setup] 切四宫格失败: {e}")
+    wait_seconds(1.5)
     screenshot(driver, shots_dir, "02_four_grid")
     dump_ui_tree(driver, str(tests_root / "ui_tree_four_grid.xml"))
 

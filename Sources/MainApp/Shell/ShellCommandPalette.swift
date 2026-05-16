@@ -124,7 +124,7 @@ struct ShellCommandPalette: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { _ in }
+        // v17.240 · 删空 .onHover { _ in } · 每行无用 NSView 监听 · 20 行 = 20 监听器累积
     }
 
     /// v17.69 · matchedRange 内字符 bold + accent 色（无 range 时整段 primary）
@@ -463,7 +463,8 @@ struct ShellCommandPalette: View {
             if lhs.score != rhs.score { return lhs.score > rhs.score }
             return lhs.cmd.title.count < rhs.cmd.title.count
         }
-        return matched.map { ($0.cmd, $0.range) }
+        // v17.240 · 限制最多 50 条 · 防搜索时上百候选 SwiftUI 渲染开销
+        return Array(matched.prefix(50)).map { ($0.cmd, $0.range) }
     }
 
     /// v17.69 · 单个 command 的 match score + highlight range（仅连续匹配段 · subsequence 无 range）

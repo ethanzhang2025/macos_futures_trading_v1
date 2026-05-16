@@ -76,20 +76,19 @@ final class PaneContainerController: NSViewController {
             return
         }
 
-        // 创建 N 个 ChartScene NSHostingController
+        // v17.246 · 创建 N 个 ChartScene NSHostingController + 走 NSSplitViewController 嵌套强制均分
         let chartVCs: [NSViewController] = (0..<count).map { _ in
             AppKitShellHC.wrap(ChartScene(), env: env)
         }
-        for vc in chartVCs { addChild(vc) }
-
-        let grid = buildGrid(layout: layout, chartViews: chartVCs.map { $0.view })
-        view.addSubview(grid)
-        grid.translatesAutoresizingMaskIntoConstraints = false
+        let rootVC = buildGridController(layout: layout, charts: chartVCs)
+        addChild(rootVC)
+        view.addSubview(rootVC.view)
+        rootVC.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            grid.topAnchor.constraint(equalTo: view.topAnchor),
-            grid.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            grid.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            grid.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            rootVC.view.topAnchor.constraint(equalTo: view.topAnchor),
+            rootVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            rootVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            rootVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
 
@@ -105,43 +104,47 @@ final class PaneContainerController: NSViewController {
         ])
     }
 
-    /// 根据 paneLayout 用 NSSplitView 嵌套构造 grid · 强制 frame 适配（不让 SwiftUI fittingSize 撑大）
-    /// v17.245 修 · NSStackView fillEqually 只均分 main axis · cross axis 跟 intrinsicContentSize
-    /// ChartScene SwiftUI fittingSize 几千 pt · NSStackView 不约束高度 → 整体撑大 toolbar 溢出
-    /// NSSplitView 强制按外层 frame 分配 + ChartScene isInV1MainWindow=true 时 minWidth/minHeight=0 不撑大 divider
-    private func buildGrid(layout: PaneLayout, chartViews: [NSView]) -> NSView {
+    /// 根据 paneLayout 用 NSSplitViewController 嵌套构造 grid · 强制按 preferredThicknessFraction 均分
+    /// v17.245 用 raw NSSplitView 默认 sizing 不均分（第一个 view 占大部分 · 其他被挤到 0 宽）
+    /// v17.246 改 NSSplitViewController + NSSplitViewItem.preferredThicknessFraction = 1/N · 严格按比例
+    private func buildGridController(layout: PaneLayout, charts: [NSViewController]) -> NSViewController {
         switch layout {
         case .single:
-            return chartViews[0]
+            return charts[0]
         case .twoHorizontal:
-            return makeSplit(views: chartViews, isVertical: true)   // 竖向 divider · 左右排列
+            return makeSplitController(controllers: charts, isVertical: true, fraction: 1.0 / 2)
         case .twoVertical:
-            return makeSplit(views: chartViews, isVertical: false)  // 横向 divider · 上下排列
+            return makeSplitController(controllers: charts, isVertical: false, fraction: 1.0 / 2)
         case .four:
-            let top = makeSplit(views: [chartViews[0], chartViews[1]], isVertical: true)
-            let bot = makeSplit(views: [chartViews[2], chartViews[3]], isVertical: true)
-            return makeSplit(views: [top, bot], isVertical: false)
+            let topRow = makeSplitController(controllers: [charts[0], charts[1]], isVertical: true, fraction: 1.0 / 2)
+            let botRow = makeSplitController(controllers: [charts[2], charts[3]], isVertical: true, fraction: 1.0 / 2)
+            return makeSplitController(controllers: [topRow, botRow], isVertical: false, fraction: 1.0 / 2)
         case .sixGrid:
-            let top = makeSplit(views: Array(chartViews[0..<3]), isVertical: true)
-            let bot = makeSplit(views: Array(chartViews[3..<6]), isVertical: true)
-            return makeSplit(views: [top, bot], isVertical: false)
+            let topRow = makeSplitController(controllers: Array(charts[0..<3]), isVertical: true, fraction: 1.0 / 3)
+            let botRow = makeSplitController(controllers: Array(charts[3..<6]), isVertical: true, fraction: 1.0 / 3)
+            return makeSplitController(controllers: [topRow, botRow], isVertical: false, fraction: 1.0 / 2)
         case .nineGrid:
-            let r1 = makeSplit(views: Array(chartViews[0..<3]), isVertical: true)
-            let r2 = makeSplit(views: Array(chartViews[3..<6]), isVertical: true)
-            let r3 = makeSplit(views: Array(chartViews[6..<9]), isVertical: true)
-            return makeSplit(views: [r1, r2, r3], isVertical: false)
+            let r1 = makeSplitController(controllers: Array(charts[0..<3]), isVertical: true, fraction: 1.0 / 3)
+            let r2 = makeSplitController(controllers: Array(charts[3..<6]), isVertical: true, fraction: 1.0 / 3)
+            let r3 = makeSplitController(controllers: Array(charts[6..<9]), isVertical: true, fraction: 1.0 / 3)
+            return makeSplitController(controllers: [r1, r2, r3], isVertical: false, fraction: 1.0 / 3)
         case .custom:
-            return chartViews[0]
+            return charts[0]
         }
     }
 
-    /// NSSplitView · isVertical=true 是 vertical divider（左右排列）· false 是 horizontal divider（上下排列）
-    private func makeSplit(views: [NSView], isVertical: Bool) -> NSSplitView {
-        let split = NSSplitView()
-        split.isVertical = isVertical
-        split.dividerStyle = .thin
-        for v in views {
-            split.addArrangedSubview(v)
+    /// NSSplitViewController + preferredThicknessFraction 强制按比例均分
+    /// isVertical=true 是 vertical divider（左右排列）· false 是 horizontal divider（上下排列）
+    private func makeSplitController(controllers: [NSViewController], isVertical: Bool, fraction: CGFloat) -> NSSplitViewController {
+        let split = NSSplitViewController()
+        split.splitView.isVertical = isVertical
+        split.splitView.dividerStyle = .thin
+        for ctrl in controllers {
+            let item = NSSplitViewItem(viewController: ctrl)
+            item.canCollapse = false
+            item.minimumThickness = 100
+            item.preferredThicknessFraction = fraction
+            split.addSplitViewItem(item)
         }
         return split
     }

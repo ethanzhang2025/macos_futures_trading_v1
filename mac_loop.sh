@@ -54,12 +54,28 @@ VVSVR_PATH="/home/beelink/debug_img/appium_loop_latest"
 APPIUM_PID=""
 
 cleanup() {
-    if [[ -n "$APPIUM_PID" ]] && kill -0 "$APPIUM_PID" 2>/dev/null; then
-        kill "$APPIUM_PID" 2>/dev/null || true
-        sleep 0.5
+    # v17.258 · 顺序: 先停自动化测试 (appium) · 再退主程序 (MainApp) · 中间留 graceful 窗口
+
+    # 1. 停 appium server (pytest 已退 · driver session 已 quit · server 可以走)
+    if [[ -n "${APPIUM_PID:-}" ]] && kill -0 "$APPIUM_PID" 2>/dev/null; then
+        echo "   ↓ 停 appium server (PID=$APPIUM_PID)"
+        kill -TERM "$APPIUM_PID" 2>/dev/null || true
+        sleep 1
+        # 兜底
+        kill -9 "$APPIUM_PID" 2>/dev/null || true
     fi
-    # kill 任何 MainApp 残留进程
-    pkill -f "MainApp.app/Contents/MacOS/MainApp" 2>/dev/null || true
+
+    # 2. 关 MainApp · SIGTERM 让它走完正常退出流程 (清 ChartScene Metal / 释放窗口)
+    if pgrep -f "MainApp.app/Contents/MacOS/MainApp" >/dev/null 2>&1; then
+        echo "   ↓ 关 MainApp (graceful SIGTERM)"
+        pkill -TERM -f "MainApp.app/Contents/MacOS/MainApp" 2>/dev/null || true
+        sleep 2
+        # 兜底 force kill (如果 graceful 卡住)
+        if pgrep -f "MainApp.app/Contents/MacOS/MainApp" >/dev/null 2>&1; then
+            echo "   ↓ MainApp 未响应 · force kill (SIGKILL)"
+            pkill -9 -f "MainApp.app/Contents/MacOS/MainApp" 2>/dev/null || true
+        fi
+    fi
 }
 trap cleanup EXIT INT TERM
 

@@ -46,15 +46,13 @@ final class AppState: ObservableObject {
 
     init(shellVM: ShellViewModel) {
         self.shellVM = shellVM
-        // v17.234 临时禁用 sink · 诊断 ⌘K 命令面板卡死是否由此引起
-        // 当前 V1 主窗子组件未真实订阅 AppState · 禁用 sink 无副作用
-        // 若禁用后卡顿消失 · 说明 sink 转发链是 root cause（待排查具体原因）
-        // 若仍卡 · 排除 AppState facade 嫌疑 · 改查 PaneContainerController / sheet 渲染等
-        // shellVM.objectWillChange
-        //     .sink { [weak self] _ in
-        //         self?.objectWillChange.send()
-        //     }
-        //     .store(in: &cancellables)
+        // v17.238 · 恢复 v17.234 诊断时临时禁用的 sink · root cause 已锁定是 ShellCommandPalette
+        // 老 bug（v17.236 修）· 与 AppState facade 转发链无关 · 撤诊断标记保持原设计意图
+        shellVM.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Facade · 7 个现有 ShellViewModel 字段

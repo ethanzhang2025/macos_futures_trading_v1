@@ -26,6 +26,8 @@ struct SectorWindow: View {
     @State private var sortField: SortField = .changePct
     @State private var sortDescending: Bool = true
     @Environment(\.openWindow) private var openWindow
+    /// v17.241 · V1 主窗 monitor 区嵌入模式标识 · 嵌入时 minWidth/minHeight=0 防撑大 NSSplitView divider
+    @Environment(\.isHostedInShell) private var isHostedInShell
 
     /// v17.108 · 用户 K 线配色偏好（跟 ChartScene/Settings 同步 · 涨跌色 swap 用）
     @State private var candleColorMode: CandleColorMode = ChartSettingsStore.loadCandleColorMode()
@@ -81,7 +83,8 @@ struct SectorWindow: View {
             Divider()
             sectorOverviewFooter
         }
-        .frame(minWidth: 960, minHeight: 600)
+        // v17.241 · 嵌入模式（V1 主窗 monitor 段）minWidth/minHeight=0 防撑大外层 NSSplitView · 独立窗口仍保留 960x600
+        .frame(minWidth: isHostedInShell ? 0 : 960, minHeight: isHostedInShell ? 0 : 600)
         .onReceive(NotificationCenter.default.publisher(for: .watchlistInstrumentSelected)) { note in
             // v15.53 · 联动：切合约时自动切到该合约的板块
             if let id = note.object as? String, let sec = SectorPresets.byID[id]?.sector {

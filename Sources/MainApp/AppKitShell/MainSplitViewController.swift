@@ -50,10 +50,11 @@ final class MainSplitViewController: NSSplitViewController {
         centerItem.canCollapse = false
         addSplitViewItem(centerItem)
 
-        // 右 · Monitor 区（A2=C · Watchlist / Sector / Position · 可 detach 为 NSPanel）
-        let monitorVC = AppKitShellHC.wrapAsMonitor(WatchlistWindow(), env: env)
-        monitorVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
-        let monitorItem = NSSplitViewItem(viewController: monitorVC)
+        // 右 · Monitor 区（A2=C Full v2 · v17.241 · 嵌套 NSSplitViewController 垂直堆叠 3 段）
+        // 上：自选合约 / 中：板块联动 / 下：多空持仓 · 各自可折叠
+        let monitorStackVC = MonitorStackController(env: env)
+        monitorStackVC.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
+        let monitorItem = NSSplitViewItem(viewController: monitorStackVC)
         monitorItem.canCollapse = true
         addSplitViewItem(monitorItem)
     }

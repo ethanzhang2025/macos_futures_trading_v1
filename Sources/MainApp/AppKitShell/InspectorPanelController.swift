@@ -44,8 +44,9 @@ final class InspectorPanelController: NSObject, NSWindowDelegate {
     }
 
     private func makePanel() -> NSPanel {
+        // v17.245 修 · 默认尺寸 320×600 → 420×820（用户反馈太小 · ShellInspector 内 inspectorWidth=280 + padding + 4 段内容）
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 600),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 820),
             styleMask: [.titled, .closable, .resizable, .utilityWindow, .nonactivatingPanel],
             backing: .buffered,
             defer: false

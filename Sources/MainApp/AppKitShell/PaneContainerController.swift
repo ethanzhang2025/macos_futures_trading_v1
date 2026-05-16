@@ -105,39 +105,45 @@ final class PaneContainerController: NSViewController {
         ])
     }
 
-    /// 根据 paneLayout 用 NSStackView 嵌套构造 grid · fillEqually 均分
+    /// 根据 paneLayout 用 NSSplitView 嵌套构造 grid · 强制 frame 适配（不让 SwiftUI fittingSize 撑大）
+    /// v17.245 修 · NSStackView fillEqually 只均分 main axis · cross axis 跟 intrinsicContentSize
+    /// ChartScene SwiftUI fittingSize 几千 pt · NSStackView 不约束高度 → 整体撑大 toolbar 溢出
+    /// NSSplitView 强制按外层 frame 分配 + ChartScene isInV1MainWindow=true 时 minWidth/minHeight=0 不撑大 divider
     private func buildGrid(layout: PaneLayout, chartViews: [NSView]) -> NSView {
         switch layout {
         case .single:
             return chartViews[0]
         case .twoHorizontal:
-            return makeStack(views: chartViews, orientation: .horizontal)
+            return makeSplit(views: chartViews, isVertical: true)   // 竖向 divider · 左右排列
         case .twoVertical:
-            return makeStack(views: chartViews, orientation: .vertical)
+            return makeSplit(views: chartViews, isVertical: false)  // 横向 divider · 上下排列
         case .four:
-            let top = makeStack(views: [chartViews[0], chartViews[1]], orientation: .horizontal)
-            let bot = makeStack(views: [chartViews[2], chartViews[3]], orientation: .horizontal)
-            return makeStack(views: [top, bot], orientation: .vertical)
+            let top = makeSplit(views: [chartViews[0], chartViews[1]], isVertical: true)
+            let bot = makeSplit(views: [chartViews[2], chartViews[3]], isVertical: true)
+            return makeSplit(views: [top, bot], isVertical: false)
         case .sixGrid:
-            let top = makeStack(views: Array(chartViews[0..<3]), orientation: .horizontal)
-            let bot = makeStack(views: Array(chartViews[3..<6]), orientation: .horizontal)
-            return makeStack(views: [top, bot], orientation: .vertical)
+            let top = makeSplit(views: Array(chartViews[0..<3]), isVertical: true)
+            let bot = makeSplit(views: Array(chartViews[3..<6]), isVertical: true)
+            return makeSplit(views: [top, bot], isVertical: false)
         case .nineGrid:
-            let r1 = makeStack(views: Array(chartViews[0..<3]), orientation: .horizontal)
-            let r2 = makeStack(views: Array(chartViews[3..<6]), orientation: .horizontal)
-            let r3 = makeStack(views: Array(chartViews[6..<9]), orientation: .horizontal)
-            return makeStack(views: [r1, r2, r3], orientation: .vertical)
+            let r1 = makeSplit(views: Array(chartViews[0..<3]), isVertical: true)
+            let r2 = makeSplit(views: Array(chartViews[3..<6]), isVertical: true)
+            let r3 = makeSplit(views: Array(chartViews[6..<9]), isVertical: true)
+            return makeSplit(views: [r1, r2, r3], isVertical: false)
         case .custom:
             return chartViews[0]
         }
     }
 
-    private func makeStack(views: [NSView], orientation: NSUserInterfaceLayoutOrientation) -> NSStackView {
-        let stack = NSStackView(views: views)
-        stack.orientation = orientation
-        stack.distribution = .fillEqually
-        stack.spacing = 2
-        return stack
+    /// NSSplitView · isVertical=true 是 vertical divider（左右排列）· false 是 horizontal divider（上下排列）
+    private func makeSplit(views: [NSView], isVertical: Bool) -> NSSplitView {
+        let split = NSSplitView()
+        split.isVertical = isVertical
+        split.dividerStyle = .thin
+        for v in views {
+            split.addArrangedSubview(v)
+        }
+        return split
     }
 }
 

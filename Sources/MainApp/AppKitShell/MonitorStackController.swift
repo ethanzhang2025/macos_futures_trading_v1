@@ -35,26 +35,58 @@ final class MonitorStackController: NSSplitViewController {
         super.viewDidLoad()
         splitView.isVertical = false   // 横向 divider · 3 段上下堆叠
 
-        // 上 · 自选合约
-        let watchlistVC = AppKitShellHC.wrapAsMonitor(WatchlistWindow(), env: env)
+        // v17.245 · 每段加 SwiftUI section header 显示标题 · trader 一眼看清哪段是什么
+        let watchlistVC = AppKitShellHC.wrapAsMonitor(
+            MonitorSectionWrapper(title: "⭐️ 自选合约") { WatchlistWindow() }, env: env
+        )
         let watchlistItem = NSSplitViewItem(viewController: watchlistVC)
         watchlistItem.canCollapse = true
         watchlistItem.minimumThickness = 80
         addSplitViewItem(watchlistItem)
 
-        // 中 · 板块联动
-        let sectorVC = AppKitShellHC.wrapAsMonitor(SectorWindow(), env: env)
+        let sectorVC = AppKitShellHC.wrapAsMonitor(
+            MonitorSectionWrapper(title: "🗂 板块联动") { SectorWindow() }, env: env
+        )
         let sectorItem = NSSplitViewItem(viewController: sectorVC)
         sectorItem.canCollapse = true
         sectorItem.minimumThickness = 80
         addSplitViewItem(sectorItem)
 
-        // 下 · 多空持仓
-        let positionVC = AppKitShellHC.wrapAsMonitor(PositionWindow(), env: env)
+        let positionVC = AppKitShellHC.wrapAsMonitor(
+            MonitorSectionWrapper(title: "💼 多空持仓") { PositionWindow() }, env: env
+        )
         let positionItem = NSSplitViewItem(viewController: positionVC)
         positionItem.canCollapse = true
         positionItem.minimumThickness = 80
         addSplitViewItem(positionItem)
+    }
+}
+
+/// v17.245 · 监盘段标题包装 · 顶部 22pt 标题栏 + 内嵌内容
+private struct MonitorSectionWrapper<Content: View>: View {
+    let title: String
+    let content: Content
+
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .frame(height: 22)
+            .background(Color.secondary.opacity(0.1))
+            Divider()
+            content
+        }
     }
 }
 

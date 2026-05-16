@@ -1502,3 +1502,72 @@ V1PrimaryTabBar 4 个 tab（套利/期权/复盘/训练）改走 WindowManager.o
 - [ ] ⌘⌃[ / ⌘⌃] toggle Sidebar/Watchlist 正常（v17.224）
 - [ ] D1 sheet 弹出 ⌘⇧L / ⌘⇧⌥Y / toolbar 🟦 / Renko ⚙️ 全部正常（v17.224 验过 · 不被新 facade 破坏）
 - [ ] 测试基线：Linux swift build 全绿（已 Linux 验证）
+
+---
+
+## V1 重构 v17.230-244（2026-05-15 第二批 · appkit-shell-rewrite 分支 · 17 commit）
+
+### v17.230 hotfix · MonitorPanelController Mac swift 6.3 严格 Sendable
+
+- [ ] V1 主窗 → 视图菜单 → 📤 拖出自选合约 → 弹自选合约浮顶面板正常（无运行期错误）
+- [ ] 关闭浮顶面板 → 主窗内自选合约仍显示 / 再开浮顶面板正常（NSWindowDelegate 清理 registry）
+
+### v17.231 · 浮顶面板层级修 + V1 主窗面板布局菜单
+
+- [ ] 视图菜单 → 📤 拖出自选合约 → 浮顶面板弹出
+- [ ] 切到浏览器 / Finder → 面板被前置程序覆盖（不再像之前浮在所有程序最前）
+- [ ] 切回主程序 → 面板还在原位（hidesOnDeactivate=false 行为正常）
+- [ ] 视图菜单 → V1 主窗面板布局 → 看到 6 项：单图 / 左右双图 / 上下双图 / 四宫格 / 六宫格 / 九宫格
+- [ ] 选「四宫格」→ V1 主窗中央分 2×2 四主图（A3=C Mini v1）
+
+### v17.232 · V1 主窗接通命令面板 ⌘K
+
+- [ ] V1 主窗按 ⌘K → 弹命令面板浮层（不再弹「工作区模板」窗口）
+- [ ] 命令面板搜「布局」→ 看到 6 个「切布局：xxx」候选 + 选立即生效
+- [ ] 旧版工作台 ⌘⌃0 内按 ⌘K → 同样弹命令面板（行为一致）
+- [ ] 命令面板按 Esc / 关闭按钮 → 关闭
+
+### v17.233-240 · ⌘K 命令面板卡顿性能修（v17.0 老 bug）
+
+- [ ] ⌘K 弹出 → 立即响应（无鼠标转轮等待几秒）
+- [ ] 输入「布局」/「自选」/「合约名」→ 候选实时过滤无卡顿
+- [ ] hover 候选行 → 无明显延迟
+- [ ] 候选行点击 → 立即执行 + 关闭面板
+- [ ] 反复 ⌘K 打开关闭 → 无累积卡顿
+
+### v17.241 · V1 重构 A2=C Full v2 · 监盘区 3 段垂直堆叠
+
+- [ ] V1 主窗右侧监盘区 → 上下 3 段：上「自选合约」/ 中「板块联动」/ 下「多空持仓」
+- [ ] 3 段之间有横向 divider 可拖动调高度
+- [ ] 各段右键 / 标题点击可折叠（macOS NSSplitView 标准交互）
+- [ ] 拖最外层主分栏（Sidebar / Chart / Monitor）divider 仍可拖（v17.222 教训规避）
+- [ ] 板块联动段切板块 → 内部板块切换正常（不被嵌入模式破坏）
+- [ ] 多空持仓段 → 持仓数据 mock 显示正常
+
+### v17.242 · V1 重构 Step 4 · NSPanel Inspector 浮顶面板
+
+- [ ] V1 主窗按 ⌘⌃I → 弹 Inspector 浮顶面板（4 段 mock 内容：盘口 5 档 / 分时 mini / Tick 流 / 异动池）
+- [ ] 面板浮在主窗之上 · 但点主窗其他区域不被面板抢焦（nonactivatingPanel 行为）
+- [ ] 切到浏览器 / Finder → 面板被覆盖（不浮顶其他程序）
+- [ ] 面板内 header 右上 X 按钮关闭 / NSWindow 标题栏关闭按钮均可关
+- [ ] 关闭后重开 ⌘⌃I → 面板再次弹出（registry 自动清理）
+- [ ] 旧版工作台 ⌘⌃0 内 ⌘⌥I 仍走旧版 inspectorVisible 切换（不冲突）
+
+### v17.243 · K 线图工具条 31 处 chartTooltip · NSPopover 0 延迟
+
+- [ ] V1 主窗中央主图 toolbar · hover 任意按钮（绘图工具 / 指标参数 / HUD 字段 / 等）→ 立即弹小提示气泡（无 1.5s 系统延迟）
+- [ ] 鼠标移出按钮 → 提示气泡立即关闭
+- [ ] 快速 hover 多个按钮 → 提示气泡跟随移到新按钮 · 不堆积
+- [ ] 主图工具条 hover 不卡（性能预期：31 个 anchor + onHover 监听 · 应可控）
+- [ ] ⚠️ 若 hover 卡顿 → 立即报告 · 走 v17.233 模式紧急回退
+
+### v17.244 · ChartScene chartTheme @AppStorage · 跨实例自动同步
+
+- [ ] V1 主窗切到四宫格布局 → 4 个主图初始主题一致
+- [ ] 任一主图切深色 / 浅色主题（toolbar 主题按钮）→ 其他 3 个主图自动跟随切
+- [ ] ⌘N 开独立主图窗 → 主题与 V1 主窗同步
+- [ ] App 重启 → 主题持久化（@AppStorage 写 UserDefaults · 与 ChartThemeStore.key 共享）
+
+### 测试基线
+- [ ] Linux: swift build --build-path /tmp/build_v1730_b1 全绿（已验证）
+- [ ] Mac: swift run MainApp --build-path /tmp/build_v1730_b1 启动正常

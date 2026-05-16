@@ -55,7 +55,7 @@ fi
 # 截图列表
 if [[ -d "$LOCAL_DIR/shots" ]] && [[ -n "$(ls -A "$LOCAL_DIR/shots" 2>/dev/null)" ]]; then
     echo "🖼  Screenshots:"
-    for f in "$LOCAL_DIR/shots"/*.png; do
+    for f in "$LOCAL_DIR/shots"/*.png "$LOCAL_DIR/shots"/*.jpg; do
         [[ -f "$f" ]] || continue
         bytes=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo "?")
         echo "  $(basename "$f")  (${bytes} bytes)"

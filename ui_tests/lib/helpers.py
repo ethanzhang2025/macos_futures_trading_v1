@@ -30,11 +30,56 @@ MOD_CMD_ALT   = MOD_COMMAND | MOD_OPTION
 
 
 # ─── 截图 ────────────────────────────────────────────────
+# v17.257 · retina 原图 1.5MB+ 太大 · 默认 JPEG quality 75 + 缩放最长边 1600
+# 环境变量覆盖:
+#   SHOT_MAX_DIM     最长边像素 · 0=不缩放 · 默认 1600
+#   SHOT_JPEG_QUALITY  1-100 · 默认 75
+#   SHOT_FORMAT      jpg | png · 默认 jpg
 
-def screenshot(driver, shots_dir: str, name: str) -> str:
-    """截图 → shots_dir/<name>.png · 返回绝对路径"""
-    path = os.path.join(shots_dir, f"{name}.png")
-    driver.save_screenshot(path)
+_SHOT_MAX_DIM = int(os.environ.get("SHOT_MAX_DIM", "1600"))
+_SHOT_QUALITY = int(os.environ.get("SHOT_JPEG_QUALITY", "75"))
+_SHOT_FORMAT = os.environ.get("SHOT_FORMAT", "jpg").lower()
+
+
+def screenshot(driver, shots_dir: str, name: str,
+               max_dim: Optional[int] = None,
+               quality: Optional[int] = None,
+               fmt: Optional[str] = None) -> str:
+    """截图并压缩 · 默认 JPEG q=75 + 缩到 1600px · 返回路径
+
+    原 retina PNG ~1.5MB · 压后 JPEG ~150-300KB（~10× 缩小）
+
+    缺 Pillow 时 fallback 写原 PNG（不报错）。
+    """
+    max_dim = max_dim if max_dim is not None else _SHOT_MAX_DIM
+    quality = quality if quality is not None else _SHOT_QUALITY
+    fmt = (fmt or _SHOT_FORMAT).lower()
+
+    raw = driver.get_screenshot_as_png()
+
+    try:
+        from PIL import Image
+        import io
+    except ImportError:
+        path = os.path.join(shots_dir, f"{name}.png")
+        with open(path, "wb") as f:
+            f.write(raw)
+        return path
+
+    img = Image.open(io.BytesIO(raw))
+
+    if max_dim > 0 and max(img.size) > max_dim:
+        ratio = max_dim / max(img.size)
+        new_size = (int(img.width * ratio), int(img.height * ratio))
+        img = img.resize(new_size, Image.LANCZOS)
+
+    if fmt in ("jpg", "jpeg"):
+        path = os.path.join(shots_dir, f"{name}.jpg")
+        img.convert("RGB").save(path, "JPEG", quality=quality, optimize=True)
+    else:
+        path = os.path.join(shots_dir, f"{name}.png")
+        img.save(path, "PNG", optimize=True)
+
     return path
 
 

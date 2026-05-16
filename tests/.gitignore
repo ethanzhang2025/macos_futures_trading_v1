@@ -1,0 +1,9 @@
+.venv/
+shots/
+result.json
+pytest.log
+ui_tree_*.xml
+*.log
+__pycache__/
+.pytest_cache/
+.DS_Store

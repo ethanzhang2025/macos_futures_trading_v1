@@ -303,6 +303,15 @@ let package = Package(
             dependencies: ["Shared", "SyncCore"],
             path: "Tools/SyncEngineDemo"
         ),
+        // SplitViewNestedDemo · v17.250 · 5.1 节四宫格诊断 demo（isolated minimal repro）
+        // 镜像 MainSplit + PaneContainer + MonitorStack 3 层 NSSplitViewController 嵌套
+        // 用 4 个彩色 NSView 替代 ChartScene · 不引入任何业务依赖
+        // 验证 H1 (NSSplitView 嵌套) vs H2/H3 (ChartScene SwiftUI 内部) 哪个是 root cause
+        .executableTarget(
+            name: "SplitViewNestedDemo",
+            dependencies: [],
+            path: "Tools/SplitViewNestedDemo"
+        ),
 
         // MARK: - iPadApp · WP-61 iPad 基础版（v15.25 batch001 起步）
         // SwiftUI App 协议 · NavigationSplitView 双栏（自选 sidebar / 图表 detail）

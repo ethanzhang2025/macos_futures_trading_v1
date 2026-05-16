@@ -18,7 +18,10 @@ import SwiftUI
 import AppKit
 
 /// V1 主窗监盘区控制器 · 垂直堆叠 3 段（自选 / 板块 / 持仓）
-final class MonitorStackController: NSSplitViewController {
+/// v17.247 修 · NSSplitViewController 子类 → NSViewController + addChild NSSplitViewController
+/// 之前 view 直接是 NSSplitView · 外层 MainSplitView 的 vertical divider hit test 被内层 NSSplitView 抢占
+/// 改成 wrap NSView · 隔离 outer/inner NSSplitView · 外层 divider 可拖
+final class MonitorStackController: NSViewController {
     private let env: AppKitShellEnvironment
 
     init(env: AppKitShellEnvironment) {
@@ -31,9 +34,14 @@ final class MonitorStackController: NSSplitViewController {
         fatalError("init(coder:) not supported · MonitorStackController 仅程序化构造")
     }
 
+    override func loadView() {
+        view = NSView()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        splitView.isVertical = false   // 横向 divider · 3 段上下堆叠
+        let inner = NSSplitViewController()
+        inner.splitView.isVertical = false   // 横向 divider · 3 段上下堆叠
 
         // v17.245 · 每段加 SwiftUI section header 显示标题 · trader 一眼看清哪段是什么
         let watchlistVC = AppKitShellHC.wrapAsMonitor(
@@ -42,7 +50,7 @@ final class MonitorStackController: NSSplitViewController {
         let watchlistItem = NSSplitViewItem(viewController: watchlistVC)
         watchlistItem.canCollapse = true
         watchlistItem.minimumThickness = 80
-        addSplitViewItem(watchlistItem)
+        inner.addSplitViewItem(watchlistItem)
 
         let sectorVC = AppKitShellHC.wrapAsMonitor(
             MonitorSectionWrapper(title: "🗂 板块联动") { SectorWindow() }, env: env
@@ -50,7 +58,7 @@ final class MonitorStackController: NSSplitViewController {
         let sectorItem = NSSplitViewItem(viewController: sectorVC)
         sectorItem.canCollapse = true
         sectorItem.minimumThickness = 80
-        addSplitViewItem(sectorItem)
+        inner.addSplitViewItem(sectorItem)
 
         let positionVC = AppKitShellHC.wrapAsMonitor(
             MonitorSectionWrapper(title: "💼 多空持仓") { PositionWindow() }, env: env
@@ -58,7 +66,17 @@ final class MonitorStackController: NSSplitViewController {
         let positionItem = NSSplitViewItem(viewController: positionVC)
         positionItem.canCollapse = true
         positionItem.minimumThickness = 80
-        addSplitViewItem(positionItem)
+        inner.addSplitViewItem(positionItem)
+
+        addChild(inner)
+        view.addSubview(inner.view)
+        inner.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            inner.view.topAnchor.constraint(equalTo: view.topAnchor),
+            inner.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            inner.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            inner.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
     }
 }
 

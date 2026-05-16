@@ -1,18 +1,18 @@
-// SplitViewNestedDemo · 5.1 节四宫格诊断 demo · 2026-05-16
+// SplitViewNestedDemo · 5.1 节四宫格诊断 demo · v17.251 · 2026-05-16
 //
-// 镜像 MainSplitViewController + PaneContainerController + MonitorStackController 3 层嵌套结构
-// 用 4 个彩色 NSView placeholder 替代 ChartScene NSHostingController
-// 不引入任何业务依赖（无 Shared / DataCore / SwiftUI / NSHostingController）
+// v17.250 第一轮诊断反馈：
+//   - inner（PaneContainer 四宫格 / Monitor 3 段）divider 全能拖 ✅
+//   - outer MainSplit 的 1, 2 vertical divider 拖不动 ❌
+// → 修订假设：不是 inner 嵌套抢 inner hit test · 而是 inner 是否抢 outer hit test？
 //
-// 验证假设：
-//   H1 · NSSplitViewController 3 层嵌套自身就是 root cause
-//   H2 · ChartScene SwiftUI minWidth 残留
-//   H3 · NSHostingController.intrinsicContentSize 覆盖 hit test
+// v17.251 升级 · 3 窗口对比锁定 root cause:
+//   Mode 1 simple      · center+monitor 都是简单 ColoredView（无 inner 嵌套）
+//   Mode 2 midNested   · center 嵌套 PaneContainer / monitor 简单（隔离 center 嵌套）
+//   Mode 3 fullNested  · center+monitor 都嵌套（当前实现 · 已知 1, 2 不能拖）
 //
-// 区分方法：
-//   - 全 6 处 divider 都能拖 → H1 排除 · root cause = H2 或 H3（ChartScene 内部）
-//   - 全都不能拖 → H1 确认（NSSplitViewController 嵌套自身）
-//   - 部分能拖 → 记录哪条 · 缩小排查范围
+// 锁定逻辑:
+//   Mode 1 能拖 1, 2 + Mode 2 不能拖 1 → root cause = inner 嵌套抢 outer hit test
+//   Mode 1 也不能拖 → root cause = outer MainSplit 自身配置问题（与 inner 无关）
 //
 // 运行：swift run SplitViewNestedDemo
 // 平台：macOS only · Linux 端打印退出 0
@@ -28,7 +28,7 @@ final class ColoredView: NSView {
 
     init(color: NSColor, title: String) {
         let lbl = NSTextField(labelWithString: title)
-        lbl.font = NSFont.systemFont(ofSize: 18, weight: .bold)
+        lbl.font = NSFont.systemFont(ofSize: 16, weight: .bold)
         lbl.textColor = .white
         lbl.alignment = .center
         lbl.backgroundColor = .clear
@@ -103,9 +103,9 @@ final class MonitorStackVC: NSViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        let watchlist = makeColoredVC(color: .systemOrange, title: "Monitor 1 · 橙 · Watchlist")
-        let sector    = makeColoredVC(color: .systemPurple, title: "Monitor 2 · 紫 · Sector")
-        let position  = makeColoredVC(color: .systemTeal,   title: "Monitor 3 · 青 · Position")
+        let watchlist = makeColoredVC(color: .systemOrange, title: "Monitor 1 · 橙")
+        let sector    = makeColoredVC(color: .systemPurple, title: "Monitor 2 · 紫")
+        let position  = makeColoredVC(color: .systemTeal,   title: "Monitor 3 · 青")
 
         let inner = NSSplitViewController()
         inner.splitView.isVertical = false
@@ -123,9 +123,35 @@ final class MonitorStackVC: NSViewController {
     }
 }
 
+// MARK: - DemoMode · 3 种对比 mode
+
+enum DemoMode {
+    case simple        // center / monitor 都是简单 ColoredView · 无 inner 嵌套
+    case midNested     // center 嵌套 PaneContainer · monitor 简单
+    case fullNested    // center + monitor 都嵌套（当前实现）
+
+    var title: String {
+        switch self {
+        case .simple:     return "Mode 1/3 · simple · 无 inner 嵌套"
+        case .midNested:  return "Mode 2/3 · midNested · 仅 center 嵌套"
+        case .fullNested: return "Mode 3/3 · fullNested · center + monitor 都嵌套"
+        }
+    }
+}
+
 // MARK: - MainSplitVC · 镜像 MainSplitViewController.swift（3 列横向）
 
 final class MainSplitVC: NSSplitViewController {
+    private let mode: DemoMode
+
+    init(mode: DemoMode) {
+        self.mode = mode
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         splitView.isVertical = true
@@ -136,13 +162,25 @@ final class MainSplitVC: NSSplitViewController {
         sidebarItem.canCollapse = true
         addSplitViewItem(sidebarItem)
 
-        let center = PaneContainerVC()
+        let center: NSViewController
+        switch mode {
+        case .simple:
+            center = makeColoredVC(color: .systemBrown, title: "中央 · 简单棕 · 无嵌套")
+        case .midNested, .fullNested:
+            center = PaneContainerVC()
+        }
         let centerItem = NSSplitViewItem(viewController: center)
         centerItem.minimumThickness = 400
         centerItem.canCollapse = false
         addSplitViewItem(centerItem)
 
-        let monitor = MonitorStackVC()
+        let monitor: NSViewController
+        switch mode {
+        case .simple, .midNested:
+            monitor = makeColoredVC(color: .systemPink, title: "Monitor · 简单粉 · 无嵌套")
+        case .fullNested:
+            monitor = MonitorStackVC()
+        }
         let monitorItem = NSSplitViewItem(viewController: monitor)
         monitorItem.minimumThickness = 200
         monitorItem.canCollapse = true
@@ -150,23 +188,38 @@ final class MainSplitVC: NSSplitViewController {
     }
 }
 
-// MARK: - AppDelegate
+// MARK: - AppDelegate · 3 窗口对比启动
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    var window: NSWindow!
+    var windows: [NSWindow] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let mainVC = MainSplitVC()
-        window = NSWindow(
-            contentRect: NSRect(x: 100, y: 100, width: 1400, height: 900),
-            styleMask: [.titled, .closable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "SplitView 嵌套诊断 · 试拖 7 条 divider"
-        window.contentViewController = mainVC
-        window.center()
-        window.makeKeyAndOrderFront(nil)
+        let modes: [DemoMode] = [.simple, .midNested, .fullNested]
+        let winW: CGFloat = 1000
+        let winH: CGFloat = 600
+        let stepX: CGFloat = 80
+        let stepY: CGFloat = 80
+        let baseX: CGFloat = 60
+        let baseY: CGFloat = 60
+
+        for (i, mode) in modes.enumerated() {
+            let mainVC = MainSplitVC(mode: mode)
+            let win = NSWindow(
+                contentRect: NSRect(
+                    x: baseX + CGFloat(i) * stepX,
+                    y: baseY + CGFloat(i) * stepY,
+                    width: winW,
+                    height: winH
+                ),
+                styleMask: [.titled, .closable, .resizable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            win.title = mode.title
+            win.contentViewController = mainVC
+            win.makeKeyAndOrderFront(nil)
+            windows.append(win)
+        }
         NSApp.activate(ignoringOtherApps: true)
 
         printGuide()
@@ -176,30 +229,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func printGuide() {
         let lines = [
-            "===== SplitView 嵌套诊断 demo =====",
+            "===== SplitView 嵌套对比 demo · v17.251 =====",
             "",
-            "窗口已开 · 请尝试以下 7 处拖动 · 记录每条能否拖动:",
+            "3 窗口已开 · 请分别测每个窗口的 outer 1 / 2 vertical divider 是否能拖:",
             "",
-            "外层 MainSplit (3 列):",
-            "  1. 灰 sidebar 与中央 chart 之间 (vertical divider)",
-            "  2. 中央 chart 与右侧 monitor 之间 (vertical divider)",
+            "Mode 1/3 · simple:",
+            "  - center / monitor 都是简单 ColoredView · 无 inner 嵌套",
+            "  - 测: 灰 ↔ 棕 (divider 1) / 棕 ↔ 粉 (divider 2)",
+            "  - 预期: 都能拖（无 inner 干扰）",
             "",
-            "中央 PaneContainer (四宫格 · 3 层嵌套):",
-            "  3. 红 / 绿 之间 (vertical divider · 顶行)",
-            "  4. 蓝 / 黄 之间 (vertical divider · 底行)",
-            "  5. 顶行 (红绿) 与 底行 (蓝黄) 之间 (horizontal divider)",
+            "Mode 2/3 · midNested:",
+            "  - center 嵌套四宫格 · monitor 简单",
+            "  - 测: 灰 ↔ 四宫格 (divider 1) / 四宫格 ↔ 粉 (divider 2)",
+            "  - 关键: 哪条能哪条不能",
             "",
-            "右侧 MonitorStack (3 段):",
-            "  6. 橙 / 紫 之间 (horizontal divider)",
-            "  7. 紫 / 青 之间 (horizontal divider)",
+            "Mode 3/3 · fullNested:",
+            "  - center + monitor 都嵌套（当前主工程实现）",
+            "  - 已知 1, 2 都拖不动 · 重新确认即可",
             "",
-            "结果对照:",
-            "  - 全 7 条都能拖 → H1 排除 · root cause = ChartScene SwiftUI 内部 (H2/H3)",
-            "  - 1-2 能拖, 3-7 不能 → 嵌套层数是问题",
-            "  - 全都不能拖 → H1 确认 · NSSplitViewController 嵌套自身",
-            "  - 其他模式 → 记录具体哪条 · 给 AI 看",
+            "反馈给 AI:",
+            "  Mode 1: 1=? / 2=?",
+            "  Mode 2: 1=? / 2=?",
+            "  Mode 3: 1=? / 2=?",
             "",
-            "退出 demo: ⌘Q 或 关窗口"
+            "锁定逻辑:",
+            "  Mode 1 都能拖 · Mode 2 divider 1 不能拖 → inner 嵌套抢 outer hit test ✅ root cause",
+            "  Mode 1 不能拖              → outer MainSplit 自身配置问题（与 inner 无关）",
+            "",
+            "退出: ⌘Q 或 关全部窗口"
         ]
         for line in lines { print(line) }
     }

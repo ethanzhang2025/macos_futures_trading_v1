@@ -178,6 +178,8 @@ echo "🧪 [5/8] 跑 pytest..."
 mkdir -p "$SHOTS_DIR"
 rm -f "$TESTS_DIR/result.json" "$TESTS_DIR/pytest.log"
 rm -f "$TESTS_DIR"/ui_tree_*.xml
+# v17.264 · 清旧截图 · 防上轮残留 (如删了 step_02 但 shots 内还有旧 step_02 截图)
+rm -f "$SHOTS_DIR"/*.jpg "$SHOTS_DIR"/*.png 2>/dev/null || true
 
 export APP_PATH
 export APPIUM_URL="http://127.0.0.1:4723/wd/hub"

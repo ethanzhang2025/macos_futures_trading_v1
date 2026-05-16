@@ -1724,25 +1724,15 @@ struct ChartScene: View {
     }
 
     /// v17.261 · V1 主窗 chart pane 精简栏 · pane 宽 ~200pt · 完整 toolbar 装不下
-    /// 保留 3 核心: chartMode (实盘/回放) · symbol 显示 · period 切换
+    /// v17.264 · ui_tree 验证 v17.261 内容跨 chart pane 边界 40pt(segmented 97 + period 72 + symbol 23 + spacer = ~240pt)
+    /// 简化为 symbol + period 两件 · 总宽 ~110pt · 留 90pt 余量 · chartMode 走 ⌘K 命令面板
     private var v1MainModeBar: some View {
         HStack(spacing: 6) {
-            Picker("", selection: $chartMode) {
-                ForEach(ChartMode.allCases) { m in
-                    Text(m.displayName).tag(m)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 100)
-
-            Spacer(minLength: 4)
-
             Text(currentInstrumentID.isEmpty ? "—" : currentInstrumentID)
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundColor(.primary)
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)  // v17.262 · 防 Spacer 把 Text 压成 width=1
+                .fixedSize(horizontal: true, vertical: false)
 
             Spacer(minLength: 4)
 
@@ -1753,11 +1743,11 @@ struct ChartScene: View {
             }
             .pickerStyle(.menu)
             .labelsHidden()
-            .frame(width: 70)
+            .frame(width: 60)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .frame(height: 30)
+        .frame(height: 28)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
     }

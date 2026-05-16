@@ -15,6 +15,8 @@ import SwiftUI
 struct ShellInspector: View {
 
     @EnvironmentObject var shellVM: ShellViewModel
+    /// v17.242 · NSPanel 嵌入模式时关闭 panel 的回调 · 默认 nil（旧版 Shell 内嵌仍走 inspectorVisible = false）
+    var onClose: (() -> Void)? = nil
 
     /// 当前 active Pane 的 symbol（跟随 group binding · ShellInspector 显示其盘口/Tick）
     private var activeSymbol: String {
@@ -52,14 +54,15 @@ struct ShellInspector: View {
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
             Spacer()
             Button {
-                shellVM.layout.inspectorVisible = false
+                // v17.242 · NSPanel 嵌入模式优先调 onClose 关闭 panel · 否则回退旧版 inspectorVisible 行为
+                if let onClose { onClose() } else { shellVM.layout.inspectorVisible = false }
             } label: {
-                Image(systemName: "sidebar.right")
+                Image(systemName: onClose != nil ? "xmark" : "sidebar.right")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("收起右辅助（⌘⌥I 切换）")
+            .help(onClose != nil ? "关闭浮顶面板" : "收起右辅助（⌘⌥I 切换）")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

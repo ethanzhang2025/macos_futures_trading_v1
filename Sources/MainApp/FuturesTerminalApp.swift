@@ -445,6 +445,9 @@ struct FuturesTerminalApp: App {
                     windowManager: coordinator.windowManager
                 )
                 Divider()
+                // v17.242 · Step 4 · Inspector 浮顶面板入口（⌘⌥I）· doc 章节 296-302
+                OpenInspectorPanelButton(envProvider: makeEnv, windowManager: coordinator.windowManager)
+                Divider()
                 // v17.231 · V1 主窗面板布局切换 · 直接验「A3=C 1/2/4/6/9 网格」
                 Menu("V1 主窗面板布局") {
                     PaneLayoutMenuButton(layout: .single, label: "▢ 单图", shellVM: shellVM)
@@ -842,6 +845,19 @@ private struct PaneLayoutMenuButton: View {
         Button(label) {
             shellVM.setPaneLayout(layout)
         }
+    }
+}
+
+/// v17.242 · Step 4 · V1 主窗 Inspector 浮顶面板入口（⌘⌃I · ⌘⌥I 已被「品种深度分析」全局占用）
+/// V1 主窗专属前缀 ⌘⌃ 已用：⌘⌃1 V1 / ⌘⌃0 旧 Shell / ⌘⌃[ Sidebar / ⌘⌃] Monitor
+private struct OpenInspectorPanelButton: View {
+    let envProvider: () -> AppKitShellEnvironment
+    let windowManager: WindowManager
+    var body: some View {
+        Button("🧭 Inspector 浮顶面板（⌘⌃I）") {
+            windowManager.openInspectorPanel(env: envProvider())
+        }
+        .keyboardShortcut("i", modifiers: [.command, .control])
     }
 }
 

@@ -32,6 +32,9 @@ final class WindowManager: ObservableObject {
     /// env 跨循环依赖 callsite 传入 · doc 章节 293-309
     private var monitorPanelController: MonitorPanelController?
 
+    /// v17.242 · Step 4 · Inspector 浮顶面板 controller（lazy · 首次 open 才创建）
+    private var inspectorPanelController: InspectorPanelController?
+
     init(appState: AppState) {
         self.appState = appState
         self.mainWindowController = MainWindowController()
@@ -59,6 +62,19 @@ final class WindowManager: ObservableObject {
     /// 当前实现走 SwiftUI openWindow · 后续可平滑切到 WindowManager 直接管 NSWindow 创建
     func openHeavyWindow(_ kind: HeavyWindowKind, using openWindow: OpenWindowAction) {
         openWindow(id: kind.windowID)
+    }
+
+    /// v17.242 · Step 4 · 打开 Inspector 浮顶面板 · 已开则激活前台
+    func openInspectorPanel(env: AppKitShellEnvironment) {
+        if inspectorPanelController == nil {
+            inspectorPanelController = InspectorPanelController(env: env)
+        }
+        inspectorPanelController?.open()
+    }
+
+    /// v17.242 · 关闭 Inspector 浮顶面板
+    func closeInspectorPanel() {
+        inspectorPanelController?.close()
     }
 }
 

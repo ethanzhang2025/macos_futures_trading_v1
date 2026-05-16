@@ -63,9 +63,12 @@ if ! command -v appium >/dev/null 2>&1; then
     echo "     appium driver install mac2"
     exit 1
 fi
-if ! appium driver list --installed 2>/dev/null | grep -q "^- mac2"; then
+## appium 输出带 ANSI 颜色码 · grep 不要锚定行首 · 同时合并 stderr
+if ! appium driver list --installed 2>&1 | grep -q "mac2"; then
     echo "📦 mac2 driver 未装 · 自动装..."
-    appium driver install mac2
+    appium driver install mac2 || {
+        echo "   (driver install 报错 · 通常是已装 · 跳过)"
+    }
 fi
 
 # Python venv（首次创建 · 后续直接激活）

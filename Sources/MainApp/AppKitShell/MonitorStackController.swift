@@ -77,7 +77,12 @@ final class MonitorStackController: NSViewController {
     }
 }
 
-/// v17.245 · 监盘段标题包装 · 顶部 22pt 标题栏 + 内嵌内容
+/// v17.245 · 监盘段标题包装 · 顶部 28pt 标题栏 + 内嵌内容
+/// v17.260 · 样式增强 · 测试发现 emoji 渲染了但太淡看不到（size 11 .secondary）
+///   - size 11 → 14 / weight .semibold → .bold
+///   - .secondary 浅灰 → .primary 主色 (深色背景 = 白)
+///   - 加 accent 边框让段 header 视觉分明
+///   - 高度 22 → 28 增加点击靶心
 private struct MonitorSectionWrapper<Content: View>: View {
     let title: String
     let content: Content
@@ -89,17 +94,27 @@ private struct MonitorSectionWrapper<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.primary)
                 Spacer()
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .frame(height: 22)
-            .background(Color.secondary.opacity(0.1))
-            Divider()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .frame(height: 28)
+            .background(
+                LinearGradient(
+                    colors: [Color.accentColor.opacity(0.18), Color.accentColor.opacity(0.08)],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(Color.accentColor.opacity(0.4)),
+                alignment: .bottom
+            )
             content
         }
     }

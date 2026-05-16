@@ -70,13 +70,10 @@ final class MonitorStackController: NSViewController {
 
         addChild(inner)
         view.addSubview(inner.view)
-        inner.view.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            inner.view.topAnchor.constraint(equalTo: view.topAnchor),
-            inner.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            inner.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            inner.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
+        // v17.249 修 · 同 PaneContainerController · Auto Layout .required 与 NSSplitView 冲突 · 改 autoresizingMask
+        inner.view.translatesAutoresizingMaskIntoConstraints = true
+        inner.view.frame = view.bounds
+        inner.view.autoresizingMask = [.width, .height]
     }
 }
 

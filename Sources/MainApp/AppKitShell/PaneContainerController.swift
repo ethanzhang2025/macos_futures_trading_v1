@@ -83,13 +83,11 @@ final class PaneContainerController: NSViewController {
         let rootVC = buildGridController(layout: layout, charts: chartVCs)
         addChild(rootVC)
         view.addSubview(rootVC.view)
-        rootVC.view.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            rootVC.view.topAnchor.constraint(equalTo: view.topAnchor),
-            rootVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            rootVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            rootVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
+        // v17.249 修 · Auto Layout .required 与 NSSplitView 内部 layout 系统冲突 · 外层 divider 拖不动
+        // 改用 autoresizingMask（NSView 旧 macOS 风格 · NSSplitView 嵌套标准做法）· 不走 Auto Layout
+        rootVC.view.translatesAutoresizingMaskIntoConstraints = true
+        rootVC.view.frame = view.bounds
+        rootVC.view.autoresizingMask = [.width, .height]
     }
 
     private func installPlaceholder(text: String) {

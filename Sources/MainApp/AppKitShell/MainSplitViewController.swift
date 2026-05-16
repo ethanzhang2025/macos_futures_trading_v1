@@ -38,25 +38,32 @@ final class MainSplitViewController: NSSplitViewController {
         // v17.248 修 · widthAnchor.required 与 NSSplitView 自身 layout 系统冲突 · 导致 divider 拖不动
         // 改用 NSSplitViewItem.minimumThickness（NSSplitView 标准 API · 不走 Auto Layout）
 
-        // 左 · Sidebar · 最小 200pt · 可折叠
+        // v17.265 · holdingPriority 修法 · 解决"拖左侧 divider 右边 monitor 变 · center 不变"bug
+        // NSSplitView 默认 priority 250 都相同 · 拖 divider 时把 delta 推给最远的 item
+        // 修: center 设 248 (低) · sidebar/monitor 设 252 (高) · 拖任一 divider 都让 center 优先变化
+
+        // 左 · Sidebar · 最小 200pt · 可折叠 · 高 priority (拖时保持)
         let sidebarVC = AppKitShellHC.wrap(ShellSidebar(), env: env)
         let sidebarItem = NSSplitViewItem(viewController: sidebarVC)
         sidebarItem.minimumThickness = 200
         sidebarItem.canCollapse = true
+        sidebarItem.holdingPriority = NSLayoutConstraint.Priority(252)
         addSplitViewItem(sidebarItem)
 
-        // 中 · PaneContainer · 最小 400pt · 不可折叠（PaneContainerController 监听 paneLayout 变化）
+        // 中 · PaneContainer · 最小 400pt · 不可折叠 · 低 priority (拖时优先变)
         let centerVC = PaneContainerController(env: env)
         let centerItem = NSSplitViewItem(viewController: centerVC)
         centerItem.minimumThickness = 400
         centerItem.canCollapse = false
+        centerItem.holdingPriority = NSLayoutConstraint.Priority(248)
         addSplitViewItem(centerItem)
 
-        // 右 · Monitor · 最小 200pt · 可折叠（内嵌 MonitorStackController 3 段堆叠）
+        // 右 · Monitor · 最小 200pt · 可折叠 · 高 priority (拖时保持)
         let monitorStackVC = MonitorStackController(env: env)
         let monitorItem = NSSplitViewItem(viewController: monitorStackVC)
         monitorItem.minimumThickness = 200
         monitorItem.canCollapse = true
+        monitorItem.holdingPriority = NSLayoutConstraint.Priority(252)
         addSplitViewItem(monitorItem)
     }
 }
